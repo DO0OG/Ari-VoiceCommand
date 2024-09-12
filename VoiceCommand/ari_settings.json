@@ -1,0 +1,12 @@
+{
+  "groq_api_key": "",
+  "tts_mode": "local",
+  "fish_api_key": "",
+  "fish_reference_id": "",
+  "cosyvoice_reference_text": "",
+  "cosyvoice_speed": 1.0,
+  "personality": "",
+  "scenario": "",
+  "system_prompt": "",
+  "history_instruction": ""
+}

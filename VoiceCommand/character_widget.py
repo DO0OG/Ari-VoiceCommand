@@ -1,0 +1,735 @@
+"""
+Shimeji 스타일 캐릭터 위젯 (최적화 버전)
+"""
+import os
+import random
+import time
+from collections import OrderedDict
+from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, QElapsedTimer, Signal, Slot, Property
+from PySide6.QtGui import QPixmap, QImage, QPainter, QAction, QCursor
+from speech_bubble import SpeechBubble
+from constants import (
+    GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
+    GREETING_INTERVAL, IMAGE_CACHE_CAPACITY
+)
+
+
+class LRUCache:
+    """LRU 캐시 구현"""
+    def __init__(self, capacity=IMAGE_CACHE_CAPACITY):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+
+    def get(self, key):
+        if key not in self.cache:
+            return None
+        self.cache.move_to_end(key)
+        return self.cache[key]
+
+    def put(self, key, value):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        self.cache[key] = value
+        if len(self.cache) > self.capacity:
+            self.cache.popitem(last=False)
+
+
+class CharacterWidget(QWidget):
+    # 스레드 안전한 시그널
+    show_speech_bubble_signal = Signal(str, int)  # text, duration
+    hide_speech_bubble_signal = Signal()
+
+    def get_char_x(self):
+        return self.x()
+
+    def set_char_x(self, x):
+        self.move(x, self.y())
+
+    char_x = Property(int, get_char_x, set_char_x)
+
+    def __init__(self):
+        super().__init__()
+        self.dragging = False
+        self.offset = QPoint()
+        self.target_pos = QPoint() # 드래그 시 목표 위치
+        self.current_animation = "idle"
+        self.frame_index = 0
+        self.animations = {}
+        self.image_cache = LRUCache()
+        self.facing_right = True  # 캐릭터 방향
+
+        # 물리 엔진
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.gravity = GRAVITY
+        self.is_falling = False
+        self.is_climbing = False # 벽 타기 상태 추가
+        self.climbing_direction = 0 # -1: 왼쪽 벽, 1: 오른쪽 벽
+        self.drag_history = []
+
+        # 탄성 및 마찰 계수
+        self.bounce_y = BOUNCE_Y
+        self.bounce_x = BOUNCE_X
+        self.friction_ground = FRICTION_GROUND
+        self.friction_air = FRICTION_AIR   
+
+        # 마우스 추적
+        self.mouse_tracker = QTimer(self)
+        self.mouse_tracker.timeout.connect(self.track_mouse)
+        self.mouse_tracker.start(100)
+        self.mouse_tracking_enabled = False
+
+        # 말풍선
+        self.speech_bubble = None
+
+        # 말풍선 자동 숨김 타이머
+        self.bubble_hide_timer = QTimer(self)
+        self.bubble_hide_timer.setSingleShot(True)
+        self.bubble_hide_timer.timeout.connect(self._hide_speech_bubble_slot)
+
+        # 시그널 연결
+        self.show_speech_bubble_signal.connect(self._show_speech_bubble_slot)
+        self.hide_speech_bubble_signal.connect(self._hide_speech_bubble_slot)
+
+        # 시간별 인사 타이머
+        self.greeting_timer = QTimer(self)
+        self.greeting_timer.timeout.connect(self.time_based_greeting)
+        self.greeting_timer.start(GREETING_INTERVAL)
+
+        # 초기 인사 (TTS 포함)
+        QTimer.singleShot(3000, self.initial_greeting_with_tts)
+
+        # 윈도우 설정
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        # 애니메이션 로드
+        self.load_animations()
+
+        # 레이블 생성
+        self.label = QLabel(self)
+        self.update_frame()
+
+        # 애니메이션 타이머 (속도 향상: 100ms -> 70ms)
+        self.animation_timer = QTimer(self)
+        self.animation_timer.timeout.connect(self.next_frame)
+        self.animation_timer.start(70)
+
+        # 행동 타이머 (3~10초마다)
+        self.behavior_timer = QTimer(self)
+        self.behavior_timer.timeout.connect(self.random_behavior)
+        self.start_behavior_timer()
+
+        # 이동 애니메이션
+        self.move_animation = None
+
+        # 물리 타이머 (30 FPS로 최적화)
+        self.physics_timer = QTimer(self)
+        self.physics_timer.timeout.connect(self.update_physics)
+        self.physics_timer.start(33)
+
+        # 화면 하단으로 이동
+        self.move_to_bottom()
+        self.show()
+
+    def load_and_cache_image(self, path, flip=False, rotation=0):
+        """이미지 로드, 캐싱 및 변형 (반전, 회전)"""
+        cache_key = f"{path}_{'flip' if flip else 'normal'}_{rotation}"
+        cached = self.image_cache.get(cache_key)
+        if cached:
+            return cached
+
+        if not os.path.exists(path):
+            return None
+
+        image = QImage(path)
+
+        # 좌우 반전
+        if flip:
+            image = image.mirrored(True, False)
+            
+        # 회전
+        if rotation != 0:
+            from PySide6.QtGui import QTransform
+            transform = QTransform().rotate(rotation)
+            image = image.transformed(transform, Qt.SmoothTransformation)
+
+        scaled_image = image.scaled(
+            int(image.width() * 1.5),
+            int(image.height() * 1.5),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+
+        pixmap = QPixmap.fromImage(scaled_image)
+        self.image_cache.put(cache_key, pixmap)
+        return pixmap
+
+    def load_animations(self):
+        """애니메이션 프레임 로드"""
+        from resource_manager import ResourceManager
+
+        animations = {
+            "idle": 8,
+            "walk": 9,
+            "drag": 8,
+            "fall": 8,
+            "sit": 9,
+            "climb": 6,
+            "ceiling": 4,
+            "sleep": 4,
+            "surprised": 2
+        }
+
+        images_dir = ResourceManager.get_images_dir()  # 수정
+
+        for anim_name, frame_count in animations.items():
+            frames = []
+            for i in range(1, frame_count + 1):
+                img_path = os.path.join(images_dir, f"{anim_name}{i}.png")
+                if os.path.exists(img_path):  # 존재 확인 추가
+                    pixmap = self.load_and_cache_image(img_path)
+                    if pixmap:
+                        frames.append(img_path)  # 경로만 저장 (메모리 절약)
+
+            if frames:
+                self.animations[anim_name] = frames
+
+    def get_ground_y(self):
+        """현재 상태에 따른 바닥 Y 좌표 계산 (보정값 강화)"""
+        screen = QApplication.primaryScreen().geometry()
+        ground_bottom = screen.height() - 50
+        # 앉은 자세(sit)일 때 더 깊게 밀착 (+25px), 기본 상태도 약간 내림 (+5px)
+        offset = 25 if self.current_animation == "sit" else 5
+        return ground_bottom - self.height() + offset
+
+    def update_frame(self):
+        """현재 프레임 업데이트 (자세 전환 시 위치 어긋남 방지)"""
+        if self.current_animation in self.animations:
+            frames = self.animations[self.current_animation]
+            if frames:
+                frame_path = frames[self.frame_index % len(frames)]
+                flip = not self.facing_right
+                pixmap = self.load_and_cache_image(frame_path, flip=flip)
+                if pixmap:
+                    # 새로운 프레임의 크기를 기준으로 위치와 크기를 한 번에 업데이트 (시각적 어긋남 원천 차단)
+                    screen = QApplication.primaryScreen().geometry()
+                    ground_bottom = screen.height() - 50
+                    offset = 25 if self.current_animation == "sit" else 5
+                    new_y = ground_bottom - pixmap.height() + offset
+
+                    self.label.setPixmap(pixmap)
+                    self.label.adjustSize()
+                    
+                    # 바닥에 있을 때 위치와 크기를 동시에 변경
+                    if not self.dragging and not self.is_falling:
+                        self.setGeometry(self.x(), new_y, pixmap.width(), pixmap.height())
+                    else:
+                        self.setFixedSize(pixmap.width(), pixmap.height())
+
+                    if self.speech_bubble:
+                        self.speech_bubble.update_position()
+
+    def next_frame(self):
+        """다음 프레임으로"""
+        if self.current_animation in self.animations:
+            frame_count = len(self.animations[self.current_animation])
+            self.frame_index = (self.frame_index + 1) % frame_count
+            self.update_frame()
+
+    def set_animation(self, animation_name):
+        """애니메이션 변경"""
+        if animation_name in self.animations and animation_name != self.current_animation:
+            self.current_animation = animation_name
+            self.frame_index = 0
+            self.update_frame()
+
+    def start_behavior_timer(self):
+        """랜덤 간격으로 행동 타이머 시작"""
+        interval = random.randint(3000, 10000)  # 3~10초
+        self.behavior_timer.start(interval)
+
+    def random_behavior(self):
+        """랜덤 행동 (벽 타기 확률 추가)"""
+        if self.dragging or self.is_climbing or (self.move_animation and self.move_animation.state() == QPropertyAnimation.Running):
+            return
+
+        screen = QApplication.primaryScreen().geometry()
+
+        # 화면 가장자리에 있으면 특별 행동
+        at_left_edge = self.x() <= 5
+        at_right_edge = self.x() >= screen.width() - self.width() - 5
+
+        # 벽 타기 시도 (화면 끝에서 30% 확률)
+        if (at_left_edge or at_right_edge) and random.random() < 0.3:
+            self.climbing_direction = -1 if at_left_edge else 1
+            self.smooth_climb()
+            return
+
+        # 행동 선택 (확률 기반)
+        rand = random.random()
+        if rand < 0.4:
+            behavior = "idle"
+        elif rand < 0.6:
+            behavior = "sit"
+        elif rand < 0.75 and not (at_left_edge or at_right_edge):
+            behavior = "walk"
+        elif rand < 0.85:
+            behavior = "sleep"
+        else:
+            behavior = "ceiling"
+
+        self.set_animation(behavior)
+
+        if behavior == "walk":
+            self.smooth_walk()
+
+        self.start_behavior_timer()
+
+    def smooth_climb(self):
+        """벽 타고 위로 올라가기"""
+        self.is_climbing = True
+        self.set_animation("climb")
+        
+        # 화면 높이의 20~50% 정도 위로 이동
+        screen = QApplication.primaryScreen().geometry()
+        climb_height = random.randint(200, 500)
+        new_y = max(50, self.y() - climb_height)
+
+        if self.move_animation:
+            self.move_animation.stop()
+
+        self.move_animation = QPropertyAnimation(self, b"geometry")
+        self.move_animation.setDuration(climb_height * 10) # 속도 조절
+        self.move_animation.setStartValue(self.geometry())
+        self.move_animation.setEndValue(QRect(self.x(), new_y, self.width(), self.height()))
+        self.move_animation.setEasingCurve(QEasingCurve.Linear)
+        self.move_animation.finished.connect(self.stop_climbing)
+        self.move_animation.start()
+
+    def stop_climbing(self):
+        """벽 타기 중단 및 떨어지기"""
+        self.is_climbing = False
+        self.is_falling = True
+        self.set_animation("fall")
+        self.start_behavior_timer()
+
+    def smooth_walk(self):
+        """부드럽고 느린 걷기 이동"""
+        from PySide6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().geometry()
+
+        # 이동 거리 및 방향
+        distance = random.randint(100, 300)
+        direction = random.choice([-1, 1])
+        new_x = self.x() + (distance * direction)
+
+        # 화면 경계 체크
+        new_x = max(0, min(new_x, screen.width() - self.width()))
+
+        # 캐릭터 방향 설정
+        self.facing_right = (new_x > self.x())
+        self.update_frame()
+
+        # QPropertyAnimation 속도 늦춤 (1.5초 -> 4초)
+        if self.move_animation:
+            self.move_animation.stop()
+
+        self.move_animation = QPropertyAnimation(self, b"char_x")
+        self.move_animation.setDuration(4000) # 4초로 변경 (더 느릿하게)
+        self.move_animation.setStartValue(self.x())
+        self.move_animation.setEndValue(new_x)
+        self.move_animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.move_animation.finished.connect(lambda: self.set_animation("idle"))
+        self.move_animation.start()
+
+    def move_to_bottom(self):
+        """화면 하단으로 이동"""
+        from PySide6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().geometry()
+        x = random.randint(0, max(0, screen.width() - 200))
+        # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
+        y = screen.height() - 200  # 하단에서 200px 위
+        self.move(x, y)
+
+    def mousePressEvent(self, event):
+        """마우스 클릭"""
+        if event.button() == Qt.LeftButton:
+            # 더블클릭 감지
+            if not hasattr(self, '_last_click'):
+                self._last_click = 0
+            now = time.time()
+            if now - self._last_click < 0.3:
+                reactions = ["왜요?", "뭐예요?", "네?", "간지러워요!", "헤헤"]
+                self.say(random.choice(reactions), duration=2000)
+                self.set_animation("surprised")
+                QTimer.singleShot(1000, lambda: self.set_animation("idle"))
+                self._last_click = 0
+                return
+            self._last_click = now
+
+            self.dragging = True
+            self.offset = event.globalPos() - self.pos()
+            self.set_animation("drag")
+
+            self.velocity_x = 0
+            self.velocity_y = 0
+            self.drag_history = [(event.globalPos(), time.time())]
+
+            if self.move_animation:
+                self.move_animation.stop()
+
+            self.physics_timer.stop()
+            self.behavior_timer.stop()
+
+    def mouseMoveEvent(self, event):
+        """마우스 드래그 (즉각적인 1:1 이동 및 방향 전환)"""
+        if self.dragging:
+            # 목표 위치 계산 (Lerp 제거, 즉시 이동)
+            nx = event.globalPos().x() - self.offset.x()
+            ny = event.globalPos().y() - self.offset.y()
+            
+            # 화면 경계 제한
+            screen = QApplication.primaryScreen().geometry()
+            nx = max(0, min(nx, screen.width() - self.width()))
+            ny = max(0, min(ny, screen.height() - self.height()))
+
+            # 방향 감지 및 프레임 업데이트
+            dx = nx - self.x()
+            if abs(dx) > 2: # 최소 이동 거리 기준
+                self.facing_right = (dx > 0)
+                self.update_frame()
+
+            self.move(nx, ny)
+            
+            # 히스토리 기록
+            self.drag_history.append((event.globalPos(), time.time()))
+            if len(self.drag_history) > 5:
+                self.drag_history.pop(0)
+
+            # 말풍선 위치 업데이트
+            if self.speech_bubble:
+                self.speech_bubble.update_position()
+
+    def mouseReleaseEvent(self, event):
+        """마우스 릴리즈"""
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
+
+            # 타이머 재시작
+            self.animation_timer.start(100)
+            self.physics_timer.start(33)
+            self.start_behavior_timer()
+
+            # 던지기 속도 계산 (계수 0.02로 약간 약화시켜 안정성 확보)
+            current_time = time.time()
+            valid_history = [h for h in self.drag_history if current_time - h[1] < 0.2]
+            
+            if len(valid_history) >= 2:
+                old_pos, old_time = valid_history[0]
+                curr_pos, curr_time = valid_history[-1]
+                dt = curr_time - old_time
+                if dt > 0:
+                    vx = (curr_pos.x() - old_pos.x()) / dt * 0.02
+                    vy = (curr_pos.y() - old_pos.y()) / dt * 0.02
+                    self.velocity_x = max(-25, min(25, vx))
+                    self.velocity_y = max(-25, min(25, vy))
+            else:
+                self.velocity_x = 0
+                self.velocity_y = 0
+
+            self.is_falling = True
+            self.set_animation("fall")
+            QTimer.singleShot(800, lambda: self.set_animation("idle") if not self.dragging and not self.is_falling else None)
+
+    def contextMenuEvent(self, event):
+        """우클릭 메뉴"""
+        from VoiceCommand import learning_mode
+        menu = QMenu(self)
+
+        # 설정
+        settings_action = QAction("설정", self)
+        settings_action.triggered.connect(self.open_settings)
+        menu.addAction(settings_action)
+
+        menu.addSeparator()
+
+        # 스마트 어시스턴트 모드
+        smart_action = QAction("스마트 어시스턴트 모드", self)
+        smart_action.setCheckable(True)
+        smart_action.setChecked(learning_mode['enabled'])
+        def toggle_smart_mode(checked):
+            learning_mode['enabled'] = checked
+            if checked:
+                self.say("스마트 어시스턴트 모드가 활성화되었습니다.", duration=3000)
+            else:
+                self.say("스마트 어시스턴트 모드가 비활성화되었습니다.", duration=3000)
+        smart_action.triggered.connect(toggle_smart_mode)
+        menu.addAction(smart_action)
+
+        # 마우스 반응
+        mouse_action = QAction("마우스 반응", self)
+        mouse_action.setCheckable(True)
+        mouse_action.setChecked(self.mouse_tracking_enabled)
+        mouse_action.triggered.connect(self.toggle_mouse_tracking)
+        menu.addAction(mouse_action)
+
+        # 숨기기
+        hide_action = QAction("숨기기", self)
+        hide_action.triggered.connect(self.hide)
+        menu.addAction(hide_action)
+
+        menu.addSeparator()
+
+        # 종료
+        exit_action = QAction("종료", self)
+        exit_action.triggered.connect(self.exit_program)
+        menu.addAction(exit_action)
+
+        menu.exec(event.globalPos())
+
+    def toggle_mouse_tracking(self):
+        """마우스 추적 토글"""
+        self.mouse_tracking_enabled = not self.mouse_tracking_enabled
+
+    def open_settings(self):
+        """설정 창 열기"""
+        from settings_dialog import SettingsDialog
+        dialog = SettingsDialog()
+        if dialog.exec():
+            from VoiceCommand import initialize_tts
+            initialize_tts()
+
+    def exit_program(self):
+        """프로그램 종료"""
+        import sys
+        import logging
+
+        logging.info("프로그램 종료 시작...")
+        try:
+            app = QApplication.instance()
+            if app:
+                app.quit()
+        except Exception as e:
+            logging.error(f"종료 중 오류: {e}")
+
+        sys.exit(0)
+
+    def update_physics(self):
+        """물리 엔진 (착지 판정 및 위치 동기화 강화)"""
+        if self.dragging:
+            return
+
+        screen = QApplication.primaryScreen().geometry()
+        target_y = self.get_ground_y()
+        current_y = self.y()
+        moved = False
+
+        # 중력 적용 로직
+        if current_y < target_y - 1 or self.velocity_y < 0:
+            self.is_falling = True
+            self.velocity_y = min(self.velocity_y + self.gravity, 20)
+            new_y = current_y + self.velocity_y
+
+            # 착지 판정 (target_y를 넘어가면 즉시 고정)
+            if new_y >= target_y:
+                new_y = target_y
+                if abs(self.velocity_y) > 3:
+                    self.velocity_y *= self.bounce_y
+                else:
+                    self.velocity_y = 0
+                    self.is_falling = False
+                    if self.current_animation == "fall":
+                        self.set_animation("idle")
+
+            if int(new_y) != current_y:
+                self.setGeometry(self.x(), int(new_y), self.width(), self.height())
+                moved = True
+
+            if self.is_falling and self.velocity_y > 5 and self.current_animation != "fall":
+                self.set_animation("fall")
+
+        else:
+            # 바닥에 안정적으로 붙어있도록 강제 고정 (오차 누적 방지)
+            if current_y != target_y and not self.is_falling:
+                self.setGeometry(self.x(), target_y, self.width(), self.height())
+                moved = True
+            self.velocity_y = 0
+            self.is_falling = False
+
+        # 수평 이동 (던지기 및 마찰)
+        if self.velocity_x != 0:
+            new_x = int(self.x() + self.velocity_x)
+            
+            # 벽 충돌 및 튕기기
+            if new_x < 0:
+                new_x = 0
+                self.velocity_x *= self.bounce_x # 수정됨: 낮은 반동 적용
+            elif new_x > screen.width() - self.width():
+                new_x = screen.width() - self.width()
+                self.velocity_x *= self.bounce_x # 수정됨: 낮은 반동 적용
+
+            if new_x != self.x():
+                self.move(new_x, self.y())
+                moved = True
+
+            # 마찰 (수정됨: 정의된 계수 사용)
+            if self.is_falling:
+                self.velocity_x *= self.friction_air
+            else:
+                self.velocity_x *= self.friction_ground
+                
+            if abs(self.velocity_x) < 0.5:
+                self.velocity_x = 0
+
+        # 말풍선 위치 업데이트 (이동했을 때만)
+        if moved and self.speech_bubble:
+            self.speech_bubble.update_position()
+
+    def track_mouse(self):
+        """마우스 반응 — 거리에 따라 호기심/도망 행동"""
+        if not self.mouse_tracking_enabled or self.dragging or self.is_climbing:
+            return
+
+        cursor_pos = QCursor.pos()
+        char_center = self.geometry().center()
+
+        dx = cursor_pos.x() - char_center.x()
+        distance = abs(dx)
+
+        screen = QApplication.primaryScreen().geometry()
+        at_edge = self.x() <= 0 or self.x() >= screen.width() - self.width()
+
+        if distance < 80:
+            # 매우 가까움 — 놀라서 도망 (속도 강하게)
+            if not getattr(self, '_mouse_scared', False):
+                self._mouse_scared = True
+                self.set_animation("surprised")
+                QTimer.singleShot(400, lambda: self.set_animation("walk") if self.mouse_tracking_enabled else None)
+
+            if not at_edge:
+                # 반대 방향으로 velocity 부여 (물리 엔진에 위임)
+                self.velocity_x = -8 if dx > 0 else 8
+                self.facing_right = (self.velocity_x > 0)
+            else:
+                # 벽에 몰렸을 때 — 벽 타기로 탈출
+                if not self.is_climbing:
+                    self.smooth_climb()
+
+        elif distance < 200:
+            # 중간 거리 — 슬슬 걷기로 피함
+            self._mouse_scared = False
+            if not at_edge and not self.is_falling:
+                self.velocity_x = -3 if dx > 0 else 3
+                self.facing_right = (self.velocity_x > 0)
+                self.set_animation("walk")
+
+        else:
+            # 멀면 — 평상시로 복귀
+            self._mouse_scared = False
+
+    def say(self, text, duration=5000):
+        """말풍선 표시 (외부에서 호출 - 스레드 안전)"""
+        # 시그널로 전달 (어느 스레드에서든 안전)
+        self.show_speech_bubble_signal.emit(text, duration)
+
+    @Slot(str, int)
+    def _show_speech_bubble_slot(self, text, duration):
+        """실제 말풍선 표시 (메인 스레드에서만 실행)"""
+        # 기존 타이머 정지
+        self.bubble_hide_timer.stop()
+
+        # 기존 말풍선 제거
+        if self.speech_bubble:
+            self.speech_bubble.hide()
+            self.speech_bubble.deleteLater()
+
+        # 새 말풍선 생성
+        self.speech_bubble = SpeechBubble(text, self)
+        self.speech_bubble.show()
+        self.speech_bubble.raise_()
+        self.update()
+
+        # 자동 숨김 타이머 시작 (메인 스레드에서)
+        if duration > 0:
+            self.bubble_hide_timer.start(duration)
+
+    def hide_speech_bubble(self):
+        """말풍선 숨기기 (외부에서 호출)"""
+        self.hide_speech_bubble_signal.emit()
+
+    @Slot()
+    def _hide_speech_bubble_slot(self):
+        """실제 말풍선 숨김 (메인 스레드에서만 실행)"""
+        if self.speech_bubble:
+            self.speech_bubble.hide()
+            self.speech_bubble.deleteLater()
+            self.speech_bubble = None
+
+    def time_based_greeting(self):
+        """시간대별 인사"""
+        from datetime import datetime
+        hour = datetime.now().hour
+
+        greetings = {
+            (6, 11): ["좋은 아침이에요!", "잘 주무셨어요?", "아침이네요!"],
+            (12, 13): ["점심 시간이에요!", "맛있게 드세요!"],
+            (14, 17): ["오후네요~", "힘내세요!"],
+            (18, 21): ["저녁 시간이에요", "하루 어떠셨어요?"],
+            (22, 23): ["밤이 깊었어요", "이제 쉬세요~"],
+            (0, 5): ["늦은 시간이네요", "푹 쉬세요!"]
+        }
+
+        for (start, end), messages in greetings.items():
+            if start <= hour <= end:
+                message = random.choice(messages)
+                self.say(message, duration=4000)
+                break
+
+    def initial_greeting_with_tts(self):
+        """초기 인사 (TTS 포함)"""
+        from datetime import datetime
+        from VoiceCommand import tts_wrapper
+        hour = datetime.now().hour
+
+        greetings = {
+            (6, 11): ["좋은 아침이에요!", "잘 주무셨어요?", "아침이네요!"],
+            (12, 13): ["점심 시간이에요!", "맛있게 드세요!"],
+            (14, 17): ["오후네요~", "힘내세요!"],
+            (18, 21): ["저녁 시간이에요", "하루 어떠셨어요?"],
+            (22, 23): ["밤이 깊었어요", "이제 쉬세요~"],
+            (0, 5): ["늦은 시간이네요", "푹 쉬세요!"]
+        }
+
+        for (start, end), messages in greetings.items():
+            if start <= hour <= end:
+                message = random.choice(messages)
+                # TTS로 재생 (말풍선은 TTS 재생 시 자동으로 표시됨)
+                tts_wrapper(message)
+                break
+
+    def cleanup(self):
+        """정리"""
+        if self.animation_timer:
+            self.animation_timer.stop()
+        if self.behavior_timer:
+            self.behavior_timer.stop()
+        if self.move_animation:
+            self.move_animation.stop()
+        if self.physics_timer:
+            self.physics_timer.stop()
+        if self.mouse_tracker:
+            self.mouse_tracker.stop()
+        if hasattr(self, 'greeting_timer'):
+            self.greeting_timer.stop()
+        if hasattr(self, 'bubble_hide_timer'):
+            self.bubble_hide_timer.stop()
+        if self.speech_bubble:
+            self.speech_bubble.close()
+        self.image_cache.cache.clear()
+        self.close()

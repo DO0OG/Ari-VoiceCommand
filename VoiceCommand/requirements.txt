@@ -1,0 +1,29 @@
+# 음성 인식
+SpeechRecognition==3.10.1
+pyaudio==0.2.14
+
+# AI
+groq==0.11.0
+
+# TTS
+fish-audio-sdk
+websockets==12.0
+numpy
+
+# GUI
+PySide6==6.6.1
+
+# 시스템
+psutil==5.9.7
+pycaw==20230407
+comtypes==1.4.1
+certifi
+
+# 파일 감시 (자동 리로드)
+watchdog
+
+# 오디오
+pydub==0.25.1
+
+# 유틸리티
+requests==2.32.3

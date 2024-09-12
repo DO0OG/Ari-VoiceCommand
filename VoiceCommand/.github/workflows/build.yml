@@ -1,0 +1,40 @@
+name: Build Ari EXE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build EXE (clean)
+        run: pyinstaller Ari.spec --clean
+
+      - name: Zip artifact
+        run: Compress-Archive -Path dist\Ari\* -DestinationPath Ari-windows.zip
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ari-windows
+          path: Ari-windows.zip
+          retention-days: 30
