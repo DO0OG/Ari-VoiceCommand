@@ -41,8 +41,15 @@ class CommandRegistry:
 
     def execute(self, text: str) -> None:
         """텍스트에 맞는 명령 찾아서 실행"""
+        from user_context import get_context_manager
+        context_manager = get_context_manager()
+
         for command in self.commands:
             if command.matches(text):
+                # 명령어 유형 기록 (클래스 이름에서 'Command' 제외)
+                cmd_type = command.__class__.__name__.replace("Command", "").lower()
+                context_manager.record_command(cmd_type, {"input": text})
+                
                 command.execute(text)
                 return
 

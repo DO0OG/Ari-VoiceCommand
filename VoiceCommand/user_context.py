@@ -26,7 +26,15 @@ class UserContextManager:
 
         # 기본 구조
         return {
+            "user_bio": {
+                "name": "사용자",
+                "location": "",
+                "interests": [],
+                "memos": []
+            },
+            "facts": {},  # 사용자에 대한 단편적 사실들 (예: "커피를 좋아함": "2025-02-21")
             "command_frequency": {},  # 명령어 사용 빈도
+            "command_sequences": {},  # 명령어 연속 사용 패턴 (예: "날씨" -> ["유튜브"])
             "time_patterns": {},  # 시간대별 활동
             "preferences": {},  # 선호도 (음악 장르, 온도 등)
             "last_commands": [],  # 최근 명령어 (최대 50개)
@@ -42,7 +50,17 @@ class UserContextManager:
             logging.error(f"컨텍스트 저장 실패: {e}")
 
     def record_command(self, command_type, params=None):
-        """명령어 사용 기록"""
+        """명령어 사용 기록 및 패턴 학습"""
+        # 연속성 기록 (패턴 학습)
+        if self.context["last_commands"]:
+            last_cmd = self.context["last_commands"][-1]["command"]
+            if last_cmd != command_type:
+                if last_cmd not in self.context["command_sequences"]:
+                    self.context["command_sequences"][last_cmd] = {}
+                if command_type not in self.context["command_sequences"][last_cmd]:
+                    self.context["command_sequences"][last_cmd][command_type] = 0
+                self.context["command_sequences"][last_cmd][command_type] += 1
+
         # 빈도 업데이트
         if command_type not in self.context["command_frequency"]:
             self.context["command_frequency"][command_type] = 0
@@ -54,6 +72,9 @@ class UserContextManager:
         if time_slot not in self.context["time_patterns"]:
             self.context["time_patterns"][time_slot] = []
         self.context["time_patterns"][time_slot].append(command_type)
+        if len(self.context["time_patterns"][time_slot]) > 20:
+            self.context["time_patterns"][time_slot] = \
+                self.context["time_patterns"][time_slot][-20:]
 
         # 최근 명령어
         self.context["last_commands"].append({
@@ -68,6 +89,31 @@ class UserContextManager:
 
         self.save_context()
 
+    def record_fact(self, key, value):
+        """사용자에 대한 사실 기록"""
+        self.context["facts"][key] = {
+            "value": value,
+            "updated_at": datetime.now().isoformat()
+        }
+        if len(self.context["facts"]) > 100:
+            sorted_keys = sorted(
+                self.context["facts"].keys(),
+                key=lambda k: self.context["facts"][k].get("updated_at", "")
+            )
+            for old_key in sorted_keys[:len(self.context["facts"]) - 100]:
+                del self.context["facts"][old_key]
+        self.save_context()
+
+    def update_bio(self, field, value):
+        """기본 정보 업데이트 (이름, 관심사 등)"""
+        if field in self.context["user_bio"]:
+            if isinstance(self.context["user_bio"][field], list):
+                if value not in self.context["user_bio"][field]:
+                    self.context["user_bio"][field].append(value)
+            else:
+                self.context["user_bio"][field] = value
+            self.save_context()
+
     def record_preference(self, category, value):
         """선호도 기록 (예: 음악 장르, 선호 온도)"""
         if category not in self.context["preferences"]:
@@ -77,11 +123,44 @@ class UserContextManager:
             self.context["preferences"][category][value] = 0
         self.context["preferences"][category][value] += 1
 
+        if len(self.context["preferences"][category]) > 50:
+            sorted_vals = sorted(
+                self.context["preferences"][category].items(),
+                key=lambda x: x[1], reverse=True
+            )
+            self.context["preferences"][category] = dict(sorted_vals[:50])
+
         self.save_context()
+
+    def get_predicted_next_commands(self):
+        """현재 패턴을 바탕으로 다음 예상 명령 제안"""
+        if not self.context["last_commands"]:
+            return []
+        
+        last_cmd = self.context["last_commands"][-1]["command"]
+        if last_cmd in self.context["command_sequences"]:
+            candidates = sorted(
+                self.context["command_sequences"][last_cmd].items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+            return [cmd for cmd, count in candidates[:2]]
+        return []
 
     def get_context_summary(self):
         """컨텍스트 요약 (프롬프트용)"""
         summary = []
+
+        # 기본 정보
+        bio = self.context.get("user_bio", {})
+        if bio.get("name") and bio["name"] != "사용자":
+            summary.append(f"사용자 이름: {bio['name']}")
+        
+        # 사실들
+        facts = self.context.get("facts", {})
+        if facts:
+            fact_list = [f"{k}: {v['value']}" for k, v in facts.items()]
+            summary.append(f"사용자에 대한 사실: {', '.join(fact_list[:5])}")
 
         # 자주 사용하는 명령어
         if self.context["command_frequency"]:
@@ -92,6 +171,11 @@ class UserContextManager:
             )[:3]
             commands_str = ", ".join([cmd for cmd, _ in top_commands])
             summary.append(f"자주 사용하는 명령: {commands_str}")
+
+        # 예상 다음 명령
+        predictions = self.get_predicted_next_commands()
+        if predictions:
+            summary.append(f"패턴 기반 추천: {', '.join(predictions)}")
 
         # 현재 시간대 활동
         hour = datetime.now().hour
