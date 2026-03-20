@@ -102,4 +102,4 @@ MIT License — 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요
 ## 연락처
 
 - 이슈: [github.com/DO0OG/AI-Assistant/issues](https://github.com/DO0OG/AI-Assistant/issues)
-- 이메일: mad_doggo@dogdev.buzz
+- 이메일: laleme@naver.com
