@@ -7,6 +7,30 @@ from PySide6.QtCore import Qt, QRect, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase
 
 
+_font_family = None  # 전역 폰트 패밀리 이름 캐시
+
+
+def register_fonts():
+    """애플리케이션 시작 시 폰트 등록 (메인 스레드에서 호출 권장)"""
+    global _font_family
+    if _font_family is not None:
+        return _font_family
+
+    font_path = os.path.join(os.path.dirname(__file__), "DNFBitBitv2.ttf")
+    if os.path.exists(font_path):
+        from PySide6.QtGui import QFontDatabase
+        font_id = QFontDatabase.addApplicationFont(font_path)
+        if font_id != -1:
+            families = QFontDatabase.applicationFontFamilies(font_id)
+            if families:
+                _font_family = families[0]
+    
+    if _font_family is None:
+        _font_family = "맑은 고딕"
+    
+    return _font_family
+
+
 class SpeechBubble(QWidget):
     """말풍선 위젯"""
 
@@ -19,28 +43,20 @@ class SpeechBubble(QWidget):
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # 폰트 설정
-        font_path = os.path.join(os.path.dirname(__file__), "DNFBitBitv2.ttf")
-        if os.path.exists(font_path):
-            font_id = QFontDatabase.addApplicationFont(font_path)
-            if font_id != -1:
-                font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
-                self.font = QFont(font_family, 11)
-            else:
-                self.font = QFont("맑은 고딕", 10)
-        else:
-            self.font = QFont("맑은 고딕", 10)
-
+        # 폰트 설정 (이미 등록된 폰트 사용)
+        font_family = register_fonts()
+        self.font = QFont(font_family, 11)
         self.fm = QFontMetrics(self.font)
         self.padding = 12
 
-        # 크기 계산
-        self.calculate_size()
-
-        # 위치 계산 및 표시
-        self.update_position()
-        self.show()
-        self.raise_()
+        try:
+            # 크기 계산
+            self.calculate_size()
+            # 위치 계산
+            self.update_position()
+        except Exception as e:
+            import logging
+            logging.error(f"SpeechBubble 초기화 중 오류: {e}")
 
     def calculate_size(self):
         """말풍선 크기 계산"""

@@ -99,19 +99,22 @@ class CosyVoiceTTS(QObject):
 
     def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9):
         super().__init__()
+        from audio_manager import GlobalAudio
         self.model_dir = model_dir or DEFAULT_MODEL_DIR
         self.reference_wav = reference_wav or _get_reference_wav()
         self.reference_text = reference_text
         self.speed = speed
 
-        self.pa = pyaudio.PyAudio()
+        self.pa = GlobalAudio.get_instance()
         self.sample_rate = 24000  # 워커에서 갱신됨
         self.is_playing = False
         self._proc = None
         self._ready = threading.Event()
+        self._warmup_ready = threading.Event()  # 추가: 웜업 완료 이벤트
         self._ctrl_q = []
         self._ctrl_lock = threading.Lock()
         self._speak_lock = threading.Lock()
+        self._stopping = False  # 종료 플래그 추가
 
         self._start_worker()
 
@@ -132,19 +135,24 @@ class CosyVoiceTTS(QObject):
             stdout=subprocess.PIPE,   # 이진 PCM 스트림
             stderr=subprocess.PIPE,   # 텍스트 제어 메시지
         )
-        threading.Thread(target=self._stderr_reader, daemon=True).start()
+        self._stderr_thread = threading.Thread(target=self._stderr_reader, daemon=True)
+        self._stderr_thread.start()
 
         logging.info("CosyVoice3 워커 시작 중 (모델 로드 중, 약 30~60초)...")
-        if not self._ready.wait(timeout=120):
-            logging.error("CosyVoice3 워커 타임아웃 (120초 초과) — 워커 프로세스를 확인하세요.")
+        # 워커가 READY 신호를 보낼 때까지 대기
+        if not self._ready.wait(timeout=300):
+            logging.error("CosyVoice3 워커 타임아웃 (300초 초과) — 워커 프로세스를 확인하세요.")
         else:
             logging.info(f"CosyVoice3 워커 준비 완료 (sample_rate={self.sample_rate})")
 
     def _stderr_reader(self):
         """워커 stderr(제어 채널)을 읽어 이벤트 설정"""
         try:
-            for raw in self._proc.stderr:
-                line = raw.decode("utf-8", errors="replace").strip()
+            while not self._stopping and self._proc and self._proc.poll() is None:
+                line_raw = self._proc.stderr.readline()
+                if not line_raw:
+                    break
+                line = line_raw.decode("utf-8", errors="replace").strip()
                 if not line:
                     continue
                 if line.startswith("SAMPLERATE:"):
@@ -153,19 +161,31 @@ class CosyVoiceTTS(QObject):
                     self._ready.set()
                 elif line.startswith("INFO:"):
                     logging.info(f"[worker] {line[5:]}")
+                    if "백그라운드 GPU warmup 완료" in line:
+                        self._warmup_ready.set()
                 elif line.startswith("DONE:") or line.startswith("ERROR:"):
                     with self._ctrl_lock:
                         self._ctrl_q.append(line)
                 else:
                     logging.debug(f"[worker] {line}")
         except Exception as e:
-            logging.error(f"stderr 읽기 오류: {e}")
+            if not self._stopping:
+                logging.error(f"stderr 읽기 오류: {e}")
 
-    def _wait_ctrl(self, timeout=60) -> str:
-        """DONE/ERROR 제어 메시지 대기"""
+    def wait_until_ready(self, timeout=300):
+        """워커 READY 대기"""
+        return self._ready.wait(timeout=timeout)
+
+    def wait_until_warmup_done(self, timeout=300):
+        """웜업 완료 대기"""
+        logging.info("CosyVoice3 웜업 완료 대기 중...")
+        return self._warmup_ready.wait(timeout=timeout)
+
+    def _wait_ctrl(self, timeout=120) -> str:
+        """DONE/ERROR 제어 메시지 대기 (타임아웃 연장)"""
         import time
         deadline = time.time() + timeout
-        while time.time() < deadline:
+        while time.time() < deadline and not self._stopping:
             with self._ctrl_lock:
                 if self._ctrl_q:
                     return self._ctrl_q.pop(0)
@@ -175,137 +195,163 @@ class CosyVoiceTTS(QObject):
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
     def speak(self, text: str) -> bool:
+        from VoiceCommand import _audio_lock
         text = _normalize_text(text)
         if not text or self._proc is None or self._proc.poll() is not None:
             return False
 
-        # 워커가 아직 준비되지 않았으면 대기 (최대 120초)
+        # 워커가 아직 준비되지 않았으면 대기 (최대 300초)
         if not self._ready.is_set():
             logging.info("[TTS] 워커 준비 대기 중...")
-            if not self._ready.wait(timeout=120):
+            if not self._ready.wait(timeout=300):
                 logging.error("[TTS] 워커 준비 타임아웃 — speak() 건너뜀")
                 return False
 
-        with self._speak_lock:
-            try:
-                self.is_playing = True
-                t0 = time.time()
+        # 오디오 장치 사용을 위해 락 획득
+        with _audio_lock:
+            with self._speak_lock:
+                try:
+                    self.is_playing = True
+                    t0 = time.time()
 
-                # 워커에 텍스트 전송
-                self._proc.stdin.write((text.replace("\n", " ").strip() + "\n").encode("utf-8"))
-                self._proc.stdin.flush()
+                    # 워커에 텍스트 전송
+                    self._proc.stdin.write((text.replace("\n", " ").strip() + "\n").encode("utf-8"))
+                    self._proc.stdin.flush()
 
-                # 링 버퍼 + 완료 이벤트
-                ring = bytearray()
-                ring_lock = threading.Lock()
-                gen_done = threading.Event()
+                    # 링 버퍼 + 완료 이벤트
+                    ring = bytearray()
+                    ring_lock = threading.Lock()
+                    gen_done = threading.Event()
 
-                def pipe_reader():
-                    first = True
+                    def pipe_reader():
+                        first = True
+                        try:
+                            while not self._stopping:
+                                hdr = self._read_exact(4)
+                                if not hdr:
+                                    break
+                                size = struct.unpack("<I", hdr)[0]
+                                if size == 0:
+                                    break
+                                data = self._read_exact(size)
+                                if not data:
+                                    break
+                                if first:
+                                    logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
+                                    first = False
+                                with ring_lock:
+                                    ring.extend(data)
+                        except Exception as e:
+                            if not self._stopping:
+                                logging.debug(f"pipe_reader 오류: {e}")
+                        finally:
+                            gen_done.set()
+
+                    reader_t = threading.Thread(target=pipe_reader, daemon=True)
+                    reader_t.start()
+
+                    # PyAudio 콜백 모드 — 오디오 클록이 독립적으로 동작,
+                    # 데이터 부족 시 무음 패딩 → 언더플로 끊김 완전 방지
+                    def audio_callback(in_data, frame_count, time_info, status):
+                        needed = frame_count * 4  # float32 = 4바이트
+                        with ring_lock:
+                            avail = len(ring)
+                            take = min(avail, needed)
+                            chunk = bytes(ring[:take])
+                            del ring[:take]
+                            empty_and_done = gen_done.is_set() and len(ring) == 0
+
+                        if take < needed:
+                            chunk += b"\x00" * (needed - take)  # 무음으로 패딩
+
+                        flag = pyaudio.paComplete if empty_and_done else pyaudio.paContinue
+                        return (chunk, flag)
+
+                    pa_stream = self.pa.open(
+                        format=pyaudio.paFloat32,
+                        channels=1,
+                        rate=self.sample_rate,
+                        output=True,
+                        frames_per_buffer=1024,  # 콜백 모드: 작을수록 레이턴시 ↓
+                        stream_callback=audio_callback,
+                    )
+                    pa_stream.start_stream()
+
+                    # 생성 완료 대기 (최대 300초)
+                    reader_t.join(timeout=300)
+                    # reader가 끝났거나 타임아웃됐어도 gen_done을 강제 설정
+                    # → 콜백이 paComplete를 반환할 수 있게 함
+                    gen_done.set()
+                    # 남은 오디오 재생 완료 대기 (드레인 강화)
+                    deadline = time.time() + 30
+                    if pa_stream:
+                        while pa_stream.is_active() and time.time() < deadline and not self._stopping:
+                            time.sleep(0.1)
+
                     try:
-                        while True:
-                            hdr = self._read_exact(4)
-                            if not hdr:
-                                break
-                            size = struct.unpack("<I", hdr)[0]
-                            if size == 0:
-                                break
-                            data = self._read_exact(size)
-                            if not data:
-                                break
-                            if first:
-                                logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
-                                first = False
-                            with ring_lock:
-                                ring.extend(data)
-                    finally:
-                        gen_done.set()
+                        if pa_stream:
+                            pa_stream.stop_stream()
+                            pa_stream.close()
+                    except:
+                        pass
+                    if self._stopping:
+                        return False
 
-                reader_t = threading.Thread(target=pipe_reader, daemon=True)
-                reader_t.start()
+                    logging.info(f"[TTS] 전체 완료: {time.time()-t0:.2f}s")
 
-                # PyAudio 콜백 모드 — 오디오 클록이 독립적으로 동작,
-                # 데이터 부족 시 무음 패딩 → 언더플로 끊김 완전 방지
-                def audio_callback(in_data, frame_count, time_info, status):
-                    needed = frame_count * 4  # float32 = 4바이트
-                    with ring_lock:
-                        avail = len(ring)
-                        take = min(avail, needed)
-                        chunk = bytes(ring[:take])
-                        del ring[:take]
-                        empty_and_done = gen_done.is_set() and len(ring) == 0
+                    ctrl = self._wait_ctrl(timeout=60)
+                    if ctrl.startswith("ERROR:"):
+                        logging.error(f"워커 오류: {ctrl[6:]}")
 
-                    if take < needed:
-                        chunk += b"\x00" * (needed - take)  # 무음으로 패딩
+                    self.is_playing = False
+                    self.playback_finished.emit()
+                    return not ctrl.startswith("ERROR:")
 
-                    flag = pyaudio.paComplete if empty_and_done else pyaudio.paContinue
-                    return (chunk, flag)
-
-                pa_stream = self.pa.open(
-                    format=pyaudio.paFloat32,
-                    channels=1,
-                    rate=self.sample_rate,
-                    output=True,
-                    frames_per_buffer=1024,  # 콜백 모드: 작을수록 레이턴시 ↓
-                    stream_callback=audio_callback,
-                )
-                pa_stream.start_stream()
-
-                # 생성 완료 대기 (최대 120초)
-                reader_t.join(timeout=120)
-                # reader가 끝났거나 타임아웃됐어도 gen_done을 강제 설정
-                # → 콜백이 paComplete를 반환할 수 있게 함
-                gen_done.set()
-                # 남은 오디오 재생 완료 대기 (최대 30초)
-                deadline = time.time() + 30
-                while pa_stream.is_active() and time.time() < deadline:
-                    time.sleep(0.02)
-
-                pa_stream.stop_stream()
-                pa_stream.close()
-
-                logging.info(f"[TTS] 전체 완료: {time.time()-t0:.2f}s")
-
-                ctrl = self._wait_ctrl(timeout=30)
-                if ctrl.startswith("ERROR:"):
-                    logging.error(f"워커 오류: {ctrl[6:]}")
-
-                self.is_playing = False
-                self.playback_finished.emit()
-                return not ctrl.startswith("ERROR:")
-
-            except Exception as e:
-                logging.error(f"CosyVoice TTS speak 오류: {e}")
-                self.is_playing = False
-                self.playback_finished.emit()
-                return False
+                except Exception as e:
+                    if not self._stopping:
+                        logging.error(f"CosyVoice TTS speak 오류: {e}")
+                    self.is_playing = False
+                    self.playback_finished.emit()
+                    return False
 
     def _read_exact(self, n: int):
         """stdout에서 정확히 n바이트 읽기"""
         buf = b""
-        while len(buf) < n:
-            chunk = self._proc.stdout.read(n - len(buf))
-            if not chunk:
-                return None
-            buf += chunk
+        try:
+            while len(buf) < n and not self._stopping:
+                chunk = self._proc.stdout.read(n - len(buf))
+                if not chunk:
+                    return None
+                buf += chunk
+        except:
+            return None
         return buf
 
     # ── 정리 ───────────────────────────────────────────────────────────────────
 
     def cleanup(self):
+        """자원 정리 (프로세스 및 PyAudio)"""
+        if self._stopping:
+            return
+        self._stopping = True
+        self._ready.set() # 대기 중인 스레드 해제
+
+        logging.info("CosyVoice3 리소스 정리 중...")
         if self._proc and self._proc.poll() is None:
             try:
+                # 1. EXIT 명령 시도
                 self._proc.stdin.write(b"EXIT\n")
                 self._proc.stdin.flush()
-                self._proc.wait(timeout=5)
+                # 2. 잠시 대기
+                if self._proc.wait(timeout=2) is None:
+                    self._proc.terminate()
             except Exception:
-                self._proc.kill()
-        if hasattr(self, "pa"):
-            try:
-                self.pa.terminate()
-            except Exception:
-                pass
+                try:
+                    self._proc.kill()
+                except:
+                    pass
 
+        # PyAudio 정리는 AriCore.cleanup()에서 GlobalAudio.terminate() 호출로 통합 관리
     def __del__(self):
         try:
             self.cleanup()

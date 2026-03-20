@@ -162,3 +162,12 @@ cython_debug/
 #.idea/
 
 config.json
+
+# ── Ari 프로젝트 ───────────────────────────────────────────────────────────────
+VoiceCommand/logs/
+VoiceCommand/saved_model/
+VoiceCommand/settings.json
+VoiceCommand/vosk-model-*/
+VoiceCommand/*.ppn
+VoiceCommand/porcupine_params_ko.pv
+VoiceCommand/reference.wav

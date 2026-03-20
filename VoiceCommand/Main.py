@@ -2,10 +2,13 @@ import sys
 import os
 import time
 import logging
+import faulthandler
 from datetime import datetime
 import gc
 import psutil
 import warnings
+
+faulthandler.enable()  # 네이티브 크래시(세그폴트 등) 발생 시 stderr에 스택 출력
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
 from PySide6.QtGui import QIcon, QAction
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -13,13 +16,16 @@ from settings_dialog import SettingsDialog
 from ai_assistant import get_ai_assistant
 from character_widget import CharacterWidget
 from collections import deque
-from VoiceCommand import (
+from threads import (
     VoiceRecognitionThread,
-    tts_wrapper,
     TTSThread,
-    CommandExecutionThread,
+    CommandExecutionThread
+)
+from VoiceCommand import (
+    tts_wrapper,
     set_ai_assistant,
     set_character_widget,
+    set_tts_thread,
     start_tts_background,
 )
 import json
@@ -240,6 +246,7 @@ class AriCore(QObject):
         super().__init__()
         self.voice_thread = VoiceRecognitionThread()
         self.tts_thread = TTSThread()
+        set_tts_thread(self.tts_thread)
         self.command_thread = CommandExecutionThread()
         self.resource_monitor = ResourceMonitor()
         logging.info("AriCore 초기화 완료")
@@ -247,7 +254,6 @@ class AriCore(QObject):
         self.init_microphone()
         self.init_threads()
         self.init_connections()
-        self.load_settings()
 
         self.file_observer = start_file_watcher()
         logging.info("파일 감시 시작")
@@ -261,33 +267,18 @@ class AriCore(QObject):
     def init_connections(self):
         self.voice_thread.result.connect(self.handle_voice_result)
 
-    def load_settings(self):
-        from resource_manager import ResourceManager
-        settings_path = ResourceManager.get_writable_path("settings.json")
-        try:
-            with open(settings_path, "r") as f:
-                settings = json.load(f)
-            selected_microphone = settings.get("microphone", "")
-            if selected_microphone:
-                self.voice_thread.set_microphone(selected_microphone)
-        except FileNotFoundError:
-            logging.warning("설정 파일을 찾을 수 없습니다. 기본 설정을 사용합니다.")
-        except json.JSONDecodeError:
-            logging.error(
-                "설정 파일을 읽는 중 오류가 발생했습니다. 기본 설정을 사용합니다."
-            )
-
     def init_microphone(self):
-        # 기본 마이크 사용
-        logging.info("기본 마이크를 사용합니다.")
-        self.voice_thread.set_microphone(None)
-
-    def save_settings(self, microphone):
-        from resource_manager import ResourceManager
-        settings_path = ResourceManager.get_writable_path("settings.json")
-        settings = {"microphone": microphone}
-        with open(settings_path, "w") as f:
-            json.dump(settings, f)
+        """마이크 초기화 (설정값 적용)"""
+        from config_manager import ConfigManager
+        settings = ConfigManager.load_settings()
+        selected_microphone = settings.get("microphone", "")
+        
+        if selected_microphone:
+            logging.info(f"설정된 마이크 사용: {selected_microphone}")
+            self.voice_thread.set_microphone(selected_microphone)
+        else:
+            logging.info("기본 마이크를 사용합니다.")
+            self.voice_thread.set_microphone(None)
 
     def handle_voice_result(self, text):
         logging.info(f"인식된 명령: {text}")
@@ -327,14 +318,22 @@ class AriCore(QObject):
         # Step 6: TTS 리소스 정리
         logging.info("Step 6/6: TTS 리소스 정리")
         from VoiceCommand import fish_tts
+        from audio_manager import GlobalAudio
         if fish_tts:
             fish_tts.cleanup()
+        GlobalAudio.terminate()
 
         logging.info("=== AriCore cleanup 완료 ===")
 
 
 class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self):
+        super().__init__()
+        self._start_time = time.time()
+
     def on_modified(self, event):
+        if time.time() - self._start_time < 10:
+            return
         if event.src_path.endswith('.py'):
             logging.info(f"파일 {event.src_path}가 수정되었습니다. 프로그램을 재시작합니다...")
             os.execv(sys.executable, ['python'] + sys.argv)
@@ -442,6 +441,10 @@ def main():
             logging.warning("시스템 트레이를 사용할 수 없습니다. 콘솔 모드로 실행합니다.")
 
         ari_core = AriCore()
+
+        # 전역 오디오 인스턴스 초기화 (메인 스레드에서 생성)
+        from audio_manager import GlobalAudio
+        GlobalAudio.get_instance()
 
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
         start_tts_background()
