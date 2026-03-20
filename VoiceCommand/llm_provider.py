@@ -194,15 +194,18 @@ class LLMProvider:
             "2. 대답의 시작 부분에 상황에 맞는 감정 태그를 반드시 하나 포함하세요: (기쁨), (슬픔), (화남), (놀람), (평온), (수줍), (기대), (진지), (걱정)\n"
             "   예: (기대) 우와, 정말요? 너무 기대돼요!\n"
             "3. 음악 재생, 타이머 설정, 날씨 확인 등 동작 요청 시 해당 도구를 호출하세요.\n"
-            "4. 간결하고 자연스럽게 캐릭터를 유지하며 대답하세요."
+            "4. 간결하고 자연스럽게 캐릭터를 유지하며 대답하세요.\n\n"
+            "**기억 및 학습**:\n"
+            "- 사용자의 이름, 위치, 신상정보 등이 나타나면 응답 끝에 [BIO: field=value]를 추가하세요.\n"
+            "- 사용자가 말한 단편적 사실이나 사실 관계는 [FACT: key=value]를 추가하세요.\n"
+            "- 사용자의 취향이나 선호도는 [PREF: category=value]를 추가하세요.\n"
+            "예: 사용자가 '나 오늘 기분 안좋아'라고 하면 [FACT: 오늘 기분=안 좋음] 등을 남길 수 있습니다."
         )
 
         if include_context:
             try:
-                from user_context import get_context_manager
-                ctx = get_context_manager().get_context_summary()
-                if ctx:
-                    content += f"\n\n사용자 컨텍스트:\n{ctx}"
+                from memory_manager import get_memory_manager
+                content += f"\n\n사용자 및 시스템 컨텍스트:\n{get_memory_manager().get_full_context_prompt()}"
             except Exception:
                 pass
         return content
@@ -211,6 +214,9 @@ class LLMProvider:
         """도구 포함 대화. Returns (text|None, tool_calls_list)"""
         if not self.client:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 API 키를 입력하세요.", []
+
+        from memory_manager import get_memory_manager
+        memory_manager = get_memory_manager()
 
         if self.provider == "anthropic":
             return self._anthropic_chat(user_message, include_context, use_tools=True)
@@ -238,9 +244,20 @@ class LLMProvider:
                     except Exception:
                         args = {}
                     tool_calls.append({"name": tc.function.name, "arguments": args})
+                    # 명령어 패턴 기록
+                    memory_manager.context_manager.record_command(tc.function.name, args)
                 logging.info(f"AI tool calls: {tool_calls}")
 
-            msg = self._filter_korean(choice.message.content or "")
+            raw_msg = choice.message.content or ""
+            
+            # 정보 추출 및 저장
+            if raw_msg:
+                memory_manager.process_interaction(user_message, raw_msg)
+                msg = memory_manager.clean_response(raw_msg)
+            else:
+                msg = ""
+
+            msg = self._filter_korean(msg)
             if not msg and not tool_calls:
                 msg = "(평온) 죄송해요, 답변을 생성할 수 없었어요."
             
@@ -258,6 +275,9 @@ class LLMProvider:
         if not self.client:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 API 키를 입력하세요."
 
+        from memory_manager import get_memory_manager
+        memory_manager = get_memory_manager()
+
         if self.provider == "anthropic":
             result, _ = self._anthropic_chat(user_message, include_context, use_tools=False)
             return result
@@ -273,7 +293,13 @@ class LLMProvider:
                 temperature=0.7,
                 max_tokens=200,
             )
-            msg = self._filter_korean(response.choices[0].message.content or "")
+            raw_msg = response.choices[0].message.content or ""
+            
+            # 정보 추출 및 저장
+            memory_manager.process_interaction(user_message, raw_msg)
+            msg = memory_manager.clean_response(raw_msg)
+            
+            msg = self._filter_korean(msg)
             if not msg:
                 msg = "죄송해요, 답변을 생성할 수 없었어요."
             self.add_to_history("assistant", msg)
@@ -286,6 +312,9 @@ class LLMProvider:
     def _anthropic_chat(self, user_message, include_context=False, use_tools=False):
         """Anthropic Claude API (자체 SDK 형식)"""
         try:
+            from memory_manager import get_memory_manager
+            memory_manager = get_memory_manager()
+            
             self.add_to_history("user", user_message)
             system_content = self._build_system(include_context)
 
@@ -313,14 +342,25 @@ class LLMProvider:
             for block in response.content:
                 if block.type == "tool_use":
                     tool_calls.append({"name": block.name, "arguments": block.input})
+                    # 명령어 패턴 기록
+                    memory_manager.context_manager.record_command(block.name, block.input)
                 elif block.type == "text":
                     text_parts.append(block.text)
 
+            raw_msg = " ".join(text_parts)
+            
+            # 정보 추출 및 저장
+            if raw_msg:
+                memory_manager.process_interaction(user_message, raw_msg)
+                msg = memory_manager.clean_response(raw_msg)
+            else:
+                msg = ""
+
             if tool_calls:
                 logging.info(f"Anthropic tool calls: {tool_calls}")
-                return None, tool_calls
+                return msg if msg else None, tool_calls
 
-            msg = self._filter_korean(" ".join(text_parts)) or "죄송해요, 답변을 생성할 수 없었어요."
+            msg = self._filter_korean(msg) or "죄송해요, 답변을 생성할 수 없었어요."
             self.add_to_history("assistant", msg)
             return msg, []
 

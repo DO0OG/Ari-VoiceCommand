@@ -9,6 +9,47 @@
 
 ---
 
+## 개발 현황
+
+### 구현 완료
+
+| 기능 | 설명 |
+|------|------|
+| **웨이크워드** | Porcupine "아리야" + SimpleWakeWord(Google STT) 폴백 |
+| **음성 인식** | Google STT (기본) · Vosk 오프라인 옵션 |
+| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter 선택 |
+| **감정 표현** | AI 태그(`(기쁨)` 등) 기반 캐릭터 애니메이션 반응 |
+| **TTS** | Fish Audio WS · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
+| **캐릭터 위젯** | Shimeji 스타일 드래그 · 물리 엔진 · 마우스 반응 |
+| **스마트 모드** | LLM tool calling으로 타이머 · 날씨 · 유튜브 등 자동 실행 |
+| **미디어** | 유튜브 오디오 스트리밍 (yt-dlp + VLC) |
+| **기억 시스템** | FACT/BIO/PREF 태그 기반 장기 기억 (LTM/STM) |
+| **설정 UI** | 트레이 아이콘 기반 3탭 설정창 (RP · AI&TTS · 장치) |
+| **텍스트 인터페이스** | PySide6 채팅 UI (음성 없이 텍스트로 대화 가능) |
+| **계산기** | 수식 음성 인식 및 계산 |
+| **빌드 시스템** | Nuitka 기반 EXE 빌드 (단일 파일 · 폴더 선택) |
+| **Raspberry Pi LED** | GPIO PWM 기반 상태별 LED 피드백 |
+
+### 개선 여지
+
+| 항목 | 내용 |
+|------|------|
+| `load_context` bare except | `user_context.py` 파일 로드 실패 시 예외 종류·로그 없이 조용히 무시됨 |
+| 크기 상한 누락 | `command_sequences` · `command_frequency` · `conversation_topics` 딕셔너리 무제한 성장 가능 |
+| `user_bio` 리스트 상한 | `interests` · `memos` 리스트에 크기 제한 없음 |
+| `conversation_topics` 미사용 | 데이터 구조에 정의되어 있으나 실제로 기록하는 코드 없음 (stub 상태) |
+
+### 추후 개발
+
+| 기능 | 설명 |
+|------|------|
+| **스마트홈 연동** | Home Assistant 명령을 commands/ 모듈로 재구현 (현재 미이식) |
+| **Discord 파일 공유** | 파일 전송 명령 commands/ 모듈로 재구현 (현재 미이식) |
+| **알람** | 특정 시각 지정 알림 (현재 카운트다운 타이머만 지원) |
+| **대화 주제 분석** | `conversation_topics` 실제 집계 및 컨텍스트 프롬프트 활용 |
+
+---
+
 ## 주요 기능
 
 | 기능 | 설명 |
@@ -82,6 +123,34 @@ tts_factory.py           ← TTS 제공자 동적 생성 팩토리
 ├── images/              ← 캐릭터 애니메이션 PNG 프레임
 └── ...
 ```
+
+---
+
+## 기억 시스템 (LTM / STM)
+
+Ari는 대화 중 AI 응답에 포함된 특수 태그를 분석하여 장기 기억을 자동으로 구축합니다.
+
+### 태그 형식
+
+| 태그 | 형식 | 예시 |
+|------|------|------|
+| `[FACT:]` | `[FACT: key=value]` | `[FACT: 취미=코딩]` |
+| `[BIO:]` | `[BIO: field=value]` | `[BIO: name=홍길동]` |
+| `[PREF:]` | `[PREF: category=value]` | `[PREF: 음악장르=로파이]` |
+
+- **FACT**: 사용자에 대한 단편적 사실 (`user_context.json` → `facts` 저장)
+- **BIO**: 이름·관심사 등 기본 프로필 정보 (`user_bio` 갱신)
+- **PREF**: 카테고리별 선호도 빈도 기록 (`preferences` 누적)
+
+### 데이터 상한
+
+| 항목 | 상한 | 초과 시 정책 |
+|------|------|-------------|
+| `facts` | 100개 | `updated_at` 기준 오래된 항목부터 삭제 |
+| `time_patterns` (슬롯당) | 20개 | 오래된 항목(앞쪽)부터 제거 |
+| `preferences` (카테고리당) | 50개 | 빈도 낮은 항목부터 제거 |
+
+기억 데이터는 `VoiceCommand/user_context.json`에 저장되며, `MemoryManager`가 매 대화마다 태그를 추출하여 자동 갱신합니다.
 
 ---
 

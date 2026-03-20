@@ -204,10 +204,11 @@ class CharacterWidget(QWidget):
                 self.animations[anim_name] = frames
 
     def get_ground_y(self):
-        """현재 상태에 따른 바닥 Y 좌표 계산 (보정값 강화)"""
+        """현재 상태에 따른 바닥 Y 좌표 계산 (전체 화면 기준 및 오프셋 강화)"""
         screen = QApplication.primaryScreen().geometry()
-        ground_bottom = screen.height() - 50
-        # 앉은 자세(sit)일 때 더 깊게 밀착 (+25px), 기본 상태도 약간 내림 (+5px)
+        ground_bottom = screen.height()
+        # 앉은 자세(sit)는 이미지가 더 낮으므로 더 깊게 밀착 (공중에 뜨는 현상 방지)
+        # idle: 0, sit: 25 (더 깊게 안착)
         offset = 25 if self.current_animation == "sit" else 5
         return ground_bottom - self.height() + offset
 
@@ -220,9 +221,9 @@ class CharacterWidget(QWidget):
                 flip = not self.facing_right
                 pixmap = self.load_and_cache_image(frame_path, flip=flip)
                 if pixmap:
-                    # 새로운 프레임의 크기를 기준으로 위치와 크기를 한 번에 업데이트 (시각적 어긋남 원천 차단)
+                    # 새로운 프레임의 크기를 기준으로 위치와 크기를 한 번에 업데이트
                     screen = QApplication.primaryScreen().geometry()
-                    ground_bottom = screen.height() - 50
+                    ground_bottom = screen.height()
                     offset = 25 if self.current_animation == "sit" else 5
                     new_y = ground_bottom - pixmap.height() + offset
 
@@ -231,7 +232,10 @@ class CharacterWidget(QWidget):
                     
                     # 바닥에 있을 때 위치와 크기를 동시에 변경
                     if not self.dragging and not self.is_falling:
-                        self.setGeometry(self.x(), new_y, pixmap.width(), pixmap.height())
+                        # 좌우 경계 제한 (캐릭터 너비의 절반에서 15px 줄인 만큼만 화면 밖 허용)
+                        margin = max(0, (pixmap.width() // 2) - 30)
+                        new_x = max(-margin, min(self.x(), screen.width() - pixmap.width() + margin))
+                        self.setGeometry(new_x, new_y, pixmap.width(), pixmap.height())
                     else:
                         self.setFixedSize(pixmap.width(), pixmap.height())
 
@@ -248,6 +252,10 @@ class CharacterWidget(QWidget):
     def set_animation(self, animation_name):
         """애니메이션 변경"""
         if animation_name in self.animations and animation_name != self.current_animation:
+            # 착지 중에는 애니메이션 강제 변경 방지 (자연스러운 전환을 위해)
+            if getattr(self, '_is_landing', False) and animation_name not in ["sit", "idle"]:
+                return
+                
             self.current_animation = animation_name
             self.frame_index = 0
             self.update_frame()
@@ -259,14 +267,14 @@ class CharacterWidget(QWidget):
 
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
-        if self.dragging or self.is_climbing or (self.move_animation and self.move_animation.state() == QPropertyAnimation.Running):
+        if self.dragging or self.is_climbing or getattr(self, '_is_landing', False) or (self.move_animation and self.move_animation.state() == QPropertyAnimation.Running):
             return
 
         screen = QApplication.primaryScreen().geometry()
-
-        # 화면 가장자리에 있으면 특별 행동
-        at_left_edge = self.x() <= 5
-        at_right_edge = self.x() >= screen.width() - self.width() - 5
+        margin = max(0, (self.width() // 2) - 30)
+        # 벽 밀착 판정 (캐릭터 너비의 40% 이상 나갔을 때)
+        at_left_edge = self.x() <= -margin + 10
+        at_right_edge = self.x() >= screen.width() - self.width() + margin - 10
 
         # 벽 타기 시도 (화면 끝에서 30% 확률)
         if (at_left_edge or at_right_edge) and random.random() < 0.3:
@@ -326,14 +334,15 @@ class CharacterWidget(QWidget):
         """부드럽고 느린 걷기 이동"""
         from PySide6.QtWidgets import QApplication
         screen = QApplication.primaryScreen().geometry()
+        margin = max(0, (self.width() // 2) - 30)
 
         # 이동 거리 및 방향
-        distance = random.randint(100, 300)
+        distance = random.randint(150, 400)
         direction = random.choice([-1, 1])
         new_x = self.x() + (distance * direction)
 
-        # 화면 경계 체크
-        new_x = max(0, min(new_x, screen.width() - self.width()))
+        # 화면 경계 체크 (벽 끝까지 이동 허용)
+        new_x = max(-margin, min(new_x, screen.width() - self.width() + margin))
 
         # 캐릭터 방향 설정
         self.facing_right = (new_x > self.x())
@@ -377,6 +386,7 @@ class CharacterWidget(QWidget):
             self._last_click = now
 
             self.dragging = True
+            self._is_landing = False # 드래그 시 착지 플래그 초기화
             self.offset = event.globalPos() - self.pos()
             self.set_animation("drag")
 
@@ -397,10 +407,11 @@ class CharacterWidget(QWidget):
             nx = event.globalPos().x() - self.offset.x()
             ny = event.globalPos().y() - self.offset.y()
             
-            # 화면 경계 제한
+            # 화면 경계 제한 (좌우는 절반까지 밖으로, 상단은 0, 하단은 바닥까지)
             screen = QApplication.primaryScreen().geometry()
-            nx = max(0, min(nx, screen.width() - self.width()))
-            ny = max(0, min(ny, screen.height() - self.height()))
+            margin = max(0, (self.width() // 2) - 30)
+            nx = max(-margin, min(nx, screen.width() - self.width() + margin))
+            ny = max(0, min(ny, screen.height() - self.height() + 25))
 
             # 방향 감지 및 프레임 업데이트
             dx = nx - self.x()
@@ -448,7 +459,8 @@ class CharacterWidget(QWidget):
 
             self.is_falling = True
             self.set_animation("fall")
-            QTimer.singleShot(800, lambda: self.set_animation("idle") if not self.dragging and not self.is_falling else None)
+            # 릴리즈 후 일정 시간 뒤에 idle로 (강제 착지 연출 방지)
+            QTimer.singleShot(800, lambda: self.set_animation("idle") if not self.dragging and not self.is_falling and not getattr(self, '_is_landing', False) else None)
 
     def contextMenuEvent(self, event):
         """우클릭 메뉴"""
@@ -526,8 +538,8 @@ class CharacterWidget(QWidget):
         current_y = self.y()
         moved = False
 
-        # 중력 적용 로직
-        if current_y < target_y - 1 or self.velocity_y < 0:
+        # 중력 적용 로직 (오차 허용 범위 내)
+        if current_y < target_y - 40 or self.velocity_y < 0:
             self.is_falling = True
             self.velocity_y = min(self.velocity_y + self.gravity, 20)
             new_y = current_y + self.velocity_y
@@ -535,50 +547,64 @@ class CharacterWidget(QWidget):
             # 착지 판정
             if new_y >= target_y:
                 new_y = target_y
-                if abs(self.velocity_y) > 3:
+                # 착지 직전 속도 저장
+                impact_vel = abs(self.velocity_y)
+                
+                if impact_vel > 3:
                     self.velocity_y *= self.bounce_y
                 else:
                     self.velocity_y = 0
                     self.is_falling = False
-                    # 착지 즉시 모션 변경 (버그 수정)
+                    
+                    # 스마트 착지 연출: 낙하 속도가 빠를 때만 sit(충격흡수) 적용
                     if self.current_animation == "fall":
-                        self.set_animation("idle")
+                        if impact_vel > 8: # 강한 추락 기준
+                            self._is_landing = True
+                            self.set_animation("sit")
+                            def finish_landing():
+                                self._is_landing = False
+                                if not self.is_falling and not self.dragging:
+                                    self.set_animation("idle")
+                            QTimer.singleShot(600, finish_landing)
+                        else: # 살짝 떨어짐
+                            self.set_animation("idle")
 
             if int(new_y) != current_y:
                 self.setGeometry(self.x(), int(new_y), self.width(), self.height())
                 moved = True
 
         else:
-            # 바닥에 안정적으로 붙어있도록 강제 고정
+            # 바닥에 안정적으로 붙어있을 때
             if self.is_falling or self.current_animation == "fall":
                 self.is_falling = False
-                self.set_animation("idle")
-            
-            if current_y != target_y:
-                self.setGeometry(self.x(), target_y, self.width(), self.height())
-                moved = True
+                self._is_landing = True
+                self.set_animation("sit")
+                def finish_landing():
+                    self._is_landing = False
+                    if not self.is_falling and not self.dragging:
+                        self.set_animation("idle")
+                QTimer.singleShot(700, finish_landing)
             
             self.velocity_y = 0
-
-        # ... (이후 수평 이동 로직 동일)
 
         # 수평 이동 (던지기 및 마찰)
         if self.velocity_x != 0:
             new_x = int(self.x() + self.velocity_x)
+            margin = max(0, (self.width() // 2) - 30)
             
-            # 벽 충돌 및 튕기기
-            if new_x < 0:
-                new_x = 0
-                self.velocity_x *= self.bounce_x # 수정됨: 낮은 반동 적용
-            elif new_x > screen.width() - self.width():
-                new_x = screen.width() - self.width()
-                self.velocity_x *= self.bounce_x # 수정됨: 낮은 반동 적용
+            # 벽 충돌 및 튕기기 (화면 밖 절반까지 허용)
+            if new_x < -margin:
+                new_x = -margin
+                self.velocity_x *= self.bounce_x
+            elif new_x > screen.width() - self.width() + margin:
+                new_x = screen.width() - self.width() + margin
+                self.velocity_x *= self.bounce_x
 
             if new_x != self.x():
                 self.move(new_x, self.y())
                 moved = True
 
-            # 마찰 (수정됨: 정의된 계수 사용)
+            # 마찰 적용
             if self.is_falling:
                 self.velocity_x *= self.friction_air
             else:
@@ -587,7 +613,7 @@ class CharacterWidget(QWidget):
             if abs(self.velocity_x) < 0.5:
                 self.velocity_x = 0
 
-        # 말풍선 위치 업데이트 (이동했을 때만)
+        # 말풍선 위치 업데이트
         if moved and self.speech_bubble:
             self.speech_bubble.update_position()
 
@@ -603,7 +629,8 @@ class CharacterWidget(QWidget):
         distance = abs(dx)
 
         screen = QApplication.primaryScreen().geometry()
-        at_edge = self.x() <= 0 or self.x() >= screen.width() - self.width()
+        margin = max(0, (self.width() // 2) - 30)
+        at_edge = self.x() <= -margin + 5 or self.x() >= screen.width() - self.width() + margin - 5
 
         if distance < 80:
             # 매우 가까움 — 놀라서 도망 (속도 강하게)

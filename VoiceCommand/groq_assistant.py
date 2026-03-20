@@ -178,17 +178,27 @@ class GroqAssistant:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 Groq API 키를 입력하세요.", []
 
         try:
-            self.add_to_history("user", user_message)
+            from memory_manager import get_memory_manager
+            memory_manager = get_memory_manager()
 
             if self.system_prompt:
                 system_content = self.system_prompt
                 system_content += "\n\n**중요**: 반드시 한국어로만 대답하세요. 사용자가 특정 동작(음악 재생, 타이머, 날씨, 볼륨, 시간 등)을 요청하면 해당 도구를 호출하세요."
+                
+                # 메모리 기반 기억 추출 지침 추가
+                system_content += (
+                    "\n\n**기억 및 학습**:\n"
+                    "- 사용자의 이름, 위치, 신상정보 등이 나타나면 응답 끝에 [BIO: field=value]를 추가하세요.\n"
+                    "- 사용자가 말한 단편적 사실이나 사실 관계는 [FACT: key=value]를 추가하세요.\n"
+                    "- 사용자의 취향이나 선호도는 [PREF: category=value]를 추가하세요.\n"
+                    "사용자가 '나 코딩 좋아해'라고 하면 [FACT: 취미=코딩] 이런 식으로 남기면 됩니다."
+                )
+
                 if include_context:
                     try:
-                        from user_context import get_context_manager
-                        context_summary = get_context_manager().get_context_summary()
+                        context_summary = memory_manager.get_full_context_prompt()
                         if context_summary:
-                            system_content += f"\n\n사용자 컨텍스트:\n{context_summary}"
+                            system_content += f"\n\n사용자 및 시스템 컨텍스트:\n{context_summary}"
                     except Exception:
                         pass
             else:
@@ -227,18 +237,36 @@ class GroqAssistant:
                         "name": tc.function.name,
                         "arguments": args
                     })
+                    # 명령어 패턴 기록
+                    memory_manager.context_manager.record_command(tc.function.name, args)
+
                 logging.info(f"AI tool calls: {tool_calls}")
                 
-                # 도구 호출 시에도 응답 메시지가 있으면 반환
+                # 도구 호출 시에도 응답 메시지가 있으면 처리 및 정제
                 assistant_message = choice.message.content or ""
+                if assistant_message:
+                    memory_manager.process_interaction(user_message, assistant_message)
+                    assistant_message = memory_manager.clean_response(assistant_message)
                 return assistant_message, tool_calls
 
             # 일반 텍스트 응답
-            assistant_message = choice.message.content or ""
+            assistant_raw_message = choice.message.content or ""
+            
+            # 1. 정보 추출 및 저장
+            memory_manager.process_interaction(user_message, assistant_raw_message)
+
+            # 2. 태그 제거 및 텍스트 정제
+            assistant_message = memory_manager.clean_response(assistant_raw_message)
+            
             filtered_message = self._filter_korean_text_preserve_commands(assistant_message)
             if not filtered_message:
                 filtered_message = "죄송해요, 답변을 생성할 수 없었어요."
-            self.add_to_history("assistant", filtered_message)
+            
+            # 최종 정제된 메시지를 히스토리에 추가
+            self.conversation_history.append({"role": "assistant", "content": filtered_message})
+            if len(self.conversation_history) > self.max_history * 2:
+                self.conversation_history = self.conversation_history[-self.max_history * 2:]
+
             return filtered_message, []
 
         except Exception as e:
@@ -261,22 +289,30 @@ class GroqAssistant:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 Groq API 키를 입력하세요."
 
         try:
-            # 사용자 메시지 추가
-            self.add_to_history("user", user_message)
+            from memory_manager import get_memory_manager
+            memory_manager = get_memory_manager()
 
             # 시스템 프롬프트 결정: 사용자 설정 우선, 없으면 기본값
             if self.system_prompt:
                 system_content = self.system_prompt
                 # 한국어 필터링 지시 추가
                 system_content += "\n\n**중요**: 반드시 한국어로만 대답하세요. 중국어, 일본어 등 다른 언어의 문자를 절대 사용하지 마세요."
+                
+                # 메모리 기반 기억 추출 지침 추가
+                system_content += (
+                    "\n\n**기억 및 학습**:\n"
+                    "- 사용자의 이름, 위치, 신상정보 등이 나타나면 응답 끝에 [BIO: field=value]를 추가하세요.\n"
+                    "- 사용자가 말한 단편적 사실이나 사실 관계는 [FACT: key=value]를 추가하세요.\n"
+                    "- 사용자의 취향이나 선호도는 [PREF: category=value]를 추가하세요.\n"
+                    "예: 사용자가 '나 오늘 기분 안좋아'라고 하면 [FACT: 오늘 기분=안 좋음] 등을 남길 수 있습니다."
+                )
 
                 # 사용자 컨텍스트 추가 (스마트 모드 시)
                 if include_context:
                     try:
-                        from user_context import get_context_manager
-                        context_summary = get_context_manager().get_context_summary()
+                        context_summary = memory_manager.get_full_context_prompt()
                         if context_summary:
-                            system_content += f"\n\n사용자 컨텍스트:\n{context_summary}"
+                            system_content += f"\n\n사용자 및 시스템 컨텍스트:\n{context_summary}"
                     except:
                         pass
             else:
@@ -293,25 +329,33 @@ class GroqAssistant:
                 }
             ]
             messages.extend(self.conversation_history)
+            messages.append({"role": "user", "content": user_message})
 
             # API 호출
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",  # 최신 모델
+                model="llama-3.3-70b-versatile",
                 messages=messages,
-                temperature=0.7,  # 캐릭터 RP를 위해 0.7로 유지
-                max_tokens=200,  # 500 → 200으로 감소 (TTS용 짧은 응답)
+                temperature=0.7,
+                max_tokens=200,
                 top_p=0.9,
                 stream=False
             )
 
-            assistant_message = response.choices[0].message.content
+            assistant_raw_message = response.choices[0].message.content
+
+            # 1. 정보 추출 및 저장
+            memory_manager.process_interaction(user_message, assistant_raw_message)
+
+            # 2. 태그 제거 및 텍스트 정제
+            assistant_message = memory_manager.clean_response(assistant_raw_message)
 
             # 한국어 필터링 적용 (명령어 태그는 보존)
             filtered_message = self._filter_korean_text_preserve_commands(assistant_message)
 
             if not filtered_message:
-                filtered_message = "죄송해요, 답변을 생성할 수 없었어요."
+                filtered_message = "죄송해요, 답변을 생성할 수 없웠어요."
 
+            self.add_to_history("user", user_message)
             self.add_to_history("assistant", filtered_message)
 
             return filtered_message
