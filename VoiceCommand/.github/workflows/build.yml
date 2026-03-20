@@ -22,11 +22,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install Nuitka
+        run: pip install nuitka
 
       - name: Build EXE (clean)
-        run: pyinstaller Ari.spec --clean
+        run: python build_exe.py --clean
 
       - name: Zip artifact
         run: Compress-Archive -Path dist\Ari\* -DestinationPath Ari-windows.zip

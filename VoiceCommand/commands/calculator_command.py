@@ -7,6 +7,9 @@ import logging
 class CalculatorCommand(BaseCommand):
     """간단한 계산 명령"""
 
+    def __init__(self, tts_func):
+        self._tts = tts_func
+
     def matches(self, text: str) -> bool:
         return "계산" in text or any(op in text for op in ["+", "-", "×", "x", "÷", "/", "곱하기", "더하기", "빼기", "나누기"])
 
@@ -48,6 +51,3 @@ class CalculatorCommand(BaseCommand):
         except Exception as e:
             logging.error(f"계산 오류: {e}")
             self._tts("계산에 실패했습니다")
-
-    def __init__(self, tts_func):
-        self._tts = tts_func

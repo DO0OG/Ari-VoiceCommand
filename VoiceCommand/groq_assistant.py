@@ -228,8 +228,10 @@ class GroqAssistant:
                         "arguments": args
                     })
                 logging.info(f"AI tool calls: {tool_calls}")
-                # 대화 기록에는 어시스턴트 도구 호출 메시지 추가하지 않음 (단순화)
-                return None, tool_calls
+                
+                # 도구 호출 시에도 응답 메시지가 있으면 반환
+                assistant_message = choice.message.content or ""
+                return assistant_message, tool_calls
 
             # 일반 텍스트 응답
             assistant_message = choice.message.content or ""
@@ -359,40 +361,19 @@ class GroqAssistant:
         logging.debug(f"Q-table 업데이트 (Groq): {action}, reward={reward}")
 
 
-# 전역 인스턴스
+# 전역 인스턴스 (하위 호환 유지)
 _groq_assistant = None
 
 
 def get_groq_assistant():
-    """Groq Assistant 싱글톤"""
-    global _groq_assistant
-    if _groq_assistant is None:
-        # 설정 파일에서 API 키 및 캐릭터 설정 로드
-        try:
-            from config_manager import ConfigManager
-            settings = ConfigManager.load_settings()
-            api_key = settings.get("groq_api_key", "")
-            system_prompt = settings.get("system_prompt", "")
-            personality = settings.get("personality", "")
-            scenario = settings.get("scenario", "")
-        except Exception as e:
-            logging.warning(f"설정 로드 실패: {e}")
-            api_key = ""
-            system_prompt = ""
-            personality = ""
-            scenario = ""
-
-        _groq_assistant = GroqAssistant(
-            api_key=api_key,
-            system_prompt=system_prompt,
-            personality=personality,
-            scenario=scenario
-        )
-
-    return _groq_assistant
+    """하위 호환: 다중 제공자 LLMProvider로 위임"""
+    from llm_provider import get_llm_provider
+    return get_llm_provider()
 
 
 def set_groq_api_key(api_key):
-    """Groq API 키 설정"""
-    global _groq_assistant
-    _groq_assistant = GroqAssistant(api_key=api_key)
+    """Groq API 키 설정 (하위 호환 — llm_provider 싱글톤 리셋)"""
+    from llm_provider import reset_llm_provider
+    from config_manager import ConfigManager
+    ConfigManager.set_value("groq_api_key", api_key)
+    reset_llm_provider()

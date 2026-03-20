@@ -35,6 +35,11 @@ class AICommand(BaseCommand):
                 response, tool_calls = self.ai_assistant.chat_with_tools(text, include_context=True)
 
                 if tool_calls:
+                    # 도구 호출 시 AI 응답이 있으면 먼저 말하고 없으면 기본 멘트
+                    if response:
+                        self.tts_wrapper(response)
+                    else:
+                        self.tts_wrapper("명령을 실행할게요.")
                     self._execute_tool_calls(tool_calls)
                 else:
                     self.tts_wrapper(response)

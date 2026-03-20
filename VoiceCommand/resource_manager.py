@@ -36,7 +36,13 @@ class ResourceManager:
     def get_bundle_path(relative_path: str) -> str:
         """번들(읽기전용) 리소스 경로 반환"""
         if getattr(sys, 'frozen', False):
-            return os.path.join(sys._MEIPASS, relative_path)
+            if hasattr(sys, '_MEIPASS'):
+                # PyInstaller: 임시 압축 해제 폴더
+                base = sys._MEIPASS
+            else:
+                # Nuitka standalone: 데이터 파일이 exe 옆에 위치
+                base = os.path.dirname(os.path.abspath(sys.executable))
+            return os.path.join(base, relative_path)
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
     @staticmethod

@@ -15,16 +15,38 @@ class ConfigManager:
 
     SETTINGS_FILE = "ari_settings.json"
     DEFAULT_SETTINGS = {
+        # ── LLM 제공자 ──────────────────────────────────────────────────────
+        "llm_provider": "groq",        # groq | openai | anthropic | mistral | gemini | openrouter
+        "llm_model": "",               # 비워두면 제공자별 기본 모델 사용
+        "groq_api_key": "",
+        "openai_api_key": "",
+        "anthropic_api_key": "",
+        "mistral_api_key": "",
+        "gemini_api_key": "",
+        "openrouter_api_key": "",
+        # ── TTS 제공자 ──────────────────────────────────────────────────────
+        "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge
         "fish_api_key": "",
         "fish_reference_id": "",
-        "groq_api_key": "",
+        "cosyvoice_reference_text": "",
+        "cosyvoice_speed": 0.9,
+        "openai_tts_api_key": "",      # 비워두면 openai_api_key 공용
+        "openai_tts_voice": "nova",    # alloy | echo | fable | onyx | nova | shimmer
+        "openai_tts_model": "tts-1",   # tts-1 | tts-1-hd
+        "elevenlabs_api_key": "",
+        "elevenlabs_voice_id": "",
+        "elevenlabs_model_id": "eleven_multilingual_v2",
+        "edge_tts_voice": "ko-KR-SunHiNeural",
+        "edge_tts_rate": "+0%",
+        # ── 캐릭터 / RP ─────────────────────────────────────────────────────
         "personality": "",
         "scenario": "",
         "system_prompt": "",
         "history_instruction": "",
+        # ── 기타 ────────────────────────────────────────────────────────────
         "microphone": "",
         "tts_speed": 1.0,
-        "tts_volume": 1.0
+        "tts_volume": 1.0,
     }
 
     @classmethod

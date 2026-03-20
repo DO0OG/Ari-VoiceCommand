@@ -1,99 +1,105 @@
-# Ari Voice Command(AI-Assistant)
-> 음성 인식을 통한 데스크탑 기능 및 편의 기능 제어와 머신러닝을 이용한 대화 기능을 구현한 프로그램으로
->
-> 기본적은 캐릭터 위젯은 shimeji와 유사하게 만들었습니다.
+﻿# Ari (아리) — AI 음성 어시스턴트
+
+> 한국어 음성 인식 기반 데스크탑 AI 어시스턴트.
+> Shimeji 스타일 캐릭터 위젯 + 다중 LLM / TTS 제공자 선택 지원.
 
 - 캐릭터 모델 제작 : [자라탕](https://github.com/yongmen20)
 
-![image](https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd)
+![preview](https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd)
 
-## 음성 명령어 목록
+---
 
-### 기본 명령어
+## 주요 기능
 
-- **"아리야"**: 음성 인식을 시작합니다.
+| 기능 | 설명 |
+|------|------|
+| **웨이크워드** | "아리야" 호출 → 음성 입력 대기 |
+| **음성 인식** | Google STT (기본) |
+| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter 선택 |
+| **감정 표현** | AI가 내용에 따라 (기쁨), (슬픔) 등 태그를 생성하고 캐릭터가 반응 |
+| **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
+| **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 |
+| **스마트 모드** | AI가 상황을 판단하여 도구(타이머, 날씨 등) 자동 실행 |
+| **미디어** | 유튜브 오디오 스트리밍 (yt-dlp + VLC) |
 
-### 웹 브라우저 관련 명령어
+---
 
-- **"[사이트 이름] 열어 줘"**: 지정된 사이트를 웹 브라우저로 엽니다.
-  예: "네이버 열어 줘", "유튜브 열어 줘"
+## 빠른 시작
 
-- **"유튜브 [검색어] 재생"**: 유튜브에서 검색어로 영상을 찾아 재생합니다.
-  예: "유튜브 뉴스 재생"
+```bash
+# 1. 의존성 설치
+pip install -r VoiceCommand/requirements.txt
 
-- **"유튜브 [검색어] 검색"**: 유튜브에서 검색어로 검색 결과를 보여줍니다.
-  예: "유튜브 요리 레시피 검색"
+# 2. 실행 (Windows)
+cd VoiceCommand
+python Main.py
+```
 
-- **"[검색어] 검색해 줘"**: 구글에서 검색어를 검색합니다.
-  예: "날씨 검색해 줘"
+### 로컬 TTS (CosyVoice3) 설치
+고품질 로컬 TTS를 사용하려면 아래 스크립트를 실행하세요 (GPU 권장).
+```bash
+python VoiceCommand/install_cosyvoice.py
+```
 
-### 시스템 제어 명령어
-
-- **"볼륨 키우기"** 또는 **"볼륨 올려"**: 시스템 볼륨을 높입니다.
-
-- **"볼륨 줄이기"** 또는 **"볼륨 내려"**: 시스템 볼륨을 낮춥니다.
-
-- **"음소거"**: 시스템 음소거를 켭니다.
-
-- **"음소거 해제"**: 시스템 음소거를 해제합니다.
-
-- **"[숫자]분 타이머"**: 지정된 시간으로 타이머를 설정합니다.
-  예: "5분 타이머"
-
-- **"타이머 취소"** 또는 **"타이머 끄기"** 또는 **"타이머 중지"**: 현재 실행 중인 타이머를 취소합니다.
-
-- **"[숫자]분 뒤에 컴퓨터 꺼 줘"** 또는 **"[숫자]분 후에 컴퓨터 꺼 줘"**: 지정된 시간 후에 컴퓨터를 종료합니다.
-  예: "30분 뒤에 컴퓨터 꺼 줘"
-
-- **"전원 꺼 줘"** 또는 **"컴퓨터 꺼 줘"**: 컴퓨터를 즉시 종료합니다.
-
-### 정보 요청 명령어
-
-- **"몇 시야"**: 현재 시간을 알려줍니다.
-
-- **"날씨 어때"**: 현재 위치의 날씨 정보를 알려줍니다.
-
-### 기타 명령어
-
-- **"학습 모드 활성화"** 또는 **"학습 모드 시작"**: AI의 응답을 학습시킵니다.
-
-- **"학습 모드 비활성화"** 또는 **"학습 모드 종료"**: AI의 응답 학습을 종료합니다.
-
-- 위 명령어들 외의 질문이나 요청은 AI 어시스턴트가 처리하여 응답합니다.
+---
 
 ## 설정
 
-### 캐릭터 위젯
-- 캐릭터 위젯은 `images` 폴더 속 각각의 양식에 따라 수정하여 사용자가 커스터마이징 할 수 있습니다.
-- 파일의 갯수와 번호는 꼭 알맞게 작성해야 합니다.
+앱 트레이 아이콘 우클릭 → **설정** 에서 3개의 탭으로 구분된 설정을 관리할 수 있습니다.
 
+1. **RP 설정**: 캐릭터의 성격 및 대화 지침 설정
+2. **AI & TTS 설정**: 사용할 엔진 및 API 키 관리
+3. **장치 설정**: 마이크 입력 장치 선택
 
-## 의존성
-- Python 3.11+
-- [whisper](https://github.com/openai/whisper)
-- [MeloTTS](https://github.com/myshell-ai/MeloTTS)(Windows)
-- PySide6
-- torch
-- tensorflow
-- pvporcupine
-- pyaudio
-- requests
-- geopy
-- pydub
-- webdriver_manager
-- selenium
-- psutil
-- comtypes (Windows 전용)
-- pycaw (Windows 전용)
-- etc...
+---
+
+## 캐릭터 커스터마이징
+
+`VoiceCommand/images/` 폴더 내의 PNG 파일들을 교체하여 자신만의 캐릭터를 만들 수 있습니다. 
+
+### 이미지 규칙 (요약)
+- **형식**: 배경이 투명한 PNG
+- **파일명**: `동작이름번호.png` (예: `idle1.png`, `walk1.png`)
+- **동작 종류**: `idle`, `walk`, `drag`, `fall`, `sit`, `surprised`, `sleep`, `climb` 등
+
+> 💡 **상세 제작 가이드**: [CHARACTER_IMAGES.md](VoiceCommand/CHARACTER_IMAGES.md) 파일을 확인하세요.
+
+---
+
+## 아키텍처 (모듈화 완료)
+
+```
+Main.py                  ← Qt 앱 진입점, 트레이, 리소스 모니터
+VoiceCommand.py          ← 핵심 비즈니스 로직 및 오케스트레이션
+threads.py               ← 음성 인식, TTS, 명령 실행 전용 스레드 분리
+audio_manager.py         ← 전역 오디오 및 스레드 락 관리
+tts_factory.py           ← TTS 제공자 동적 생성 팩토리
+│
+├── commands/            ← 명령 패턴 (BaseCommand 구현체들)
+│   ├── ai_command.py    ← LLM fallback + tool calling
+│   └── ...
+│
+├── images/              ← 캐릭터 애니메이션 PNG 프레임
+└── ...
+```
+
+---
+
+## 빌드 (EXE)
+
+Nuitka를 사용하여 최적화된 단일 폴더/파일 빌드를 지원합니다.
+```bash
+python build_exe.py           # 증분 빌드 (빠름)
+python build_exe.py --onefile  # 배포용 단일 파일 빌드
+```
+
+---
 
 ## 라이선스
-- 이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-## 기여하기
-- 버그 리포트, 기능 제안, 풀 리퀘스트 등 모든 형태의 기여를 환영합니다. 기여하기 전에 [CONTRIBUTING.md](CONTRIBUTING.md)를 읽어주세요.
+MIT License — 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ## 연락처
-- 프로젝트에 대한 질문이나 제안이 있으시면 [이슈](https://github.com/DO0OG/AI-Assistant/issues)를 열어주세요.
-- 또는 이메일 mad_doggo@dogdev.buzz로 연락주세요.
 
+- 이슈: [github.com/DO0OG/AI-Assistant/issues](https://github.com/DO0OG/AI-Assistant/issues)
+- 이메일: mad_doggo@dogdev.buzz

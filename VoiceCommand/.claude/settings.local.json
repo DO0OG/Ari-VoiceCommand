@@ -42,7 +42,10 @@
       "Bash(./build/Release/s2.exe:*)",
       "Bash(\"D:\\\\Git\\\\AI-Assistant\\\\VoiceCommand\\\\s2.cpp\\\\build\\\\Release\\\\s2.exe\" -m s2-pro-q6_k.gguf -t tokenizer.json -pa test3.mp3 -text \"네, 부르셨나요?\" -o test1.wav)",
       "Read(//d/Git/CosyVoice/third_party/**)",
-      "Read(//d/Git/CosyVoice/**)"
+      "Read(//d/Git/CosyVoice/**)",
+      "Bash(sort -k2)",
+      "Bash(xargs -0 ls -lh)",
+      "Bash(xargs rm:*)"
     ]
   }
 }

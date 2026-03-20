@@ -39,6 +39,7 @@ class CharacterWidget(QWidget):
     # 스레드 안전한 시그널
     show_speech_bubble_signal = Signal(str, int)  # text, duration
     hide_speech_bubble_signal = Signal()
+    change_emotion_signal = Signal(str)  # 추가: 감정 변경 시그널
 
     def get_char_x(self):
         return self.x()
@@ -50,6 +51,8 @@ class CharacterWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        from speech_bubble import register_fonts
+        register_fonts()  # 메인 스레드에서 폰트 등록
         self.dragging = False
         self.offset = QPoint()
         self.target_pos = QPoint() # 드래그 시 목표 위치
@@ -91,14 +94,12 @@ class CharacterWidget(QWidget):
         # 시그널 연결
         self.show_speech_bubble_signal.connect(self._show_speech_bubble_slot)
         self.hide_speech_bubble_signal.connect(self._hide_speech_bubble_slot)
+        self.change_emotion_signal.connect(self._change_emotion_slot)
 
         # 시간별 인사 타이머
         self.greeting_timer = QTimer(self)
         self.greeting_timer.timeout.connect(self.time_based_greeting)
         self.greeting_timer.start(GREETING_INTERVAL)
-
-        # 초기 인사 (TTS 포함)
-        QTimer.singleShot(3000, self.initial_greeting_with_tts)
 
         # 윈도우 설정
         self.setWindowFlags(
@@ -148,6 +149,8 @@ class CharacterWidget(QWidget):
             return None
 
         image = QImage(path)
+        if image.isNull():
+            return None
 
         # 좌우 반전
         if flip:
@@ -506,22 +509,15 @@ class CharacterWidget(QWidget):
             initialize_tts()
 
     def exit_program(self):
-        """프로그램 종료"""
-        import sys
+        """프로그램 종료 요청"""
         import logging
-
-        logging.info("프로그램 종료 시작...")
-        try:
-            app = QApplication.instance()
-            if app:
-                app.quit()
-        except Exception as e:
-            logging.error(f"종료 중 오류: {e}")
-
-        sys.exit(0)
+        logging.info("캐릭터 메뉴를 통한 프로그램 종료 요청")
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def update_physics(self):
-        """물리 엔진 (착지 판정 및 위치 동기화 강화)"""
+        """물리 엔진 (착지 판정 및 모션 싱크 강화)"""
         if self.dragging:
             return
 
@@ -536,7 +532,7 @@ class CharacterWidget(QWidget):
             self.velocity_y = min(self.velocity_y + self.gravity, 20)
             new_y = current_y + self.velocity_y
 
-            # 착지 판정 (target_y를 넘어가면 즉시 고정)
+            # 착지 판정
             if new_y >= target_y:
                 new_y = target_y
                 if abs(self.velocity_y) > 3:
@@ -544,6 +540,7 @@ class CharacterWidget(QWidget):
                 else:
                     self.velocity_y = 0
                     self.is_falling = False
+                    # 착지 즉시 모션 변경 (버그 수정)
                     if self.current_animation == "fall":
                         self.set_animation("idle")
 
@@ -551,16 +548,19 @@ class CharacterWidget(QWidget):
                 self.setGeometry(self.x(), int(new_y), self.width(), self.height())
                 moved = True
 
-            if self.is_falling and self.velocity_y > 5 and self.current_animation != "fall":
-                self.set_animation("fall")
-
         else:
-            # 바닥에 안정적으로 붙어있도록 강제 고정 (오차 누적 방지)
-            if current_y != target_y and not self.is_falling:
+            # 바닥에 안정적으로 붙어있도록 강제 고정
+            if self.is_falling or self.current_animation == "fall":
+                self.is_falling = False
+                self.set_animation("idle")
+            
+            if current_y != target_y:
                 self.setGeometry(self.x(), target_y, self.width(), self.height())
                 moved = True
+            
             self.velocity_y = 0
-            self.is_falling = False
+
+        # ... (이후 수평 이동 로직 동일)
 
         # 수평 이동 (던지기 및 마찰)
         if self.velocity_x != 0:
@@ -633,6 +633,38 @@ class CharacterWidget(QWidget):
             # 멀면 — 평상시로 복귀
             self._mouse_scared = False
 
+    def set_emotion(self, emotion):
+        """감정 설정 (외부에서 호출 - 스레드 안전)"""
+        self.change_emotion_signal.emit(emotion)
+
+    @Slot(str)
+    def _change_emotion_slot(self, emotion):
+        """실제 감정 표현 처리 (메인 스레드)"""
+        import logging
+        logging.debug(f"캐릭터 감정 표현: {emotion}")
+        
+        # 감정에 따른 애니메이션 매핑
+        emotion_map = {
+            "기쁨": ["walk", "idle"],
+            "슬픔": ["sit", "sleep"],
+            "화남": ["surprised"],
+            "놀람": ["surprised"],
+            "평온": ["idle", "sit"],
+            "수줍": ["sit", "idle"],
+            "기대": ["walk", "idle"],
+            "진지": ["sit"],
+            "걱정": ["sit", "idle"]
+        }
+        
+        if emotion in emotion_map:
+            anim = random.choice(emotion_map[emotion])
+            self.set_animation(anim)
+            
+            # 기쁨/기대일 경우 가볍게 점프 효과
+            if emotion in ["기쁨", "기대"] and not self.is_falling:
+                self.velocity_y = -8
+                self.is_falling = True
+
     def say(self, text, duration=5000):
         """말풍선 표시 (외부에서 호출 - 스레드 안전)"""
         # 시그널로 전달 (어느 스레드에서든 안전)
@@ -641,6 +673,7 @@ class CharacterWidget(QWidget):
     @Slot(str, int)
     def _show_speech_bubble_slot(self, text, duration):
         """실제 말풍선 표시 (메인 스레드에서만 실행)"""
+        import logging
         # 기존 타이머 정지
         self.bubble_hide_timer.stop()
 
@@ -658,6 +691,10 @@ class CharacterWidget(QWidget):
         # 자동 숨김 타이머 시작 (메인 스레드에서)
         if duration > 0:
             self.bubble_hide_timer.start(duration)
+        else:
+            # duration=0 (TTS 대기)인 경우에도 최대 60초 후에는 사라지도록 안전장치 설정 (긴 문장 대응)
+            self.bubble_hide_timer.start(60000)
+            logging.debug("말풍선 대기 모드 (60초 안전장치 작동)")
 
     def hide_speech_bubble(self):
         """말풍선 숨기기 (외부에서 호출)"""
@@ -666,10 +703,13 @@ class CharacterWidget(QWidget):
     @Slot()
     def _hide_speech_bubble_slot(self):
         """실제 말풍선 숨김 (메인 스레드에서만 실행)"""
+        import logging
         if self.speech_bubble:
+            logging.debug("말풍선 숨김 처리")
             self.speech_bubble.hide()
             self.speech_bubble.deleteLater()
             self.speech_bubble = None
+        self.bubble_hide_timer.stop()
 
     def time_based_greeting(self):
         """시간대별 인사"""
@@ -689,28 +729,6 @@ class CharacterWidget(QWidget):
             if start <= hour <= end:
                 message = random.choice(messages)
                 self.say(message, duration=4000)
-                break
-
-    def initial_greeting_with_tts(self):
-        """초기 인사 (TTS 포함)"""
-        from datetime import datetime
-        from VoiceCommand import tts_wrapper
-        hour = datetime.now().hour
-
-        greetings = {
-            (6, 11): ["좋은 아침이에요!", "잘 주무셨어요?", "아침이네요!"],
-            (12, 13): ["점심 시간이에요!", "맛있게 드세요!"],
-            (14, 17): ["오후네요~", "힘내세요!"],
-            (18, 21): ["저녁 시간이에요", "하루 어떠셨어요?"],
-            (22, 23): ["밤이 깊었어요", "이제 쉬세요~"],
-            (0, 5): ["늦은 시간이네요", "푹 쉬세요!"]
-        }
-
-        for (start, end), messages in greetings.items():
-            if start <= hour <= end:
-                message = random.choice(messages)
-                # TTS로 재생 (말풍선은 TTS 재생 시 자동으로 표시됨)
-                tts_wrapper(message)
                 break
 
     def cleanup(self):

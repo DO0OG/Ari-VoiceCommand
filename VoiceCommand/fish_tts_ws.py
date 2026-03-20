@@ -51,116 +51,87 @@ class FishTTSWebSocket(QObject):
             download_done = threading.Event()
 
             def play_worker():
-                """스트리밍 재생 워커 (적응형 버퍼링)"""
+                """스트리밍 재생 워커 (반응성 및 안정성 최적화)"""
                 stream = None
                 chunk_buffer = []
-                INITIAL_BUFFER_SIZE = 3  # 초기 버퍼: 3개 청크 (레이턴시 vs 안정성 절충)
+                INITIAL_BUFFER_SIZE = 3  # 2 -> 3: 긴 문장 초기 안정성 확보
 
                 try:
                     # 1단계: 초기 버퍼 확보
-                    logging.info(f"초기 버퍼 확보 중 ({INITIAL_BUFFER_SIZE}개 청크)...")
                     for _ in range(INITIAL_BUFFER_SIZE):
                         try:
                             chunk = audio_queue.get(timeout=3.0)
-                            if chunk is None:
-                                break
+                            if chunk is None: break
                             chunk_buffer.append(chunk)
-                        except queue.Empty:
-                            break
+                        except queue.Empty: break
 
-                    if not chunk_buffer:
-                        logging.error("초기 버퍼 비어있음")
-                        return
+                    if not chunk_buffer: return
 
-                    # 초기 버퍼 디코딩 및 재생 시작
+                    # 첫 재생 장치 열기 및 즉시 재생
                     combined = b"".join(chunk_buffer)
                     segment = AudioSegment.from_mp3(io.BytesIO(combined))
 
-                    stream = self.pa.open(
-                        format=self.pa.get_format_from_width(segment.sample_width),
-                        channels=segment.channels,
-                        rate=segment.frame_rate,
-                        output=True,
-                        frames_per_buffer=8192  # 8KB로 증가 (끊김 최소화)
-                    )
-
-                    logging.info(f"재생 시작 (초기 {len(chunk_buffer)}개 청크)")
-                    stream.write(segment.raw_data)
+                    from audio_manager import _audio_lock
+                    with _audio_lock:
+                        stream = self.pa.open(
+                            format=self.pa.get_format_from_width(segment.sample_width),
+                            channels=segment.channels,
+                            rate=segment.frame_rate,
+                            output=True,
+                            frames_per_buffer=4096 # 버퍼 크기 증가로 안정성 향상
+                        )
+                        stream.write(segment.raw_data)
+                    
                     chunk_buffer.clear()
 
-                    # 2단계: 적응형 스트리밍 재생
+                    # 2단계: 연속 스트리밍 재생 (적응형 디코딩)
                     mp3_buffer = b""
-                    MIN_DECODE_SIZE = 8192  # 8KB로 증가 (안정성 우선)
-                    consecutive_failures = 0
+                    MIN_DECODE_SIZE = 8192 # 4KB -> 8KB: 긴 문장 끊김 방지
 
                     while not stop_event.is_set():
                         try:
-                            chunk = audio_queue.get(timeout=0.15)  # 0.1 → 0.15로 약간 증가
-                            if chunk is None:
-                                break
-
+                            chunk = audio_queue.get(timeout=0.1)
+                            if chunk is None: break
                             mp3_buffer += chunk
 
-                            # 적응형 버퍼 크기: 디코딩 실패가 많으면 더 모으기
-                            adaptive_size = MIN_DECODE_SIZE + (consecutive_failures * 2048)
-
-                            # 버퍼가 충분히 모이면 디코딩 후 재생
-                            if len(mp3_buffer) >= adaptive_size:
+                            # 충분한 데이터가 모였을 때만 디코딩하여 재생 (끊김 최소화)
+                            if len(mp3_buffer) >= MIN_DECODE_SIZE:
                                 try:
                                     segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
-                                    stream.write(segment.raw_data)
+                                    with _audio_lock:
+                                        stream.write(segment.raw_data)
                                     mp3_buffer = b""
-                                    consecutive_failures = 0  # 성공 시 리셋
-                                except Exception as e:
-                                    # 디코딩 실패 = 불완전한 MP3 프레임
-                                    consecutive_failures += 1
-                                    if consecutive_failures > 3:
-                                        # 3번 이상 실패 시 큐에서 추가 청크 대기
-                                        try:
-                                            extra_chunk = audio_queue.get(timeout=0.1)
-                                            if extra_chunk:
-                                                mp3_buffer += extra_chunk
-                                        except:
-                                            pass
-
-                                    # 버퍼가 너무 크면 일부 버림
-                                    if len(mp3_buffer) > 40960:  # 40KB
-                                        logging.warning(f"버퍼 오버플로우, 일부 버림")
-                                        mp3_buffer = mp3_buffer[-20480:]
-                                        consecutive_failures = 0
-
-                        except queue.Empty:
-                            # 큐가 비었지만 버퍼에 데이터가 있으면 재생 시도
-                            if len(mp3_buffer) >= 2048:
-                                try:
-                                    segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
-                                    stream.write(segment.raw_data)
-                                    mp3_buffer = b""
-                                    consecutive_failures = 0
                                 except:
-                                    pass
-
-                            # 다운로드 완료 확인
-                            if download_done.is_set():
-                                break
+                                    # 프레임이 잘렸을 경우 다음 청크 대기
+                                    if len(mp3_buffer) > 32768: mp3_buffer = b"" # 오버플로 방지
+                                    continue
+                        except queue.Empty:
+                            if download_done.is_set() and not mp3_buffer: break
                             continue
 
-                    # 3단계: 남은 버퍼 재생
+                    # 3단계: 남은 데이터 처리 및 스트림 드레인
                     if mp3_buffer:
                         try:
                             segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
-                            stream.write(segment.raw_data)
-                        except:
-                            pass
+                            with _audio_lock:
+                                stream.write(segment.raw_data)
+                        except: pass
+
+                    # 하드웨어 버퍼가 모두 비워질 때까지 대기 (말풍선 유지 핵심)
+                    if stream:
+                        while stream.is_active():
+                            time.sleep(0.1)
 
                 except Exception as e:
                     logging.error(f"재생 워커 오류: {e}")
 
                 finally:
                     if stream:
-                        stream.stop_stream()
-                        stream.close()
-                    logging.info("재생 완료")
+                        try:
+                            stream.stop_stream()
+                            stream.close()
+                        except: pass
+                    logging.info("재생 장치 닫기 완료")
 
             # 재생 스레드 시작
             self.is_playing = True
@@ -183,13 +154,17 @@ class FishTTSWebSocket(QObject):
             audio_queue.put(None)
             logging.info(f"다운로드 완료 ({chunk_count}개 청크)")
 
-            # 재생 완료 대기
-            self.play_thread.join(timeout=30.0)
+            # 재생 완료 대기 (최대 60초로 연장)
+            self.play_thread.join(timeout=60.0)
             if self.play_thread.is_alive():
-                logging.warning("재생 스레드 타임아웃")
+                logging.warning("재생 스레드 종료 지연")
 
+            # 완전히 끝날 때까지 0.2초 추가 여유 (OS 사운드 버퍼 고려)
+            time.sleep(0.2)
+            
             self.is_playing = False
             self.playback_finished.emit()
+            logging.info("TTS 재생 프로세스 완전 종료")
 
             return True
 

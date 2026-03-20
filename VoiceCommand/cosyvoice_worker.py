@@ -6,9 +6,14 @@ CosyVoice3 워커 프로세스 — 이진 스트리밍 프로토콜
 """
 import sys
 import os
+
+os.environ.setdefault("TORCH_HOME", "C:/torch_cache")
+os.environ.setdefault("TRITON_CACHE_DIR", "C:/torch_cache/triton")
+
 import struct
 import argparse
 import logging
+import threading   # ← 백그라운드 warmup용
 
 import numpy as np
 
@@ -75,6 +80,22 @@ def main():
 
     model = ModelClass(args.model_dir, load_trt=False, fp16=True)
 
+    # ── 최적화: VRAM 선점 (RTX 3070 8GB 기준 85%)
+    try:
+        torch.cuda.set_per_process_memory_fraction(0.85)
+        ctrl("INFO:VRAM 선점 설정 완료 (85%)")
+    except Exception as e:
+        ctrl(f"INFO:VRAM 선점 생략 ({e})")
+
+    # ── 최적화: torch.compile (추론 20~30% 단축, reduce-overhead = CUDA graph)
+    if torch.cuda.is_available():
+        try:
+            model.model.llm = torch.compile(model.model.llm, mode="reduce-overhead")
+            model.model.flow = torch.compile(model.model.flow, mode="reduce-overhead")
+            ctrl("INFO:torch.compile 적용됨 (초회 warmup 추가 시간 발생)")
+        except Exception as e:
+            ctrl(f"INFO:torch.compile 생략 ({e})")
+
     # ── 최적화 1: Flow ODE steps 10→5 (각 청크 ~50% 빠름, 품질 소폭 하락)
     # register_forward_pre_hook으로 n_timesteps 인자만 교체 (nn.Module 호환)
     try:
@@ -129,6 +150,8 @@ def main():
         SPK_ID = ""  # 실패 시 기존 방식 fallback
         ctrl(f"INFO:특징 사전추출 실패, fallback: {e}")
 
+    _inference_lock = threading.Lock()
+
     def make_gen(text, stream):
         """SPK_ID 캐시 사용 시 ONNX 추출 생략"""
         if SPK_ID:
@@ -156,23 +179,20 @@ def main():
                 speed=args.speed,
             )
 
-    # GPU warmup — 첫 CUDA 커널 컴파일 (초회 실행 시 ~90초, 이후 PyTorch 캐시 사용)
-    try:
-        ctrl("INFO:GPU warmup 시작 (초회만 ~90초 소요)...")
-        for _ in make_gen("네.", stream=True):
-            pass  # 모든 청크 소비 → generator 정상 완료 및 정리
-        ctrl("INFO:GPU warmup 완료")
-    except Exception as e:
-        ctrl(f"INFO:GPU warmup 생략 ({e})")
-
     ctrl(f"SAMPLERATE:{sample_rate}")
+    ctrl("READY")  # 모델 로드 완료 즉시 READY (warmup은 백그라운드 진행)
 
-    # GPU warmup 제거 — CUDA 커널 컴파일은 첫 실제 TTS 호출 시 발생.
-    # 워밍업을 여기서 하면 초회에 5~10분이 걸려 타임아웃이 터지므로
-    # 워커는 모델 로드 직후 바로 READY를 보낸다.
-    # (두 번째 호출부터는 캐시 사용으로 빠름)
+    def _warmup():
+        try:
+            ctrl("INFO:백그라운드 GPU warmup 시작 (torch.compile 초회 컴파일 포함)...")
+            with _inference_lock:
+                for _ in make_gen("네.", stream=True):
+                    pass
+            ctrl("INFO:백그라운드 GPU warmup 완료")
+        except Exception as e:
+            ctrl(f"INFO:백그라운드 warmup 실패 ({e})")
 
-    ctrl("READY")
+    threading.Thread(target=_warmup, daemon=True).start()
 
     # 요청 처리 루프
     for raw in sys.stdin:
@@ -182,13 +202,13 @@ def main():
 
         try:
             n = 0
-            for result in make_gen(text, stream=True):
-                chunk = result.get("tts_speech") if isinstance(result, dict) else result
-                if chunk is not None:
-                    arr = chunk.squeeze().cpu().numpy().astype(np.float32)
-                    write_chunk(arr.tobytes())
-                    n += 1
-
+            with _inference_lock:
+                for result in make_gen(text, stream=True):
+                    chunk = result.get("tts_speech") if isinstance(result, dict) else result
+                    if chunk is not None:
+                        arr = chunk.squeeze().cpu().numpy().astype(np.float32)
+                        write_chunk(arr.tobytes())
+                        n += 1
             write_end()
             ctrl(f"DONE:{n}")
 
