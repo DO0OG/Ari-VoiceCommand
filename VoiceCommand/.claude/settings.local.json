@@ -45,7 +45,8 @@
       "Read(//d/Git/CosyVoice/**)",
       "Bash(sort -k2)",
       "Bash(xargs -0 ls -lh)",
-      "Bash(xargs rm:*)"
+      "Bash(xargs rm:*)",
+      "Bash(git log:*)"
     ]
   }
 }

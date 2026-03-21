@@ -4,6 +4,11 @@ import time
 import logging
 import faulthandler
 from datetime import datetime
+
+# Windows 콘솔 창 숨기기
+if sys.platform == "win32":
+    import ctypes
+    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 import gc
 import psutil
 import warnings
@@ -138,6 +143,11 @@ class SystemTrayIcon(QSystemTrayIcon):
 
         self.menu.addSeparator()
 
+        # 게임 모드 토글 추가 (GPU 해제용)
+        self.game_mode_action = self.menu.addAction("🎮 게임 모드 (GPU 절약)")
+        self.game_mode_action.setCheckable(True)
+        self.game_mode_action.triggered.connect(self.toggle_game_mode)
+
         # 스마트 어시스턴트 모드 토글 추가
         self.smart_mode_action = self.menu.addAction("스마트 어시스턴트 모드")
         self.smart_mode_action.setCheckable(True)
@@ -161,8 +171,25 @@ class SystemTrayIcon(QSystemTrayIcon):
 
         # 메뉴가 열릴 때마다 상태 업데이트
         self.menu.aboutToShow.connect(self.update_character_menu_text)
+        self.menu.aboutToShow.connect(self.update_game_mode_status)
         self.menu.aboutToShow.connect(self.update_smart_mode_status)
         self.menu.aboutToShow.connect(self.update_mouse_reaction_status)
+
+    def toggle_game_mode(self):
+        """게임 모드 토글: CosyVoice3 VRAM 해제 ↔ 복원"""
+        from VoiceCommand import enable_game_mode, disable_game_mode, is_game_mode
+        if self.game_mode_action.isChecked():
+            enable_game_mode()
+            if self.character_widget:
+                self.character_widget.say("게임 모드 ON. GPU 메모리 해제했습니다.", duration=3000)
+        else:
+            disable_game_mode()
+            if self.character_widget:
+                self.character_widget.say("게임 모드 OFF. TTS 복원 중...", duration=3000)
+
+    def update_game_mode_status(self):
+        from VoiceCommand import is_game_mode
+        self.game_mode_action.setChecked(is_game_mode())
 
     def toggle_smart_mode(self):
         """스마트 어시스턴트 모드 토글"""

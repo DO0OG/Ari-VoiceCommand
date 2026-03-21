@@ -12,7 +12,11 @@ class UserContextManager:
     """사용자 행동 패턴 및 컨텍스트 관리"""
 
     def __init__(self, context_file="user_context.json"):
-        self.context_file = context_file
+        try:
+            from resource_manager import ResourceManager
+            self.context_file = ResourceManager.get_writable_path(context_file)
+        except Exception:
+            self.context_file = context_file
         self.context = self.load_context()
 
     def load_context(self):

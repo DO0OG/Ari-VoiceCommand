@@ -67,8 +67,21 @@ class VoiceRecognitionThread(QThread):
         response = random.choice(WAKE_RESPONSES)
         tts_wrapper(response)
         
-        # TTS 재생 시간을 고려하여 잠시 대기
-        time.sleep(0.5)
+        # TTS 재생 완료 대기 (유동적 대기)
+        try:
+            from VoiceCommand import is_tts_playing
+            wait_start = time.time()
+            while is_tts_playing():
+                if time.time() - wait_start > 15.0:
+                    logging.warning("TTS 대기 타임아웃 (15초 초과)")
+                    break
+                time.sleep(0.1)
+            
+            # 재생이 끝난 후 음성 인시 시작 전 아주 짧은 여유
+            time.sleep(0.2)
+        except Exception as e:
+            logging.error(f"TTS 대기 중 오류: {e}")
+            time.sleep(0.5)
         
         self.listening_state_changed.emit(True)
         with _audio_lock:
@@ -102,6 +115,7 @@ class TTSThread(QThread):
     def __init__(self):
         super().__init__()
         self.queue = Queue()
+        self.is_processing = False
 
     def run(self):
         logging.info("TTSThread 구동 중")
@@ -111,9 +125,13 @@ class TTSThread(QThread):
                 if text is None:
                     break
                 
-                from VoiceCommand import text_to_speech, character_widget
-                text_to_speech(text)
-                self.queue.task_done()
+                try:
+                    self.is_processing = True
+                    from VoiceCommand import text_to_speech, character_widget
+                    text_to_speech(text)
+                finally:
+                    self.queue.task_done()
+                    self.is_processing = False
 
                 # 큐가 완전히 비었을 때만 말풍선을 숨김 (연속된 문장 처리)
                 if self.queue.empty() and character_widget:

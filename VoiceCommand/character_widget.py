@@ -138,6 +138,15 @@ class CharacterWidget(QWidget):
         self.move_to_bottom()
         self.show()
 
+        # Windows에서 HWND_TOPMOST 강제 적용
+        import sys
+        if sys.platform == 'win32':
+            self._enforce_topmost()
+            # 주기적으로 최상위 상태 재적용 (5초마다)
+            self.topmost_timer = QTimer(self)
+            self.topmost_timer.timeout.connect(self._enforce_topmost)
+            self.topmost_timer.start(5000)
+
     def load_and_cache_image(self, path, flip=False, rotation=0):
         """이미지 로드, 캐싱 및 변형 (반전, 회전)"""
         cache_key = f"{path}_{'flip' if flip else 'normal'}_{rotation}"
@@ -268,6 +277,7 @@ class CharacterWidget(QWidget):
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
         if self.dragging or self.is_climbing or getattr(self, '_is_landing', False) or (self.move_animation and self.move_animation.state() == QPropertyAnimation.Running):
+            self.start_behavior_timer()
             return
 
         screen = QApplication.primaryScreen().geometry()
@@ -357,8 +367,37 @@ class CharacterWidget(QWidget):
         self.move_animation.setStartValue(self.x())
         self.move_animation.setEndValue(new_x)
         self.move_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        self.move_animation.finished.connect(lambda: self.set_animation("idle"))
+        def on_walk_finished():
+            self.set_animation("idle")
+            if not self.dragging and not self.is_climbing:
+                self.start_behavior_timer()
+        self.move_animation.finished.connect(on_walk_finished)
         self.move_animation.start()
+
+    def _enforce_topmost(self):
+        """Win32 API로 항상 최상위 강제 적용 (Windows 전용)"""
+        import sys
+        if sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            HWND_TOPMOST = -1
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            hwnd = int(self.winId())
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            )
+        except Exception:
+            pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        import sys
+        if sys.platform == 'win32':
+            QTimer.singleShot(100, self._enforce_topmost)
 
     def move_to_bottom(self):
         """화면 하단으로 이동"""
@@ -473,6 +512,21 @@ class CharacterWidget(QWidget):
         menu.addAction(settings_action)
 
         menu.addSeparator()
+
+        # 게임 모드
+        from VoiceCommand import is_game_mode, enable_game_mode, disable_game_mode
+        game_action = QAction("🎮 게임 모드 (GPU 절약)", self)
+        game_action.setCheckable(True)
+        game_action.setChecked(is_game_mode())
+        def toggle_game_mode(checked):
+            if checked:
+                enable_game_mode()
+                self.say("게임 모드 ON. GPU 메모리 해제했습니다.", duration=3000)
+            else:
+                disable_game_mode()
+                self.say("게임 모드 OFF. TTS 복원 중...", duration=3000)
+        game_action.triggered.connect(toggle_game_mode)
+        menu.addAction(game_action)
 
         # 스마트 어시스턴트 모드
         smart_action = QAction("스마트 어시스턴트 모드", self)

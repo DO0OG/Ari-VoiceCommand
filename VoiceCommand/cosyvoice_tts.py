@@ -195,7 +195,7 @@ class CosyVoiceTTS(QObject):
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
     def speak(self, text: str) -> bool:
-        from VoiceCommand import _audio_lock
+        from audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text(text)
         if not text or self._proc is None or self._proc.poll() is not None:
             return False
