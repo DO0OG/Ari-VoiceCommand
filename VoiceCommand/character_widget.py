@@ -501,10 +501,26 @@ class CharacterWidget(QWidget):
             # 릴리즈 후 일정 시간 뒤에 idle로 (강제 착지 연출 방지)
             QTimer.singleShot(800, lambda: self.set_animation("idle") if not self.dragging and not self.is_falling and not getattr(self, '_is_landing', False) else None)
 
+    def set_text_interface(self, text_interface):
+        """텍스트 인터페이스 참조 설정"""
+        self.text_interface = text_interface
+
+    def open_text_interface(self):
+        """텍스트 대화창 열기 (캐릭터 위치 기준)"""
+        if hasattr(self, 'text_interface') and self.text_interface:
+            self.text_interface.show_near(self.x(), self.y(), self.width(), self.height())
+
     def contextMenuEvent(self, event):
         """우클릭 메뉴"""
         from VoiceCommand import learning_mode
         menu = QMenu(self)
+
+        # 텍스트 대화
+        chat_action = QAction("💬 텍스트 대화", self)
+        chat_action.triggered.connect(self.open_text_interface)
+        menu.addAction(chat_action)
+
+        menu.addSeparator()
 
         # 설정
         settings_action = QAction("설정", self)
