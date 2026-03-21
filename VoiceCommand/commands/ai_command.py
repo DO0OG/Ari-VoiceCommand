@@ -140,28 +140,3 @@ class AICommand(BaseCommand):
         finally:
             _tool_executing = False
 
-    def _handle_learning_mode(self, command):
-        """학습 모드 처리"""
-        from VoiceCommand import listen_for_speech
-
-        feedback = listen_for_speech(
-            timeout=5,
-            phrase_time_limit=5,
-            prompt="응답이 적절했나요? '적절' 또는 '부적절'로 대답해주세요."
-        )
-
-        if feedback and "부적절" in feedback.lower():
-            new_response = listen_for_speech(
-                timeout=10,
-                phrase_time_limit=10,
-                prompt="새로운 응답을 말씀해 주세요."
-            )
-            if new_response:
-                self.ai_assistant.learn_new_response(command, new_response)
-                self.tts_wrapper("새로운 응답을 학습했습니다. 감사합니다.")
-                self.ai_assistant.update_q_table(command, "say_sorry", -1, command)
-            else:
-                self.tts_wrapper("새로운 응답을 학습하지 못했습니다. 죄송합니다.")
-        elif feedback:
-            self.tts_wrapper("감사합니다. 앞으로도 좋은 답변을 드리도록 노력하겠습니다.")
-            self.ai_assistant.update_q_table(command, "use_best_response", 1, command)

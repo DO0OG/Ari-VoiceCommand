@@ -30,8 +30,10 @@ class TimerManager:
                 self.tts_callback(f"{minutes}분 타이머가 완료되었습니다.")
                 self.active_timer = None
             elif self.active_timer:
-                # 1초마다 확인
-                threading.Timer(1, timer_thread).start()
+                # 새 타이머를 active_timer에 갱신해야 cancel()이 계속 유효함
+                new_timer = threading.Timer(1, timer_thread)
+                self.active_timer["timer"] = new_timer
+                new_timer.start()
 
         if self.active_timer:
             self.active_timer["timer"].cancel()

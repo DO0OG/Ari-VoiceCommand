@@ -22,7 +22,6 @@ def create_requirements_file():
         "llama-cpp-python",
         "numpy",
         "pyaudio",
-        "pvporcupine",
         "comtypes",
         "pywin32",
         "geopy",

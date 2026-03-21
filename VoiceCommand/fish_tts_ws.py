@@ -4,6 +4,7 @@ Fish Audio WebSocket TTS (Streaming Optimized)
 """
 import logging
 import io
+import time
 import threading
 import queue
 import pyaudio
@@ -16,9 +17,10 @@ class FishTTSWebSocket(QObject):
 
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
+        from audio_manager import GlobalAudio
         self.client = FishAudio(api_key=api_key) if api_key else FishAudio()
         self.reference_id = reference_id
-        self.pa = pyaudio.PyAudio()
+        self.pa = GlobalAudio.get_instance()
         self.is_playing = False
         self.play_thread = None  # 추가
         self.stop_event = threading.Event()  # 추가
@@ -46,8 +48,10 @@ class FishTTSWebSocket(QObject):
             )
 
             # 재생용 큐와 이벤트
+            # self.stop_event를 공유해야 cleanup()이 play_worker도 중단시킬 수 있음
             audio_queue = queue.Queue()
-            stop_event = threading.Event()
+            self.stop_event.clear()
+            stop_event = self.stop_event
             download_done = threading.Event()
 
             def play_worker():
@@ -71,22 +75,22 @@ class FishTTSWebSocket(QObject):
                     combined = b"".join(chunk_buffer)
                     segment = AudioSegment.from_mp3(io.BytesIO(combined))
 
-                    from audio_manager import _audio_lock
-                    with _audio_lock:
+                    from audio_manager import _audio_output_lock
+                    # pa.open()만 락으로 보호 (stream.write는 블로킹 콜이므로 락 밖으로)
+                    with _audio_output_lock:
                         stream = self.pa.open(
                             format=self.pa.get_format_from_width(segment.sample_width),
                             channels=segment.channels,
                             rate=segment.frame_rate,
                             output=True,
-                            frames_per_buffer=4096 # 버퍼 크기 증가로 안정성 향상
+                            frames_per_buffer=4096
                         )
-                        stream.write(segment.raw_data)
-                    
+                    stream.write(segment.raw_data)
                     chunk_buffer.clear()
 
                     # 2단계: 연속 스트리밍 재생 (적응형 디코딩)
                     mp3_buffer = b""
-                    MIN_DECODE_SIZE = 8192 # 4KB -> 8KB: 긴 문장 끊김 방지
+                    MIN_DECODE_SIZE = 8192
 
                     while not stop_event.is_set():
                         try:
@@ -94,16 +98,13 @@ class FishTTSWebSocket(QObject):
                             if chunk is None: break
                             mp3_buffer += chunk
 
-                            # 충분한 데이터가 모였을 때만 디코딩하여 재생 (끊김 최소화)
                             if len(mp3_buffer) >= MIN_DECODE_SIZE:
                                 try:
                                     segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
-                                    with _audio_lock:
-                                        stream.write(segment.raw_data)
+                                    stream.write(segment.raw_data)
                                     mp3_buffer = b""
                                 except:
-                                    # 프레임이 잘렸을 경우 다음 청크 대기
-                                    if len(mp3_buffer) > 32768: mp3_buffer = b"" # 오버플로 방지
+                                    if len(mp3_buffer) > 32768: mp3_buffer = b""
                                     continue
                         except queue.Empty:
                             if download_done.is_set() and not mp3_buffer: break
@@ -113,14 +114,15 @@ class FishTTSWebSocket(QObject):
                     if mp3_buffer:
                         try:
                             segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
-                            with _audio_lock:
-                                stream.write(segment.raw_data)
+                            stream.write(segment.raw_data)
                         except: pass
 
-                    # 하드웨어 버퍼가 모두 비워질 때까지 대기 (말풍선 유지 핵심)
+                    # 하드웨어 버퍼 소진 대기 — 레이턴시 최적화 (10초 -> 1.5초)
                     if stream:
-                        while stream.is_active():
-                            time.sleep(0.1)
+                        # 데이터 전송 후 소리가 실제로 나가는 시간을 고려하여 짧게 대기
+                        drain_deadline = time.time() + 1.5
+                        while stream.is_active() and time.time() < drain_deadline:
+                            time.sleep(0.01)
 
                 except Exception as e:
                     logging.error(f"재생 워커 오류: {e}")
@@ -128,7 +130,7 @@ class FishTTSWebSocket(QObject):
                 finally:
                     if stream:
                         try:
-                            stream.stop_stream()
+                            # stop_stream() 대신 즉시 close()하여 반응성 확보
                             stream.close()
                         except: pass
                     logging.info("재생 장치 닫기 완료")
@@ -154,10 +156,12 @@ class FishTTSWebSocket(QObject):
             audio_queue.put(None)
             logging.info(f"다운로드 완료 ({chunk_count}개 청크)")
 
-            # 재생 완료 대기 (최대 60초로 연장)
-            self.play_thread.join(timeout=60.0)
+            # 재생 완료 대기 — 최대 15초, 초과 시 강제 중단
+            self.play_thread.join(timeout=15.0)
             if self.play_thread.is_alive():
-                logging.warning("재생 스레드 종료 지연")
+                logging.warning("재생 스레드 타임아웃 — 강제 중단")
+                self.stop_event.set()
+                self.play_thread.join(timeout=2.0)
 
             # 완전히 끝날 때까지 0.2초 추가 여유 (OS 사운드 버퍼 고려)
             time.sleep(0.2)
@@ -182,9 +186,6 @@ class FishTTSWebSocket(QObject):
         if self.play_thread and self.play_thread.is_alive():
             self.play_thread.join(timeout=1.0)
         self.is_playing = False
-        if hasattr(self, 'pa'):
-            self.pa.terminate()
 
     def __del__(self):
-        if hasattr(self, 'pa'):
-            self.pa.terminate()
+        pass

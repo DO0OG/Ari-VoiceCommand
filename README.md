@@ -11,6 +11,12 @@
 
 ## 개발 현황
 
+### 최근 업데이트 (2026-03-21)
+- **TTS-음성 인식 동기화**: 웨이크워드 감지 후 응답 TTS가 끝나기 전에 마이크가 켜지는 문제를 해결하여 인식 성공률 향상.
+- **Fish Audio 최적화**: 게임 모드 등에서 발생하던 약 10초의 종료 지연을 **1.5초** 이내로 단축.
+- **안정성 개선**: 볼륨 조절 명령 버그 수정 및 전역 오디오 싱글톤(`GlobalAudio`) 적용으로 자원 충돌 방지.
+
+
 ### 구현 완료
 
 | 기능 | 설명 |
@@ -109,17 +115,18 @@ python VoiceCommand/install_cosyvoice.py
 ## 아키텍처 (모듈화 완료)
 
 ```
-Main.py                  ← Qt 앱 진입점, 트레이, 리소스 모니터
-VoiceCommand.py          ← 핵심 비즈니스 로직 및 오케스트레이션
-threads.py               ← 음성 인식, TTS, 명령 실행 전용 스레드 분리
-audio_manager.py         ← 전역 오디오 및 스레드 락 관리
-tts_factory.py           ← TTS 제공자 동적 생성 팩토리
+Main.py                  ← Qt 앱 진입점, 시스템 트레이, 리소스 모니터
+VoiceCommand.py          ← 핵심 비즈니스 로직 및 오케스트레이션 (인식-판단-실행 순환)
+threads.py               ← 음성 인식, TTS, 명령 실행 전용 스레드 분리 및 상태 관리
+audio_manager.py         ← 전역 오디오 장치 공유 및 스레드 락 관리 (GlobalAudio)
+tts_factory.py           ← 다양한 TTS 제공자(OpenAI, Edge, Fish 등) 동적 생성 팩토리
 │
-├── commands/            ← 명령 패턴 (BaseCommand 구현체들)
-│   ├── ai_command.py    ← LLM fallback + tool calling
+├── commands/            ← 커맨드 패턴 기반 도구 모음 (BaseCommand 구현체)
+│   ├── ai_command.py    ← LLM 대화 및 Tool Calling 처리
+│   ├── youtube_command.py ← 유튜브 검색 및 재생 제어
 │   └── ...
 │
-├── images/              ← 캐릭터 애니메이션 PNG 프레임
+├── images/              ← 캐릭터 애니메이션 PNG 프레임 (Shimeji 규격)
 └── ...
 ```
 

@@ -34,6 +34,8 @@ _tts_thread = None
 
 _tts_init_event = threading.Event()
 _tts_init_started = False
+_game_mode = False          # 게임 모드 상태
+_saved_tts_mode = None      # 게임 모드 진입 전 원래 TTS 모드
 
 
 class SharedMicrophone(sr.Microphone):
@@ -104,7 +106,14 @@ def initialize_tts():
     from tts_factory import create_tts_provider
     settings = ConfigManager.load_settings()
     fish_tts, _ = create_tts_provider()
-    reconnect_tts_signals()
+    
+    # 캐릭터 위젯이 이미 있으면 시그널 재연결 (필요 시)
+    if character_widget and hasattr(fish_tts, 'playback_finished'):
+        try:
+            # 기존 연결이 있을 수 있으므로 안전하게 처리
+            fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
+        except: pass
+
     rp_gen = RPGenerator()
     rp_gen.set_config(
         personality=settings.get("personality", ""),
@@ -115,10 +124,7 @@ def initialize_tts():
 
 
 def reconnect_tts_signals():
-    """TTS 시그널 재연결 (필요 시 활용을 위해 유지)"""
-    global fish_tts, character_widget
-    # 기존: fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
-    # 수정: TTSThread에서 큐 상태를 확인하여 직접 숨기도록 변경했으므로 자동 연결은 제거
+    """사용되지 않음 (하위 호환 유지)"""
     pass
 
 
@@ -152,11 +158,17 @@ def text_to_speech(text):
         character_widget.set_emotion(emotion)
 
     if fish_tts is None:
-        if _tts_init_started: _tts_init_event.wait(timeout=360)
-        else: initialize_tts()
-    reconnect_tts_signals()
+        if _tts_init_started:
+            if not _tts_init_event.wait(timeout=10.0): # 타임아웃 360 -> 10초로 단축 (행 걸림 방지)
+                logging.warning("TTS 초기화 대기 타임아웃")
+                return False
+        else:
+            initialize_tts()
     
-    if fish_tts is None: return False
+    if fish_tts is None:
+        logging.error("TTS 프로바이더가 없습니다.")
+        return False
+
     try:
         if rp_gen: text = rp_gen.generate(text)
         return fish_tts.speak(text)
@@ -186,6 +198,18 @@ def tts_wrapper(text, show_bubble=True):
     else:
         text_to_speech(text)
 
+
+def is_tts_playing():
+    """현재 TTS가 큐 대기 중, 처리 중, 또는 재생 중인지 확인"""
+    global _tts_thread, fish_tts
+    if _tts_thread:
+        if not _tts_thread.queue.empty():
+            return True
+        if getattr(_tts_thread, 'is_processing', False):
+            return True
+    if fish_tts and getattr(fish_tts, 'is_playing', False):
+        return True
+    return False
 
 
 def execute_command(command):
@@ -223,16 +247,6 @@ def wake_detector_recalibrate_helper(detector, source):
 weather_service = WeatherService(api_key="")
 timer_manager = TimerManager(tts_callback=lambda t: tts_wrapper(text=t))
 
-from commands.command_registry import CommandRegistry
-_command_registry = CommandRegistry(
-    ai_assistant=None,
-    weather_service=weather_service,
-    timer_manager=timer_manager,
-    adjust_volume_func=None, # 아래에서 정의
-    tts_func=tts_wrapper,
-    learning_mode_ref=learning_mode
-)
-
 def adjust_volume(change):
     try:
         from ctypes import cast, POINTER
@@ -247,4 +261,80 @@ def adjust_volume(change):
         tts_wrapper(f"볼륨을 {int(new_v * 100)}%로 조절했습니다.")
     except: tts_wrapper("볼륨 조절 실패")
 
-_command_registry.adjust_volume_func = adjust_volume
+from commands.command_registry import CommandRegistry
+_command_registry = CommandRegistry(
+    ai_assistant=None,
+    weather_service=weather_service,
+    timer_manager=timer_manager,
+    adjust_volume_func=adjust_volume,
+    tts_func=tts_wrapper,
+    learning_mode_ref=learning_mode
+)
+
+# ── 게임 모드 ─────────────────────────────────────────────────────────────────
+
+def enable_game_mode():
+    """게임 모드 활성화: CosyVoice3 서브프로세스 종료 → VRAM 해제 → Fish Audio로 전환"""
+    global fish_tts, _game_mode, _saved_tts_mode
+
+    if _game_mode:
+        return  # 이미 활성화됨
+
+    from config_manager import ConfigManager
+    _saved_tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
+
+    # CosyVoice3 워커 프로세스 종료 (VRAM 해제)
+    if fish_tts and hasattr(fish_tts, 'cleanup'):
+        try:
+            fish_tts.cleanup()
+        except Exception as e:
+            logging.warning(f"기존 TTS 정리 오류 (무시): {e}")
+    fish_tts = None
+
+    # Fish Audio TTS로 교체
+    try:
+        from fish_tts_ws import FishTTSWebSocket
+        settings = ConfigManager.load_settings()
+        fish_tts = FishTTSWebSocket(
+            api_key=settings.get("fish_api_key", ""),
+            reference_id=settings.get("fish_reference_id", "")
+        )
+        _game_mode = True
+        logging.info("게임 모드 활성화: Fish Audio TTS로 전환, GPU 메모리 해제됨")
+    except Exception as e:
+        logging.error(f"게임 모드 전환 실패: {e}")
+
+
+def disable_game_mode():
+    """게임 모드 비활성화: Fish Audio 해제 → 원래 TTS(CosyVoice3 등)로 복원"""
+    global fish_tts, _game_mode, _saved_tts_mode
+
+    if not _game_mode:
+        return
+
+    # Fish Audio 정리
+    if fish_tts and hasattr(fish_tts, 'cleanup'):
+        try:
+            fish_tts.cleanup()
+        except Exception as e:
+            logging.warning(f"Fish TTS 정리 오류 (무시): {e}")
+    fish_tts = None
+    _game_mode = False
+
+    # 원래 TTS 재초기화 (백그라운드)
+    def _reinit():
+        try:
+            initialize_tts()
+            if fish_tts and hasattr(fish_tts, 'wait_until_warmup_done'):
+                fish_tts.wait_until_warmup_done()
+            tts_wrapper("게임 모드 해제. CosyVoice로 복원되었습니다.")
+        except Exception as e:
+            logging.error(f"TTS 복원 실패: {e}")
+
+    import threading as _threading
+    _threading.Thread(target=_reinit, daemon=True, name="TTS-GameModeRestore").start()
+    logging.info("게임 모드 비활성화: 원래 TTS 복원 중")
+
+
+def is_game_mode() -> bool:
+    return _game_mode
