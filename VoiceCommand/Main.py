@@ -21,6 +21,7 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from settings_dialog import SettingsDialog
 from ai_assistant import get_ai_assistant
 from character_widget import CharacterWidget
+from text_interface import create_text_interface
 from collections import deque
 from threads import (
     VoiceRecognitionThread,
@@ -135,11 +136,16 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.setToolTip(f"Ari Voice Command")
         self.should_exit = False
         self.character_widget = None  # 캐릭터 위젯 참조 초기화
+        self.text_interface = None
 
         self.menu = QMenu(parent)
         self.setContextMenu(self.menu)
 
-        # 캐릭터 표시/숨기기 메뉴 추가 (최상단)
+        # 텍스트 대화 (최상단)
+        self.chat_action = self.menu.addAction("💬 텍스트 대화")
+        self.chat_action.triggered.connect(self.open_text_interface)
+
+        # 캐릭터 표시/숨기기 메뉴 추가
         self.character_action = self.menu.addAction("캐릭터 표시")
         self.character_action.triggered.connect(self.toggle_character)
 
@@ -248,6 +254,17 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.character_widget = character_widget
         self.update_character_menu_text()
         logging.info("시스템 트레이에 캐릭터 위젯 참조가 설정되었습니다.")
+
+    def set_text_interface(self, text_interface):
+        """텍스트 인터페이스 참조 설정"""
+        self.text_interface = text_interface
+
+    def open_text_interface(self):
+        """텍스트 대화창 열기 (우측 하단)"""
+        if self.text_interface:
+            screen = QApplication.primaryScreen().geometry()
+            # 우측 하단 근처를 타겟으로 팝업
+            self.text_interface.show_near(screen.width() - 100, screen.height() - 100, 0, 0)
 
     def toggle_character(self):
         """캐릭터 표시/숨기기 토글"""
@@ -482,9 +499,14 @@ def main():
         character = CharacterWidget()
         set_character_widget(character)
 
-        # 트레이 아이콘에 캐릭터 참조 설정
+        # 텍스트 인터페이스 생성 및 설정
+        text_interface = create_text_interface(ai_assistant, tts_wrapper)
+        character.set_text_interface(text_interface)
+
+        # 트레이 아이콘에 캐릭터 참조 및 텍스트 인터페이스 설정
         if use_system_tray and tray_icon:
             tray_icon.set_character_widget(character)
+            tray_icon.set_text_interface(text_interface)
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용
@@ -496,6 +518,8 @@ def main():
         logging.error(f"예외 발생: {str(e)}", exc_info=True)
     finally:
         logging.info("=== 앱 종료 시작 ===")
+        if 'text_interface' in locals() and text_interface:
+            text_interface.cleanup()
         if character:
             character.cleanup()
             character.close()
