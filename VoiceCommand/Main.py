@@ -13,7 +13,8 @@ import gc
 import psutil
 import warnings
 
-faulthandler.enable()  # 네이티브 크래시(세그폴트 등) 발생 시 stderr에 스택 출력
+if sys.stderr is not None:
+    faulthandler.enable()  # 네이티브 크래시(세그폴트 등) 발생 시 stderr에 스택 출력
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
 from PySide6.QtGui import QIcon, QAction
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -50,7 +51,8 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
 if not os.path.exists(icon_path):
-    print(f"경고: 아이콘 파일을 찾을 수 없습니다: {icon_path}")
+    if sys.stdout is not None:
+        print(f"경고: 아이콘 파일을 찾을 수 없습니다: {icon_path}")
     icon_path = None
 
 
@@ -72,7 +74,7 @@ def setup_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.FileHandler(log_file, encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
+            *(  [logging.StreamHandler(sys.stdout)] if sys.stdout is not None else [] ),
         ],
     )
 
