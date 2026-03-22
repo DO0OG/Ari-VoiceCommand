@@ -1,6 +1,5 @@
 """시스템 제어 명령 (종료, 재시작 등)"""
 import os
-import subprocess
 import logging
 import sys
 from commands.base_command import BaseCommand

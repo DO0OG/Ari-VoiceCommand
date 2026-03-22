@@ -3,6 +3,7 @@ Shimeji 스타일 캐릭터 위젯 (최적화 버전)
 """
 import os
 import random
+import secrets
 import time
 import sys
 import logging
@@ -409,7 +410,7 @@ class CharacterWidget(QWidget):
         def on_ceiling_reached():
             self.set_animation("ceiling")
             # 천장에 2~5초 머무른 뒤 떨어지기
-            QTimer.singleShot(random.randint(2000, 5000), self.stop_climbing)
+            QTimer.singleShot(2000 + secrets.randbelow(3001), self.stop_climbing)
             
         self.move_animation.finished.connect(on_ceiling_reached)
         self.move_animation.start()

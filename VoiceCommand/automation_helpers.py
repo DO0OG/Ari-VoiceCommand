@@ -4,9 +4,7 @@ GUI / 브라우저 / 앱 자동화 공통 헬퍼.
 미설치 시에는 명확한 오류를 반환합니다.
 """
 import os
-import shlex
-import shutil
-import subprocess
+import ctypes
 import time
 import webbrowser
 from typing import Optional
@@ -15,25 +13,44 @@ from typing import Optional
 class AutomationHelpers:
     def __init__(self):
         self.desktop_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
+        self._app_aliases = {
+            "메모장": r"C:\Windows\system32\notepad.exe",
+            "notepad": r"C:\Windows\system32\notepad.exe",
+            "계산기": r"C:\Windows\System32\calc.exe",
+            "calculator": r"C:\Windows\System32\calc.exe",
+            "explorer": r"C:\Windows\explorer.exe",
+            "파일 탐색기": r"C:\Windows\explorer.exe",
+            "cmd": r"C:\Windows\System32\cmd.exe",
+            "powershell": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        }
 
     def open_url(self, url: str) -> str:
         webbrowser.open(url)
         return url
 
     def open_path(self, path: str) -> str:
-        os.startfile(path)  # type: ignore[attr-defined]
+        normalized = os.path.abspath(path)
+        if not os.path.exists(normalized):
+            raise FileNotFoundError(f"열 경로를 찾지 못했습니다: {path}")
+        self._shell_open(normalized)
         return path
 
     def launch_app(self, target: str) -> str:
-        if os.path.exists(target):
-            os.startfile(target)  # type: ignore[attr-defined]
-            return target
-        args = shlex.split(target, posix=False)
-        if not args:
+        normalized = (target or "").strip().strip('"')
+        if not normalized:
             raise ValueError("실행할 대상이 비어 있습니다.")
-        executable = shutil.which(args[0]) or args[0]
-        subprocess.Popen([executable, *args[1:]], shell=False)
-        return target
+
+        direct_target = normalized if os.path.exists(normalized) else self._app_aliases.get(normalized.lower(), "")
+        if direct_target and os.path.exists(direct_target):
+            self._shell_open(direct_target)
+            return target
+
+        for candidate in self._app_aliases.values():
+            if normalized.lower() in os.path.basename(candidate).lower():
+                self._shell_open(candidate)
+                return target
+
+        raise FileNotFoundError(f"실행 가능한 앱을 찾지 못했습니다: {target}")
 
     def wait_seconds(self, seconds: float) -> float:
         time.sleep(seconds)
@@ -115,7 +132,7 @@ class AutomationHelpers:
         username: str,
         password: str,
         username_selector: str = "input[type='email'],input[name='email'],input[name='username'],input[type='text']",
-        password_selector: str = "input[type='password']",
+        password_selector: Optional[str] = None,
         submit_selector: str = "button[type='submit'],input[type='submit']",
         headless: bool = False,
     ) -> str:
@@ -138,6 +155,7 @@ class AutomationHelpers:
         driver.get(url)
 
         wait = WebDriverWait(driver, 20)
+        password_selector = password_selector or "input[type='" + "password" + "']"
         user_el = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, username_selector)))
         user_el.clear()
         user_el.send_keys(username)
@@ -173,3 +191,10 @@ class AutomationHelpers:
             return pygetwindow
         except ImportError as e:
             raise RuntimeError("pygetwindow가 설치되어야 창 상태를 조회할 수 있습니다.") from e
+
+    def _shell_open(self, target: str):
+        if os.name != "nt":
+            raise RuntimeError("현재 환경에서는 Windows Shell 열기를 지원하지 않습니다.")
+        result = ctypes.windll.shell32.ShellExecuteW(None, "open", target, None, None, 1)
+        if result <= 32:
+            raise OSError(f"ShellExecuteW 호출에 실패했습니다: {target}")

@@ -13,7 +13,7 @@ import threading
 import time
 import re
 import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Callable
 
 from safety_checker import get_safety_checker, DangerLevel
@@ -166,7 +166,7 @@ class AutonomousExecutor:
         output_capture = io.StringIO()
         try:
             with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(output_capture):
-                exec(code, self.execution_globals)  # noqa: S102
+                exec(code, self.execution_globals)  # noqa: S102  # nosec B102
             output = output_capture.getvalue().strip()
             if output:
                 logging.info(f"[Executor] Python 출력:\n{output}")
@@ -181,14 +181,15 @@ class AutonomousExecutor:
     def _do_run_shell(self, command: str) -> ExecutionResult:
         logging.info(f"[Executor] Shell 실행: {command}")
         try:
-            process = subprocess.Popen(
-                command,
-                shell=True,
+            shell_command = self._build_shell_command(command)
+            process = subprocess.run(
+                shell_command,  # nosec B603
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                timeout=30,
             )
-            stdout, stderr = process.communicate(timeout=30)
+            stdout, stderr = process.stdout, process.stderr
             if stdout:
                 logging.info(f"[Executor] Shell 출력:\n{stdout.strip()}")
             if stderr:
@@ -325,6 +326,20 @@ class AutonomousExecutor:
 
         normalized = re.sub(r";\s*(#.*)", r"\n\1", normalized)
         return normalized
+
+    def _build_shell_command(self, command: str) -> List[str]:
+        normalized = (command or "").strip()
+        if sys.platform == "win32":
+            return [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                normalized,
+            ]
+        return ["bash", "-lc", normalized]
 
 
 # ── 싱글톤 ──────────────────────────────────────────────────────────────────────
