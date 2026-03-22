@@ -73,6 +73,16 @@ cmd = [
     *( ["--windows-icon-from-ico=icon.ico"] if os.path.exists("icon.ico") else [] ),
 
     # 필수 패키지 명시
+    "--include-module=confirmation_manager",
+    "--include-module=agent_orchestrator",
+    "--include-module=agent_planner",
+    "--include-module=autonomous_executor",
+    "--include-module=proactive_scheduler",
+    "--include-module=real_verifier",
+    "--include-module=safety_checker",
+    "--include-module=strategy_memory",
+    "--include-module=web_tools",
+    "--include-module=automation_helpers",
     "--include-package=pycaw",
     "--include-package=comtypes",
     "--include-package=groq",
@@ -85,6 +95,15 @@ cmd = [
     "--include-package=watchdog",
     "--include-package=requests",
     "--include-package=httpx",
+    "--include-package=psutil",
+    "--include-package=reportlab",
+    "--include-package=ddgs",
+    "--include-package=duckduckgo_search",
+    "--include-package=pyautogui",
+    "--include-package=pyperclip",
+    "--include-package=pygetwindow",
+    "--include-package=selenium",
+    "--include-package=webdriver_manager",
 
     # 불필요한 모듈 제외 (빌드 속도 및 용량 최적화)
     "--nofollow-import-to=matplotlib",

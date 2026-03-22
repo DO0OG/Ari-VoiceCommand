@@ -10,6 +10,7 @@ from commands.time_command import TimeCommand
 from commands.calculator_command import CalculatorCommand
 from commands.ai_command import AICommand
 from commands.youtube_command import YoutubeCommand
+from commands.system_command import SystemCommand
 
 
 class CommandRegistry:
@@ -34,6 +35,7 @@ class CommandRegistry:
             TimerCommand(timer_manager, tts_func),
             WeatherCommand(weather_service, tts_func),
             VolumeCommand(adjust_volume_func, tts_func),
+            SystemCommand(tts_func),
             TimeCommand(tts_func),
             CalculatorCommand(tts_func),
             AICommand(ai_assistant, tts_func, learning_mode_ref),  # 마지막 (fallback)

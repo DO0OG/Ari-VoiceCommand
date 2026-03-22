@@ -46,7 +46,17 @@
       "Bash(sort -k2)",
       "Bash(xargs -0 ls -lh)",
       "Bash(xargs rm:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Read(//d D:/Git/AI-Assistant/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(C:/Users/안지훈/AppData/Local/Programs/Python/Python311/python.exe -m py_compile \"D:/Git/AI-Assistant/VoiceCommand/agent_orchestrator.py\")",
+      "Bash(PY=\"C:/Users/안지훈/AppData/Local/Programs/Python/Python311/python.exe\")",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(\"$PY\" -m py_compile \"D:/Git/AI-Assistant/VoiceCommand/$f\")",
+      "Bash(echo \"OK  $f\")"
     ]
   }
 }

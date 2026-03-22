@@ -10,6 +10,12 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEas
 from PySide6.QtGui import QFont
 from datetime import datetime
 
+try:
+    from VoiceCommand import parse_emotion_text, EMOTION_EMOJI
+except Exception:
+    parse_emotion_text = None
+    EMOTION_EMOJI = {}
+
 class ChatWidget(QFrame):
     """채팅 메시지를 표시하는 위젯. 메모리 관리를 위해 오래된 메시지를 삭제합니다."""
     def __init__(self):
@@ -31,6 +37,12 @@ class ChatWidget(QFrame):
                 item.widget().deleteLater()
 
         timestamp = datetime.now().strftime("%H:%M:%S")
+        display_message = message
+        if not is_user and parse_emotion_text:
+            emotion, pure_text = parse_emotion_text(message)
+            emoji = EMOTION_EMOJI.get(emotion, "")
+            if pure_text:
+                display_message = f"{emoji} {pure_text}".strip() if emoji else pure_text
         
         msg_frame = QFrame()
         msg_layout = QVBoxLayout(msg_frame)
@@ -45,7 +57,7 @@ class ChatWidget(QFrame):
         sender_label.setFont(QFont("맑은 고딕", 9, QFont.Bold))
         sender_label.setStyleSheet(f"color: {sender_color};")
         
-        message_label = QLabel(message)
+        message_label = QLabel(display_message)
         message_label.setWordWrap(True)
         message_label.setFont(QFont("맑은 고딕", 10))
         message_label.setStyleSheet("color: #333333; margin: 2px 0px;")
@@ -81,13 +93,30 @@ class TextInterfaceThread(QThread):
         
     def run(self):
         try:
-            # 표준 인터페이스 process_query 사용
-            if hasattr(self.ai_assistant, 'process_query'):
-                response, _, _ = self.ai_assistant.process_query(self.query)
-            elif hasattr(self.ai_assistant, 'chat'):
-                response = self.ai_assistant.chat(self.query)
-            else:
-                response = "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
+            response = None
+
+            # 텍스트 UI도 실제 AICommand 경로를 재사용해 tool call / agent task까지 수행한다.
+            try:
+                from VoiceCommand import _command_registry
+                if _command_registry:
+                    from commands.ai_command import AICommand
+                    for command in _command_registry.commands:
+                        if isinstance(command, AICommand):
+                            response = command.run_interaction(self.query)
+                            break
+            except Exception as e:
+                logging.error(f"텍스트 UI의 AICommand 경로 실행 실패: {e}")
+
+            if not response:
+                # 최후 폴백
+                if hasattr(self.ai_assistant, 'chat_with_tools'):
+                    response, _ = self.ai_assistant.chat_with_tools(self.query, include_context=True)
+                elif hasattr(self.ai_assistant, 'process_query'):
+                    response, _, _ = self.ai_assistant.process_query(self.query)
+                elif hasattr(self.ai_assistant, 'chat'):
+                    response = self.ai_assistant.chat(self.query)
+                else:
+                    response = "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
             
             self.response_ready.emit(str(response))
         except Exception as e:
