@@ -318,11 +318,17 @@ class TextInterface(QMainWindow):
         start_rect = QRect(target_x + target_width//2, target_y + target_height//2, 1, 1)
         end_rect = QRect(final_x, final_y, self.width(), self.height())
         
+        try:
+            self.opacity_anim.finished.disconnect(self.hide)
+        except RuntimeError:
+            pass
+
         self.setGeometry(start_rect)
         self.setWindowOpacity(0.0)
         self.show()
         
         self.anim.stop()
+        self.anim.setEasingCurve(QEasingCurve.OutBack)
         self.anim.setStartValue(start_rect)
         self.anim.setEndValue(end_rect)
         self.anim.start()
@@ -346,6 +352,11 @@ class TextInterface(QMainWindow):
         self.anim.setEndValue(end_rect)
         self.anim.start()
         
+        try:
+            self.opacity_anim.finished.disconnect(self.hide)
+        except (RuntimeError, TypeError):
+            pass
+            
         self.opacity_anim.stop()
         self.opacity_anim.setStartValue(self.windowOpacity())
         self.opacity_anim.setEndValue(0.0)

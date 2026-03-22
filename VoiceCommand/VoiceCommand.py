@@ -95,9 +95,12 @@ def start_tts_background():
                 _tts_init_event.set()
         threading.Thread(target=_run, daemon=True).start()
     else:
-        try: initialize_tts()
-        except: pass
-        finally: _tts_init_event.set()
+        try:
+            initialize_tts()
+        except Exception as e:
+            logging.error(f"TTS 초기화 실패 (동기): {e}")
+        finally:
+            _tts_init_event.set()
 
 
 def initialize_tts():
@@ -111,8 +114,13 @@ def initialize_tts():
     if character_widget and hasattr(fish_tts, 'playback_finished'):
         try:
             # 기존 연결이 있을 수 있으므로 안전하게 처리
+            try:
+                fish_tts.playback_finished.disconnect(character_widget.hide_speech_bubble)
+            except Exception:
+                pass  # 이미 연결 해제된 경우 무시
             fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
-        except: pass
+        except Exception:
+            pass  # 시그널 미지원 프로바이더 무시
 
     rp_gen = RPGenerator()
     rp_gen.set_config(
@@ -238,8 +246,10 @@ def recognize_speech_helper(recognizer, source, signal):
 
 
 def wake_detector_recalibrate_helper(detector, source):
-    try: detector.recalibrate(source)
-    except: pass
+    try:
+        detector.recalibrate(source)
+    except Exception:  # nosec B110
+        pass
 
 
 # ── 모듈 초기화 ──────────────────────────────────────────────────────────────
@@ -259,7 +269,8 @@ def adjust_volume(change):
         new_v = max(0.0, min(1.0, curr + change))
         volume.SetMasterVolumeLevelScalar(new_v, None)
         tts_wrapper(f"볼륨을 {int(new_v * 100)}%로 조절했습니다.")
-    except: tts_wrapper("볼륨 조절 실패")
+    except Exception:
+        tts_wrapper("볼륨 조절 실패")
 
 from commands.command_registry import CommandRegistry
 _command_registry = CommandRegistry(

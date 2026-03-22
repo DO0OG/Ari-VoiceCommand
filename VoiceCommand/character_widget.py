@@ -4,11 +4,14 @@ Shimeji 스타일 캐릭터 위젯 (최적화 버전)
 import os
 import random
 import time
+import sys
+import logging
+import ctypes
 from collections import OrderedDict
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, QElapsedTimer, Signal, Slot, Property
-from PySide6.QtGui import QPixmap, QImage, QPainter, QAction, QCursor
-from speech_bubble import SpeechBubble
+from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
+from speech_bubble import SpeechBubble, register_fonts
 from constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL, IMAGE_CACHE_CAPACITY
@@ -51,8 +54,9 @@ class CharacterWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-        from speech_bubble import register_fonts
         register_fonts()  # 메인 스레드에서 폰트 등록
+        self._screen_geom_cache = None
+        self._screen_geom_cache_time = 0
         self.dragging = False
         self.offset = QPoint()
         self.target_pos = QPoint() # 드래그 시 목표 위치
@@ -139,7 +143,6 @@ class CharacterWidget(QWidget):
         self.show()
 
         # Windows에서 HWND_TOPMOST 강제 적용
-        import sys
         if sys.platform == 'win32':
             self._enforce_topmost()
             # 주기적으로 최상위 상태 재적용 (5초마다)
@@ -167,7 +170,6 @@ class CharacterWidget(QWidget):
             
         # 회전
         if rotation != 0:
-            from PySide6.QtGui import QTransform
             transform = QTransform().rotate(rotation)
             image = image.transformed(transform, Qt.SmoothTransformation)
 
@@ -212,9 +214,16 @@ class CharacterWidget(QWidget):
             if frames:
                 self.animations[anim_name] = frames
 
+    def get_screen_geometry(self):
+        """화면 크기 정보를 캐싱하여 반환 (성능 최적화)"""
+        if not hasattr(self, '_screen_geom_cache_time') or time.time() - self._screen_geom_cache_time > 2.0:
+            self._screen_geom_cache = QApplication.primaryScreen().geometry()
+            self._screen_geom_cache_time = time.time()
+        return self._screen_geom_cache
+
     def get_ground_y(self):
         """현재 상태에 따른 바닥 Y 좌표 계산 (전체 화면 기준 및 오프셋 강화)"""
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         ground_bottom = screen.height()
         # 앉은 자세(sit)는 이미지가 더 낮으므로 더 깊게 밀착 (공중에 뜨는 현상 방지)
         # idle: 0, sit: 25 (더 깊게 안착)
@@ -231,7 +240,7 @@ class CharacterWidget(QWidget):
                 pixmap = self.load_and_cache_image(frame_path, flip=flip)
                 if pixmap:
                     # 새로운 프레임의 크기를 기준으로 위치와 크기를 한 번에 업데이트
-                    screen = QApplication.primaryScreen().geometry()
+                    screen = self.get_screen_geometry()
                     ground_bottom = screen.height()
                     offset = 25 if self.current_animation == "sit" else 5
                     new_y = ground_bottom - pixmap.height() + offset
@@ -280,7 +289,7 @@ class CharacterWidget(QWidget):
             self.start_behavior_timer()
             return
 
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         margin = max(0, (self.width() // 2) - 30)
         # 벽 밀착 판정 (캐릭터 너비의 40% 이상 나갔을 때)
         at_left_edge = self.x() <= -margin + 10
@@ -318,7 +327,6 @@ class CharacterWidget(QWidget):
         self.set_animation("climb")
         
         # 화면 높이의 20~50% 정도 위로 이동
-        screen = QApplication.primaryScreen().geometry()
         climb_height = random.randint(200, 500)
         new_y = max(50, self.y() - climb_height)
 
@@ -343,7 +351,7 @@ class CharacterWidget(QWidget):
     def smooth_walk(self):
         """부드럽고 느린 걷기 이동"""
         from PySide6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         margin = max(0, (self.width() // 2) - 30)
 
         # 이동 거리 및 방향
@@ -376,11 +384,9 @@ class CharacterWidget(QWidget):
 
     def _enforce_topmost(self):
         """Win32 API로 항상 최상위 강제 적용 (Windows 전용)"""
-        import sys
         if sys.platform != 'win32':
             return
         try:
-            import ctypes
             HWND_TOPMOST = -1
             SWP_NOMOVE = 0x0002
             SWP_NOSIZE = 0x0001
@@ -395,14 +401,12 @@ class CharacterWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        import sys
         if sys.platform == 'win32':
             QTimer.singleShot(100, self._enforce_topmost)
 
     def move_to_bottom(self):
         """화면 하단으로 이동"""
-        from PySide6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         x = random.randint(0, max(0, screen.width() - 200))
         # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
         y = screen.height() - 200  # 하단에서 200px 위
@@ -447,7 +451,7 @@ class CharacterWidget(QWidget):
             ny = event.globalPos().y() - self.offset.y()
             
             # 화면 경계 제한 (좌우는 절반까지 밖으로, 상단은 0, 하단은 바닥까지)
-            screen = QApplication.primaryScreen().geometry()
+            screen = self.get_screen_geometry()
             margin = max(0, (self.width() // 2) - 30)
             nx = max(-margin, min(nx, screen.width() - self.width() + margin))
             ny = max(0, min(ny, screen.height() - self.height() + 25))
@@ -592,7 +596,6 @@ class CharacterWidget(QWidget):
 
     def exit_program(self):
         """프로그램 종료 요청"""
-        import logging
         logging.info("캐릭터 메뉴를 통한 프로그램 종료 요청")
         app = QApplication.instance()
         if app:
@@ -603,7 +606,7 @@ class CharacterWidget(QWidget):
         if self.dragging:
             return
 
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         target_y = self.get_ground_y()
         current_y = self.y()
         moved = False
@@ -698,7 +701,7 @@ class CharacterWidget(QWidget):
         dx = cursor_pos.x() - char_center.x()
         distance = abs(dx)
 
-        screen = QApplication.primaryScreen().geometry()
+        screen = self.get_screen_geometry()
         margin = max(0, (self.width() // 2) - 30)
         at_edge = self.x() <= -margin + 5 or self.x() >= screen.width() - self.width() + margin - 5
 
@@ -737,7 +740,6 @@ class CharacterWidget(QWidget):
     @Slot(str)
     def _change_emotion_slot(self, emotion):
         """실제 감정 표현 처리 (메인 스레드)"""
-        import logging
         logging.debug(f"캐릭터 감정 표현: {emotion}")
         
         # 감정에 따른 애니메이션 매핑
@@ -770,7 +772,6 @@ class CharacterWidget(QWidget):
     @Slot(str, int)
     def _show_speech_bubble_slot(self, text, duration):
         """실제 말풍선 표시 (메인 스레드에서만 실행)"""
-        import logging
         # 기존 타이머 정지
         self.bubble_hide_timer.stop()
 
@@ -800,7 +801,6 @@ class CharacterWidget(QWidget):
     @Slot()
     def _hide_speech_bubble_slot(self):
         """실제 말풍선 숨김 (메인 스레드에서만 실행)"""
-        import logging
         if self.speech_bubble:
             logging.debug("말풍선 숨김 처리")
             self.speech_bubble.hide()

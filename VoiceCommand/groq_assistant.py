@@ -313,7 +313,7 @@ class GroqAssistant:
                         context_summary = memory_manager.get_full_context_prompt()
                         if context_summary:
                             system_content += f"\n\n사용자 및 시스템 컨텍스트:\n{context_summary}"
-                    except:
+                    except Exception:
                         pass
             else:
                 system_content = (
