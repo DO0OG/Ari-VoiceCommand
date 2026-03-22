@@ -12,6 +12,13 @@ import subprocess
 import sys
 import multiprocessing
 
+# 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 clean_build = "--clean" in sys.argv
 one_file = "--onefile" in sys.argv
 jobs = multiprocessing.cpu_count()
