@@ -354,7 +354,7 @@ class TextInterface(QMainWindow):
         
         try:
             self.opacity_anim.finished.disconnect(self.hide)
-        except RuntimeError:
+        except (RuntimeError, TypeError):
             pass
             
         self.opacity_anim.stop()

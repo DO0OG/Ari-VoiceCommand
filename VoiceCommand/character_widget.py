@@ -4,10 +4,11 @@ Shimeji 스타일 캐릭터 위젯 (최적화 버전)
 import os
 import random
 import time
+import sys
 from collections import OrderedDict
-from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
+from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication, QAction
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, QElapsedTimer, Signal, Slot, Property
-from PySide6.QtGui import QPixmap, QImage, QPainter, QAction, QCursor
+from PySide6.QtGui import QPixmap, QImage, QPainter, QCursor, QTransform
 from speech_bubble import SpeechBubble
 from constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,

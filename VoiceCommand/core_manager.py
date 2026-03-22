@@ -71,7 +71,7 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         if event.src_path.endswith('.py'):
             logging.info(f"파일 {event.src_path}가 수정되었습니다. 프로그램을 재시작합니다...")
-            os.execv(sys.executable, ['python'] + sys.argv)
+            os.execv(sys.executable, ['python'] + sys.argv)  # nosec B606
 
 def start_file_watcher():
     # 배포(frozen) 환경에서는 파일 감시 불필요
