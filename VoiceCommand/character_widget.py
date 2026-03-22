@@ -5,10 +5,12 @@ import os
 import random
 import time
 import sys
+import logging
+import ctypes
 from collections import OrderedDict
-from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication, QAction
+from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, QElapsedTimer, Signal, Slot, Property
-from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform
+from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
 from speech_bubble import SpeechBubble, register_fonts
 from constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
@@ -52,7 +54,6 @@ class CharacterWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-        from speech_bubble import register_fonts
         register_fonts()  # 메인 스레드에서 폰트 등록
         self._screen_geom_cache = None
         self._screen_geom_cache_time = 0
@@ -142,7 +143,6 @@ class CharacterWidget(QWidget):
         self.show()
 
         # Windows에서 HWND_TOPMOST 강제 적용
-        import sys
         if sys.platform == 'win32':
             self._enforce_topmost()
             # 주기적으로 최상위 상태 재적용 (5초마다)
@@ -170,7 +170,6 @@ class CharacterWidget(QWidget):
             
         # 회전
         if rotation != 0:
-            from PySide6.QtGui import QTransform
             transform = QTransform().rotate(rotation)
             image = image.transformed(transform, Qt.SmoothTransformation)
 
@@ -385,7 +384,6 @@ class CharacterWidget(QWidget):
 
     def _enforce_topmost(self):
         """Win32 API로 항상 최상위 강제 적용 (Windows 전용)"""
-        import sys
         if sys.platform != 'win32':
             return
         try:
@@ -404,13 +402,11 @@ class CharacterWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        import sys
         if sys.platform == 'win32':
             QTimer.singleShot(100, self._enforce_topmost)
 
     def move_to_bottom(self):
         """화면 하단으로 이동"""
-        from PySide6.QtWidgets import QApplication
         screen = self.get_screen_geometry()
         x = random.randint(0, max(0, screen.width() - 200))
         # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
@@ -601,7 +597,6 @@ class CharacterWidget(QWidget):
 
     def exit_program(self):
         """프로그램 종료 요청"""
-        import logging
         logging.info("캐릭터 메뉴를 통한 프로그램 종료 요청")
         app = QApplication.instance()
         if app:
@@ -746,7 +741,6 @@ class CharacterWidget(QWidget):
     @Slot(str)
     def _change_emotion_slot(self, emotion):
         """실제 감정 표현 처리 (메인 스레드)"""
-        import logging
         logging.debug(f"캐릭터 감정 표현: {emotion}")
         
         # 감정에 따른 애니메이션 매핑
@@ -779,7 +773,6 @@ class CharacterWidget(QWidget):
     @Slot(str, int)
     def _show_speech_bubble_slot(self, text, duration):
         """실제 말풍선 표시 (메인 스레드에서만 실행)"""
-        import logging
         # 기존 타이머 정지
         self.bubble_hide_timer.stop()
 
@@ -809,7 +802,6 @@ class CharacterWidget(QWidget):
     @Slot()
     def _hide_speech_bubble_slot(self):
         """실제 말풍선 숨김 (메인 스레드에서만 실행)"""
-        import logging
         if self.speech_bubble:
             logging.debug("말풍선 숨김 처리")
             self.speech_bubble.hide()

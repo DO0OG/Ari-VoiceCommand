@@ -25,7 +25,7 @@ class UserContextManager:
             try:
                 with open(self.context_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except Exception:
                 pass
 
         # 기본 구조

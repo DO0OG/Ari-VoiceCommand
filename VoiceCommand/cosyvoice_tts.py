@@ -292,7 +292,7 @@ class CosyVoiceTTS(QObject):
                         if pa_stream:
                             pa_stream.stop_stream()
                             pa_stream.close()
-                    except:
+                    except Exception:
                         pass
                     if self._stopping:
                         return False
@@ -323,7 +323,7 @@ class CosyVoiceTTS(QObject):
                 if not chunk:
                     return None
                 buf += chunk
-        except:
+        except Exception:
             return None
         return buf
 
@@ -348,7 +348,7 @@ class CosyVoiceTTS(QObject):
             except Exception:
                 try:
                     self._proc.kill()
-                except:
+                except Exception:
                     pass
 
         # PyAudio 정리는 AriCore.cleanup()에서 GlobalAudio.terminate() 호출로 통합 관리

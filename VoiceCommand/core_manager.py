@@ -71,7 +71,7 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         if event.src_path.endswith('.py'):
             logging.info(f"파일 {event.src_path}가 수정되었습니다. 프로그램을 재시작합니다...")
-            # sys.executable을 첫 번째 인자로 사용하여 현재 파이썬 환경 유지
+            # 현재 실행 환경을 유지하며 프로세스 재시작 (안전한 리스트 인자 사용)
             executable = sys.executable
             args = [executable] + sys.argv
             os.execv(executable, args)  # nosec B606

@@ -103,7 +103,7 @@ class FishTTSWebSocket(QObject):
                                     segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
                                     stream.write(segment.raw_data)
                                     mp3_buffer = b""
-                                except:
+                                except Exception:
                                     if len(mp3_buffer) > 32768: mp3_buffer = b""
                                     continue
                         except queue.Empty:
@@ -115,7 +115,7 @@ class FishTTSWebSocket(QObject):
                         try:
                             segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
                             stream.write(segment.raw_data)
-                        except: pass
+                        except Exception: pass
 
                     # 하드웨어 버퍼 소진 대기 — 레이턴시 최적화 (10초 -> 1.5초)
                     if stream:
@@ -132,7 +132,7 @@ class FishTTSWebSocket(QObject):
                         try:
                             # stop_stream() 대신 즉시 close()하여 반응성 확보
                             stream.close()
-                        except: pass
+                        except Exception: pass
                     logging.info("재생 장치 닫기 완료")
 
             # 재생 스레드 시작

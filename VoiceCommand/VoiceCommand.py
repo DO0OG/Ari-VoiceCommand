@@ -96,7 +96,7 @@ def start_tts_background():
         threading.Thread(target=_run, daemon=True).start()
     else:
         try: initialize_tts()
-        except: pass
+        except Exception: pass
         finally: _tts_init_event.set()
 
 
@@ -113,9 +113,9 @@ def initialize_tts():
             # 기존 연결이 있을 수 있으므로 안전하게 처리
             try:
                 fish_tts.playback_finished.disconnect(character_widget.hide_speech_bubble)
-            except: pass
+            except Exception: pass
             fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
-        except: pass
+        except Exception: pass
 
     rp_gen = RPGenerator()
     rp_gen.set_config(
