@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - \"v*\"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Ari EXE
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: \"3.11\"
+          cache: \"pip\"
+
+      - name: Install dependencies
+        run: |
+          pip install -r VoiceCommand/requirements.txt
+          pip install nuitka
+
+      - name: Build EXE (Standalone Folder)
+        working-directory: VoiceCommand
+        run: python build_exe.py --clean
+
+      - name: Zip Artifact
+        working-directory: VoiceCommand
+        run: |
+          powershell Compress-Archive -Path dist/Ari/* -DestinationPath ../Ari-windows.zip
+        shell: pwsh
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ari-windows-binary
+          path: Ari-windows.zip
+          retention-days: 5
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, \"refs/tags/v\")
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Ari-windows-binary
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Ari-windows.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
