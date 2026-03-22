@@ -10,11 +10,12 @@ Plan → Execute+Self-Fix → Verify 다층 루프로 목표를 자율적으로 
      복잡한 목표 → 다단계 계획 → 병렬 실행+자동수정 → 코드 기반 검증 → [재계획] 루프
 """
 import concurrent.futures
+import ast
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Callable, Dict, Tuple
+from typing import Any, List, Optional, Callable, Dict, Tuple
 
 from agent_planner import AgentPlanner, ActionStep, get_planner
 from autonomous_executor import AutonomousExecutor, ExecutionResult, get_executor
@@ -25,14 +26,29 @@ _LOCK_CONTENTION_ERRORS = frozenset({
     "이미 다른 명령이 실행 중입니다.",
 })
 
-_SAFE_EVAL_BUILTINS = {
+_SAFE_AST_CALLS = {
     "len": len,
     "str": str,
     "int": int,
     "float": float,
     "bool": bool,
-    "any": any,
-    "all": all,
+}
+
+_SAFE_AST_METHODS = {
+    dict: {"get"},
+}
+
+_COMPARE_OPERATORS = {
+    ast.Eq: lambda a, b: a == b,
+    ast.NotEq: lambda a, b: a != b,
+    ast.Gt: lambda a, b: a > b,
+    ast.GtE: lambda a, b: a >= b,
+    ast.Lt: lambda a, b: a < b,
+    ast.LtE: lambda a, b: a <= b,
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+    ast.Is: lambda a, b: a is b,
+    ast.IsNot: lambda a, b: a is not b,
 }
 
 
@@ -395,21 +411,104 @@ class AgentOrchestrator:
 
     def _eval_condition(self, condition: str, context: Dict[str, str]) -> bool:
         """
-        step.condition Python 표현식 평가.
+        step.condition 표현식을 안전한 AST 해석기로 평가.
         step_outputs 딕셔너리로 컨텍스트에 접근 가능.
         평가 실패 시 True(실행) 반환.
         """
         if not condition:
             return True
         try:
+            tree = ast.parse(condition, mode="eval")
             step_outputs = dict(context)
-            return bool(eval(  # noqa: S307
-                condition,
-                {"__builtins__": _SAFE_EVAL_BUILTINS, "step_outputs": step_outputs},
-            ))
+            return bool(self._eval_ast_node(tree.body, {"step_outputs": step_outputs}))
         except Exception as e:
             logging.warning(f"[Orchestrator] 조건 평가 실패 (True로 처리): {condition!r} → {e}")
             return True
+
+    def _eval_ast_node(self, node: ast.AST, variables: Dict[str, Any]) -> Any:
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, ast.Name):
+            if node.id in variables:
+                return variables[node.id]
+            if node.id in _SAFE_AST_CALLS:
+                return _SAFE_AST_CALLS[node.id]
+            raise ValueError(f"허용되지 않은 이름: {node.id}")
+
+        if isinstance(node, ast.BoolOp):
+            values = [self._eval_ast_node(value, variables) for value in node.values]
+            if isinstance(node.op, ast.And):
+                return all(values)
+            if isinstance(node.op, ast.Or):
+                return any(values)
+            raise ValueError(f"허용되지 않은 bool 연산자: {type(node.op).__name__}")
+
+        if isinstance(node, ast.UnaryOp):
+            operand = self._eval_ast_node(node.operand, variables)
+            if isinstance(node.op, ast.Not):
+                return not operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            raise ValueError(f"허용되지 않은 단항 연산자: {type(node.op).__name__}")
+
+        if isinstance(node, ast.Compare):
+            left = self._eval_ast_node(node.left, variables)
+            for op, comparator in zip(node.ops, node.comparators):
+                right = self._eval_ast_node(comparator, variables)
+                op_type = type(op)
+                if op_type not in _COMPARE_OPERATORS:
+                    raise ValueError(f"허용되지 않은 비교 연산자: {op_type.__name__}")
+                if not _COMPARE_OPERATORS[op_type](left, right):
+                    return False
+                left = right
+            return True
+
+        if isinstance(node, ast.Call):
+            func = self._eval_ast_node(node.func, variables)
+            args = [self._eval_ast_node(arg, variables) for arg in node.args]
+            kwargs = {kw.arg: self._eval_ast_node(kw.value, variables) for kw in node.keywords}
+            if func in _SAFE_AST_CALLS.values():
+                return func(*args, **kwargs)
+            if isinstance(node.func, ast.Attribute):
+                bound = self._eval_ast_node(node.func.value, variables)
+                method_name = node.func.attr
+                allowed_methods = _SAFE_AST_METHODS.get(type(bound), set())
+                if method_name in allowed_methods:
+                    return getattr(bound, method_name)(*args, **kwargs)
+            raise ValueError("허용되지 않은 함수 호출")
+
+        if isinstance(node, ast.Attribute):
+            value = self._eval_ast_node(node.value, variables)
+            if isinstance(value, dict) and node.attr == "get":
+                return value.get
+            raise ValueError(f"허용되지 않은 속성 접근: {node.attr}")
+
+        if isinstance(node, ast.Subscript):
+            value = self._eval_ast_node(node.value, variables)
+            index = self._eval_ast_node(node.slice, variables)
+            return value[index]
+
+        if isinstance(node, ast.IfExp):
+            condition = self._eval_ast_node(node.test, variables)
+            branch = node.body if condition else node.orelse
+            return self._eval_ast_node(branch, variables)
+
+        if isinstance(node, ast.List):
+            return [self._eval_ast_node(item, variables) for item in node.elts]
+
+        if isinstance(node, ast.Tuple):
+            return tuple(self._eval_ast_node(item, variables) for item in node.elts)
+
+        if isinstance(node, ast.Dict):
+            return {
+                self._eval_ast_node(key, variables): self._eval_ast_node(value, variables)
+                for key, value in zip(node.keys, node.values)
+            }
+
+        raise ValueError(f"허용되지 않은 AST 노드: {type(node).__name__}")
 
     # ── 유틸 ──────────────────────────────────────────────────────────────────
 
@@ -417,8 +516,8 @@ class AgentOrchestrator:
         if self.tts and message:
             try:
                 self.tts(message)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"[Orchestrator] TTS 전달 실패: {e}")
 
     def _log_plan(self, steps: List[ActionStep]):
         logging.info(f"[Orchestrator] {len(steps)}단계 계획:")

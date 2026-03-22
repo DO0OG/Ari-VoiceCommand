@@ -9,7 +9,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Dict
 
 # JSON 파싱 정규식 — 모듈 로드 시 1회 컴파일

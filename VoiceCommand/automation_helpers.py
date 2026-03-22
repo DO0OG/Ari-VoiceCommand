@@ -4,6 +4,8 @@ GUI / 브라우저 / 앱 자동화 공통 헬퍼.
 미설치 시에는 명확한 오류를 반환합니다.
 """
 import os
+import shlex
+import shutil
 import subprocess
 import time
 import webbrowser
@@ -26,7 +28,11 @@ class AutomationHelpers:
         if os.path.exists(target):
             os.startfile(target)  # type: ignore[attr-defined]
             return target
-        subprocess.Popen(target, shell=True)
+        args = shlex.split(target, posix=False)
+        if not args:
+            raise ValueError("실행할 대상이 비어 있습니다.")
+        executable = shutil.which(args[0]) or args[0]
+        subprocess.Popen([executable, *args[1:]], shell=False)
         return target
 
     def wait_seconds(self, seconds: float) -> float:
@@ -54,7 +60,7 @@ class AutomationHelpers:
                 pg.hotkey("ctrl", "v")
                 return text
             except Exception:
-                pass
+                use_clipboard = False
         pg.write(text, interval=interval)
         return text
 
