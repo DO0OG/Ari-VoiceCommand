@@ -111,6 +111,9 @@ def initialize_tts():
     if character_widget and hasattr(fish_tts, 'playback_finished'):
         try:
             # 기존 연결이 있을 수 있으므로 안전하게 처리
+            try:
+                fish_tts.playback_finished.disconnect(character_widget.hide_speech_bubble)
+            except: pass
             fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
         except: pass
 
