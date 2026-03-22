@@ -53,6 +53,8 @@ class CharacterWidget(QWidget):
         super().__init__()
         from speech_bubble import register_fonts
         register_fonts()  # 메인 스레드에서 폰트 등록
+        self._screen_geom_cache = None
+        self._screen_geom_cache_time = 0
         self.dragging = False
         self.offset = QPoint()
         self.target_pos = QPoint() # 드래그 시 목표 위치
@@ -325,7 +327,6 @@ class CharacterWidget(QWidget):
         self.set_animation("climb")
         
         # 화면 높이의 20~50% 정도 위로 이동
-        screen = self.get_screen_geometry()
         climb_height = random.randint(200, 500)
         new_y = max(50, self.y() - climb_height)
 

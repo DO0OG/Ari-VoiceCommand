@@ -29,7 +29,7 @@ class ResourceMonitor(QObject):
         try:
             mem_info = self.process.memory_info()
             return mem_info.rss / (1024 * 1024)
-        except:
+        except Exception:
             return 0
 
     def run(self):

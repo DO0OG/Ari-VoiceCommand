@@ -5,7 +5,7 @@ from settings_dialog import SettingsDialog
 class SystemTrayIcon(QSystemTrayIcon):
     def __init__(self, icon, parent=None):
         super(SystemTrayIcon, self).__init__(icon, parent)
-        self.setToolTip(f"Ari Voice Command")
+        self.setToolTip("Ari Voice Command")
         self.should_exit = False
         self.character_widget = None
         self.text_interface = None
