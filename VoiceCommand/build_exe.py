@@ -56,7 +56,7 @@ cmd = [
 
     # PySide6 최적화
     "--enable-plugin=pyside6",
-    "--include-qt-plugins=qtaudio_windows,mediaservice",
+    "--include-qt-plugins=multimedia",
 
     # 데이터 자원 포함
     "--include-data-dir=images=images",
