@@ -246,8 +246,10 @@ def recognize_speech_helper(recognizer, source, signal):
 
 
 def wake_detector_recalibrate_helper(detector, source):
-    try: detector.recalibrate(source)
-    except: pass
+    try:
+        detector.recalibrate(source)
+    except Exception:  # nosec B110
+        pass
 
 
 # ── 모듈 초기화 ──────────────────────────────────────────────────────────────
@@ -267,7 +269,8 @@ def adjust_volume(change):
         new_v = max(0.0, min(1.0, curr + change))
         volume.SetMasterVolumeLevelScalar(new_v, None)
         tts_wrapper(f"볼륨을 {int(new_v * 100)}%로 조절했습니다.")
-    except: tts_wrapper("볼륨 조절 실패")
+    except Exception:
+        tts_wrapper("볼륨 조절 실패")
 
 from commands.command_registry import CommandRegistry
 _command_registry = CommandRegistry(

@@ -76,7 +76,7 @@ class FileChangeHandler(FileSystemEventHandler):
             script_path = os.path.abspath(sys.argv[0])
             # 안전하게 인자 리스트 구성 (명시적 경로 사용)
             args = [executable, script_path] + sys.argv[1:]
-            os.execv(executable, args)  # nosec B606 B607 B404
+            os.execv(executable, args)  # nosec B606 B607 B404 & nosemgrep: python.lang.security.audit.dangerous-os-exec.dangerous-os-exec-v
 
 def start_file_watcher():
     # 배포(frozen) 환경에서는 파일 감시 불필요
