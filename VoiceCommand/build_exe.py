@@ -90,7 +90,8 @@ cmd = [
     "Main.py"
 ]
 
-print(f"빌드 시작 시간: {subprocess.check_output(['powershell', 'Get-Date -Format \"HH:mm:ss\"']).decode().strip()}")
+start_time = subprocess.check_output(['powershell', 'Get-Date -Format "HH:mm:ss"']).decode().strip()
+print(f"빌드 시작 시간: {start_time}")
 result = subprocess.run(cmd)
 
 if result.returncode == 0:
