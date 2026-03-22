@@ -53,6 +53,7 @@ cmd = [
     "--output-dir=dist",
     "--show-progress",
     "--remove-output", # 빌드 완료 후 중간 파일 삭제
+    "--assume-yes-for-downloads", # 자동 다운로드 승인 (비대화형 환경 대응)
 
     # PySide6 최적화
     "--enable-plugin=pyside6",
