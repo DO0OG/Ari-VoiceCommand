@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBu
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
 from PySide6.QtGui import QFont
 
-from safety_checker import SafetyReport, DangerLevel
+from safety_checker import SafetyReport
 
 
 class ConfirmationDialog(QDialog):
@@ -164,8 +164,8 @@ class ConfirmationManager:
         if tts_func:
             try:
                 tts_func(f"위험한 작업이 감지됐어요. {report.summary_kr}. 실행할까요?")
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"확인 안내 TTS 실패: {e}")
 
         holder: dict = {"event": threading.Event(), "result": False}
         self._bridge.request_dialog.emit(action_desc, report, holder)

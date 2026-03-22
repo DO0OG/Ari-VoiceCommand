@@ -72,6 +72,9 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
     script/style 제거, HTML 태그 제거, 공백 정리 적용.
     """
     try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            return "페이지 로드 오류: http/https URL만 지원합니다."
         req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=15) as resp:
             raw = resp.read().decode("utf-8", errors="replace")

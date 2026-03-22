@@ -6,7 +6,6 @@
   scheduler.schedule("오늘 날씨 요약해서 말해줘", "매일 오전 9시")
   scheduler.schedule("작업 디렉토리 정리해줘", "30분 후")
 """
-import dataclasses
 import json
 import logging
 import os
@@ -14,7 +13,7 @@ import threading
 import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 _SCHEDULE_FILE = os.path.join(os.path.dirname(__file__), "scheduled_tasks.json")
 _TICK_INTERVAL = 30   # 초: 예약 작업 체크 주기

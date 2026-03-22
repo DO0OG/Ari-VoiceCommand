@@ -13,7 +13,7 @@ import os
 import re
 from datetime import datetime
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 _VERIFY_CODE_PROMPT = """\
 다음 목표가 달성됐는지 확인하는 파이썬 검증 코드를 작성하세요.

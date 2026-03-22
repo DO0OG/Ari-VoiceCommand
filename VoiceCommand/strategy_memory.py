@@ -3,11 +3,10 @@
 세션 간에 어떤 접근이 성공/실패했는지 기록하고,
 다음 계획 수립 시 과거 경험을 참고합니다.
 """
-import dataclasses
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import List, Optional, Dict
 
@@ -139,7 +138,7 @@ class StrategyMemory:
         try:
             with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump(
-                    [dataclasses.asdict(r) for r in self._records],
+                    [asdict(r) for r in self._records],
                     f, ensure_ascii=False, indent=2,
                 )
         except Exception as e:

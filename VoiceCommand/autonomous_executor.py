@@ -4,14 +4,14 @@ AI가 생성한 파이썬 코드 및 쉘 명령어를 안전하고 효율적으�
 """
 import os
 import sys
-import io
-import contextlib
 import subprocess
 import logging
 import traceback
 import threading
 import time
 import re
+import json
+import tempfile
 import textwrap
 from dataclasses import dataclass
 from typing import List, Optional, Callable
@@ -163,20 +163,40 @@ class AutonomousExecutor:
     def _do_run_python(self, code: str) -> ExecutionResult:
         code = self._normalize_python_code(code)
         logging.info(f"[Executor] Python 실행:\n{code}")
-        output_capture = io.StringIO()
+        runner_path = ""
         try:
-            with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(output_capture):
-                exec(code, self.execution_globals)  # noqa: S102  # nosec B102
-            output = output_capture.getvalue().strip()
+            runner_path = self._write_python_runner(code)
+            process = subprocess.run(
+                [sys.executable, runner_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30,
+            )
+            output = (process.stdout or "").strip()
+            error_output = (process.stderr or "").strip()
+            if process.returncode != 0:
+                logging.error(f"[Executor] Python 오류:\n{error_output}")
+                if self.tts_wrapper:
+                    self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
+                return ExecutionResult(success=False, error=error_output or "파이썬 실행 실패")
             if output:
                 logging.info(f"[Executor] Python 출력:\n{output}")
             return ExecutionResult(success=True, output=output)
+        except subprocess.TimeoutExpired:
+            logging.error("[Executor] Python 시간 초과")
+            if self.tts_wrapper:
+                self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
+            return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
         except Exception:
             err = traceback.format_exc()
             logging.error(f"[Executor] Python 오류:\n{err}")
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
             return ExecutionResult(success=False, error=err)
+        finally:
+            if runner_path:
+                self._safe_unlink(runner_path)
 
     def _do_run_shell(self, command: str) -> ExecutionResult:
         logging.info(f"[Executor] Shell 실행: {command}")
@@ -326,6 +346,175 @@ class AutonomousExecutor:
 
         normalized = re.sub(r";\s*(#.*)", r"\n\1", normalized)
         return normalized
+
+    def _write_python_runner(self, code: str) -> str:
+        runner = self._build_python_runner_script(code)
+        temp = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".py", delete=False)
+        with temp:
+            temp.write(runner)
+        return temp.name
+
+    def _build_python_runner_script(self, code: str) -> str:
+        desktop_path = os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop')
+        step_outputs = self.execution_globals.get("step_outputs", {})
+        payload = {
+            "desktop_path": desktop_path,
+            "step_outputs": step_outputs if isinstance(step_outputs, dict) else {},
+            "module_dir": os.path.dirname(__file__),
+        }
+        payload_json = json.dumps(payload, ensure_ascii=False)
+        indented_code = textwrap.indent(code, "        ")
+        return f'''import contextlib
+import io
+import json
+import logging
+import os
+import re
+import subprocess
+import sys
+import textwrap
+import threading
+import time
+import traceback
+import webbrowser
+from datetime import datetime
+
+PAYLOAD = json.loads({payload_json!r})
+desktop_path = PAYLOAD.get("desktop_path", "")
+step_outputs = PAYLOAD.get("step_outputs", {{}})
+module_dir = PAYLOAD.get("module_dir", "")
+if module_dir and module_dir not in sys.path:
+    sys.path.insert(0, module_dir)
+from automation_helpers import AutomationHelpers
+_automation = AutomationHelpers()
+
+def _choose_document_format(content: str, preferred_format: str = "auto", title: str = "") -> str:
+    preferred = (preferred_format or "auto").strip().lower()
+    if preferred in {{"txt", "md", "pdf"}}:
+        if preferred != "pdf" or _can_write_pdf():
+            return preferred
+        return "md" if ("#" in content or "- " in content or title) else "txt"
+    normalized = content or ""
+    if title or "## " in normalized or normalized.count("\\n- ") >= 2 or normalized.count("\\n#") >= 1:
+        return "md"
+    if len(normalized) > 2500 and _can_write_pdf():
+        return "pdf"
+    return "txt"
+
+def _can_write_pdf() -> bool:
+    try:
+        import reportlab  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+def _write_simple_pdf(path: str, content: str, title: str = ""):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfgen import canvas
+    font_name = "Helvetica"
+    for candidate_name, candidate_path in [("MalgunGothic", r"C:\\Windows\\Fonts\\malgun.ttf"), ("AppleGothic", r"C:\\Windows\\Fonts\\malgun.ttf")]:
+        if os.path.exists(candidate_path):
+            try:
+                pdfmetrics.registerFont(TTFont(candidate_name, candidate_path))
+                font_name = candidate_name
+                break
+            except Exception:
+                continue
+    c = canvas.Canvas(path, pagesize=A4)
+    width, height = A4
+    y = height - 50
+    c.setFont(font_name, 16 if title else 11)
+    if title:
+        c.drawString(40, y, title[:80])
+        y -= 28
+        c.setFont(font_name, 11)
+    for raw_line in (content or "").splitlines():
+        line = raw_line.replace("\\t", "    ")
+        wrapped = textwrap.wrap(line, width=52) or [""]
+        for segment in wrapped:
+            if y < 50:
+                c.showPage()
+                c.setFont(font_name, 11)
+                y = height - 50
+            c.drawString(40, y, segment)
+            y -= 16
+    c.save()
+
+def save_document(directory: str, base_name: str, content: str, preferred_format: str = "auto", title: str = "") -> str:
+    os.makedirs(directory, exist_ok=True)
+    doc_format = _choose_document_format(content, preferred_format=preferred_format, title=title)
+    safe_base = re.sub(r'[^A-Za-z0-9._-]+', '_', base_name).strip("._") or "document"
+    path = os.path.join(directory, f"{{safe_base}}.{{doc_format}}")
+    if doc_format == "pdf":
+        _write_simple_pdf(path, content, title=title)
+    elif doc_format == "md":
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+    else:
+        plain = re.sub(r'^\\s*#+\\s*', '', content, flags=re.MULTILINE)
+        plain = re.sub(r'^\\s*[-*]\\s+', '- ', plain, flags=re.MULTILINE)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(plain)
+    return path
+
+try:
+    from web_tools import web_search, web_fetch
+except Exception:
+    web_search = None
+    web_fetch = None
+
+execution_globals = {{
+    "os": os,
+    "sys": sys,
+    "subprocess": subprocess,
+    "threading": threading,
+    "logging": logging,
+    "time": time,
+    "webbrowser": webbrowser,
+    "datetime": datetime,
+    "desktop_path": desktop_path,
+    "step_outputs": step_outputs,
+    "save_document": save_document,
+    "choose_document_format": _choose_document_format,
+    "open_url": _automation.open_url,
+    "open_path": _automation.open_path,
+    "launch_app": _automation.launch_app,
+    "wait_seconds": _automation.wait_seconds,
+    "click_screen": _automation.click_screen,
+    "move_mouse": _automation.move_mouse,
+    "type_text": _automation.type_text,
+    "press_keys": _automation.press_keys,
+    "hotkey": _automation.hotkey,
+    "take_screenshot": _automation.screenshot,
+    "write_clipboard": _automation.write_clipboard,
+    "read_clipboard": _automation.read_clipboard,
+    "get_active_window_title": _automation.get_active_window_title,
+    "wait_for_window": _automation.wait_for_window,
+    "browser_login": _automation.browser_login,
+}}
+if web_search:
+    execution_globals["web_search"] = web_search
+if web_fetch:
+    execution_globals["web_fetch"] = web_fetch
+
+_capture = io.StringIO()
+try:
+    with contextlib.redirect_stdout(_capture), contextlib.redirect_stderr(_capture):
+{indented_code}
+    print(_capture.getvalue().strip(), end="")
+except Exception:
+    traceback.print_exc()
+    sys.exit(1)
+'''
+
+    def _safe_unlink(self, path: str):
+        try:
+            if path and os.path.exists(path):
+                os.unlink(path)
+        except OSError as e:
+            logging.debug(f"[Executor] 임시 파일 삭제 실패: {e}")
 
     def _build_shell_command(self, command: str) -> List[str]:
         normalized = (command or "").strip()
