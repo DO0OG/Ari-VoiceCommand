@@ -11,10 +11,22 @@
 
 ## 개발 현황
 
-### 최근 업데이트 (2026-03-21)
-- **TTS-음성 인식 동기화**: 웨이크워드 감지 후 응답 TTS가 끝나기 전에 마이크가 켜지는 문제를 해결하여 인식 성공률 향상.
-- **Fish Audio 최적화**: 게임 모드 등에서 발생하던 약 10초의 종료 지연을 **1.5초** 이내로 단축.
-- **안정성 개선**: 볼륨 조절 명령 버그 수정 및 전역 오디오 싱글톤(`GlobalAudio`) 적용으로 자원 충돌 방지.
+### 최근 업데이트 (2026-03-23)
+
+- **범용 자율 실행 템플릿 확장**: 뉴스 검색·요약·저장뿐 아니라 폴더 생성, 시스템 정보 보고서 저장, 파일 요약 저장, 디렉터리 목록 저장 등 자주 쓰는 작업군을 LLM 자유 생성보다 먼저 안정적인 템플릿으로 처리하도록 개선했습니다.
+- **텍스트 UI 자율 실행 통합**: 채팅창 입력도 음성과 동일한 `AICommand → tool call → orchestrator` 경로를 사용하도록 수정하여, 텍스트 대화에서도 실제 작업 수행이 가능해졌습니다.
+- **문서 저장 자동 포맷 선택**: `save_document()` 도우미를 추가하여 결과 구조에 따라 `txt`, `md`, `pdf`를 자동 선택하거나 사용자가 지정한 포맷으로 저장할 수 있습니다.
+- **웹 검색 폴백 강화**: `ddgs` 우선 사용 + DuckDuckGo HTML 폴백으로, 별도 검색 패키지 상태에 따라 자율 실행이 멈추지 않도록 보강했습니다.
+- **감정 태그 UI 정리**: `(진지)`뿐 아니라 `[진지]`, `[기쁨]` 형태도 말풍선과 텍스트 UI에서 이모지 기반 표시로 정리되도록 수정했습니다.
+- **GUI / 브라우저 자동화 헬퍼 추가**: `open_url`, `open_path`, `launch_app`, `click_screen`, `type_text`, `hotkey`, `take_screenshot`, `wait_for_window`, `browser_login` 등의 헬퍼를 실행 환경에 주입하여 앱 실행·브라우저 조작·기본 GUI 자동화 기반을 확장했습니다.
+- **자율 실행 도구 주입**: AI가 생성하는 Python 코드 내에서 `web_search`, `web_fetch`를 별도 도구 호출 없이 즉시 호출 가능하도록 환경을 개선했습니다.
+- **에이전트-캐릭터 감정 연동**: 에이전트의 실행 상태(계획 수립, 코드 수정, 목표 달성 등)에 따라 캐릭터가 [진지], [걱정], [기쁨] 등 감정 애니메이션을 자동으로 수행합니다.
+- **스케줄러 표현식 확장**: `ProactiveScheduler`에 "매시간", "N일 후" 등 다양한 반복 및 스케줄 파싱 로직을 추가하여 자율 작업 예약 능력을 강화했습니다.
+- **웹 검색 요약 파이프라인**: 검색 결과를 단순히 나열하지 않고, LLM이 구어체로 3문장 이내 요약하여 TTS로 응답하는 최적화된 흐름을 구현했습니다.
+- **UI 시각화 및 안정성**: 위험 작업 확인 다이얼로그의 위험 요소를 HTML 리스트로 시각화하여 가독성을 높였으며, `StrategyMemory` 태그 확장으로 과거 경험 회상 능력을 개선했습니다.
+- **자율 실행 엔진**: AI가 Python/Shell 코드를 직접 생성·실행하며, 실패 시 LLM이 자동으로 코드를 수정해 재시도합니다.
+- **3레이어 에이전트 루프**: 복잡한 목표를 Plan → Execute+Self-Fix → Verify 순서로 처리합니다. 목표 미달성 시 이전 결과를 컨텍스트로 삼아 최대 4회 재계획합니다.
+- **안전 검사기**: 코드/명령을 SAFE · CAUTION · DANGEROUS 3단계로 분류하며, 위험한 작업은 15초 카운트다운 확인 다이얼로그를 통해 사용자 승인을 요청합니다.
 
 
 ### 구현 완료
@@ -28,6 +40,12 @@
 | **TTS** | Fish Audio WS · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그 · 물리 엔진 · 마우스 반응 |
 | **스마트 모드** | LLM tool calling으로 타이머 · 날씨 · 유튜브 등 자동 실행 |
+| **자율 실행** | Python / Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) |
+| **에이전트 루프** | 복잡한 목표를 Plan→Execute→Verify 3레이어로 자율 처리 (최대 4회 재계획) |
+| **작업 템플릿** | 폴더 생성, 검색·요약·저장, 시스템 정보 보고서, 디렉터리 목록, 파일 요약 등 자주 쓰는 작업군을 규칙 기반으로 우선 처리 |
+| **문서 저장** | 결과 구조에 따라 `txt` · `md` · `pdf` 자동 저장 또는 사용자 지정 포맷 저장 |
+| **GUI 자동화 기반** | 앱 실행, URL 열기, 키 입력, 마우스 클릭, 스크린샷, 클립보드 제어, 창 대기, Selenium 기반 로그인 자동화 |
+| **안전 검사** | 실행 전 위험 수준 3단계 분류 + 위험 작업 확인 다이얼로그 (15초 카운트다운) |
 | **미디어** | 유튜브 오디오 스트리밍 (yt-dlp + VLC) |
 | **기억 시스템** | FACT/BIO/PREF 태그 기반 장기 기억 (LTM/STM) |
 | **설정 UI** | 트레이 아이콘 기반 3탭 설정창 (RP · AI&TTS · 장치) |
@@ -40,7 +58,7 @@
 | 항목 | 내용 |
 |------|------|
 | `load_context` bare except | `user_context.py` 파일 로드 실패 시 예외 종류·로그 없이 조용히 무시됨 |
-| 크기 상한 누락 | `command_sequences` · `command_frequency` · `conversation_topics` 딕셔너리 무제한 성장 가능 |
+| 크기 상한 누락 | `command_sequences` · `command_frequency` 딕셔너리 무제한 성장 가능 |
 | `user_bio` 리스트 상한 | `interests` · `memos` 리스트에 크기 제한 없음 |
 | `conversation_topics` 미사용 | 데이터 구조에 정의되어 있으나 실제로 기록하는 코드 없음 (stub 상태) |
 
@@ -48,10 +66,24 @@
 
 | 기능 | 설명 |
 |------|------|
-| **스마트홈 연동** | Home Assistant 명령을 commands/ 모듈로 재구현 (현재 미이식) |
 | **Discord 파일 공유** | 파일 전송 명령 commands/ 모듈로 재구현 (현재 미이식) |
 | **알람** | 특정 시각 지정 알림 (현재 카운트다운 타이머만 지원) |
 | **대화 주제 분석** | `conversation_topics` 실제 집계 및 컨텍스트 프롬프트 활용 |
+
+### 다음 구현 우선순위
+
+1. **파일 작업군 확대**
+   파일 이름 변경, 병합, 정리, CSV/JSON 분석, 로그 리포트 자동 생성
+2. **GUI 자동화 강화**
+   창 찾기, 포커스 전환, 좌표 기반 클릭을 넘어 앱 상태 인식 기반 자동화 확장
+3. **브라우저 워크플로우 강화**
+   로그인 이후 반복 작업, 다운로드 처리, 페이지별 selector 전략 축적
+4. **플래너 모델 분리**
+   실행용 LLM과 플래너/검증용 LLM을 분리해 전체 안정성 향상
+5. **검증 계층 강화**
+   파일/폴더 존재 확인 외에 GUI 상태, 브라우저 상태, 앱 상태 검증 추가
+6. **안전 정책 정교화**
+   위험 작업 범주 세분화, 앱/사이트별 허용 정책, 사용자 승인 UX 개선
 
 ---
 
@@ -66,6 +98,8 @@
 | **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 |
 | **스마트 모드** | AI가 상황을 판단하여 도구(타이머, 날씨 등) 자동 실행 |
+| **자율 실행** | AI가 Python/Shell 코드를 생성하고 직접 실행, 오류 시 자동 수정 |
+| **결과 저장 형식** | `txt`, `md`, `pdf`, 자동 선택(`auto`) 지원 |
 | **미디어** | 유튜브 오디오 스트리밍 (yt-dlp + VLC) |
 
 ---
@@ -101,7 +135,7 @@ python VoiceCommand/install_cosyvoice.py
 
 ## 캐릭터 커스터마이징
 
-`VoiceCommand/images/` 폴더 내의 PNG 파일들을 교체하여 자신만의 캐릭터를 만들 수 있습니다. 
+`VoiceCommand/images/` 폴더 내의 PNG 파일들을 교체하여 자신만의 캐릭터를 만들 수 있습니다.
 
 ### 이미지 규칙 (요약)
 - **형식**: 배경이 투명한 PNG
@@ -112,23 +146,88 @@ python VoiceCommand/install_cosyvoice.py
 
 ---
 
-## 아키텍처 (모듈화 완료)
+## 아키텍처
 
 ```
-Main.py                  ← Qt 앱 진입점, 시스템 트레이, 리소스 모니터
-VoiceCommand.py          ← 핵심 비즈니스 로직 및 오케스트레이션 (인식-판단-실행 순환)
-threads.py               ← 음성 인식, TTS, 명령 실행 전용 스레드 분리 및 상태 관리
-audio_manager.py         ← 전역 오디오 장치 공유 및 스레드 락 관리 (GlobalAudio)
-tts_factory.py           ← 다양한 TTS 제공자(OpenAI, Edge, Fish 등) 동적 생성 팩토리
+Main.py                     ← Qt 앱 진입점, 시스템 트레이, 리소스 모니터
+VoiceCommand.py             ← 핵심 비즈니스 로직 및 오케스트레이션 (인식-판단-실행 순환)
+threads.py                  ← 음성 인식, TTS, 명령 실행 전용 스레드 분리 및 상태 관리
+audio_manager.py            ← 전역 오디오 장치 공유 및 스레드 락 관리 (GlobalAudio)
+llm_provider.py             ← 다중 LLM 제공자 통합 (Groq, OpenAI, Anthropic 등)
+tts_factory.py              ← 다양한 TTS 제공자(OpenAI, Edge, Fish 등) 동적 생성 팩토리
 │
-├── commands/            ← 커맨드 패턴 기반 도구 모음 (BaseCommand 구현체)
-│   ├── ai_command.py    ← LLM 대화 및 Tool Calling 처리
-│   ├── youtube_command.py ← 유튜브 검색 및 재생 제어
+├── commands/               ← 커맨드 패턴 기반 도구 모음 (BaseCommand 구현체)
+│   ├── ai_command.py       ← LLM 대화 및 Tool Calling 처리, 에이전트 루프 진입점
+│   ├── youtube_command.py  ← 유튜브 검색 및 재생 제어
 │   └── ...
 │
-├── images/              ← 캐릭터 애니메이션 PNG 프레임 (Shimeji 규격)
+├── [자율 실행 엔진]
+│   ├── agent_orchestrator.py  ← Plan → Execute+Self-Fix → Verify 3레이어 루프
+│   ├── agent_planner.py       ← 목표 프로파일링 + 템플릿 계획 + LLM 기반 보조 분해/수정
+│   ├── autonomous_executor.py ← Python/Shell 안전 실행기 + 문서 저장 유틸(save_document)
+│   ├── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 공통 헬퍼
+│   ├── safety_checker.py      ← 코드/명령 위험 수준 분류 (SAFE/CAUTION/DANGEROUS)
+│   └── confirmation_manager.py ← 위험 작업 Qt 확인 다이얼로그 (크로스-스레드 안전)
+│
+├── images/                 ← 캐릭터 애니메이션 PNG 프레임 (Shimeji 규격)
 └── ...
 ```
+
+### 자율 실행 흐름
+
+```
+사용자 음성 요청
+     │
+     ▼
+ LLM (chat_with_tools)
+     │
+     ├── 단순 도구 호출 (타이머, 날씨 등) ──────────────────────────────► 즉시 실행
+     │
+     ├── execute_python_code / execute_shell_command
+     │        │
+     │        ▼
+     │   SafetyChecker (SAFE/CAUTION/DANGEROUS 분류)
+     │        │
+     │        ├── SAFE    → 즉시 실행
+     │        ├── CAUTION → TTS 경고 후 실행
+     │        └── DANGEROUS → 확인 다이얼로그 (15초 카운트다운)
+     │                │
+     │                ▼
+     │   AgentOrchestrator.execute_with_self_fix()
+     │        │ 실패 시 LLM이 코드 수정 후 재시도 (최대 2회)
+     │        ▼
+     │   실행 결과 → LLM 피드백 → 최종 TTS 응답
+     │
+     └── run_agent_task (복잡한 다단계 목표)
+              │
+              ▼
+         AgentOrchestrator.run()
+              │
+              ├── Layer 1: AgentPlanner.decompose() → 템플릿 계획 또는 LLM 계획 생성
+              ├── Layer 2: 각 단계 실행 + 실패 시 LLM 자동 수정 (Self-Fix)
+              │           단계 간 출력을 step_outputs 딕셔너리로 전달
+              └── Layer 3: AgentPlanner.verify() → 목표 달성 검증
+                           미달성 시 컨텍스트 포함 재계획 (최대 4회 반복)
+```
+
+### 현재 강한 작업군
+
+- 폴더 생성 및 바탕화면 결과 저장
+- 웹 검색 → 요약 → 문서 저장
+- 오늘 뉴스 검색 → 기사 본문 일부 수집 → 구조화 요약 저장
+- 시스템 정보 수집 → 보고서 저장
+- 로컬 텍스트/마크다운/로그/JSON/CSV 파일 요약 저장
+- 디렉터리 목록 생성 및 저장
+- URL 열기, 앱 실행, 기본 GUI 클릭/입력 자동화
+- Selenium 기반 브라우저 로그인 자동화 (환경/사이트 구조 의존)
+
+### 아직 한계가 있는 영역
+
+- 사이트별 DOM 구조가 크게 다른 로그인/인증 흐름
+- 복잡한 GUI 클릭 시퀀스와 앱별 내부 워크플로의 높은 변동성
+- 외부 앱의 비표준 UI 자동화
+- 사용자의 로컬 환경에 강하게 의존하는 특수 작업
+- MFA / CAPTCHA / 보안 키 등 추가 인증이 필요한 사이트
 
 ---
 

@@ -130,6 +130,70 @@ class GroqAssistant:
                         "properties": {}
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "shutdown_computer",
+                    "description": "컴퓨터를 종료합니다. 사용자가 컴퓨터를 꺼달라고 하거나 종료를 요청할 때 사용하세요.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_screen_status",
+                    "description": "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다. 사용자가 '내 화면 어때?' 혹은 '지금 뭐하고 있어?' 라고 물어볼 때 사용하세요.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "execute_python_code",
+                    "description": "기존에 정의된 도구(명령어)가 없을 때, 사용자의 요청을 해결하기 위해 자율적으로 파이썬 코드를 작성하고 실행합니다. 모듈 임포트(import)부터 포함하여 완성된 코드를 작성해야 합니다.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "description": "실행할 파이썬 코드. (예: import webbrowser\\nwebbrowser.open('https://google.com'))"
+                            },
+                            "explanation": {
+                                "type": "string",
+                                "description": "이 코드가 무엇을 하는지 사용자에게 설명할 짧은 텍스트 (TTS용)"
+                            }
+                        },
+                        "required": ["code", "explanation"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "execute_shell_command",
+                    "description": "OS 시스템 제어, 프로그램 실행, 파일 관리 등 파이썬 코드보다 터미널 명령어가 더 적합할 때 사용하는 자율 실행 도구입니다.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "실행할 쉘/CMD 명령어. (예: start notepad, calc 등)"
+                            },
+                            "explanation": {
+                                "type": "string",
+                                "description": "이 명령어가 무엇을 하는지 사용자에게 설명할 짧은 텍스트 (TTS용)"
+                            }
+                        },
+                        "required": ["command", "explanation"]
+                    }
+                }
             }
         ]
 
@@ -183,7 +247,12 @@ class GroqAssistant:
 
             if self.system_prompt:
                 system_content = self.system_prompt
-                system_content += "\n\n**중요**: 반드시 한국어로만 대답하세요. 사용자가 특정 동작(음악 재생, 타이머, 날씨, 볼륨, 시간 등)을 요청하면 해당 도구를 호출하세요."
+                system_content += "\n\n**자율성 및 도구 사용 지침**:\n"
+                system_content += "- 당신은 사용자의 윈도우 PC를 제어하는 '자율형 스마트 어시스턴트'입니다.\n"
+                system_content += "- 기존 도구(`play_youtube`, `get_weather` 등)로 해결할 수 없는 모든 요청은 `execute_python_code` 또는 `execute_shell_command`를 사용하여 **스스로 판단하고 실행**하세요.\n"
+                system_content += "- 파이썬 코드 작성 시 `os`, `sys`, `webbrowser`, `pyautogui`, `subprocess`, `time`, `datetime` 등의 모듈을 자유롭게 활용하세요.\n"
+                system_content += "- 명령 실행 전 반드시 사용자에게 무엇을 할 것인지 `explanation` 매개변수를 통해 짧고 친절하게 설명하세요.\n"
+                system_content += "- **중요**: 반드시 한국어로만 대답하세요."
                 
                 # 메모리 기반 기억 추출 지침 추가
                 system_content += (

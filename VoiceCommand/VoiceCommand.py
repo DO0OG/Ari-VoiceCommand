@@ -141,7 +141,8 @@ def reconnect_tts_signals():
 import re
 
 # 감정 태그 파싱용 정규표현식 사전 컴파일 (성능 최적화)
-EMOTION_PATTERN = re.compile(r'\((기쁨|슬픔|화남|놀람|평온|수줍|기대|진지|걱정)\)')
+_EMOTION_NAMES = "기쁨|슬픔|화남|놀람|평온|수줍|기대|진지|걱정"
+EMOTION_PATTERN = re.compile(rf'[\(\[]({_EMOTION_NAMES})[\)\]]')
 
 # 감정별 이모지 매핑 (이미지 제작 부담 완화 및 표현력 강화)
 EMOTION_EMOJI = {
@@ -150,16 +151,23 @@ EMOTION_EMOJI = {
 }
 
 
+def parse_emotion_text(text):
+    """감정 태그를 제거하고 대표 감정/표시용 텍스트를 반환."""
+    emotion = "평온"
+    matches = EMOTION_PATTERN.findall(text or "")
+    if matches:
+        emotion = matches[-1]
+    pure_text = EMOTION_PATTERN.sub("", text or "")
+    pure_text = re.sub(r'\s+', ' ', pure_text).strip()
+    return emotion, pure_text
+
+
 def text_to_speech(text):
     """TTS로 음성 출력 (최종 최적화 버전)"""
     global fish_tts, rp_gen
     
     # 감정 태그 파싱 (사전 컴파일된 패턴 사용)
-    emotion = "평온"
-    match = EMOTION_PATTERN.search(text)
-    if match:
-        emotion = match.group(1)
-        text = EMOTION_PATTERN.sub("", text).strip()
+    emotion, text = parse_emotion_text(text)
     
     # 캐릭터 감정 표현 실행
     if character_widget:
@@ -188,13 +196,9 @@ def text_to_speech(text):
 def tts_wrapper(text, show_bubble=True):
     """TTS 재생 + 말풍선 표시 (감정 이모지 및 동기화 최적화)"""
     # 표시용 텍스트에서 감정 태그 파싱 및 이모지 추가
-    display_text = text
-    match = EMOTION_PATTERN.search(text)
-    if match:
-        emotion = match.group(1)
-        emoji = EMOTION_EMOJI.get(emotion, "")
-        pure_text = EMOTION_PATTERN.sub("", text).strip()
-        display_text = f"{emoji} {pure_text}" if emoji else pure_text
+    emotion, pure_text = parse_emotion_text(text)
+    emoji = EMOTION_EMOJI.get(emotion, "")
+    display_text = f"{emoji} {pure_text}" if emoji and pure_text else (pure_text or text)
 
     if show_bubble and character_widget:
         # duration=0은 무한 유지가 아니라 TTS 완료 시그널 대기 모드임

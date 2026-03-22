@@ -47,6 +47,10 @@ python install_dependencies.py
 - Context-aware conversation handling
 - Supports learning mode and RP (Roleplay) generation
 
+**automation_helpers.py** - GUI / Browser automation helpers
+- Exposes reusable helpers for URL opening, app launching, keyboard/mouse input, screenshots, clipboard, window waiting
+- Optional Selenium-based browser login flow for sites where credentials/selectors are provided
+
 **audio_manager.py** - Audio resource management
 - `GlobalAudio`: Singleton PyAudio instance manager
 - Separate locks for input (`_audio_input_lock`) and output (`_audio_output_lock`)
@@ -115,3 +119,6 @@ Add new command classes in `commands/` and register them in `commands/command_re
 - **Fish Audio Latency**: Reduced playback termination delay from 10s to 1.5s for faster response in Game Mode.
 - **Audio Lock**: Input and Output locks are separated to allow concurrent microphone listening and speaker playback (though usually kept sequential for recognition accuracy).
 - **Volume Control**: Ensure `adjust_volume` is defined before `CommandRegistry` initialization in `VoiceCommand.py`.
+- **Template-first autonomy**: `agent_planner.py` now prefers deterministic templates for common tasks such as folder creation, search→summarize→save, system info reports, directory listings, and file summarization before falling back to free-form LLM planning.
+- **Text UI parity**: `text_interface.py` routes user requests through `AICommand.run_interaction()` so tool calling and agent execution behave consistently across voice and text entry.
+- **Document save helper**: `autonomous_executor.py` provides `save_document()` / `choose_document_format()` helpers for txt/md/pdf output.

@@ -1,4 +1,5 @@
-name: Codacy Analysis
+name: CI
+
 on:
   push:
     branches:
@@ -6,13 +7,71 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+
+env:
+  PYTHONIOENCODING: utf-8
+
 jobs:
-  codacy-analysis:
-    runs-on: ubuntu-latest
+  validate:
+    name: Validate Python Sources
+    runs-on: windows-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Run Codacy Analysis
-        uses: codacy/codacy-analysis-cli-action@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          project-token: $
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            VoiceCommand/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r VoiceCommand/requirements.txt
+
+      - name: Compile core modules
+        working-directory: VoiceCommand
+        shell: pwsh
+        run: |
+          $files = @(
+            "Main.py",
+            "VoiceCommand.py",
+            "llm_provider.py",
+            "agent_planner.py",
+            "agent_orchestrator.py",
+            "autonomous_executor.py",
+            "automation_helpers.py",
+            "web_tools.py",
+            "text_interface.py",
+            "commands/ai_command.py",
+            "build_exe.py"
+          )
+          python -m py_compile $files
+
+      - name: Smoke-test template routing
+        working-directory: VoiceCommand
+        shell: pwsh
+        run: |
+          @'
+          from agent_planner import AgentPlanner
+          from llm_provider import LLMProvider
+
+          planner = AgentPlanner(LLMProvider(api_key=""))
+          samples = [
+              "바탕화면에 샘플 폴더 만들어줘",
+              "시스템 정보 수집해서 md로 저장해줘",
+              r"C:\Users\runneradmin\Desktop 폴더 목록 저장해줘",
+              "https://example.com 열어줘",
+          ]
+
+          for sample in samples:
+              steps = planner._build_template_plan(sample)
+              if not steps:
+                  raise SystemExit(f"Template plan missing: {sample}")
+          print("template routing ok")
+          '@ | python -

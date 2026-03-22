@@ -8,6 +8,14 @@ from datetime import datetime
 from user_context import get_context_manager
 from conversation_history import add_conversation
 
+# FACT로 저장하면 안 되는 일시적/task-specific 키워드
+_EPHEMERAL_FACT_KEYS = {
+    '오늘', '현재', '지금', '요청', '작업', '귀가', '출근', '퇴근',
+    '기분', '시간', '위치', '장소', '날씨', '상태', '결과', '내용',
+    '실행', '완료', '목표', '명령', '수행', '처리',
+}
+
+
 class MemoryManager:
     """단기(대화 기록) 및 장기(사용자 패턴/사실) 기억 통합 관리"""
 
@@ -26,14 +34,22 @@ class MemoryManager:
         except Exception as e:
             logging.error(f"응답 정보 추출 실패: {e}")
 
+    def _is_persistent_fact(self, key: str) -> bool:
+        """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""
+        return not any(kw in key for kw in _EPHEMERAL_FACT_KEYS)
+
     def _extract_info_from_response(self, response):
         """AI 응답에서 [FACT: ...], [BIO: ...], [PREF: ...] 태그 추출 및 저장"""
         try:
-            # 사실 추출: [FACT: key=value]
+            # 사실 추출: [FACT: key=value] — 지속성 있는 사실만 저장
             facts = re.findall(r'\[FACT:\s*([^=]+)=([^\]]+)\]', response)
             for key, value in facts:
-                logging.info(f"사실 기억함: {key.strip()} = {value.strip()}")
-                self.context_manager.record_fact(key.strip(), value.strip())
+                k = key.strip()
+                if self._is_persistent_fact(k):
+                    logging.info(f"사실 기억함: {k} = {value.strip()}")
+                    self.context_manager.record_fact(k, value.strip())
+                else:
+                    logging.info(f"[MemoryManager] 일시적 FACT 무시 (비저장): {k}={value.strip()}")
 
             # 기본 정보 추출: [BIO: field=value]
             bios = re.findall(r'\[BIO:\s*([^=]+)=([^\]]+)\]', response)
@@ -61,9 +77,13 @@ class MemoryManager:
         return f"{time_info}\n\n{summary}"
 
     def clean_response(self, response):
-        """특수 태그(FACT, BIO 등)를 제거하여 사용자에게 보낼 메시지 정제"""
+        """특수 태그(FACT, BIO 등)를 제거하여 사용자에게 보낼 메시지 정제.
+        일본어·중국어 한자 등 비한국어 문자도 제거합니다."""
         cleaned = re.sub(r'\[(FACT|BIO|PREF|CMD):[^\]]+\]', '', response)
-        return cleaned.strip()
+        # 일본어 히라가나·카타카나, CJK 한자(한국 한자와 구분) 제거
+        cleaned = re.sub(r'[\u3040-\u30FF\u4E00-\u9FFF\uF900-\uFAFF]', '', cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned
 
 # 싱글톤
 _memory_manager = None
