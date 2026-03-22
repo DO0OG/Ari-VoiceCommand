@@ -387,7 +387,6 @@ class CharacterWidget(QWidget):
         if sys.platform != 'win32':
             return
         try:
-            import ctypes
             HWND_TOPMOST = -1
             SWP_NOMOVE = 0x0002
             SWP_NOSIZE = 0x0001

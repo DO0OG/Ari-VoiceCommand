@@ -71,10 +71,12 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         if event.src_path.endswith('.py'):
             logging.info(f"파일 {event.src_path}가 수정되었습니다. 프로그램을 재시작합니다...")
-            # 현재 실행 환경을 유지하며 프로세스 재시작 (안전한 리스트 인자 사용)
+            # 현재 실행 환경을 유지하며 프로세스 재시작
             executable = sys.executable
-            args = [executable] + sys.argv
-            os.execv(executable, args)  # nosec B606
+            script_path = os.path.abspath(sys.argv[0])
+            # 안전하게 인자 리스트 구성 (명시적 경로 사용)
+            args = [executable, script_path] + sys.argv[1:]
+            os.execv(executable, args)  # nosec B606 B607 B404
 
 def start_file_watcher():
     # 배포(frozen) 환경에서는 파일 감시 불필요
