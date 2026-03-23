@@ -36,7 +36,7 @@
 
 | 기능 | 설명 |
 |------|------|
-| **웨이크워드** | Porcupine "아리야" + SimpleWakeWord(Google STT) 폴백 |
+| **웨이크워드** | SimpleWakeWord(Google STT) "아리야" |
 | **음성 인식** | Google STT (기본) · Vosk 오프라인 옵션 |
 | **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter 선택 |
 | **감정 표현** | AI 태그(`(기쁨)` 등) 기반 캐릭터 애니메이션 반응 |
