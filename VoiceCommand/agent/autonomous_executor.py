@@ -164,17 +164,18 @@ class AutonomousExecutor:
         code = self._normalize_python_code(code)
         logging.info(f"[Executor] Python 실행:\n{code}")
         runner_path = ""
+        process = None
         try:
             runner_path = self._write_python_runner(code)
-            process = subprocess.run(  # nosec B603 - controlled runner invocation
+            process = subprocess.Popen(  # nosec B603 - controlled runner invocation
                 [sys.executable, runner_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=30,
             )
-            output = (process.stdout or "").strip()
-            error_output = (process.stderr or "").strip()
+            stdout, stderr = process.communicate(timeout=30)
+            output = (stdout or "").strip()
+            error_output = (stderr or "").strip()
             if process.returncode != 0:
                 logging.error(f"[Executor] Python 오류:\n{error_output}")
                 if self.tts_wrapper:
@@ -185,6 +186,10 @@ class AutonomousExecutor:
             return ExecutionResult(success=True, output=output)
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
+            try:
+                process.kill()
+            except Exception:
+                pass
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
             return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
@@ -200,16 +205,16 @@ class AutonomousExecutor:
 
     def _do_run_shell(self, command: str) -> ExecutionResult:
         logging.info(f"[Executor] Shell 실행: {command}")
+        process = None
         try:
             shell_command = self._build_shell_command(command)
-            process = subprocess.run(
+            process = subprocess.Popen(  # nosec B603 - controlled shell invocation
                 shell_command,  # nosec B603
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=30,
             )
-            stdout, stderr = process.stdout, process.stderr
+            stdout, stderr = process.communicate(timeout=30)
             if stdout:
                 logging.info(f"[Executor] Shell 출력:\n{stdout.strip()}")
             if stderr:
@@ -221,6 +226,10 @@ class AutonomousExecutor:
             )
         except subprocess.TimeoutExpired:
             logging.error(f"[Executor] Shell 시간 초과: {command}")
+            try:
+                process.kill()
+            except Exception:
+                pass
             if self.tts_wrapper:
                 self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
             return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
