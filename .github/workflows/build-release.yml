@@ -47,9 +47,30 @@ jobs:
 
       - name: Zip Artifact
         working-directory: VoiceCommand
-        run: |
-          powershell Compress-Archive -Path dist/Ari/* -DestinationPath ../Ari-windows.zip
         shell: pwsh
+        run: |
+          $preferred = Join-Path $PWD "dist\Ari"
+          $fallback = Join-Path $PWD "dist\Main.dist"
+          $sourceDir = $null
+
+          if (Test-Path $preferred) {
+            $sourceDir = $preferred
+          }
+          elseif (Test-Path $fallback) {
+            $sourceDir = $fallback
+          }
+          else {
+            Write-Host "dist 디렉터리 내용:"
+            Get-ChildItem -Path (Join-Path $PWD "dist") -Recurse -Force -ErrorAction SilentlyContinue
+            throw "압축할 빌드 산출물 폴더를 찾지 못했습니다."
+          }
+
+          $zipPath = Join-Path (Split-Path $PWD -Parent) "Ari-windows.zip"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive -Path $sourceDir -DestinationPath $zipPath -Force
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
