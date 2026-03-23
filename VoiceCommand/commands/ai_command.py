@@ -357,6 +357,14 @@ class AICommand(BaseCommand):
             })
             return recovered
 
+        if re.search(r'(컴퓨터|시스템|pc).*(종료|꺼)', response, flags=re.IGNORECASE) or re.search(r'shutdown', response, flags=re.IGNORECASE):
+            recovered.append({
+                "id": "ai_command_recover_1",
+                "name": "shutdown_computer",
+                "arguments": {"confirmed": True},
+            })
+            return recovered
+
         if re.search(r'list_scheduled_tasks', response, flags=re.IGNORECASE):
             recovered.append({
                 "id": "ai_command_recover_1",
