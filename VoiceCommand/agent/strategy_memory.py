@@ -6,9 +6,11 @@
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import List, Optional, Dict
+from agent.execution_analysis import classify_failure_message
 
 _MEMORY_FILE = os.path.join(os.path.dirname(__file__), "strategy_memory.json")
 _MAX_RECORDS = 500
@@ -25,6 +27,10 @@ _TAG_KEYWORDS: Dict[str, List[str]] = {
     "미디어":  ["유튜브", "음악", "영상", "소리", "볼륨", "오디오", "재생", "동영상"],
     "정보":    ["날씨", "뉴스", "시간", "환율", "주식", "알려줘", "뭐야", "누구"]
 }
+_TOKEN_STOPWORDS = {
+    "해줘", "해주세요", "하고", "다음", "이후", "정리", "저장", "실행", "요청", "작업",
+    "the", "and", "for", "with", "from", "this", "that", "save", "open",
+}
 
 
 @dataclass
@@ -34,6 +40,7 @@ class StrategyRecord:
     steps_desc: List[str]      # 단계 설명 목록 (코드 전체가 아닌 요약)
     success: bool
     error_summary: str
+    failure_kind: str
     duration_ms: int
     timestamp: str
 
@@ -55,6 +62,7 @@ class StrategyMemory:
         success: bool,
         error: str = "",
         duration_ms: int = 0,
+        failure_kind: str = "",
     ):
         """목표 달성 시도 결과를 기록합니다."""
         rec = StrategyRecord(
@@ -63,6 +71,7 @@ class StrategyMemory:
             steps_desc=[getattr(s, "description_kr", str(s))[:80] for s in (steps or [])],
             success=success,
             error_summary=error[:200],
+            failure_kind=failure_kind or self._classify_failure(error),
             duration_ms=duration_ms,
             timestamp=datetime.now().isoformat(),
         )
@@ -77,14 +86,21 @@ class StrategyMemory:
         최신 기록 우선, 공통 태그 기준 최대 3개.
         """
         goal_tags = set(self._extract_tags(goal))
-        relevant: List[StrategyRecord] = []
+        goal_tokens = self._extract_tokens(goal)
+        scored = []
+        for rec in self._records:
+            overlap = len(goal_tags & set(rec.tags))
+            token_score = self._token_similarity(goal_tokens, self._extract_tokens(rec.goal_summary))
+            if overlap == 0 and token_score <= 0:
+                continue
+            recency = self._safe_timestamp(rec.timestamp)
+            score = overlap * 10 + token_score * 8
+            score += 3 if rec.success else 0
+            score += min(rec.duration_ms, 60_000) / 60_000
+            score += recency.timestamp() / 10_000_000_000
+            scored.append((score, rec))
 
-        # 최신순 순회, 공통 태그가 있는 기록 수집
-        for rec in reversed(self._records):
-            if goal_tags & set(rec.tags):
-                relevant.append(rec)
-            if len(relevant) >= 3:
-                break
+        relevant = [rec for _, rec in sorted(scored, key=lambda item: item[0], reverse=True)[:3]]
 
         if not relevant:
             return ""
@@ -97,6 +113,8 @@ class StrategyMemory:
                 lines.append(f"  접근: {' → '.join(rec.steps_desc[:3])}")
             if not rec.success and rec.error_summary:
                 lines.append(f"  실패 원인: {rec.error_summary[:80]}")
+            if rec.failure_kind:
+                lines.append(f"  실패 분류: {rec.failure_kind}")
             if rec.success:
                 lines.append(f"  소요: {rec.duration_ms}ms")
         lines.append("※ 실패한 접근 방식은 반복하지 마세요.")
@@ -105,10 +123,16 @@ class StrategyMemory:
     def recent_failures(self, goal: str, n: int = 2) -> List[str]:
         """최근 실패한 접근 방식 목록 반환 (fix_step 힌트용)"""
         goal_tags = set(self._extract_tags(goal))
+        goal_tokens = self._extract_tokens(goal)
         failures = []
         for rec in reversed(self._records):
-            if not rec.success and (goal_tags & set(rec.tags)):
-                failures.append(rec.error_summary)
+            tag_overlap = goal_tags & set(rec.tags)
+            token_score = self._token_similarity(goal_tokens, self._extract_tokens(rec.goal_summary))
+            if not rec.success and (tag_overlap or token_score > 0):
+                hint = rec.error_summary
+                if rec.failure_kind:
+                    hint = f"[{rec.failure_kind}] {hint}"
+                failures.append(hint)
             if len(failures) >= n:
                 break
         return failures
@@ -119,6 +143,23 @@ class StrategyMemory:
         tags = [tag for tag, words in _TAG_KEYWORDS.items() if any(w in text for w in words)]
         return tags or ["일반"]
 
+    def _extract_tokens(self, text: str) -> set[str]:
+        tokens = set()
+        for token in re.findall(r"[가-힣A-Za-z][가-힣A-Za-z0-9_-]{1,20}", (text or "").lower()):
+            if token in _TOKEN_STOPWORDS:
+                continue
+            tokens.add(token)
+        return tokens
+
+    def _token_similarity(self, left: set[str], right: set[str]) -> float:
+        if not left or not right:
+            return 0.0
+        intersection = len(left & right)
+        union = len(left | right)
+        if union == 0:
+            return 0.0
+        return intersection / union
+
     def _prune(self):
         if len(self._records) > _MAX_RECORDS:
             self._records = self._records[-_MAX_RECORDS:]
@@ -128,7 +169,7 @@ class StrategyMemory:
             if os.path.exists(self.filepath):
                 with open(self.filepath, encoding="utf-8") as f:
                     data = json.load(f)
-                self._records = [StrategyRecord(**r) for r in data]
+                self._records = [self._normalize_record(r) for r in data if isinstance(r, dict)]
                 logging.info(f"[StrategyMemory] {len(self._records)}개 전략 로드")
         except Exception as e:
             logging.warning(f"[StrategyMemory] 로드 실패: {e}")
@@ -143,6 +184,27 @@ class StrategyMemory:
                 )
         except Exception as e:
             logging.warning(f"[StrategyMemory] 저장 실패: {e}")
+
+    def _normalize_record(self, raw: dict) -> StrategyRecord:
+        return StrategyRecord(
+            goal_summary=str(raw.get("goal_summary", ""))[:200],
+            tags=list(raw.get("tags", [])) or ["일반"],
+            steps_desc=list(raw.get("steps_desc", [])),
+            success=bool(raw.get("success", False)),
+            error_summary=str(raw.get("error_summary", ""))[:200],
+            failure_kind=str(raw.get("failure_kind", "")),
+            duration_ms=int(raw.get("duration_ms", 0) or 0),
+            timestamp=raw.get("timestamp") or datetime.now().isoformat(),
+        )
+
+    def _classify_failure(self, error: str) -> str:
+        return classify_failure_message(error)
+
+    def _safe_timestamp(self, value: str) -> datetime:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.min
 
 
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────

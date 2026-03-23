@@ -25,6 +25,20 @@ jobs:
       - name: Install Nuitka
         run: pip install nuitka
 
+      - name: Compile critical modules
+        run: >
+          py -3 -m py_compile
+          agent/execution_analysis.py
+          agent/agent_orchestrator.py
+          agent/real_verifier.py
+          agent/strategy_memory.py
+          memory/user_context.py
+          memory/memory_manager.py
+          build_exe.py
+
+      - name: Run unit tests
+        run: py -3 -m unittest discover -s tests -p "test_*.py"
+
       - name: Build EXE (clean)
         run: python build_exe.py --clean
 

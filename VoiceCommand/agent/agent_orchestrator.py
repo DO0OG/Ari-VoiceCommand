@@ -19,6 +19,7 @@ from typing import Any, List, Optional, Callable, Dict, Tuple
 
 from agent.agent_planner import AgentPlanner, ActionStep, get_planner
 from agent.autonomous_executor import AutonomousExecutor, ExecutionResult, get_executor
+from agent.execution_analysis import classify_failure_message, is_read_only_step_content
 
 # executor._lock 경합 시 반환되는 오류 문자열 — self-fix 대상에서 제외
 _LOCK_CONTENTION_ERRORS = frozenset({
@@ -60,6 +61,7 @@ class StepResult:
     exec_result: ExecutionResult
     attempt: int = 1
     was_fixed: bool = False
+    failure_kind: str = ""
 
 
 @dataclass
@@ -238,7 +240,11 @@ class AgentOrchestrator:
                 self._say(f"[진지] {step.description_kr}")
                 result, attempt, was_fixed = self._execute_step_with_retry(step, goal, context)
                 group_results = [StepResult(
-                    step=step, exec_result=result, attempt=attempt, was_fixed=was_fixed,
+                    step=step,
+                    exec_result=result,
+                    attempt=attempt,
+                    was_fixed=was_fixed,
+                    failure_kind=self._classify_failure(result),
                 )]
             else:
                 group_results = self._execute_parallel_group(runnable, context, goal)
@@ -273,7 +279,13 @@ class AgentOrchestrator:
 
         def run_one(idx: int, step: ActionStep) -> StepResult:
             result, attempt, was_fixed = self._execute_step_with_retry(step, goal, context)
-            return StepResult(step=step, exec_result=result, attempt=attempt, was_fixed=was_fixed)
+            return StepResult(
+                step=step,
+                exec_result=result,
+                attempt=attempt,
+                was_fixed=was_fixed,
+                failure_kind=self._classify_failure(result),
+            )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(group)) as pool:
             futures = {pool.submit(run_one, i, step): i for i, step in enumerate(group)}
@@ -289,6 +301,7 @@ class AgentOrchestrator:
                         exec_result=ExecutionResult(
                             success=False, error=str(e), code_or_cmd=step.content
                         ),
+                        failure_kind="runtime_exception",
                     )
 
         return [r for r in results if r is not None]
@@ -349,9 +362,8 @@ class AgentOrchestrator:
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:
         """단계 타입에 따라 executor 호출, 컨텍스트를 전역으로 주입"""
         if step.step_type == "python":
-            if context:
-                self.executor.execution_globals["step_outputs"] = dict(context)
-            return self.executor.run_python(step.content)
+            extra_globals = {"step_outputs": dict(context)} if context else {}
+            return self.executor.run_python(step.content, extra_globals=extra_globals)
         elif step.step_type == "shell":
             return self.executor.run_shell(step.content)
         else:
@@ -389,12 +401,17 @@ class AgentOrchestrator:
             from strategy_memory import get_strategy_memory
             steps = [sr.step for sr in run_result.step_results]
             error = "" if run_result.achieved else run_result.summary_kr
+            failure_kind = ""
+            failed = [sr for sr in run_result.step_results if not sr.exec_result.success]
+            if failed:
+                failure_kind = failed[-1].failure_kind or self._classify_failure(failed[-1].exec_result)
             get_strategy_memory().record(
                 goal=goal,
                 steps=steps,
                 success=run_result.achieved,
                 error=error,
                 duration_ms=duration_ms,
+                failure_kind=failure_kind,
             )
         except Exception as e:
             logging.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
@@ -403,11 +420,43 @@ class AgentOrchestrator:
 
     def _group_by_dependency(self, steps: List[ActionStep]) -> List[List[ActionStep]]:
         """
-        모든 단계를 순차적으로 실행합니다.
-        다단계 목표는 이전 단계 결과에 의존하므로 병렬 실행은 안전하지 않습니다.
-        각 단계가 완료된 후 결과가 context에 반영되어야 다음 단계가 올바르게 실행됩니다.
+        이전 단계 출력에 의존하지 않는 읽기 전용 단계만 제한적으로 병렬 묶음 처리합니다.
+        그 외 단계는 순차 실행하여 부작용과 컨텍스트 경쟁을 줄입니다.
         """
-        return [[step] for step in steps]
+        groups: List[List[ActionStep]] = []
+        parallel_group: List[ActionStep] = []
+
+        for step in steps:
+            if self._can_run_in_parallel(step):
+                parallel_group.append(step)
+                continue
+
+            if parallel_group:
+                groups.append(parallel_group)
+                parallel_group = []
+            groups.append([step])
+
+        if parallel_group:
+            groups.append(parallel_group)
+        return groups
+
+    def _can_run_in_parallel(self, step: ActionStep) -> bool:
+        if step.step_type == "think":
+            return False
+        if step.condition:
+            return False
+        content = (step.content or "").lower()
+        if "step_outputs" in content:
+            return False
+        return self._is_read_only_step(step)
+
+    def _is_read_only_step(self, step: ActionStep) -> bool:
+        return is_read_only_step_content(step.content, step.description_kr)
+
+    def _classify_failure(self, result: ExecutionResult) -> str:
+        if result.success:
+            return ""
+        return classify_failure_message(result.error or result.output or "")
 
     def _eval_condition(self, condition: str, context: Dict[str, str]) -> bool:
         """
