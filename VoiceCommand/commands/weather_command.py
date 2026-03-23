@@ -11,11 +11,13 @@ class WeatherCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        return "날씨 어때" in text
+        normalized = (text or "").replace(" ", "")
+        weather_keywords = ("날씨", "기온", "비와", "비와?", "비와요", "온도")
+        return any(keyword in normalized for keyword in weather_keywords)
 
     def execute(self, text: str) -> None:
         try:
-            weather_info = self.weather_service.get_weather()
+            weather_info = self.weather_service.get_weather_from_text(text)
             self.tts_wrapper(weather_info)
         except Exception as e:
             logging.error(f"날씨 정보 조회 중 오류 발생: {str(e)}")

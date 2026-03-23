@@ -39,12 +39,18 @@ def _get_python_exe() -> str:
 _NATIVE_HOURS = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉',
                  '열', '열한', '열두']
 _SINO_ONES = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
+_DIGIT_NAMES = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
 
 
 def _sino(n: int) -> str:
     """정수를 한자어 수사 문자열로 (0~9999)"""
+    if n < 0:
+        return '마이너스 ' + _sino(abs(n))
     if n == 0:
         return '영'
+    if n > 9999:
+        # 비정상적으로 긴 숫자는 한 자리씩 읽어 TTS 예외를 막는다.
+        return ''.join(_DIGIT_NAMES[int(d)] for d in str(n))
     result = ''
     if n >= 1000:
         t = n // 1000
