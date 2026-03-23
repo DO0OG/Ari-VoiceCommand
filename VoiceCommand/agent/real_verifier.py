@@ -84,8 +84,6 @@ class RealVerifier:
             if hasattr(sr, "step"):
                 descs.append(getattr(sr.step, "description_kr", ""))
 
-        joined_desc = " ".join(descs)
-        open_markers = ("웹사이트 열기", "앱 실행", "파일/경로 열기")
         has_open_evidence = any(
             output.startswith(("http://", "https://"))
             or output.lower().endswith((".exe", ".lnk"))

@@ -2,7 +2,7 @@
 간단한 AI 어시스턴트 (TensorFlow 제거)
 """
 import logging
-import random
+from secrets import choice
 
 
 class SimpleAIAssistant:
@@ -23,13 +23,13 @@ class SimpleAIAssistant:
 
         # 간단한 패턴 매칭
         if any(word in query for word in ["안녕", "하이", "헬로"]):
-            response = random.choice(self.responses["인사"])
+            response = choice(self.responses["인사"])
         elif any(word in query for word in ["고마", "감사"]):
-            response = random.choice(self.responses["감사"])
+            response = choice(self.responses["감사"])
         elif any(word in query for word in ["미안", "죄송"]):
-            response = random.choice(self.responses["미안"])
+            response = choice(self.responses["미안"])
         else:
-            response = random.choice(self.responses["기본"])
+            response = choice(self.responses["기본"])
 
         # AdvancedAIAssistant와 호환성을 위해 튜플 반환
         return response, [], "neutral"
