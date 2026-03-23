@@ -48,12 +48,10 @@ class AgentIntegrationTests(unittest.TestCase):
 
     def test_directory_listing_template_saves_file(self):
         with tempfile.TemporaryDirectory() as tmp:
-            source_dir = os.path.join(tmp, "source")
-            os.makedirs(source_dir, exist_ok=True)
-            with open(os.path.join(source_dir, "alpha.txt"), "w", encoding="utf-8") as handle:
+            with open(os.path.join(tmp, "alpha.txt"), "w", encoding="utf-8") as handle:
                 handle.write("hello")
 
-            goal = rf"{source_dir} 폴더 목록 저장해줘"
+            goal = "바탕화면 폴더 목록 저장해줘"
             _, _, context = self._execute_template_steps(goal, tmp)
             saved_path = context.get("step_1_output", "").strip()
             self.assertTrue(saved_path)

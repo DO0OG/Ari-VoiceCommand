@@ -168,11 +168,17 @@ class AutonomousExecutor:
         process = None
         try:
             runner_path = self._write_python_runner(code, extra_globals=extra_globals)
+            child_env = os.environ.copy()
+            child_env["PYTHONIOENCODING"] = "utf-8"
+            child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(  # nosec B603 - controlled runner invocation
                 [sys.executable, runner_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=child_env,
             )
             stdout, stderr = process.communicate(timeout=30)
             output = (stdout or "").strip()
@@ -209,11 +215,17 @@ class AutonomousExecutor:
         process = None
         try:
             shell_command = self._build_shell_command(command)
+            child_env = os.environ.copy()
+            child_env["PYTHONIOENCODING"] = "utf-8"
+            child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(  # nosec B603 - controlled shell invocation
                 shell_command,  # nosec B603
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=child_env,
             )
             stdout, stderr = process.communicate(timeout=30)
             if stdout:
