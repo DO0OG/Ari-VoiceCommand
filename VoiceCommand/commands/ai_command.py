@@ -4,8 +4,8 @@ import re
 import threading
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional, Tuple
-from autonomous_executor import get_executor, ExecutionResult
-from agent_orchestrator import get_orchestrator, AgentRunResult
+from agent.autonomous_executor import get_executor, ExecutionResult
+from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 
 
 class AICommand(BaseCommand):

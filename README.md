@@ -13,6 +13,9 @@
 
 ### 최근 업데이트 (2026-03-23)
 
+- **코드 구조 정리**: 자율 실행 핵심 구현을 `VoiceCommand/agent/`, 웹 연동 구현을 `VoiceCommand/services/`로 재배치하고, 루트에는 호환 wrapper를 남겨 기존 import 경로를 유지했습니다.
+- **영역별 패키지 분리**: UI는 `VoiceCommand/ui/`, TTS 제공자는 `VoiceCommand/tts/`, 기억/컨텍스트 관리는 `VoiceCommand/memory/`로 정리해 결합도를 낮췄습니다.
+- **패키지 우선 import 정리**: 내부 구현 간 의존은 가능한 한 `core.*`, `agent.*`, `ui.*`, `tts.*`, `memory.*`, `services.*` 경로를 직접 사용하도록 정리했고, 루트 파일은 주로 호환 목적의 얇은 wrapper로 남겼습니다.
 - **범용 자율 실행 템플릿 확장**: 뉴스 검색·요약·저장뿐 아니라 폴더 생성, 시스템 정보 보고서 저장, 파일 요약 저장, 디렉터리 목록 저장 등 자주 쓰는 작업군을 LLM 자유 생성보다 먼저 안정적인 템플릿으로 처리하도록 개선했습니다.
 - **텍스트 UI 자율 실행 통합**: 채팅창 입력도 음성과 동일한 `AICommand → tool call → orchestrator` 경로를 사용하도록 수정하여, 텍스트 대화에서도 실제 작업 수행이 가능해졌습니다.
 - **문서 저장 자동 포맷 선택**: `save_document()` 도우미를 추가하여 결과 구조에 따라 `txt`, `md`, `pdf`를 자동 선택하거나 사용자가 지정한 포맷으로 저장할 수 있습니다.
@@ -149,25 +152,68 @@ python VoiceCommand/install_cosyvoice.py
 ## 아키텍처
 
 ```
-Main.py                     ← Qt 앱 진입점, 시스템 트레이, 리소스 모니터
-VoiceCommand.py             ← 핵심 비즈니스 로직 및 오케스트레이션 (인식-판단-실행 순환)
-threads.py                  ← 음성 인식, TTS, 명령 실행 전용 스레드 분리 및 상태 관리
-audio_manager.py            ← 전역 오디오 장치 공유 및 스레드 락 관리 (GlobalAudio)
-llm_provider.py             ← 다중 LLM 제공자 통합 (Groq, OpenAI, Anthropic 등)
-tts_factory.py              ← 다양한 TTS 제공자(OpenAI, Edge, Fish 등) 동적 생성 팩토리
+Main.py                     ← Qt 앱 진입점
+VoiceCommand.py             ← 호환 wrapper (실제 구현: core/VoiceCommand.py)
+llm_provider.py             ← 호환 wrapper (실제 구현: agent/llm_provider.py)
+tts_factory.py              ← 호환 wrapper (실제 구현: tts/tts_factory.py)
 │
 ├── commands/               ← 커맨드 패턴 기반 도구 모음 (BaseCommand 구현체)
 │   ├── ai_command.py       ← LLM 대화 및 Tool Calling 처리, 에이전트 루프 진입점
 │   ├── youtube_command.py  ← 유튜브 검색 및 재생 제어
 │   └── ...
 │
-├── [자율 실행 엔진]
+├── core/                   ← 앱 런타임 핵심 로직
+│   ├── VoiceCommand.py        ← 음성 인식-판단-실행 오케스트레이션
+│   ├── threads.py             ← 음성 인식 / TTS / 명령 실행 스레드
+│   ├── config_manager.py      ← 설정 로드/저장
+│   ├── constants.py           ← 전역 상수
+│   ├── core_manager.py        ← 앱 코어 초기화/관리
+│   ├── resource_manager.py    ← 리소스 관리
+│   └── rp_generator.py        ← 페르소나/RP 문장 생성
+│
+├── assistant/              ← LLM 어시스턴트 레이어
+│   ├── ai_assistant.py        ← 통합 AI 어시스턴트
+│   └── groq_assistant.py      ← Groq 기반 보조 어시스턴트 경로
+│
+├── audio/                  ← 오디오 입력 및 웨이크워드
+│   ├── audio_manager.py       ← 전역 오디오 장치/락 관리
+│   └── simple_wake.py         ← 웨이크워드 감지
+│
+├── ui/                     ← PySide6 기반 UI 구성요소
+│   ├── text_interface.py      ← 채팅창 UI
+│   ├── tray_icon.py           ← 시스템 트레이
+│   ├── settings_dialog.py     ← 설정창
+│   ├── speech_bubble.py       ← 말풍선 위젯
+│   └── character_widget.py    ← 캐릭터 위젯/애니메이션
+│
+├── tts/                    ← TTS 제공자 및 팩토리
+│   ├── tts_factory.py         ← 제공자 선택 팩토리
+│   ├── tts_openai.py          ← OpenAI TTS
+│   ├── tts_edge.py            ← Edge TTS
+│   ├── tts_elevenlabs.py      ← ElevenLabs TTS
+│   ├── cosyvoice_tts.py       ← CosyVoice 로컬 TTS
+│   ├── fish_tts_ws.py         ← Fish Audio WS TTS
+│   └── cosyvoice_worker.py    ← CosyVoice 워커 프로세스
+│
+├── memory/                 ← 대화 이력 및 사용자 기억
+│   ├── memory_manager.py      ← FACT/BIO/PREF 기반 기억 관리
+│   ├── user_context.py        ← 사용자 컨텍스트 저장/로드
+│   └── conversation_history.py ← 대화 기록 저장/조회
+│
+├── agent/                  ← 자율 실행 핵심 구현
 │   ├── agent_orchestrator.py  ← Plan → Execute+Self-Fix → Verify 3레이어 루프
 │   ├── agent_planner.py       ← 목표 프로파일링 + 템플릿 계획 + LLM 기반 보조 분해/수정
-│   ├── autonomous_executor.py ← Python/Shell 안전 실행기 + 문서 저장 유틸(save_document)
+│   ├── autonomous_executor.py ← Python/Shell 실행기 + 문서 저장 + runner 기반 격리 실행
 │   ├── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 공통 헬퍼
-│   ├── safety_checker.py      ← 코드/명령 위험 수준 분류 (SAFE/CAUTION/DANGEROUS)
-│   └── confirmation_manager.py ← 위험 작업 Qt 확인 다이얼로그 (크로스-스레드 안전)
+│   ├── llm_provider.py        ← 다중 LLM 제공자 통합 및 tool routing
+│   ├── real_verifier.py       ← 부작용 없는 실행 검증기
+│   ├── safety_checker.py      ← 코드/명령 위험 수준 분류
+│   └── ...
+│
+├── services/               ← 외부 웹/서비스 연동
+│   ├── web_tools.py           ← 검색 / 웹 페이지 fetch / HTML 폴백
+│   ├── weather_service.py     ← 날씨 조회
+│   └── timer_manager.py       ← 타이머 관리
 │
 ├── images/                 ← 캐릭터 애니메이션 PNG 프레임 (Shimeji 규격)
 └── ...

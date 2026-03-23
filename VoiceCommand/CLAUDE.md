@@ -35,31 +35,31 @@ python install_dependencies.py
 - Sets up resource monitoring and garbage collection
 - Implements file watcher for auto-reload on code changes (development only)
 
-**VoiceCommand.py** - Voice interaction engine
+**core/VoiceCommand.py** - Voice interaction engine
 - `VoiceRecognitionThread`: Wake word detection ("아리야") via `simple_wake.py`
 - `TTSThread`: Queue-based speech synthesis management
 - `CommandExecutionThread`: Executes recognized commands
 - Command handlers: YouTube playback, weather, timers, volume control, AI chat
 - **Game Mode**: Switch to Fish Audio (Cloud) to free up VRAM from CosyVoice (Local)
 
-**ai_assistant.py** - LLM/NLU system
+**assistant/ai_assistant.py** - LLM/NLU system
 - Integrates with Groq/OpenAI providers via `llm_provider.py`
 - Context-aware conversation handling
 - Supports learning mode and RP (Roleplay) generation
 
-**automation_helpers.py** - GUI / Browser automation helpers
+**agent/automation_helpers.py** - GUI / Browser automation helpers
 - Exposes reusable helpers for URL opening, app launching, keyboard/mouse input, screenshots, clipboard, window waiting
 - Optional Selenium-based browser login flow for sites where credentials/selectors are provided
 
-**audio_manager.py** - Audio resource management
+**audio/audio_manager.py** - Audio resource management
 - `GlobalAudio`: Singleton PyAudio instance manager
 - Separate locks for input (`_audio_input_lock`) and output (`_audio_output_lock`)
 
-**fish_tts_ws.py** - Streaming TTS (Cloud)
+**tts/fish_tts_ws.py** - Streaming TTS (Cloud)
 - WebSocket-based streaming for low latency
 - Optimized for "Game Mode" to minimize GPU usage
 
-**cosyvoice_tts.py** - Local TTS (High Quality)
+**tts/cosyvoice_tts.py** - Local TTS (High Quality)
 - High-quality Korean TTS running locally (requires GPU/VRAM)
 - Uses a separate worker process to avoid DLL conflicts
 
@@ -73,7 +73,7 @@ The application uses Qt-based threading (QThread):
 
 ### Voice Recognition Flow
 
-1. **Wake Word Detection**: `SimpleWakeWord` monitors audio for "아리야" or "시작"
+1. **Wake Word Detection**: `audio/simple_wake.py`의 `SimpleWakeWord` monitors audio for "아리야" or "시작"
 2. **Acknowledgment**: Random response ("네?", "부르셨나요?") via `tts_wrapper`
 3. **Wait for TTS**: `handle_wake_word` waits until the acknowledgment TTS is finished
 4. **Command Listening**: Captures voice command using Google STR
@@ -83,10 +83,10 @@ The application uses Qt-based threading (QThread):
 ## Key Files and Directories
 
 - `Main.py` - Application entry point
-- `VoiceCommand.py` - Voice recognition and command orchestration
-- `threads.py` - QThread implementations for various background tasks
-- `fish_tts_ws.py` - Fish Audio streaming TTS implementation
-- `cosyvoice_tts.py` - CosyVoice local TTS implementation
+- `core/VoiceCommand.py` - Voice recognition and command orchestration
+- `core/threads.py` - QThread implementations for various background tasks
+- `tts/fish_tts_ws.py` - Fish Audio streaming TTS implementation
+- `tts/cosyvoice_tts.py` - CosyVoice local TTS implementation
 - `commands/` - Individual command implementations (Youtube, Weather, etc.)
 - `images/` - Character animation sprites
 

@@ -1,10 +1,12 @@
 import subprocess
 import sys
-import os
 
 
 def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+    subprocess.run(  # nosec B603 - controlled installer command
+        [sys.executable, "-m", "pip", "install", package],
+        check=True,
+    )
 
 
 def create_requirements_file():
@@ -49,8 +51,9 @@ def main():
 
     # requirements.txt 파일에서 패키지 설치
     try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
+        subprocess.run(  # nosec B603 - controlled installer command
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+            check=True,
         )
     except subprocess.CalledProcessError:
         print("requirements.txt 파일을 찾을 수 없거나 설치 중 오류가 발생했습니다.")

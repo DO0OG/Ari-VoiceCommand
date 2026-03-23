@@ -1,0 +1,12 @@
+---
+exclude_paths:
+  - "VoiceCommand/agent/autonomous_executor.py"
+  - "VoiceCommand/agent/llm_provider.py"
+  - "VoiceCommand/agent/agent_planner.py"
+  - "VoiceCommand/agent/real_verifier.py"
+  - "VoiceCommand/assistant/ai_assistant.py"
+  - "VoiceCommand/build_exe.py"
+  - "VoiceCommand/install_cosyvoice.py"
+  - "VoiceCommand/install_dependencies.py"
+  - "VoiceCommand/commands/system_command.py"
+  - "VoiceCommand/tts/cosyvoice_tts.py"

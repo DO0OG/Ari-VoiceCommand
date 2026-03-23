@@ -8,9 +8,9 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 """
 import os
 import shutil
-import subprocess
 import sys
 import multiprocessing
+from datetime import datetime
 
 # 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
 if sys.stdout.encoding != 'utf-8':
@@ -31,10 +31,12 @@ print(f"• 작업 유형: {'클린 빌드' if clean_build else '증분 빌드'}
 print(f"• 병렬 작업: {jobs} 코어 사용\n")
 
 try:
-    import nuitka
+    from nuitka.__main__ import main as nuitka_main
 except ImportError:
-    print("Nuitka 설치 중...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "nuitka"])
+    raise SystemExit(
+        "Nuitka가 설치되어 있지 않습니다. "
+        "먼저 `python -m pip install nuitka`를 실행해 주세요."
+    )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(HERE, "dist", "Ari")
@@ -44,8 +46,7 @@ if clean_build and os.path.exists(os.path.join(HERE, "dist")):
     print("기존 빌드 캐시 및 출력물 삭제 중...")
     shutil.rmtree(os.path.join(HERE, "dist"))
 
-cmd = [
-    sys.executable, "-m", "nuitka",
+nuitka_args = [
     "--standalone" if not one_file else "--onefile",
     f"--jobs={jobs}",
     "--windows-console-mode=disable",
@@ -83,6 +84,14 @@ cmd = [
     "--include-module=strategy_memory",
     "--include-module=web_tools",
     "--include-module=automation_helpers",
+    "--include-package=agent",
+    "--include-package=assistant",
+    "--include-package=audio",
+    "--include-package=core",
+    "--include-package=memory",
+    "--include-package=tts",
+    "--include-package=ui",
+    "--include-package=services",
     "--include-package=pycaw",
     "--include-package=comtypes",
     "--include-package=groq",
@@ -117,11 +126,26 @@ cmd = [
     "Main.py"
 ]
 
-start_time = subprocess.check_output(['powershell', 'Get-Date -Format "HH:mm:ss"']).decode().strip()
+start_time = datetime.now().strftime("%H:%M:%S")
 print(f"빌드 시작 시간: {start_time}")
-result = subprocess.run(cmd)
 
-if result.returncode == 0:
+try:
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = ["nuitka", *nuitka_args]
+        nuitka_main()
+        build_success = True
+        exit_code = 0
+    finally:
+        sys.argv = original_argv
+except SystemExit as exc:
+    exit_code = exc.code if isinstance(exc.code, int) else 1
+    build_success = exit_code == 0
+except Exception as exc:
+    print(f"\n❌ 빌드 중 예외 발생: {exc}")
+    build_success = False
+
+if build_success:
     # 폴더 정리
     NUITKA_OUT = os.path.join(HERE, "dist", "Main.dist")
     if not one_file and os.path.exists(NUITKA_OUT):
@@ -133,4 +157,7 @@ if result.returncode == 0:
     print("   빌드 성공! 배포 준비가 완료되었습니다.")
     print("=" * 60)
 else:
-    print(f"\n❌ 빌드 중 오류 발생 (코드: {result.returncode})")
+    if 'exit_code' in locals():
+        print(f"\n❌ 빌드 중 오류 발생 (코드: {exit_code})")
+    else:
+        print("\n❌ 빌드 중 오류 발생")
