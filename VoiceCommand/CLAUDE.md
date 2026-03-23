@@ -25,6 +25,16 @@ pip install -r requirements.txt
 python install_dependencies.py
 ```
 
+### Validation
+```bash
+# Full validation
+py -3 validate_repo.py
+
+# Individual checks
+py -3 -m py_compile agent/execution_analysis.py agent/agent_orchestrator.py agent/real_verifier.py agent/strategy_memory.py memory/user_context.py memory/memory_manager.py build_exe.py
+py -3 -m unittest discover -s tests -p "test_*.py"
+```
+
 ## Architecture
 
 ### Core Components
@@ -50,6 +60,9 @@ python install_dependencies.py
 **agent/automation_helpers.py** - GUI / Browser automation helpers
 - Exposes reusable helpers for URL opening, app launching, keyboard/mouse input, screenshots, clipboard, window waiting
 - Optional Selenium-based browser login flow for sites where credentials/selectors are provided
+
+**agent/execution_analysis.py** - Shared execution analysis rules
+- Centralizes failure taxonomy, read-only step detection, and artifact extraction used by orchestrator/verifier/strategy memory
 
 **audio/audio_manager.py** - Audio resource management
 - `GlobalAudio`: Singleton PyAudio instance manager
@@ -122,3 +135,7 @@ Add new command classes in `commands/` and register them in `commands/command_re
 - **Template-first autonomy**: `agent_planner.py` now prefers deterministic templates for common tasks such as folder creation, search→summarize→save, system info reports, directory listings, and file summarization before falling back to free-form LLM planning.
 - **Text UI parity**: `text_interface.py` routes user requests through `AICommand.run_interaction()` so tool calling and agent execution behave consistently across voice and text entry.
 - **Document save helper**: `autonomous_executor.py` provides `save_document()` / `choose_document_format()` helpers for txt/md/pdf output.
+- **Memory reliability**: `memory/user_context.py` now bounds growth, logs load failures, tracks conversation topics, and supports TTL-backed facts.
+- **Strategy retrieval**: `agent/strategy_memory.py` now blends tag overlap with lightweight token similarity instead of relying on coarse tags alone.
+- **Execution verification**: `real_verifier.py` checks observed file/path artifacts before falling back to generated verification code and LLM judgment.
+- **Integration coverage**: `tests/test_agent_integration.py` executes template planner + executor flows against temporary directories for basic end-to-end regression coverage.

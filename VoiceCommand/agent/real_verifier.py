@@ -10,10 +10,15 @@ LLM이 생성한 검증 코드를 실제로 실행하여 목표 달성 여부를
 """
 import logging
 import os
-import re
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional
+from agent.execution_analysis import (
+    describes_open_action,
+    describes_storage_action,
+    existing_paths,
+    extract_artifacts,
+)
 
 _VERIFY_CODE_PROMPT = """\
 다음 목표가 달성됐는지 확인하는 파이썬 검증 코드를 작성하세요.
@@ -74,35 +79,47 @@ class RealVerifier:
     # ── 내부 ──────────────────────────────────────────────────────────────────
 
     def _heuristic_verify(self, goal: str, step_results: list) -> Optional[VerificationResult]:
-        descs = []
         outputs = []
+        descriptions = []
         for sr in step_results:
             exec_r = getattr(sr, "exec_result", sr)
             if not getattr(exec_r, "success", False):
-                return None
+                return VerificationResult(
+                    verified=False,
+                    method="heuristic",
+                    evidence=(exec_r.error or exec_r.output or "")[:200],
+                    summary_kr="실패한 단계가 있어 목표를 달성하지 못했습니다.",
+                )
             outputs.append((exec_r.output or "").strip())
             if hasattr(sr, "step"):
-                descs.append(getattr(sr.step, "description_kr", ""))
+                descriptions.append(getattr(sr.step, "description_kr", ""))
 
-        has_open_evidence = any(
-            output.startswith(("http://", "https://"))
-            or output.lower().endswith((".exe", ".lnk"))
-            or ("\\" in output and ":" in output)
-            for output in outputs if output
-        )
-        if has_open_evidence:
-            evidence = next((out for out in outputs if out), "")
+        artifacts = extract_artifacts(outputs)
+        existing_path_items = existing_paths(artifacts["paths"])
+        description_text = " ".join(descriptions)
+
+        if existing_path_items and describes_storage_action(description_text):
             return VerificationResult(
                 verified=True,
                 method="heuristic",
-                evidence=evidence[:200],
-                summary_kr="실행 결과 기준으로 열기 작업이 완료되었습니다.",
+                evidence=existing_path_items[0][:200],
+                summary_kr="실제 경로가 확인되어 파일 작업이 완료된 것으로 판단했습니다.",
             )
+
+        if existing_path_items and describes_open_action(description_text):
+            return VerificationResult(
+                verified=True,
+                method="heuristic",
+                evidence=existing_path_items[0][:200],
+                summary_kr="실행 대상 경로가 확인되어 열기 작업이 완료된 것으로 판단했습니다.",
+            )
+
         return None
 
     def _generate_verification_code(self, goal: str, step_results: list) -> Optional[str]:
         """LLM에게 검증 코드 생성 요청"""
         lines = []
+        artifacts = {"paths": [], "urls": []}
         for i, sr in enumerate(step_results):
             # StepResult or ExecutionResult 모두 처리
             exec_r = getattr(sr, "exec_result", sr)
@@ -112,8 +129,18 @@ class RealVerifier:
             status = "성공" if exec_r.success else "실패"
             out = (exec_r.output or exec_r.error or "없음")[:100]
             lines.append(f"  단계 {i+1} [{status}] {desc}: {out}")
+            extracted = extract_artifacts([exec_r.output or "", exec_r.error or ""])
+            artifacts["paths"].extend(extracted["paths"])
+            artifacts["urls"].extend(extracted["urls"])
 
         steps_summary = "\n".join(lines) or "  (단계 정보 없음)"
+        artifact_lines = []
+        if artifacts["paths"]:
+            artifact_lines.append("관측된 경로: " + ", ".join(dict.fromkeys(artifacts["paths"]))[:400])
+        if artifacts["urls"]:
+            artifact_lines.append("관측된 URL: " + ", ".join(dict.fromkeys(artifacts["urls"]))[:400])
+        if artifact_lines:
+            steps_summary = steps_summary + "\n" + "\n".join(artifact_lines)
         prompt = _VERIFY_CODE_PROMPT.format(goal=goal, steps_summary=steps_summary)
 
         try:
@@ -151,7 +178,7 @@ class RealVerifier:
         """검증 코드를 실행하고 결과 해석. 실패 시 None 반환."""
         try:
             # _do_run_python은 safety check 없이 직접 실행 (검증용 코드)
-            result = self.executor._do_run_python(code)
+            result = self.executor._do_run_python(code, extra_globals={"verification_context": {"mode": "verifier"}})
             if not result.success:
                 logging.warning(f"[RealVerifier] 검증 코드 실행 실패: {result.error[:100]}")
                 return None
@@ -215,7 +242,6 @@ class RealVerifier:
                 )
         except Exception as e:
             logging.warning(f"[RealVerifier] trace 저장 실패: {e}")
-
 
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 

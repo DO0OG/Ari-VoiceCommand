@@ -2,7 +2,6 @@
 기억 관리자 (단기 및 장기 기억 통합)
 """
 import logging
-import json
 import re
 from datetime import datetime
 from memory.user_context import get_context_manager
@@ -13,6 +12,9 @@ _EPHEMERAL_FACT_KEYS = {
     '오늘', '현재', '지금', '요청', '작업', '귀가', '출근', '퇴근',
     '기분', '시간', '위치', '장소', '날씨', '상태', '결과', '내용',
     '실행', '완료', '목표', '명령', '수행', '처리',
+}
+_TOPIC_BLOCKLIST = {
+    "있어", "그냥", "정도", "이번엔", "저거", "이거", "그거", "응답", "대화",
 }
 
 
@@ -33,6 +35,12 @@ class MemoryManager:
             self._extract_info_from_response(ai_response)
         except Exception as e:
             logging.error(f"응답 정보 추출 실패: {e}")
+        try:
+            topics = self._extract_topics(user_msg, ai_response)
+            if topics:
+                self.context_manager.record_topics(topics)
+        except Exception as e:
+            logging.error(f"대화 주제 추출 실패: {e}")
 
     def _is_persistent_fact(self, key: str) -> bool:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""
@@ -47,7 +55,7 @@ class MemoryManager:
                 k = key.strip()
                 if self._is_persistent_fact(k):
                     logging.info(f"사실 기억함: {k} = {value.strip()}")
-                    self.context_manager.record_fact(k, value.strip())
+                    self.context_manager.record_fact(k, value.strip(), source="assistant_tag", confidence=0.75)
                 else:
                     logging.info(f"[MemoryManager] 일시적 FACT 무시 (비저장): {k}={value.strip()}")
 
@@ -84,6 +92,10 @@ class MemoryManager:
         cleaned = re.sub(r'[\u3040-\u30FF\u4E00-\u9FFF\uF900-\uFAFF]', '', cleaned)
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         return cleaned
+
+    def _extract_topics(self, user_msg: str, ai_response: str):
+        topics = self.context_manager.extract_topics(user_msg, ai_response)
+        return [topic for topic in topics if topic not in _TOPIC_BLOCKLIST]
 
 # 싱글톤
 _memory_manager = None

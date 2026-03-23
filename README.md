@@ -13,6 +13,14 @@
 
 ### 최근 업데이트 (2026-03-23)
 
+- **기억 신뢰성 강화**: `UserContextManager`에 로드 실패 로그, FACT TTL, BIO/주제/명령 패턴 크기 제한, 대화 주제 자동 추출을 추가해 장시간 실행 시 메모리 품질이 무너지는 문제를 줄였습니다.
+- **대화 주제 회상 추가**: `conversation_topics`를 실제로 집계하여 프롬프트 컨텍스트에 반영하고, 최근 반복 주제를 기억 기반으로 재주입할 수 있게 했습니다.
+- **실행 컨텍스트 분리**: Python 실행 시 `step_outputs`와 검증용 컨텍스트를 전역 공유 상태 대신 runner payload 스냅샷으로 주입하도록 바꿔 병렬 실행 시 컨텍스트 오염 가능성을 낮췄습니다.
+- **선택적 병렬 실행**: 오케스트레이터가 이전 단계 출력에 의존하지 않는 read-only 단계만 제한적으로 병렬 실행하도록 변경해 안전성을 유지하면서 처리량을 높였습니다.
+- **실패 분류형 전략 기억**: Strategy Memory가 timeout, 권한, 리소스 누락, 네트워크 오류 등 실패 유형을 함께 기록하여 다음 self-fix와 계획 수립 때 더 직접적인 힌트를 줄 수 있습니다.
+- **의미 유사 전략 검색**: Strategy Memory가 태그뿐 아니라 목표 문장 토큰 유사도도 함께 사용해 비슷한 작업 이력을 더 잘 회수하도록 개선했습니다.
+- **실제 검증 강화**: 검증기가 생성/저장된 경로 존재 여부를 우선 확인하고, LLM 검증 코드에도 관측된 파일/URL 아티팩트를 함께 넘겨 단순 로그 기반 성공 오판을 줄였습니다.
+- **통합 테스트 추가**: 템플릿 기반 폴더 생성/디렉터리 목록 저장 경로를 실제 임시 디렉터리에서 실행하는 회귀 테스트를 추가했습니다.
 - **코드 구조 정리**: 자율 실행 핵심 구현을 `VoiceCommand/agent/`, 웹 연동 구현을 `VoiceCommand/services/`로 재배치하고, 루트에는 호환 wrapper를 남겨 기존 import 경로를 유지했습니다.
 - **영역별 패키지 분리**: UI는 `VoiceCommand/ui/`, TTS 제공자는 `VoiceCommand/tts/`, 기억/컨텍스트 관리는 `VoiceCommand/memory/`로 정리해 결합도를 낮췄습니다.
 - **패키지 우선 import 정리**: 내부 구현 간 의존은 가능한 한 `core.*`, `agent.*`, `ui.*`, `tts.*`, `memory.*`, `services.*` 경로를 직접 사용하도록 정리했고, 루트 파일은 주로 호환 목적의 얇은 wrapper로 남겼습니다.
@@ -43,14 +51,15 @@
 | **TTS** | Fish Audio WS · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그 · 물리 엔진 · 마우스 반응 |
 | **스마트 모드** | LLM tool calling으로 타이머 · 날씨 · 유튜브 등 자동 실행 |
-| **자율 실행** | Python / Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) |
+| **자율 실행** | Python / Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) + read-only 단계 제한 병렬 실행 |
 | **에이전트 루프** | 복잡한 목표를 Plan→Execute→Verify 3레이어로 자율 처리 (최대 4회 재계획) |
 | **작업 템플릿** | 폴더 생성, 검색·요약·저장, 시스템 정보 보고서, 디렉터리 목록, 파일 요약 등 자주 쓰는 작업군을 규칙 기반으로 우선 처리 |
 | **문서 저장** | 결과 구조에 따라 `txt` · `md` · `pdf` 자동 저장 또는 사용자 지정 포맷 저장 |
 | **GUI 자동화 기반** | 앱 실행, URL 열기, 키 입력, 마우스 클릭, 스크린샷, 클립보드 제어, 창 대기, Selenium 기반 로그인 자동화 |
 | **안전 검사** | 실행 전 위험 수준 3단계 분류 + 위험 작업 확인 다이얼로그 (15초 카운트다운) |
 | **미디어** | 유튜브 오디오 스트리밍 (yt-dlp + VLC) |
-| **기억 시스템** | FACT/BIO/PREF 태그 기반 장기 기억 (LTM/STM) |
+| **기억 시스템** | FACT/BIO/PREF 태그 기반 장기 기억 + FACT TTL/상한 + 대화 주제 자동 추출/회상 |
+| **실행 검증** | 경로/파일 아티팩트 기반 실제 검증 + LLM 코드 검증 폴백 |
 | **설정 UI** | 트레이 아이콘 기반 3탭 설정창 (RP · AI&TTS · 장치) |
 | **텍스트 인터페이스** | PySide6 채팅 UI (음성 없이 텍스트로 대화 가능) |
 | **계산기** | 수식 음성 인식 및 계산 |
@@ -60,10 +69,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| `load_context` bare except | `user_context.py` 파일 로드 실패 시 예외 종류·로그 없이 조용히 무시됨 |
-| 크기 상한 누락 | `command_sequences` · `command_frequency` 딕셔너리 무제한 성장 가능 |
-| `user_bio` 리스트 상한 | `interests` · `memos` 리스트에 크기 제한 없음 |
-| `conversation_topics` 미사용 | 데이터 구조에 정의되어 있으나 실제로 기록하는 코드 없음 (stub 상태) |
+| 장기 기억 품질 | FACT 충돌 해소는 아직 최신값/수동 규칙 위주이며, 신뢰도 학습은 초기 단계 |
+| GUI 상태 검증 | 파일/경로 검증은 강화됐지만 화면 인식 기반 검증은 아직 제한적 |
+| 플래너 병렬성 | read-only 단계만 병렬화하며, 더 정교한 의존성 그래프 분석은 미구현 |
+| 전략 기억 검색 | 현재는 태그/실패 분류 기반이며 임베딩 기반 유사 전략 검색은 미구현 |
 
 ### 추후 개발
 
@@ -71,7 +80,7 @@
 |------|------|
 | **Discord 파일 공유** | 파일 전송 명령 commands/ 모듈로 재구현 (현재 미이식) |
 | **알람** | 특정 시각 지정 알림 (현재 카운트다운 타이머만 지원) |
-| **대화 주제 분석** | `conversation_topics` 실제 집계 및 컨텍스트 프롬프트 활용 |
+| **주제 기반 선제 제안** | 누적된 `conversation_topics`를 추천/자동화 우선순위에 반영 |
 
 ### 다음 구현 우선순위
 
@@ -204,6 +213,7 @@ tts_factory.py              ← 호환 wrapper (실제 구현: tts/tts_factory.p
 │   ├── agent_orchestrator.py  ← Plan → Execute+Self-Fix → Verify 3레이어 루프
 │   ├── agent_planner.py       ← 목표 프로파일링 + 템플릿 계획 + LLM 기반 보조 분해/수정
 │   ├── autonomous_executor.py ← Python/Shell 실행기 + 문서 저장 + runner 기반 격리 실행
+│   ├── execution_analysis.py  ← 실패 분류 / 읽기 전용 단계 판정 / 실행 산출물 추출 공용 유틸
 │   ├── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 공통 헬퍼
 │   ├── llm_provider.py        ← 다중 LLM 제공자 통합 및 tool routing
 │   ├── real_verifier.py       ← 부작용 없는 실행 검증기
@@ -217,6 +227,17 @@ tts_factory.py              ← 호환 wrapper (실제 구현: tts/tts_factory.p
 │
 ├── images/                 ← 캐릭터 애니메이션 PNG 프레임 (Shimeji 규격)
 └── ...
+```
+
+### 개발용 검증
+
+```bash
+# 전체 검증
+py -3 VoiceCommand/validate_repo.py
+
+# 개별 실행
+py -3 -m py_compile VoiceCommand/agent/execution_analysis.py VoiceCommand/agent/agent_orchestrator.py VoiceCommand/agent/real_verifier.py VoiceCommand/agent/strategy_memory.py VoiceCommand/memory/user_context.py VoiceCommand/memory/memory_manager.py
+py -3 -m unittest discover -s VoiceCommand/tests -p "test_*.py"
 ```
 
 ### 자율 실행 흐름

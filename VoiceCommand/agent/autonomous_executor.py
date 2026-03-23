@@ -33,10 +33,13 @@ class AutonomousExecutor:
     """AI 자율 명령 실행기"""
 
     _MAX_HISTORY = 20
+    _MAX_CONCURRENT_PYTHON = 2
+    _MAX_CONCURRENT_SHELL = 2
 
     def __init__(self, tts_func: Optional[Callable] = None):
         self.tts_wrapper = tts_func
-        self._lock = threading.Lock()
+        self._python_slots = threading.BoundedSemaphore(self._MAX_CONCURRENT_PYTHON)
+        self._shell_slots = threading.BoundedSemaphore(self._MAX_CONCURRENT_SHELL)
         self._history: List[ExecutionResult] = []
         self._safety = get_safety_checker()
         self._automation = AutomationHelpers()
@@ -85,10 +88,9 @@ class AutonomousExecutor:
 
     # ── 공개 API ────────────────────────────────────────────────────────────────
 
-    def run_python(self, code: str) -> ExecutionResult:
+    def run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
         """파이썬 코드를 안전하게 실행하고 결과를 반환합니다."""
-        if not self._lock.acquire(blocking=False):
-            return ExecutionResult(success=False, error="이미 다른 코드가 실행 중입니다.", code_or_cmd=code)
+        self._python_slots.acquire()
 
         start = time.monotonic()
         try:
@@ -110,10 +112,10 @@ class AutonomousExecutor:
                 if self.tts_wrapper:
                     self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
 
-            result = self._do_run_python(code)
+            result = self._do_run_python(code, extra_globals=extra_globals)
         finally:
             duration_ms = int((time.monotonic() - start) * 1000)
-            self._lock.release()
+            self._python_slots.release()
 
         result.duration_ms = duration_ms
         result.code_or_cmd = code
@@ -122,8 +124,7 @@ class AutonomousExecutor:
 
     def run_shell(self, command: str) -> ExecutionResult:
         """쉘 명령을 안전하게 실행하고 결과를 반환합니다."""
-        if not self._lock.acquire(blocking=False):
-            return ExecutionResult(success=False, error="이미 다른 명령이 실행 중입니다.", code_or_cmd=command)
+        self._shell_slots.acquire()
 
         start = time.monotonic()
         try:
@@ -148,7 +149,7 @@ class AutonomousExecutor:
             result = self._do_run_shell(command)
         finally:
             duration_ms = int((time.monotonic() - start) * 1000)
-            self._lock.release()
+            self._shell_slots.release()
 
         result.duration_ms = duration_ms
         result.code_or_cmd = command
@@ -160,18 +161,24 @@ class AutonomousExecutor:
 
     # ── 내부 실행 ───────────────────────────────────────────────────────────────
 
-    def _do_run_python(self, code: str) -> ExecutionResult:
+    def _do_run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
         code = self._normalize_python_code(code)
         logging.info(f"[Executor] Python 실행:\n{code}")
         runner_path = ""
         process = None
         try:
-            runner_path = self._write_python_runner(code)
+            runner_path = self._write_python_runner(code, extra_globals=extra_globals)
+            child_env = os.environ.copy()
+            child_env["PYTHONIOENCODING"] = "utf-8"
+            child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(  # nosec B603 - controlled runner invocation
                 [sys.executable, runner_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=child_env,
             )
             stdout, stderr = process.communicate(timeout=30)
             output = (stdout or "").strip()
@@ -208,11 +215,17 @@ class AutonomousExecutor:
         process = None
         try:
             shell_command = self._build_shell_command(command)
+            child_env = os.environ.copy()
+            child_env["PYTHONIOENCODING"] = "utf-8"
+            child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(  # nosec B603 - controlled shell invocation
                 shell_command,  # nosec B603
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=child_env,
             )
             stdout, stderr = process.communicate(timeout=30)
             if stdout:
@@ -356,21 +369,23 @@ class AutonomousExecutor:
         normalized = re.sub(r";\s*(#.*)", r"\n\1", normalized)
         return normalized
 
-    def _write_python_runner(self, code: str) -> str:
-        runner = self._build_python_runner_script(code)
+    def _write_python_runner(self, code: str, extra_globals: Optional[dict] = None) -> str:
+        runner = self._build_python_runner_script(code, extra_globals=extra_globals)
         temp = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".py", delete=False)
         with temp:
             temp.write(runner)
         return temp.name
 
-    def _build_python_runner_script(self, code: str) -> str:
-        desktop_path = os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop')
-        step_outputs = self.execution_globals.get("step_outputs", {})
+    def _build_python_runner_script(self, code: str, extra_globals: Optional[dict] = None) -> str:
+        desktop_path = self.execution_globals.get(
+            "desktop_path",
+            os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop'),
+        )
         payload = {
             "desktop_path": desktop_path,
-            "step_outputs": step_outputs if isinstance(step_outputs, dict) else {},
             "module_dir": os.path.dirname(os.path.dirname(__file__)),
         }
+        payload.update(self._sanitize_runner_payload(extra_globals))
         payload_json = json.dumps(payload, ensure_ascii=False)
         indented_code = textwrap.indent(code, "        ")
         return f'''import contextlib
@@ -391,6 +406,7 @@ from datetime import datetime
 PAYLOAD = json.loads({payload_json!r})
 desktop_path = PAYLOAD.get("desktop_path", "")
 step_outputs = PAYLOAD.get("step_outputs", {{}})
+verification_context = PAYLOAD.get("verification_context", {{}})
 module_dir = PAYLOAD.get("module_dir", "")
 if module_dir and module_dir not in sys.path:
     sys.path.insert(0, module_dir)
@@ -485,6 +501,7 @@ execution_globals = {{
     "datetime": datetime,
     "desktop_path": desktop_path,
     "step_outputs": step_outputs,
+    "verification_context": verification_context,
     "save_document": save_document,
     "choose_document_format": _choose_document_format,
     "open_url": _automation.open_url,
@@ -518,6 +535,17 @@ except Exception:
     traceback.print_exc()
     sys.exit(1)
 '''
+
+    def _sanitize_runner_payload(self, extra_globals: Optional[dict]) -> dict:
+        payload = {}
+        for key, value in (extra_globals or {}).items():
+            try:
+                json.dumps(value, ensure_ascii=False)
+            except TypeError:
+                payload[key] = str(value)
+            else:
+                payload[key] = value
+        return payload
 
     def _safe_unlink(self, path: str):
         try:
