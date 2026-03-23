@@ -1,47 +1,47 @@
+# 패키지 구조 정리(2026-03-23): core / agent / services / ui / tts / memory / audio
+
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
 SpeechRecognition==3.10.1
 pyaudio==0.2.14
 
 # ── GUI ────────────────────────────────────────────────────────────────────────
 PySide6==6.6.1
+pyautogui
+pygetwindow
+pyperclip
 
 # ── AI / LLM ───────────────────────────────────────────────────────────────────
-groq>=0.11.0                  # LLM: Groq (기본)
-openai>=1.0.0                 # LLM: OpenAI / Mistral / Gemini / OpenRouter 공용
-#anthropic>=0.25.0            # LLM: Anthropic Claude (선택)
+groq>=0.11.0
+openai>=1.0.0
+# anthropic>=0.25.0
 
-# ── TTS ────────────────────────────────────────────────────────────────────────
-fish-audio-sdk                # TTS: Fish Audio WebSocket (기본)
-#edge-tts>=6.1.9              # TTS: Microsoft Edge TTS (무료, 선택)
-#elevenlabs>=1.0.0            # TTS: ElevenLabs (선택)
-
-# ── 오디오 및 데이터 처리 ───────────────────────────────────────────────────────
+# ── TTS / 오디오 ───────────────────────────────────────────────────────────────
+fish-audio-sdk
+numpy
 pydub==0.25.1
-numpy                         # CosyVoice 필수
-pyautogui                     # GUI 자동화
-pyperclip                     # 클립보드 자동화
-pygetwindow                   # 활성 창/창 제목 감지
-#torch>=2.0.0                 # CosyVoice3 필수 (별도 설치 권장)
-#torchaudio                   # CosyVoice3 필수
-
-# ── 네트워크 / HTTP ────────────────────────────────────────────────────────────
 websockets==12.0
-requests>=2.32.0
-httpx                         # API 클라이언트 통신
-ddgs                          # AI 웹 검색 도구 (권장)
-duckduckgo-search             # 구버전 호환 (선택)
+# edge-tts>=6.1.9
+# elevenlabs>=1.0.0
+# torch>=2.0.0
+# torchaudio
+
+# ── 네트워크 / 브라우저 자동화 ─────────────────────────────────────────────────
 certifi
-selenium                      # 브라우저 자동화
-webdriver-manager             # ChromeDriver 자동 설치
+ddgs
+duckduckgo-search
+httpx
+requests>=2.32.0
+selenium
+webdriver-manager
 
 # ── 시스템 (Windows) ───────────────────────────────────────────────────────────
+comtypes>=1.4.1
 psutil>=5.9.0
 pycaw>=20230407
-comtypes>=1.4.1
 
 # ── 빌드 및 유틸리티 ───────────────────────────────────────────────────────────
-watchdog                      # 파일 변경 감지
-nuitka                        # EXE 빌드 도구
-python-dotenv                 # 설정 관리
-huggingface_hub               # 모델 다운로드
-reportlab                     # PDF 저장 지원
+huggingface_hub
+nuitka
+python-dotenv
+reportlab
+watchdog

@@ -39,7 +39,7 @@ jobs:
         working-directory: VoiceCommand
         shell: pwsh
         run: |
-          python -m py_compile Main.py build_exe.py llm_provider.py agent_planner.py autonomous_executor.py automation_helpers.py
+          python -m py_compile Main.py build_exe.py VoiceCommand.py ai_assistant.py audio_manager.py character_widget.py config_manager.py constants.py threads.py weather_service.py timer_manager.py llm_provider.py agent_planner.py autonomous_executor.py automation_helpers.py text_interface.py tray_icon.py settings_dialog.py speech_bubble.py tts_factory.py tts_openai.py tts_edge.py tts_elevenlabs.py cosyvoice_tts.py fish_tts_ws.py cosyvoice_worker.py memory_manager.py user_context.py conversation_history.py agent/llm_provider.py agent/agent_planner.py agent/autonomous_executor.py agent/automation_helpers.py agent/real_verifier.py assistant/ai_assistant.py assistant/groq_assistant.py audio/audio_manager.py audio/simple_wake.py core/VoiceCommand.py core/config_manager.py core/constants.py core/core_manager.py core/resource_manager.py core/rp_generator.py core/threads.py services/web_tools.py services/weather_service.py services/timer_manager.py ui/text_interface.py ui/tray_icon.py ui/settings_dialog.py ui/speech_bubble.py ui/character_widget.py tts/tts_factory.py tts/tts_openai.py tts/tts_edge.py tts/tts_elevenlabs.py tts/cosyvoice_tts.py tts/fish_tts_ws.py tts/cosyvoice_worker.py memory/memory_manager.py memory/user_context.py memory/conversation_history.py
 
       - name: Build EXE (Standalone Folder)
         working-directory: VoiceCommand

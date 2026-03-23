@@ -6,6 +6,16 @@ import faulthandler
 from datetime import datetime
 import warnings
 
+# Qt의 비활성 포커스 요청 경고(qt.qpa.window)를 숨긴다.
+# 캐릭터 위젯은 WindowDoesNotAcceptFocus 플래그를 의도적으로 사용하므로,
+# 드래그 시 발생하는 requestActivate 경고는 기능상 무해한 노이즈다.
+_qt_logging_rules = os.environ.get("QT_LOGGING_RULES", "").strip()
+_suppress_rule = "qt.qpa.window.warning=false"
+if _suppress_rule not in _qt_logging_rules:
+    os.environ["QT_LOGGING_RULES"] = (
+        f"{_qt_logging_rules};{_suppress_rule}" if _qt_logging_rules else _suppress_rule
+    )
+
 # Windows 콘솔 창 숨기기
 if sys.platform == "win32":
     import ctypes
@@ -18,18 +28,18 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgr
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 
-from ai_assistant import get_ai_assistant
-from character_widget import CharacterWidget
-from text_interface import create_text_interface
-from VoiceCommand import (
+from assistant.ai_assistant import get_ai_assistant
+from ui.character_widget import CharacterWidget
+from ui.text_interface import create_text_interface
+from core.VoiceCommand import (
     tts_wrapper,
     set_ai_assistant,
     set_character_widget,
     start_tts_background,
 )
 
-from core_manager import AriCore
-from tray_icon import SystemTrayIcon
+from core.core_manager import AriCore
+from ui.tray_icon import SystemTrayIcon
 
 # 전역 변수 선언
 ai_assistant = None
@@ -46,7 +56,7 @@ if not os.path.exists(icon_path):
 
 # 로그 설정
 def setup_logging():
-    from resource_manager import ResourceManager
+    from core.resource_manager import ResourceManager
     log_dir = ResourceManager.get_writable_path("logs")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -68,7 +78,7 @@ def setup_logging():
 
 def check_cosyvoice_first_run(app):
     """최초 실행 시 CosyVoice 설치 여부 확인"""
-    from resource_manager import ResourceManager
+    from core.resource_manager import ResourceManager
     FLAG_FILE = ResourceManager.get_writable_path(".cosyvoice_asked")
     COSYVOICE_DIR = r"D:\Git\CosyVoice"
 
@@ -156,14 +166,16 @@ def main():
         ari_core = AriCore()
 
         # 전역 오디오 인스턴스 초기화 (메인 스레드에서 생성)
-        from audio_manager import GlobalAudio
+        from audio.audio_manager import GlobalAudio
         GlobalAudio.get_instance()
 
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
         start_tts_background()
 
         # 캐릭터 위젯 생성
+        logging.info("캐릭터 위젯 생성 시작")
         character = CharacterWidget()
+        logging.info("캐릭터 위젯 생성 완료")
         set_character_widget(character)
 
         # 텍스트 인터페이스 생성 및 설정

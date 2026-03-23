@@ -3,8 +3,8 @@
 이 파일은 AI 세션(Gemini, Claude 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-03-23 (Session: GUI Automation Helpers, Broader Templates & Docs Refresh)
-## Autonomy Level: 자율 실행 범위 추가 확장됨 (GUI/브라우저/앱 자동화 기반 추가, 범용 100% 안정성은 아직 미도달)
+## Last Updated: 2026-03-23 (Session: Agent Package Refactor, Verification Fixes & Bubble Consistency)
+## Autonomy Level: 자율 실행 범위 확장 + 열기 작업/검증/TTS 말풍선 동기화 보강 완료
 
 ---
 
@@ -16,6 +16,17 @@
 - TTS: Fish Audio (Cloud, Game Mode) / CosyVoice (Local, 고품질)
 - UI: PySide6 시스템 트레이 + 캐릭터 애니메이션 (Shimeji 스타일)
 - 진입점: `Main.py` → `VoiceCommand.py` → `CommandRegistry` → 각 Command 클래스
+- 현재 구조 정리:
+  - 핵심 자율 실행 구현: `VoiceCommand/agent/`
+  - 웹 연동 구현: `VoiceCommand/services/`
+  - UI 모듈: `VoiceCommand/ui/`
+  - TTS 제공자/팩토리: `VoiceCommand/tts/`
+  - 기억/대화 이력: `VoiceCommand/memory/`
+  - 앱 런타임 핵심: `VoiceCommand/core/`
+  - AI 어시스턴트 레이어: `VoiceCommand/assistant/`
+  - 오디오/웨이크워드: `VoiceCommand/audio/`
+  - 내부 구현 import는 패키지 경로(`core.*`, `agent.*`, `ui.*`, `tts.*`, `memory.*`, `services.*`) 우선으로 정리됨
+  - 루트의 `llm_provider.py`, `text_interface.py`, `tts_factory.py`, `memory_manager.py` 등은 하위 패키지로 연결하는 호환 wrapper
 
 ---
 

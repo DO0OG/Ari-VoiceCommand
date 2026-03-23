@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import multiprocessing
+from datetime import datetime
 
 # 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
 if sys.stdout.encoding != 'utf-8':
@@ -34,7 +35,10 @@ try:
     import nuitka
 except ImportError:
     print("Nuitka 설치 중...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "nuitka"])
+    subprocess.run(  # nosec B603 - controlled build dependency install
+        [sys.executable, "-m", "pip", "install", "nuitka"],
+        check=True,
+    )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(HERE, "dist", "Ari")
@@ -83,6 +87,14 @@ cmd = [
     "--include-module=strategy_memory",
     "--include-module=web_tools",
     "--include-module=automation_helpers",
+    "--include-package=agent",
+    "--include-package=assistant",
+    "--include-package=audio",
+    "--include-package=core",
+    "--include-package=memory",
+    "--include-package=tts",
+    "--include-package=ui",
+    "--include-package=services",
     "--include-package=pycaw",
     "--include-package=comtypes",
     "--include-package=groq",
@@ -117,9 +129,9 @@ cmd = [
     "Main.py"
 ]
 
-start_time = subprocess.check_output(['powershell', 'Get-Date -Format "HH:mm:ss"']).decode().strip()
+start_time = datetime.now().strftime("%H:%M:%S")
 print(f"빌드 시작 시간: {start_time}")
-result = subprocess.run(cmd)
+result = subprocess.run(cmd, check=False)  # nosec B603 - controlled build command
 
 if result.returncode == 0:
     # 폴더 정리

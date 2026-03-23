@@ -48,9 +48,13 @@ class CommandRegistry:
 
         for command in self.commands:
             if command.matches(text):
+                logging.info(f"[CommandRegistry] 매칭 명령: {command.__class__.__name__} / 입력: {text}")
                 # 명령어 유형 기록 (클래스 이름에서 'Command' 제외)
                 cmd_type = command.__class__.__name__.replace("Command", "").lower()
-                context_manager.record_command(cmd_type, {"input": text})
+                try:
+                    context_manager.record_command(cmd_type, {"input": text})
+                except Exception as e:
+                    logging.warning(f"[CommandRegistry] 사용자 컨텍스트 기록 실패: {e}")
                 
                 command.execute(text)
                 return
