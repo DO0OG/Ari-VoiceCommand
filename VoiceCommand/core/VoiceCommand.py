@@ -31,6 +31,7 @@ rp_gen = None
 character_widget = None
 _command_registry = None
 _tts_thread = None
+_tts_signature = None
 
 _tts_init_event = threading.Event()
 _tts_init_started = False
@@ -72,6 +73,15 @@ def set_ai_assistant(assistant):
 def set_character_widget(widget):
     global character_widget
     character_widget = widget
+    
+    # 오케스트레이터 생각 중 상태 연결
+    try:
+        from agent.agent_orchestrator import get_orchestrator
+        orch = get_orchestrator()
+        orch.set_thinking_callback(widget.thinking_signal.emit)
+    except Exception as e:
+        logging.warning(f"오케스트레이터 생각 콜백 연결 실패: {e}")
+        
     reconnect_tts_signals()
 
 
@@ -105,11 +115,21 @@ def start_tts_background():
 
 
 def initialize_tts():
-    global fish_tts, rp_gen
+    global fish_tts, rp_gen, _tts_signature
     from core.config_manager import ConfigManager
-    from tts.tts_factory import create_tts_provider
+    from tts.tts_factory import create_tts_provider, build_tts_signature
     settings = ConfigManager.load_settings()
-    fish_tts, _ = create_tts_provider()
+    next_signature = build_tts_signature(settings)
+    if fish_tts is not None and _tts_signature == next_signature:
+        logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
+    else:
+        if fish_tts and hasattr(fish_tts, "cleanup"):
+            try:
+                fish_tts.cleanup()
+            except Exception as e:
+                logging.debug(f"기존 TTS 정리 중 무시된 오류: {e}")
+        fish_tts, _ = create_tts_provider()
+        _tts_signature = next_signature
     
     # 캐릭터 위젯이 이미 있으면 시그널 재연결 (필요 시)
     if character_widget and hasattr(fish_tts, 'playback_finished'):
@@ -133,8 +153,17 @@ def initialize_tts():
 
 
 def reconnect_tts_signals():
-    """사용되지 않음 (하위 호환 유지)"""
-    pass
+    """현재 TTS 프로바이더와 캐릭터 위젯 시그널을 다시 연결."""
+    if not fish_tts or not character_widget or not hasattr(fish_tts, 'playback_finished'):
+        return
+    try:
+        try:
+            fish_tts.playback_finished.disconnect(character_widget.hide_speech_bubble)
+        except Exception:
+            pass
+        fish_tts.playback_finished.connect(character_widget.hide_speech_bubble)
+    except Exception as e:
+        logging.debug(f"TTS 시그널 재연결 실패: {e}")
 
 
 # ── 실행 로직 ───────────────────────────────────────────────────────────────
@@ -178,7 +207,7 @@ def _show_tts_bubble(text):
         character_widget.say(display_text, duration=0)
 
 
-def text_to_speech(text):
+def text_to_speech(text, show_bubble=True):
     """TTS로 음성 출력 (최종 최적화 버전)"""
     global fish_tts, rp_gen
     
@@ -188,38 +217,49 @@ def text_to_speech(text):
     # 캐릭터 감정 표현 실행
     if character_widget:
         character_widget.set_emotion(emotion)
-        _show_tts_bubble(text)
+        if show_bubble:
+            _show_tts_bubble(text)
 
     if fish_tts is None:
         if _tts_init_started:
             if not _tts_init_event.wait(timeout=10.0): # 타임아웃 360 -> 10초로 단축 (행 걸림 방지)
                 logging.warning("TTS 초기화 대기 타임아웃")
+                if show_bubble and character_widget:
+                    character_widget.hide_speech_bubble()
                 return False
         else:
             initialize_tts()
     
     if fish_tts is None:
         logging.error("TTS 프로바이더가 없습니다.")
+        if show_bubble and character_widget:
+            character_widget.hide_speech_bubble()
         return False
 
     try:
         if rp_gen: text = rp_gen.generate(text)
-        return fish_tts.speak(text)
+        ok = fish_tts.speak(text)
+        if not ok and show_bubble and character_widget:
+            character_widget.hide_speech_bubble()
+        return ok
     except Exception as e:
         logging.error(f"TTS 오류: {e}")
+        if show_bubble and character_widget:
+            character_widget.hide_speech_bubble()
         return False
 
 
 def tts_wrapper(text, show_bubble=True):
     """TTS 재생 + 말풍선 표시 (감정 이모지 및 동기화 최적화)"""
-    if show_bubble:
-        _show_tts_bubble(text)
-
     if _tts_thread:
         # 단순 큐잉으로 최적화 유지
-        _tts_thread.speak(text)
+        queued = _tts_thread.speak(text)
+        if queued and show_bubble:
+            _show_tts_bubble(text)
+        elif not queued and character_widget:
+            character_widget.hide_speech_bubble()
     else:
-        text_to_speech(text)
+        text_to_speech(text, show_bubble=show_bubble)
 
 
 def is_tts_playing():

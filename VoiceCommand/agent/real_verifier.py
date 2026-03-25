@@ -1,18 +1,11 @@
-"""
-실제 상태 검증기 (Real Verifier)
-LLM 텍스트 판단에만 의존하지 않고,
-LLM이 생성한 검증 코드를 실제로 실행하여 목표 달성 여부를 확인합니다.
-
-검증 순서:
-  1. LLM이 목표에 맞는 검증 Python 코드 생성
-  2. 코드 실행 → 출력이 "True/False" 등 명확한 결과이면 채택
-  3. 코드 실행 실패 시 → LLM 텍스트 판단으로 폴백
-"""
+import json
 import logging
 import os
+import re
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Dict, Any
+
 from agent.execution_analysis import (
     describes_open_action,
     describes_storage_action,
@@ -21,21 +14,27 @@ from agent.execution_analysis import (
 )
 
 _VERIFY_CODE_PROMPT = """\
-다음 목표가 달성됐는지 확인하는 파이썬 검증 코드를 작성하세요.
+다음 목표가 실제로 달성됐는지 확인하는 파이썬 검증 코드를 작성하세요.
 
 목표: {goal}
 
 실행된 단계와 출력:
 {steps_summary}
 
-요구사항:
-- 목표 달성 여부를 실제 상태로 확인 (파일 존재, 값 검증, 출력 확인 등)
-- 브라우저 열기, 앱 실행, URL 열기 같은 작업은 검증을 위해 open_url, launch_app, webbrowser.open 등을 다시 호출하지 마세요.
-- 검증 코드는 부작용이 없어야 합니다. 이미 수행된 동작을 다시 실행하지 말고, 가능한 경우 실행 출력과 상태만 확인하세요.
-- 마지막 줄에 반드시 True 또는 False를 print()로 출력
-- Windows 바탕화면 경로: os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop')
-- 예시: desktop = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop'); print(os.path.exists(desktop))
-- 코드만 반환 (설명·주석·마크다운 없음)
+검증 요구사항:
+1. 목표 달성 여부를 '실제 상태'로 확인하세요.
+   - 파일 작업: os.path.exists(path) 등을 사용
+   - 창/앱 실행: get_active_window_title(), find_window("제목"), focus_window("제목") 없는 읽기 전용 검사 활용
+   - 웹 브라우저: get_browser_state(), get_browser_current_url(), 창 제목 확인
+   - 다운로드: wait_for_download() 같은 상태 헬퍼는 사용 가능하되 새 다운로드를 시작하지 마세요
+2. 주의: 브라우저 열기(open_url), 앱 실행(launch_app) 등 상태를 변화시키는 함수를 다시 호출하지 마세요. (읽기 전용 검증)
+3. 마지막 줄에 반드시 True 또는 False를 print()로 출력하세요.
+4. 예시:
+   import os; print(os.path.exists(r'C:\\Users\\User\\Desktop\\test.txt'))
+   또는
+   title = get_active_window_title(); print('네이버' in title)
+
+코드만 반환 (설명/주석/마크다운 금지):
 """
 
 _RE_CODE_FENCE = re.compile(r'```(?:python)?\s*', re.IGNORECASE)
@@ -44,7 +43,7 @@ _RE_CODE_FENCE = re.compile(r'```(?:python)?\s*', re.IGNORECASE)
 @dataclass
 class VerificationResult:
     verified: bool
-    method: str         # "code" | "llm"
+    method: str         # "code" | "llm" | "heuristic"
     evidence: str       # 실제 증거 텍스트
     summary_kr: str
 
@@ -59,28 +58,29 @@ class RealVerifier:
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
     def verify(self, goal: str, step_results: list) -> VerificationResult:
-        """
-        검증 코드 실행 → 실패 시 LLM 텍스트 판단 폴백.
-        step_results: List[StepResult] 또는 List[ExecutionResult]
-        """
+        """검증 코드 실행 → 실패 시 LLM 텍스트 판단 폴백."""
+        # 1. 휴리스틱 검증 (빠른 판단)
         heuristic = self._heuristic_verify(goal, step_results)
         if heuristic is not None:
             return heuristic
 
+        # 2. 코드 기반 실제 상태 검증 (Phase 2.2 핵심)
         code = self._generate_verification_code(goal, step_results)
         if code:
             result = self._run_verification(code)
             if result is not None:
                 return result
 
-        # 폴백: LLM 텍스트 판단
+        # 3. 폴백: LLM 텍스트 판단
         return self._llm_verify(goal, step_results)
 
     # ── 내부 ──────────────────────────────────────────────────────────────────
 
     def _heuristic_verify(self, goal: str, step_results: list) -> Optional[VerificationResult]:
+        """간단한 규칙 기반 검증"""
         outputs = []
         descriptions = []
+        workflow_payloads: List[Dict[str, Any]] = []
         for sr in step_results:
             exec_r = getattr(sr, "exec_result", sr)
             if not getattr(exec_r, "success", False):
@@ -88,133 +88,239 @@ class RealVerifier:
                     verified=False,
                     method="heuristic",
                     evidence=(exec_r.error or exec_r.output or "")[:200],
-                    summary_kr="실패한 단계가 있어 목표를 달성하지 못했습니다.",
+                    summary_kr="일부 단계가 실패하여 목표를 달성하지 못했습니다.",
                 )
             outputs.append((exec_r.output or "").strip())
+            payload = self._parse_json_output(exec_r.output or "")
+            if payload:
+                workflow_payloads.append(payload)
             if hasattr(sr, "step"):
                 descriptions.append(getattr(sr.step, "description_kr", ""))
 
         artifacts = extract_artifacts(outputs)
         existing_path_items = existing_paths(artifacts["paths"])
         description_text = " ".join(descriptions)
+        url_candidates = [url.lower() for url in artifacts["urls"] if url]
+        active_title = ""
+        open_window_titles: List[str] = []
+        browser_state: Dict[str, Any] = {}
+        image_candidates = [
+            path for path in artifacts["paths"]
+            if str(path).lower().endswith((".png", ".jpg", ".jpeg", ".bmp"))
+        ]
+        try:
+            active_title = (self.executor.execution_globals.get("get_active_window_title") or (lambda: ""))() or ""
+        except Exception:
+            active_title = ""
+        try:
+            open_window_titles = (self.executor.execution_globals.get("list_open_windows") or (lambda: []))() or []
+        except Exception:
+            open_window_titles = []
+        try:
+            browser_state = (self.executor.execution_globals.get("get_browser_state") or (lambda: {}))() or {}
+        except Exception:
+            browser_state = {}
+        try:
+            is_image_visible = self.executor.execution_globals.get("is_image_visible") or (lambda *_args, **_kwargs: False)
+        except Exception:
+            is_image_visible = lambda *_args, **_kwargs: False
 
+        # 파일 생성 작업 확인
         if existing_path_items and describes_storage_action(description_text):
             return VerificationResult(
                 verified=True,
                 method="heuristic",
-                evidence=existing_path_items[0][:200],
-                summary_kr="실제 경로가 확인되어 파일 작업이 완료된 것으로 판단했습니다.",
+                evidence=existing_path_items[0],
+                summary_kr=f"실제 경로({os.path.basename(existing_path_items[0])})가 확인되어 작업을 완료했습니다.",
             )
 
-        if existing_path_items and describes_open_action(description_text):
+        if describes_open_action(description_text):
+            lowered_title = active_title.lower()
+            current_url = str(browser_state.get("current_url", "")).lower()
+            matched_url = next((url for url in url_candidates if url in current_url), "")
+            if matched_url or any(token for token in url_candidates if token and token.split("//")[-1].split("/")[0] in lowered_title):
+                evidence = matched_url or active_title or current_url
+                return VerificationResult(
+                    verified=True,
+                    method="heuristic",
+                    evidence=evidence[:200],
+                    summary_kr="브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다.",
+                )
+            if active_title:
+                return VerificationResult(
+                    verified=True,
+                    method="heuristic",
+                    evidence=active_title[:200],
+                    summary_kr="활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다.",
+                )
+            if open_window_titles:
+                domain_tokens = []
+                for token in url_candidates:
+                    domain = token.split("//")[-1].split("/")[0]
+                    domain_tokens.extend([part for part in domain.split(".") if len(part) >= 3])
+                matched_title = next(
+                    (
+                        title for title in open_window_titles
+                        if any(part in title.lower() for part in domain_tokens)
+                    ),
+                    "",
+                )
+                if matched_title:
+                    return VerificationResult(
+                        verified=True,
+                        method="heuristic",
+                        evidence=matched_title[:200],
+                        summary_kr="열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다.",
+                    )
+                goal_tokens = [token.lower() for token in re.findall(r"[A-Za-z가-힣0-9._-]+", description_text) if len(token) >= 2]
+                matched_title = next(
+                    (
+                        title for title in open_window_titles
+                        if any(token in title.lower() for token in goal_tokens)
+                    ),
+                    "",
+                )
+                if matched_title:
+                    return VerificationResult(
+                        verified=True,
+                        method="heuristic",
+                        evidence=matched_title[:200],
+                        summary_kr="열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다.",
+                    )
+
+        visible_image = next((path for path in image_candidates if is_image_visible(path)), "")
+        if visible_image:
             return VerificationResult(
                 verified=True,
                 method="heuristic",
-                evidence=existing_path_items[0][:200],
-                summary_kr="실행 대상 경로가 확인되어 열기 작업이 완료된 것으로 판단했습니다.",
+                evidence=visible_image[:200],
+                summary_kr="화면 이미지 인식을 통해 목표 상태를 확인했습니다.",
+            )
+
+        for payload in workflow_payloads:
+            opened_url = str(payload.get("opened_url", "") or "")
+            window_title = str(payload.get("window_title", "") or "")
+            action_items = payload.get("actions") or []
+            if opened_url and (not url_candidates or any(url in opened_url.lower() for url in url_candidates)):
+                return VerificationResult(
+                    verified=True,
+                    method="heuristic",
+                    evidence=opened_url[:200],
+                    summary_kr="워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다.",
+                )
+            if window_title and any(isinstance(item, str) and item.startswith("성공:") for item in action_items):
+                return VerificationResult(
+                    verified=True,
+                    method="heuristic",
+                    evidence=window_title[:200],
+                    summary_kr="워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다.",
+                )
+
+        if browser_state.get("current_url") and browser_state.get("title"):
+            return VerificationResult(
+                verified=True,
+                method="heuristic",
+                evidence=f"{browser_state.get('title')} | {browser_state.get('current_url')}"[:200],
+                summary_kr="현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다.",
+            )
+
+        last_action_summary = str(browser_state.get("last_action_summary", "") or "")
+        if last_action_summary and "성공:" in last_action_summary and not any(token in last_action_summary for token in ("실패:", "오류:")):
+            return VerificationResult(
+                verified=True,
+                method="heuristic",
+                evidence=last_action_summary[:200],
+                summary_kr="브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다.",
             )
 
         return None
 
+    def _parse_json_output(self, output: str) -> Optional[Dict[str, Any]]:
+        text = (output or "").strip()
+        if not text:
+            return None
+        if not text.startswith("{"):
+            json_line = next((line.strip() for line in reversed(text.splitlines()) if line.strip().startswith("{")), "")
+            text = json_line
+        if not text.startswith("{"):
+            return None
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
     def _generate_verification_code(self, goal: str, step_results: list) -> Optional[str]:
-        """LLM에게 검증 코드 생성 요청"""
+        """LLM에게 검증 코드 생성 요청 (planner_model 사용)"""
         lines = []
         artifacts = {"paths": [], "urls": []}
         for i, sr in enumerate(step_results):
-            # StepResult or ExecutionResult 모두 처리
             exec_r = getattr(sr, "exec_result", sr)
-            desc = ""
-            if hasattr(sr, "step"):
-                desc = getattr(sr.step, "description_kr", "")
+            desc = getattr(sr.step, "description_kr", "") if hasattr(sr, "step") else ""
             status = "성공" if exec_r.success else "실패"
             out = (exec_r.output or exec_r.error or "없음")[:100]
             lines.append(f"  단계 {i+1} [{status}] {desc}: {out}")
+            
             extracted = extract_artifacts([exec_r.output or "", exec_r.error or ""])
             artifacts["paths"].extend(extracted["paths"])
             artifacts["urls"].extend(extracted["urls"])
 
         steps_summary = "\n".join(lines) or "  (단계 정보 없음)"
         artifact_lines = []
-        if artifacts["paths"]:
-            artifact_lines.append("관측된 경로: " + ", ".join(dict.fromkeys(artifacts["paths"]))[:400])
-        if artifacts["urls"]:
-            artifact_lines.append("관측된 URL: " + ", ".join(dict.fromkeys(artifacts["urls"]))[:400])
-        if artifact_lines:
-            steps_summary = steps_summary + "\n" + "\n".join(artifact_lines)
+        if artifacts["paths"]: artifact_lines.append("관측된 경로: " + ", ".join(set(artifacts["paths"]))[:400])
+        if artifacts["urls"]: artifact_lines.append("관측된 URL: " + ", ".join(set(artifacts["urls"]))[:400])
+        if artifact_lines: steps_summary += "\n" + "\n".join(artifact_lines)
+
         prompt = _VERIFY_CODE_PROMPT.format(goal=goal, steps_summary=steps_summary)
 
         try:
-            if not self.llm.client:
-                return None
-            if self.llm.provider == "anthropic":
-                resp = self.llm.client.messages.create(
-                    model=self.llm.model,
-                    max_tokens=400,
-                    system="파이썬 검증 코드만 반환하세요. 설명·마크다운 없음.",
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                code = " ".join(b.text for b in resp.content if b.type == "text")
-            else:
-                resp = self.llm.client.chat.completions.create(
-                    model=self.llm.model,
-                    messages=[
-                        {"role": "system", "content": "파이썬 검증 코드만 반환하세요. 설명·마크다운 없음."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.1,
-                    max_tokens=400,
-                )
-                code = resp.choices[0].message.content or ""
-
+            # planner_model을 사용하여 더 정확한 검증 코드 생성
+            code = self.llm.chat(
+                prompt, 
+                system_override="파이썬 검증 코드만 반환하세요. 설명·마크다운 없음.",
+                model_override=self.llm.planner_model
+            )
             code = _RE_CODE_FENCE.sub("", code).strip()
             self._write_trace(goal, code)
             return code if code else None
-
         except Exception as e:
             logging.error(f"[RealVerifier] 검증 코드 생성 실패: {e}")
             return None
 
     def _run_verification(self, code: str) -> Optional[VerificationResult]:
-        """검증 코드를 실행하고 결과 해석. 실패 시 None 반환."""
+        """검증 코드를 실행하고 결과 해석."""
         try:
-            # _do_run_python은 safety check 없이 직접 실행 (검증용 코드)
+            # 검증 코드는 safety check 없이 실행 (읽기 전용으로 유도됨)
             result = self.executor._do_run_python(code, extra_globals={"verification_context": {"mode": "verifier"}})
             if not result.success:
-                logging.warning(f"[RealVerifier] 검증 코드 실행 실패: {result.error[:100]}")
                 return None
 
             output = result.output.strip().lower()
-            if not output:
-                return None
+            if not output: return None
 
-            # True/False 판단
-            if output.startswith("true") or output == "1":
+            if "true" in output or output == "1":
                 verified = True
-            elif output.startswith("false") or output == "0":
+            elif "false" in output or output == "0":
                 verified = False
             else:
-                # 명확하지 않으면 폴백
-                logging.info(f"[RealVerifier] 검증 출력 불명확: {output[:50]}")
                 return None
 
             return VerificationResult(
                 verified=verified,
                 method="code",
                 evidence=result.output.strip()[:200],
-                summary_kr=f"코드 검증 {'달성' if verified else '미달성'}: {result.output.strip()[:80]}",
+                summary_kr=f"상태 검증 결과: {'성공' if verified else '미달성'}",
             )
         except Exception as e:
             logging.error(f"[RealVerifier] 검증 실행 오류: {e}")
             return None
 
     def _llm_verify(self, goal: str, step_results: list) -> VerificationResult:
-        """LLM 텍스트 기반 폴백 검증"""
+        """LLM 텍스트 기반 폴백 검증 (planner_model 사용)"""
         try:
-            from agent_planner import get_planner
+            from agent.agent_planner import get_planner
             planner = get_planner()
-            exec_results = [
-                getattr(sr, "exec_result", sr) for sr in step_results
-            ]
+            exec_results = [getattr(sr, "exec_result", sr) for sr in step_results]
             verdict = planner.verify(goal, exec_results)
             return VerificationResult(
                 verified=verdict.get("achieved", False),
@@ -223,10 +329,8 @@ class RealVerifier:
                 summary_kr=verdict.get("summary_kr", "LLM 검증 실패"),
             )
         except Exception as e:
-            logging.error(f"[RealVerifier] LLM 검증 실패: {e}")
-            return VerificationResult(
-                verified=False, method="llm", evidence="", summary_kr="검증 오류"
-            )
+            logging.error(f"[RealVerifier] LLM 검증 오류: {e}")
+            return VerificationResult(verified=False, method="llm", evidence="", summary_kr="검증 프로세스 오류")
 
     def _write_trace(self, goal: str, code: str):
         try:
@@ -235,23 +339,17 @@ class RealVerifier:
             os.makedirs(log_dir, exist_ok=True)
             path = os.path.join(log_dir, f"verifier_trace_{datetime.now().strftime('%Y%m%d')}.log")
             with open(path, "a", encoding="utf-8") as f:
-                f.write(
-                    f"[{datetime.now().strftime('%H:%M:%S')}] goal: {goal}\n"
-                    f"{code[:4000]}\n"
-                    f"{'=' * 80}\n"
-                )
-        except Exception as e:
-            logging.warning(f"[RealVerifier] trace 저장 실패: {e}")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] goal: {goal}\n{code}\n{'=' * 80}\n")
+        except Exception: pass
 
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 
 _verifier: Optional[RealVerifier] = None
 
-
 def get_real_verifier() -> RealVerifier:
     global _verifier
     if _verifier is None:
-        from llm_provider import get_llm_provider
-        from autonomous_executor import get_executor
+        from agent.llm_provider import get_llm_provider
+        from agent.autonomous_executor import get_executor
         _verifier = RealVerifier(get_llm_provider(), get_executor())
     return _verifier

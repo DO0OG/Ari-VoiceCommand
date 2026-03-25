@@ -62,6 +62,8 @@ class AutonomousExecutor:
             'launch_app': self._automation.launch_app,
             'wait_seconds': self._automation.wait_seconds,
             'click_screen': self._automation.click_screen,
+            'click_image': self._automation.click_image,
+            'is_image_visible': self._automation.is_image_visible,
             'move_mouse': self._automation.move_mouse,
             'type_text': self._automation.type_text,
             'press_keys': self._automation.press_keys,
@@ -70,9 +72,54 @@ class AutonomousExecutor:
             'write_clipboard': self._automation.write_clipboard,
             'read_clipboard': self._automation.read_clipboard,
             'get_active_window_title': self._automation.get_active_window_title,
+            'list_open_windows': self._automation.list_open_windows,
+            'find_window': self._automation.find_window,
+            'focus_window': self._automation.focus_window,
             'wait_for_window': self._automation.wait_for_window,
             'browser_login': self._automation.browser_login,
+            'get_browser_state': self._automation.get_browser_state,
+            'get_browser_current_url': self._automation.get_browser_current_url,
+            'get_desktop_state': self._automation.get_desktop_state,
+            'get_learned_strategies': self._automation.get_learned_strategies,
+            'get_learned_strategy_summary': self._automation.get_learned_strategy_summary,
+            'get_planning_snapshot': self._automation.get_planning_snapshot,
+            'get_planning_snapshot_summary': self._automation.get_planning_snapshot_summary,
+            'wait_for_download': self._automation.wait_for_download,
+            'suggest_browser_actions': self._automation.suggest_browser_actions,
+            'build_adaptive_browser_plan': self._automation.build_adaptive_browser_plan,
+            'build_resilient_browser_plans': self._automation.build_resilient_browser_plans,
+            'run_browser_actions': self._automation.run_browser_actions,
+            'run_adaptive_browser_workflow': self._automation.run_adaptive_browser_workflow,
+            'run_resilient_browser_workflow': self._automation.run_resilient_browser_workflow,
+            'suggest_desktop_workflow': self._automation.suggest_desktop_workflow,
+            'build_adaptive_desktop_plan': self._automation.build_adaptive_desktop_plan,
+            'build_resilient_desktop_plans': self._automation.build_resilient_desktop_plans,
+            'run_desktop_workflow': self._automation.run_desktop_workflow,
+            'run_adaptive_desktop_workflow': self._automation.run_adaptive_desktop_workflow,
+            'run_resilient_desktop_workflow': self._automation.run_resilient_desktop_workflow,
+            'get_execution_history': self.get_history,
+            'get_last_execution': self.get_last_execution,
+            'get_runtime_state': self.get_runtime_state,
         }
+        # 파일 작업 도구 주입 (Phase 1.2)
+        try:
+            from agent.file_tools import (
+                rename_file, merge_text_files, organize_folder_by_extension,
+                analyze_data_file, generate_markdown_report, detect_file_set,
+                batch_rename_files,
+            )
+            self.execution_globals.update({
+                'rename_file': rename_file,
+                'merge_files': merge_text_files,
+                'organize_folder': organize_folder_by_extension,
+                'analyze_data': analyze_data_file,
+                'generate_report': generate_markdown_report,
+                'detect_file_set': detect_file_set,
+                'batch_rename_files': batch_rename_files,
+            })
+        except ImportError as e:
+            logging.warning(f"[Executor] file_tools 로드 실패: {e}")
+
         try:
             import pyautogui
             self.execution_globals['pyautogui'] = pyautogui
@@ -80,9 +127,13 @@ class AutonomousExecutor:
             pass
         
         try:
-            from web_tools import web_search, web_fetch
+            try:
+                from services.web_tools import web_search, web_fetch, get_smart_browser
+            except ImportError:
+                from web_tools import web_search, web_fetch, get_smart_browser
             self.execution_globals['web_search'] = web_search
             self.execution_globals['web_fetch'] = web_fetch
+            self.execution_globals['get_browser'] = get_smart_browser
         except ImportError:
             pass
 
@@ -158,6 +209,45 @@ class AutonomousExecutor:
 
     def get_history(self) -> List[ExecutionResult]:
         return list(self._history)
+
+    def get_last_execution(self) -> Optional[ExecutionResult]:
+        return self._history[-1] if self._history else None
+
+    def get_runtime_state(self) -> dict:
+        """현재 실행 환경의 읽기 전용 상태 스냅샷."""
+        browser_state = {}
+        active_title = ""
+        try:
+            browser_state = self._automation.get_browser_state()
+        except Exception:
+            browser_state = {}
+        try:
+            active_title = self._automation.get_active_window_title()
+        except Exception:
+            active_title = ""
+        try:
+            open_windows = self._automation.list_open_windows()
+        except Exception:
+            open_windows = []
+        try:
+            desktop_state = self._automation.get_desktop_state()
+        except Exception:
+            desktop_state = {}
+
+        last = self.get_last_execution()
+        return {
+            "active_window_title": active_title,
+            "open_window_titles": open_windows,
+            "browser_state": browser_state,
+            "desktop_state": desktop_state,
+            "learned_strategies": self._automation.get_learned_strategies(),
+            "learned_strategy_summary": self._automation.get_learned_strategy_summary(),
+            "planning_snapshot": self._automation.get_planning_snapshot(),
+            "planning_snapshot_summary": self._automation.get_planning_snapshot_summary(),
+            "last_execution_success": getattr(last, "success", None),
+            "last_execution_output": (getattr(last, "output", "") or "")[:300],
+            "last_execution_error": (getattr(last, "error", "") or "")[:300],
+        }
 
     # ── 내부 실행 ───────────────────────────────────────────────────────────────
 
@@ -485,10 +575,28 @@ def save_document(directory: str, base_name: str, content: str, preferred_format
     return path
 
 try:
-    from web_tools import web_search, web_fetch
+    from services.web_tools import web_search, web_fetch
 except Exception:
-    web_search = None
-    web_fetch = None
+    try:
+        from web_tools import web_search, web_fetch
+    except Exception:
+        web_search = None
+        web_fetch = None
+
+try:
+    from agent.file_tools import (
+        rename_file, merge_text_files, organize_folder_by_extension,
+        analyze_data_file, generate_markdown_report, detect_file_set,
+        batch_rename_files,
+    )
+except Exception:
+    rename_file = None
+    merge_text_files = None
+    organize_folder_by_extension = None
+    analyze_data_file = None
+    generate_markdown_report = None
+    detect_file_set = None
+    batch_rename_files = None
 
 execution_globals = {{
     "os": os,
@@ -509,6 +617,8 @@ execution_globals = {{
     "launch_app": _automation.launch_app,
     "wait_seconds": _automation.wait_seconds,
     "click_screen": _automation.click_screen,
+    "click_image": _automation.click_image,
+    "is_image_visible": _automation.is_image_visible,
     "move_mouse": _automation.move_mouse,
     "type_text": _automation.type_text,
     "press_keys": _automation.press_keys,
@@ -517,13 +627,58 @@ execution_globals = {{
     "write_clipboard": _automation.write_clipboard,
     "read_clipboard": _automation.read_clipboard,
     "get_active_window_title": _automation.get_active_window_title,
+    "find_window": _automation.find_window,
+    "focus_window": _automation.focus_window,
     "wait_for_window": _automation.wait_for_window,
     "browser_login": _automation.browser_login,
+    "get_browser_state": _automation.get_browser_state,
+    "get_browser_current_url": _automation.get_browser_current_url,
+    "get_desktop_state": _automation.get_desktop_state,
+    "get_learned_strategies": _automation.get_learned_strategies,
+    "get_learned_strategy_summary": _automation.get_learned_strategy_summary,
+    "get_planning_snapshot": _automation.get_planning_snapshot,
+    "get_planning_snapshot_summary": _automation.get_planning_snapshot_summary,
+    "list_open_windows": _automation.list_open_windows,
+    "wait_for_download": _automation.wait_for_download,
+    "suggest_browser_actions": _automation.suggest_browser_actions,
+    "build_adaptive_browser_plan": _automation.build_adaptive_browser_plan,
+    "build_resilient_browser_plans": _automation.build_resilient_browser_plans,
+    "run_browser_actions": _automation.run_browser_actions,
+    "run_adaptive_browser_workflow": _automation.run_adaptive_browser_workflow,
+    "run_resilient_browser_workflow": _automation.run_resilient_browser_workflow,
+    "suggest_desktop_workflow": _automation.suggest_desktop_workflow,
+    "build_adaptive_desktop_plan": _automation.build_adaptive_desktop_plan,
+    "build_resilient_desktop_plans": _automation.build_resilient_desktop_plans,
+    "run_desktop_workflow": _automation.run_desktop_workflow,
+    "run_adaptive_desktop_workflow": _automation.run_adaptive_desktop_workflow,
+    "run_resilient_desktop_workflow": _automation.run_resilient_desktop_workflow,
+    "rename_file": rename_file,
+    "merge_files": merge_text_files,
+    "organize_folder": organize_folder_by_extension,
+    "analyze_data": analyze_data_file,
+    "generate_report": generate_markdown_report,
+    "detect_file_set": detect_file_set,
+    "batch_rename_files": batch_rename_files,
 }}
 if web_search:
     execution_globals["web_search"] = web_search
 if web_fetch:
     execution_globals["web_fetch"] = web_fetch
+execution_globals["get_execution_history"] = lambda: []
+execution_globals["get_last_execution"] = lambda: None
+execution_globals["get_runtime_state"] = lambda: {{
+    "active_window_title": _automation.get_active_window_title(),
+    "open_window_titles": _automation.list_open_windows(),
+    "browser_state": _automation.get_browser_state(),
+    "desktop_state": _automation.get_desktop_state(),
+    "learned_strategies": _automation.get_learned_strategies(),
+    "learned_strategy_summary": _automation.get_learned_strategy_summary(),
+    "planning_snapshot": _automation.get_planning_snapshot(),
+    "planning_snapshot_summary": _automation.get_planning_snapshot_summary(),
+    "last_execution_success": None,
+    "last_execution_output": "",
+    "last_execution_error": "",
+}}
 globals().update(execution_globals)
 
 _capture = io.StringIO()

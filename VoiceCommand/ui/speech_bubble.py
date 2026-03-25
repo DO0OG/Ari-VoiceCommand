@@ -4,9 +4,10 @@
 import os
 import logging
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Qt, QRect, QTimer
-from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase
+from PySide6.QtCore import Qt, QRect, QTimer, QPoint
+from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase, QPolygon
 
+from ui import theme as theme_module
 
 _font_family = None  # 전역 폰트 패밀리 이름 캐시
 
@@ -54,7 +55,7 @@ class SpeechBubble(QWidget):
 
         # 폰트 설정 (이미 등록된 폰트 사용)
         font_family = register_fonts()
-        self.font = QFont(font_family, 11)
+        self.font = QFont(font_family, theme_module.FONT_SIZE_LARGE + 1)
         self.fm = QFontMetrics(self.font)
         self.padding = 12
 
@@ -118,9 +119,14 @@ class SpeechBubble(QWidget):
         # 말풍선 영역 (꼬리 제외)
         bubble_rect = QRect(0, 0, self.bubble_width, self.bubble_height - 15)
 
+        # 테마 기반 색상
+        bg_color = QColor(theme_module.COLOR_BG_WHITE)
+        bg_color.setAlpha(245)
+        border_color = QColor(210, 210, 210)
+
         # 배경 그리기
-        painter.setBrush(QColor(255, 255, 255, 240))
-        painter.setPen(QColor(200, 200, 200))
+        painter.setBrush(bg_color)
+        painter.setPen(border_color)
         painter.drawRoundedRect(bubble_rect, 10, 10)
 
         # 꼬리 그리기
@@ -131,15 +137,13 @@ class SpeechBubble(QWidget):
             (tail_x, tail_y + 15),
             (tail_x + 8, tail_y)
         ]
-        from PySide6.QtGui import QPolygon
-        from PySide6.QtCore import QPoint
         polygon = QPolygon([QPoint(x, y) for x, y in tail_points])
-        painter.setBrush(QColor(255, 255, 255, 240))
-        painter.setPen(QColor(200, 200, 200))
+        painter.setBrush(bg_color)
+        painter.setPen(border_color)
         painter.drawPolygon(polygon)
 
         # 텍스트 그리기
-        painter.setPen(QColor(51, 51, 51))
+        painter.setPen(QColor(theme_module.COLOR_TEXT_PRIMARY))
         painter.setFont(self.font)
         text_rect = bubble_rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
         painter.drawText(text_rect, Qt.TextWordWrap | Qt.AlignCenter, self.text)

@@ -11,15 +11,25 @@ Plan → Execute+Self-Fix → Verify 다층 루프로 목표를 자율적으로 
 """
 import concurrent.futures
 import ast
+import json
 import logging
+import re
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Any, List, Optional, Callable, Dict, Tuple
 
 from agent.agent_planner import AgentPlanner, ActionStep, get_planner
 from agent.autonomous_executor import AutonomousExecutor, ExecutionResult, get_executor
-from agent.execution_analysis import classify_failure_message, is_read_only_step_content
+from agent.execution_analysis import (
+    classify_failure_message,
+    extract_artifacts,
+    extract_step_targets,
+    is_read_only_step_content,
+    mutates_runtime_state,
+)
+
+logger = logging.getLogger(__name__)
 
 # executor._lock 경합 시 반환되는 오류 문자열 — self-fix 대상에서 제외
 _LOCK_CONTENTION_ERRORS = frozenset({
@@ -50,6 +60,10 @@ _COMPARE_OPERATORS = {
     ast.NotIn: lambda a, b: a not in b,
     ast.Is: lambda a, b: a is b,
     ast.IsNot: lambda a, b: a is not b,
+}
+
+_UNARY_OPERATORS = {
+    ast.Not: lambda value: not value,
 }
 
 
@@ -89,505 +103,422 @@ class AgentOrchestrator:
         executor: AutonomousExecutor,
         planner: AgentPlanner,
         tts_func: Optional[Callable] = None,
+        progress_callback: Optional[Callable] = None,
+        thinking_callback: Optional[Callable] = None,
     ):
         self.executor = executor
         self.planner = planner
         self.tts = tts_func
+        self.progress_callback = progress_callback
+        self.thinking_callback = thinking_callback
         self._run_lock = threading.Lock()
 
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
+    def set_progress_callback(self, cb: Optional[Callable]) -> None:
+        """진행 이벤트 콜백 설정. UI 대시보드 연결에 사용."""
+        self.progress_callback = cb
+
+    def set_thinking_callback(self, cb: Optional[Callable]) -> None:
+        """생각 중(Thinking) 상태 콜백 설정. 캐릭터 애니메이션 제어에 사용."""
+        self.thinking_callback = cb
+
+    def execute_with_self_fix(self, content: str, step_type: str, goal: str) -> ExecutionResult:
+        """단일 단계 실행 + 자동 수정 (단순 도구 호출용)"""
+        step = ActionStep(step_id=0, step_type=step_type, content=content, description_kr="단일 명령 실행")
+        res, _, _ = self._execute_step_with_retry(step, goal, {})
+        return res
+
+    def _emit_progress(self, event_type: str, **kwargs) -> None:
+        if self.progress_callback:
+            try:
+                self.progress_callback(event_type, **kwargs)
+            except Exception as e:
+                logger.debug(f"[Orchestrator] 진행 콜백 오류: {e}")
+
+    def _set_thinking(self, thinking: bool) -> None:
+        if self.thinking_callback:
+            try:
+                self.thinking_callback(thinking)
+            except Exception as e:
+                logger.debug(f"[Orchestrator] 생각 콜백 오류: {e}")
+
     def run(self, goal: str) -> AgentRunResult:
-        """
-        복잡한 목표를 다층 루프로 자율 달성.
-
-        Layer 1 — Plan:    목표를 단계로 분해 (전략 기억 활용)
-        Layer 2 — Execute: 독립 단계 병렬 실행 + 실패 시 LLM 자동 수정 + 재시도
-                           on_failure 정책(abort/skip/continue) 및 condition 표현식 적용
-        Layer 3 — Verify:  코드 실행 기반 검증 → LLM 텍스트 폴백
-                           미달성 → 결과를 컨텍스트에 포함해 재계획
-        """
+        """복잡한 목표를 다층 루프로 자율 달성."""
         if not self._run_lock.acquire(blocking=False):
-            return AgentRunResult(goal=goal, summary_kr="이미 에이전트가 실행 중입니다.")
+            logger.warning("[Orchestrator] 이미 에이전트가 실행 중입니다.")
+            return AgentRunResult(goal=goal, summary_kr="다른 작업이 진행 중입니다.")
 
+        start_time = time.time()
+        self._set_thinking(True)
+        try:
+            run_result = self._run_loop(goal)
+            duration = int((time.time() - start_time) * 1000)
+            
+            # 실패 시 L4 반성 및 교훈 도출
+            lesson = ""
+            if not run_result.achieved:
+                lesson_data = self._reflect_on_failure(goal, run_result)
+                lesson = lesson_data.get("lesson", "")
+                if lesson:
+                    run_result.summary_kr += f"\n(교훈: {lesson})"
+
+            self._record_strategy(goal, run_result, duration, lesson)
+            return run_result
+        finally:
+            self._set_thinking(False)
+            self._run_lock.release()
+
+    def _run_loop(self, goal: str) -> AgentRunResult:
+        """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {}
-        start_time = time.time()
 
-        try:
-            for iteration in range(self.MAX_PLAN_ITERATIONS):
-                run_result.total_iterations = iteration + 1
-                logging.info(f"[Orchestrator] 계획 수립 (반복 {iteration+1}/{self.MAX_PLAN_ITERATIONS})")
+        for iteration in range(self.MAX_PLAN_ITERATIONS):
+            run_result.total_iterations = iteration + 1
+            logger.info(f"[Orchestrator] 계획 수립 (반복 {iteration+1}/{self.MAX_PLAN_ITERATIONS})")
 
-                # ── Layer 1: Plan ──────────────────────────────────────────
-                steps = self.planner.decompose(goal, context)
-                if not steps:
-                    run_result.summary_kr = "계획 수립에 실패했습니다."
-                    break
+            # Layer 1: Plan
+            steps = self.planner.decompose(goal, context)
+            if not steps:
+                run_result.summary_kr = "계획 수립에 실패했습니다."
+                break
 
-                self._log_plan(steps)
+            self._log_plan(steps)
+            self._emit_progress("plan_ready", steps=[asdict(s) for s in steps], iteration=iteration)
 
-                # ── Layer 2: Execute + Self-Fix (병렬 + 조건부) ────────────
-                all_success, step_results = self._execute_plan(steps, context, goal)
-                run_result.step_results.extend(step_results)
+            # Layer 2: Execute + Self-Fix
+            all_success, step_results = self._execute_plan(steps, context, goal)
+            run_result.step_results.extend(step_results)
 
-                if not all_success:
-                    run_result.summary_kr = "실행 중 복구할 수 없는 오류가 발생했습니다."
-                    break
+            if not all_success:
+                failed = [sr for sr in step_results if not sr.exec_result.success]
+                adaptive_ctx = self._build_adaptive_context(failed)
+                context.update(adaptive_ctx)
+                reason = adaptive_ctx.get("재계획_이유", "실행 실패")
+                self._emit_progress("replan", iteration=iteration, reason=reason)
+                self._say("[진지] 접근 방법을 바꿔서 다시 시도합니다.")
+                if iteration >= self.MAX_PLAN_ITERATIONS - 1:
+                    run_result.summary_kr = f"실행 실패: {reason}"
+                continue
 
-                # ── Layer 3: Verify (코드 실행 기반 → LLM 폴백) ───────────
-                achieved, summary = self._verify(goal, step_results)
-                logging.info(f"[Orchestrator] 검증: achieved={achieved}, summary={summary}")
+            # Layer 3: Verify
+            self._emit_progress("verify_start")
+            achieved, summary = self._verify(goal, step_results)
+            run_result.achieved = achieved
+            run_result.summary_kr = summary
 
-                if achieved:
-                    run_result.achieved = True
-                    run_result.summary_kr = summary
-                    self._say(f"[기쁨] {summary}")
-                    break
-                else:
-                    # 미달성 → 결과를 컨텍스트로 전달 후 재계획
-                    context["이전_시도"] = summary
-                    for i, sr in enumerate(step_results):
-                        if sr.exec_result.output:
-                            context[f"step{i}_output"] = sr.exec_result.output[:200]
-                    self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
+            if achieved:
+                self._emit_progress("achieved", summary=summary)
+                self._say(f"[기쁨] {summary}")
+                break
             else:
-                run_result.summary_kr = (
-                    f"{self.MAX_PLAN_ITERATIONS}번 시도했지만 목표를 달성하지 못했습니다."
-                )
-
-        finally:
-            self._run_lock.release()
-            # 전략 기억 기록 (성공/실패 모두)
-            duration_ms = int((time.time() - start_time) * 1000)
-            self._record_strategy(goal, run_result, duration_ms)
-
+                context["이전_시도"] = summary
+                self._emit_progress("not_achieved", summary=summary, iteration=iteration)
+                self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
+        
         return run_result
 
-    def execute_with_self_fix(
-        self,
-        code: str,
-        step_type: str,
-        goal: str,
-    ) -> ExecutionResult:
-        """
-        단일 코드/명령 실행 + 자동 수정 루프.
-        run() 없이 _handle_python/_handle_shell에서 직접 호출.
-        실패하면 LLM이 코드를 수정하고 최대 MAX_STEP_RETRIES번 재시도.
-        """
-        step = ActionStep(
-            step_id=0,
-            step_type=step_type,
-            content=code,
-            description_kr="요청된 코드 실행",
-        )
-        result, attempt, was_fixed = self._execute_step_with_retry(step, goal, {})
-        if was_fixed and result.success:
-            logging.info(f"[Orchestrator] 자동 수정 성공 (시도 {attempt}회)")
-        return result
+    def _reflect_on_failure(self, goal: str, run_result: AgentRunResult) -> Dict[str, str]:
+        """실패한 시나리오에 대해 L4 반성(Post-mortem) 수행"""
+        history_lines = []
+        for i, sr in enumerate(run_result.step_results):
+            status = "✅" if sr.exec_result.success else "❌"
+            history_lines.append(f"[{i+1}] {status} {sr.step.description_kr}")
+            if not sr.exec_result.success:
+                history_lines.append(f"   오류: {(sr.exec_result.error or sr.exec_result.output or '')[:100]}")
+        
+        history_summary = "\n".join(history_lines)
+        return self.planner.reflect(goal, history_summary)
 
-    # ── 내부: 실행 계층 ────────────────────────────────────────────────────────
-
-    def _execute_plan(
-        self,
-        steps: List[ActionStep],
-        context: Dict[str, str],
-        goal: str,
-    ) -> Tuple[bool, List[StepResult]]:
-        """
-        단계 목록 실행.
-        - 독립 단계는 병렬 그룹으로 묶어 동시 실행
-        - 조건 표현식 평가로 건너뜀 처리
-        - on_failure 정책(abort/skip/continue) 적용
-        반환: (성공 여부, StepResult 목록)
-        """
+    def _execute_plan(self, steps: List[ActionStep], context: Dict[str, str], goal: str) -> Tuple[bool, List[StepResult]]:
         step_results: List[StepResult] = []
         groups = self._group_by_dependency(steps)
 
         for group in groups:
-            # think 단계: 실행 없이 컨텍스트 기록 (항상 단독 그룹)
             if len(group) == 1 and group[0].step_type == "think":
                 step = group[0]
-                logging.info(f"[Orchestrator] think: {step.description_kr}")
-                step_results.append(StepResult(
-                    step=step,
-                    exec_result=ExecutionResult(success=True, output=step.description_kr),
-                ))
+                step_results.append(StepResult(step=step, exec_result=ExecutionResult(success=True, output=step.description_kr)))
                 context[f"step_{step.step_id}_output"] = step.description_kr
                 continue
 
-            # 조건 평가 — 미충족 단계는 건너뜀으로 기록
-            runnable: List[ActionStep] = []
-            for step in group:
-                if step.condition and not self._eval_condition(step.condition, context):
-                    logging.info(
-                        f"[Orchestrator] 단계 {step.step_id} 조건 미충족, 건너뜀: {step.condition!r}"
-                    )
-                    step_results.append(StepResult(
-                        step=step,
-                        exec_result=ExecutionResult(success=True, output="조건 미충족으로 건너뜀"),
-                        attempt=0,
-                    ))
-                else:
-                    runnable.append(step)
+            runnable = [s for s in group if not s.condition or self._eval_condition(s.condition, context)]
+            if not runnable: continue
 
-            if not runnable:
-                continue
-
-            # 병렬 실행 (단독 단계면 직접 호출로 오버헤드 최소화)
             if len(runnable) == 1:
                 step = runnable[0]
-                self._say(f"[진지] {step.description_kr}")
-                result, attempt, was_fixed = self._execute_step_with_retry(step, goal, context)
-                group_results = [StepResult(
-                    step=step,
-                    exec_result=result,
-                    attempt=attempt,
-                    was_fixed=was_fixed,
-                    failure_kind=self._classify_failure(result),
-                )]
+                self._emit_progress("step_start", step_id=step.step_id, desc=step.description_kr, step_type=step.step_type)
+                result, attempt, fixed = self._execute_step_with_retry(step, goal, context)
+                group_results = [StepResult(step=step, exec_result=result, attempt=attempt, was_fixed=fixed, failure_kind=self._classify_failure(result))]
             else:
+                for s in runnable: self._emit_progress("step_start", step_id=s.step_id, desc=s.description_kr, step_type=s.step_type)
                 group_results = self._execute_parallel_group(runnable, context, goal)
 
-            # on_failure 정책 적용
             for sr in group_results:
                 step_results.append(sr)
+                self._emit_progress("step_done", step_id=sr.step.step_id, success=sr.exec_result.success, was_fixed=sr.was_fixed, error=(sr.exec_result.error or "")[:100])
                 if sr.exec_result.success:
-                    if sr.exec_result.output:
-                        context[f"step_{sr.step.step_id}_output"] = sr.exec_result.output[:300]
-                else:
-                    policy = sr.step.on_failure
-                    logging.warning(
-                        f"[Orchestrator] 단계 {sr.step.step_id} 최종 실패 "
-                        f"(on_failure={policy}): "
-                        f"{(sr.exec_result.error or sr.exec_result.output or '')[:80]}"
-                    )
-                    if policy == "abort":
-                        return False, step_results
-                    # "skip" / "continue": 계속 실행
-
+                    if sr.exec_result.output: context[f"step_{sr.step.step_id}_output"] = sr.exec_result.output[:300]
+                    self._update_runtime_context(context, sr.exec_result)
+                elif sr.step.on_failure == "abort":
+                    return False, step_results
         return True, step_results
 
-    def _execute_parallel_group(
-        self,
-        group: List[ActionStep],
-        context: Dict[str, str],
-        goal: str,
-    ) -> List[StepResult]:
-        """그룹 내 단계들을 ThreadPoolExecutor로 병렬 실행."""
-        results: List[Optional[StepResult]] = [None] * len(group)
-
-        def run_one(idx: int, step: ActionStep) -> StepResult:
-            result, attempt, was_fixed = self._execute_step_with_retry(step, goal, context)
-            return StepResult(
-                step=step,
-                exec_result=result,
-                attempt=attempt,
-                was_fixed=was_fixed,
-                failure_kind=self._classify_failure(result),
-            )
-
+    def _execute_parallel_group(self, group: List[ActionStep], context: Dict[str, str], goal: str) -> List[StepResult]:
+        results = [None] * len(group)
+        def run_one(idx, step):
+            res, att, fixed = self._execute_step_with_retry(step, goal, context)
+            return StepResult(step=step, exec_result=res, attempt=att, was_fixed=fixed, failure_kind=self._classify_failure(res))
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(group)) as pool:
-            futures = {pool.submit(run_one, i, step): i for i, step in enumerate(group)}
-            for future in concurrent.futures.as_completed(futures):
-                idx = futures[future]
-                try:
-                    results[idx] = future.result()
+            futures = {pool.submit(run_one, i, s): i for i, s in enumerate(group)}
+            for f in concurrent.futures.as_completed(futures):
+                idx = futures[f]
+                try: results[idx] = f.result()
                 except Exception as e:
-                    step = group[idx]
-                    logging.error(f"[Orchestrator] 병렬 단계 예외 (step {step.step_id}): {e}")
-                    results[idx] = StepResult(
-                        step=step,
-                        exec_result=ExecutionResult(
-                            success=False, error=str(e), code_or_cmd=step.content
-                        ),
-                        failure_kind="runtime_exception",
-                    )
+                    results[idx] = StepResult(step=group[idx], exec_result=ExecutionResult(success=False, error=str(e)), failure_kind="runtime_exception")
+        return [r for r in results if r]
 
-        return [r for r in results if r is not None]
-
-    def _execute_step_with_retry(
-        self,
-        step: ActionStep,
-        goal: str,
-        context: Dict[str, str],
-    ) -> Tuple[ExecutionResult, int, bool]:
-        """
-        실행 → 실패 시 LLM 코드 수정 → 재시도.
-        락 경합 시: self-fix 없이 지수 백오프 후 재시도.
-        반환: (ExecutionResult, 총 시도 횟수, 수정 여부)
-        """
-        current_step = step
-        was_fixed = False
-        exec_result = ExecutionResult(success=False, error="실행되지 않음")
-
-        for attempt in range(1, self.MAX_STEP_RETRIES + 2):  # 최초 1 + 재시도
-            exec_result = self._run_step(current_step, context)
-
-            if exec_result.success:
-                if was_fixed:
-                    self._say("[기쁨] 자동 수정 후 성공했어요.")
-                return exec_result, attempt, was_fixed
-
-            # 마지막 시도였으면 포기
-            if attempt > self.MAX_STEP_RETRIES:
-                break
-
-            error_msg = exec_result.error or exec_result.output or "알 수 없는 오류"
-
-            # 락 경합: 코드 수정 없이 지수 백오프 대기 후 재시도
-            if error_msg in _LOCK_CONTENTION_ERRORS:
-                wait = attempt  # 1초, 2초, ...
-                logging.warning(f"[Orchestrator] 실행기 잠김, {wait}초 대기 후 재시도")
-                time.sleep(wait)
-                continue
-
-            logging.info(
-                f"[Orchestrator] 단계 {step.step_id} 실패 (시도 {attempt}), "
-                f"자동 수정 중... 오류: {error_msg[:80]}"
-            )
-            self._say(f"[걱정] 오류 발생, 자동으로 수정 중입니다. ({attempt}/{self.MAX_STEP_RETRIES})")
-
-            fixed = self.planner.fix_step(current_step, error_msg, goal, context)
-            if fixed and fixed.content and fixed.content != current_step.content:
-                current_step = fixed
-                was_fixed = True
-                logging.info(f"[Orchestrator] 수정된 코드:\n{fixed.content[:200]}")
-            else:
-                logging.warning("[Orchestrator] LLM이 유효한 수정안을 제공하지 않음, 재시도 중단")
-                break
-
-        return exec_result, attempt, was_fixed
+    def _execute_step_with_retry(self, step: ActionStep, goal: str, context: Dict[str, str]) -> Tuple[ExecutionResult, int, bool]:
+        curr, fixed, res = step, False, ExecutionResult(success=False, error="실행되지 않음")
+        for att in range(1, self.MAX_STEP_RETRIES + 2):
+            res = self._run_step(curr, context)
+            if res.success: return res, att, fixed
+            if att > self.MAX_STEP_RETRIES: break
+            err = res.error or res.output or "오류"
+            if err in _LOCK_CONTENTION_ERRORS: time.sleep(att); continue
+            self._say(f"[걱정] 오류 발생, 수정 중입니다. ({att}/{self.MAX_STEP_RETRIES})")
+            f = self.planner.fix_step(curr, err, goal, context)
+            if f and f.content and f.content != curr.content: curr, fixed = f, True
+            else: break
+        return res, att, fixed
 
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:
-        """단계 타입에 따라 executor 호출, 컨텍스트를 전역으로 주입"""
         if step.step_type == "python":
-            extra_globals = {"step_outputs": dict(context)} if context else {}
-            return self.executor.run_python(step.content, extra_globals=extra_globals)
-        elif step.step_type == "shell":
-            return self.executor.run_shell(step.content)
-        else:
-            return ExecutionResult(success=True, output="")
-
-    # ── 내부: 검증 & 기억 ──────────────────────────────────────────────────────
+            return self.executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
+        return self.executor.run_shell(step.content) if step.step_type == "shell" else ExecutionResult(success=True, output="")
 
     def _verify(self, goal: str, step_results: List[StepResult]) -> Tuple[bool, str]:
-        """
-        Layer 3 검증:
-        1. RealVerifier — 검증 코드를 실제 실행하여 판단
-        2. 폴백 — LLM 텍스트 기반 판단 (불확실, 보수적으로 처리)
-        """
         try:
-            from real_verifier import get_real_verifier
-            vr = get_real_verifier()
-            vresult = vr.verify(goal, step_results)
-            return vresult.verified, vresult.summary_kr
-        except Exception as e:
-            logging.warning(f"[Orchestrator] RealVerifier 실패, LLM 텍스트 폴백: {e}")
-            self._say("[걱정] 실제 상태 검증에 실패했어요. 실행 로그만으로 판단합니다.")
-
-        # 폴백: 실패한 단계가 하나라도 있으면 미달성으로 처리
-        failed = [sr for sr in step_results if not sr.exec_result.success]
-        if failed:
-            return False, f"{len(failed)}개 단계가 실패했습니다."
-
-        exec_results = [sr.exec_result for sr in step_results]
-        verdict = self.planner.verify(goal, exec_results)
+            from agent.real_verifier import get_real_verifier
+            v = get_real_verifier().verify(goal, step_results)
+            return v.verified, v.summary_kr
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] RealVerifier 폴백: {exc}")
+        if any(not sr.exec_result.success for sr in step_results): return False, "일부 단계 실패"
+        verdict = self.planner.verify(goal, [sr.exec_result for sr in step_results])
         return verdict.get("achieved", False), verdict.get("summary_kr", "검증 실패")
 
-    def _record_strategy(self, goal: str, run_result: AgentRunResult, duration_ms: int):
-        """전략 기억에 실행 결과 기록 (실패 무시)"""
+    def _record_strategy(self, goal: str, run_result: AgentRunResult, duration: int, lesson: str = ""):
         try:
-            from strategy_memory import get_strategy_memory
-            steps = [sr.step for sr in run_result.step_results]
-            error = "" if run_result.achieved else run_result.summary_kr
-            failure_kind = ""
+            from agent.strategy_memory import get_strategy_memory
             failed = [sr for sr in run_result.step_results if not sr.exec_result.success]
-            if failed:
-                failure_kind = failed[-1].failure_kind or self._classify_failure(failed[-1].exec_result)
-            get_strategy_memory().record(
-                goal=goal,
-                steps=steps,
-                success=run_result.achieved,
-                error=error,
-                duration_ms=duration_ms,
-                failure_kind=failure_kind,
-            )
-        except Exception as e:
-            logging.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
+            fk = failed[-1].failure_kind if failed else ""
+            get_strategy_memory().record(goal=goal, steps=[sr.step for sr in run_result.step_results], success=run_result.achieved, error="" if run_result.achieved else run_result.summary_kr, duration_ms=duration, failure_kind=fk, lesson=lesson)
+        except Exception as e: logger.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
 
-    # ── 내부: 계획 유틸 ────────────────────────────────────────────────────────
+    def _build_adaptive_context(self, failed: List[StepResult]) -> Dict[str, str]:
+        kinds = [sr.failure_kind for sr in failed if sr.failure_kind]
+        errs = " | ".join([(sr.exec_result.error or sr.exec_result.output or "")[:100] for sr in failed])
+        artifacts = extract_artifacts([sr.exec_result.output or "" for sr in failed] + [sr.exec_result.error or "" for sr in failed])
+        ctx = {"재계획_이유": f"실행 실패 ({', '.join(set(kinds)) if kinds else '오류'})", "실패_오류": errs[:300]}
+        if artifacts["paths"]:
+            ctx["관측_경로"] = ", ".join(artifacts["paths"][:3])
+        if artifacts["urls"]:
+            ctx["관측_URL"] = ", ".join(artifacts["urls"][:3])
+        return ctx
+
+    def _update_runtime_context(self, context: Dict[str, str], exec_result: ExecutionResult) -> None:
+        try:
+            runtime_state = self.executor.get_runtime_state()
+        except Exception:
+            runtime_state = {}
+        if runtime_state.get("active_window_title"):
+            context["active_window_title"] = str(runtime_state["active_window_title"])[:200]
+        if runtime_state.get("open_window_titles"):
+            context["open_window_titles"] = ", ".join(runtime_state.get("open_window_titles", [])[:6])[:300]
+        browser_state = runtime_state.get("browser_state") or {}
+        if browser_state.get("current_url"):
+            context["browser_current_url"] = str(browser_state.get("current_url"))[:200]
+        if browser_state.get("title"):
+            context["browser_title"] = str(browser_state.get("title"))[:200]
+        desktop_state = runtime_state.get("desktop_state") or {}
+        if desktop_state:
+            context["desktop_state_json"] = json.dumps(desktop_state, ensure_ascii=False)[:500]
+        learned_strategies = runtime_state.get("learned_strategies") or {}
+        if learned_strategies:
+            context["learned_strategies_json"] = json.dumps(learned_strategies, ensure_ascii=False)[:500]
+        learned_strategy_summary = str(runtime_state.get("learned_strategy_summary", "") or "")
+        if learned_strategy_summary:
+            context["learned_strategy_summary"] = learned_strategy_summary[:300]
+        planning_snapshot_summary = str(runtime_state.get("planning_snapshot_summary", "") or "")
+        if planning_snapshot_summary:
+            context["planning_snapshot_summary"] = planning_snapshot_summary[:400]
+        planning_snapshot = runtime_state.get("planning_snapshot") or {}
+        if planning_snapshot:
+            context["planning_snapshot_json"] = json.dumps(planning_snapshot, ensure_ascii=False)[:500]
+        context["last_step_success"] = str(exec_result.success)
+        if exec_result.output:
+            artifacts = extract_artifacts([exec_result.output])
+            if artifacts["paths"]:
+                context["last_artifact_paths"] = ", ".join(artifacts["paths"][:3])
+            if artifacts["urls"]:
+                context["last_artifact_urls"] = ", ".join(artifacts["urls"][:3])
+        if runtime_state:
+            context["runtime_state_json"] = json.dumps(runtime_state, ensure_ascii=False)[:500]
 
     def _group_by_dependency(self, steps: List[ActionStep]) -> List[List[ActionStep]]:
-        """
-        이전 단계 출력에 의존하지 않는 읽기 전용 단계만 제한적으로 병렬 묶음 처리합니다.
-        그 외 단계는 순차 실행하여 부작용과 컨텍스트 경쟁을 줄입니다.
-        """
-        groups: List[List[ActionStep]] = []
-        parallel_group: List[ActionStep] = []
+        """단계별 의존성(step_outputs 참조 및 write 작업)을 분석하여 실행 레이어 생성."""
+        if not steps:
+            return []
 
-        for step in steps:
-            if self._can_run_in_parallel(step):
-                parallel_group.append(step)
-                continue
+        graph = {s.step_id: set() for s in steps}
+        step_map = {s.step_id: s for s in steps}
+        ordered_ids = [s.step_id for s in steps]
+        step_positions = {step_id: idx for idx, step_id in enumerate(ordered_ids)}
+        target_cache = {
+            s.step_id: extract_step_targets((s.content or "") + "\n" + (s.description_kr or ""))
+            for s in steps
+        }
 
-            if parallel_group:
-                groups.append(parallel_group)
-                parallel_group = []
-            groups.append([step])
+        for s in steps:
+            # 1. 명시적 의존성 (step_X_output 참조)
+            refs = re.findall(r"step_(\d+)_output", (s.content or "") + (s.condition or ""))
+            for r in refs:
+                ref_id = int(r)
+                if ref_id in graph:
+                    graph[s.step_id].add(ref_id)
 
-        if parallel_group:
-            groups.append(parallel_group)
-        return groups
+            # 2. 암묵적 의존성 (경로/브라우저/GUI 상태 충돌)
+            current_targets = target_cache[s.step_id]
+            current_read_only = is_read_only_step_content(s.content, s.description_kr)
+            current_stateful = mutates_runtime_state(s.content, s.description_kr)
+            current_index = step_positions[s.step_id]
 
-    def _can_run_in_parallel(self, step: ActionStep) -> bool:
-        if step.step_type == "think":
-            return False
-        if step.condition:
-            return False
-        content = (step.content or "").lower()
-        if "step_outputs" in content:
-            return False
-        return self._is_read_only_step(step)
+            for prev_id in ordered_ids[:current_index]:
+                prev_step = step_map[prev_id]
+                prev_targets = target_cache[prev_id]
+                prev_read_only = is_read_only_step_content(prev_step.content, prev_step.description_kr)
+                prev_stateful = mutates_runtime_state(prev_step.content, prev_step.description_kr)
 
-    def _is_read_only_step(self, step: ActionStep) -> bool:
-        return is_read_only_step_content(step.content, step.description_kr)
+                path_conflict = bool(
+                    set(current_targets["paths"]) & set(prev_targets["paths"])
+                )
+                domain_conflict = bool(
+                    set(current_targets["domains"]) & set(prev_targets["domains"])
+                )
+                window_conflict = bool(
+                    set(current_targets.get("windows", [])) & set(prev_targets.get("windows", []))
+                )
+                goal_hint_conflict = bool(
+                    set(current_targets.get("goal_hints", [])) & set(prev_targets.get("goal_hints", []))
+                )
+                state_conflict = current_stateful and prev_stateful
 
-    def _classify_failure(self, result: ExecutionResult) -> str:
-        if result.success:
-            return ""
-        return classify_failure_message(result.error or result.output or "")
+                if path_conflict or domain_conflict or window_conflict or goal_hint_conflict or state_conflict:
+                    graph[s.step_id].add(prev_id)
+                    continue
 
-    def _eval_condition(self, condition: str, context: Dict[str, str]) -> bool:
-        """
-        step.condition 표현식을 안전한 AST 해석기로 평가.
-        step_outputs 딕셔너리로 컨텍스트에 접근 가능.
-        평가 실패 시 True(실행) 반환.
-        """
-        if not condition:
-            return True
+                if not current_read_only and not prev_read_only:
+                    graph[s.step_id].add(prev_id)
+                    continue
+
+                if current_stateful and not prev_read_only:
+                    graph[s.step_id].add(prev_id)
+
+        # 위상 정렬 기반 레이어 분리
+        layers, processed = [], set()
+        while len(processed) < len(steps):
+            current_layer = [s for s in steps if s.step_id not in processed and graph[s.step_id].issubset(processed)]
+            if not current_layer: break
+            layers.append(current_layer)
+            processed.update(s.step_id for s in current_layer)
+            
+        return layers if layers else [[s] for s in steps] # 실패 시 순차 실행 폴백
+
+    def _eval_condition(self, cond: str, ctx: Dict[str, str]) -> bool:
         try:
-            tree = ast.parse(condition, mode="eval")
-            step_outputs = dict(context)
-            return bool(self._eval_ast_node(tree.body, {"step_outputs": step_outputs}))
-        except Exception as e:
-            logging.warning(f"[Orchestrator] 조건 평가 실패 (True로 처리): {condition!r} → {e}")
+            parsed = ast.parse(cond, mode="eval")
+            return bool(self._evaluate_condition_node(parsed, {"step_outputs": ctx}))
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] 조건식 평가 폴백(True): {cond!r} ({exc})")
             return True
 
-    def _eval_ast_node(self, node: ast.AST, variables: Dict[str, Any]) -> Any:
+    def _evaluate_condition_node(self, node: ast.AST, scope: Dict[str, Any]) -> Any:
+        if isinstance(node, ast.Expression):
+            return self._evaluate_condition_node(node.body, scope)
         if isinstance(node, ast.Constant):
             return node.value
-
         if isinstance(node, ast.Name):
-            if node.id in variables:
-                return variables[node.id]
-            if node.id in _SAFE_AST_CALLS:
-                return _SAFE_AST_CALLS[node.id]
+            if node.id in scope:
+                return scope[node.id]
             raise ValueError(f"허용되지 않은 이름: {node.id}")
-
         if isinstance(node, ast.BoolOp):
-            values = [self._eval_ast_node(value, variables) for value in node.values]
+            values = [bool(self._evaluate_condition_node(value, scope)) for value in node.values]
             if isinstance(node.op, ast.And):
                 return all(values)
             if isinstance(node.op, ast.Or):
                 return any(values)
-            raise ValueError(f"허용되지 않은 bool 연산자: {type(node.op).__name__}")
-
+            raise ValueError("허용되지 않은 BoolOp")
         if isinstance(node, ast.UnaryOp):
-            operand = self._eval_ast_node(node.operand, variables)
-            if isinstance(node.op, ast.Not):
-                return not operand
-            if isinstance(node.op, ast.USub):
-                return -operand
-            if isinstance(node.op, ast.UAdd):
-                return +operand
-            raise ValueError(f"허용되지 않은 단항 연산자: {type(node.op).__name__}")
-
+            operator = _UNARY_OPERATORS.get(type(node.op))
+            if operator is None:
+                raise ValueError("허용되지 않은 UnaryOp")
+            return operator(self._evaluate_condition_node(node.operand, scope))
         if isinstance(node, ast.Compare):
-            left = self._eval_ast_node(node.left, variables)
-            for op, comparator in zip(node.ops, node.comparators):
-                right = self._eval_ast_node(comparator, variables)
-                op_type = type(op)
-                if op_type not in _COMPARE_OPERATORS:
-                    raise ValueError(f"허용되지 않은 비교 연산자: {op_type.__name__}")
-                if not _COMPARE_OPERATORS[op_type](left, right):
+            left = self._evaluate_condition_node(node.left, scope)
+            for operator_node, comparator in zip(node.ops, node.comparators):
+                right = self._evaluate_condition_node(comparator, scope)
+                operator = _COMPARE_OPERATORS.get(type(operator_node))
+                if operator is None or not operator(left, right):
                     return False
                 left = right
             return True
-
-        if isinstance(node, ast.Call):
-            func = self._eval_ast_node(node.func, variables)
-            args = [self._eval_ast_node(arg, variables) for arg in node.args]
-            kwargs = {kw.arg: self._eval_ast_node(kw.value, variables) for kw in node.keywords}
-            if func in _SAFE_AST_CALLS.values():
-                return func(*args, **kwargs)
-            if isinstance(node.func, ast.Attribute):
-                bound = self._eval_ast_node(node.func.value, variables)
-                method_name = node.func.attr
-                allowed_methods = _SAFE_AST_METHODS.get(type(bound), set())
-                if method_name in allowed_methods:
-                    return getattr(bound, method_name)(*args, **kwargs)
-            raise ValueError("허용되지 않은 함수 호출")
-
-        if isinstance(node, ast.Attribute):
-            value = self._eval_ast_node(node.value, variables)
-            if isinstance(value, dict) and node.attr == "get":
-                return value.get
-            raise ValueError(f"허용되지 않은 속성 접근: {node.attr}")
-
         if isinstance(node, ast.Subscript):
-            value = self._eval_ast_node(node.value, variables)
-            index = self._eval_ast_node(node.slice, variables)
-            return value[index]
+            target = self._evaluate_condition_node(node.value, scope)
+            key_node = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+            key = self._evaluate_condition_node(key_node, scope)
+            return target[key]
+        if isinstance(node, ast.Call):
+            return self._evaluate_condition_call(node, scope)
+        if isinstance(node, (ast.List, ast.Tuple)):
+            return [self._evaluate_condition_node(item, scope) for item in node.elts]
+        raise ValueError(f"지원하지 않는 조건식 노드: {type(node).__name__}")
 
-        if isinstance(node, ast.IfExp):
-            condition = self._eval_ast_node(node.test, variables)
-            branch = node.body if condition else node.orelse
-            return self._eval_ast_node(branch, variables)
+    def _evaluate_condition_call(self, node: ast.Call, scope: Dict[str, Any]) -> Any:
+        if isinstance(node.func, ast.Name):
+            func = _SAFE_AST_CALLS.get(node.func.id)
+            if func is None:
+                raise ValueError(f"허용되지 않은 함수: {node.func.id}")
+            args = [self._evaluate_condition_node(arg, scope) for arg in node.args]
+            return func(*args)
 
-        if isinstance(node, ast.List):
-            return [self._eval_ast_node(item, variables) for item in node.elts]
+        if isinstance(node.func, ast.Attribute):
+            owner = self._evaluate_condition_node(node.func.value, scope)
+            allowed_methods = _SAFE_AST_METHODS.get(type(owner), set())
+            if node.func.attr not in allowed_methods:
+                raise ValueError(f"허용되지 않은 메서드: {node.func.attr}")
+            args = [self._evaluate_condition_node(arg, scope) for arg in node.args]
+            return getattr(owner, node.func.attr)(*args)
 
-        if isinstance(node, ast.Tuple):
-            return tuple(self._eval_ast_node(item, variables) for item in node.elts)
+        raise ValueError("지원하지 않는 호출식")
 
-        if isinstance(node, ast.Dict):
-            return {
-                self._eval_ast_node(key, variables): self._eval_ast_node(value, variables)
-                for key, value in zip(node.keys, node.values)
-            }
+    def _classify_failure(self, res: ExecutionResult) -> str:
+        return classify_failure_message(res.error or res.output or "") if not res.success else ""
 
-        raise ValueError(f"허용되지 않은 AST 노드: {type(node).__name__}")
-
-    # ── 유틸 ──────────────────────────────────────────────────────────────────
-
-    def _say(self, message: str):
-        if self.tts and message:
-            try:
-                self.tts(message)
-            except Exception as e:
-                logging.debug(f"[Orchestrator] TTS 전달 실패: {e}")
+    def _say(self, msg: str):
+        if self.tts: self.tts(msg)
 
     def _log_plan(self, steps: List[ActionStep]):
-        logging.info(f"[Orchestrator] {len(steps)}단계 계획:")
-        for s in steps:
-            cond = f" [조건: {s.condition}]" if s.condition else ""
-            logging.info(f"  [{s.step_id}] ({s.step_type}) {s.description_kr}{cond}")
+        logger.info(f"[Orchestrator] {len(steps)}단계 계획 수립됨")
 
-
-# ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 
 _orchestrator: Optional[AgentOrchestrator] = None
 
-
-def get_orchestrator(tts_func: Optional[Callable] = None) -> AgentOrchestrator:
+def get_orchestrator(tts_func: Optional[Callable] = None, progress_callback: Optional[Callable] = None) -> AgentOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        executor = get_executor(tts_func)
-        planner = get_planner()
-        _orchestrator = AgentOrchestrator(executor, planner, tts_func)
+        _orchestrator = AgentOrchestrator(get_executor(tts_func), get_planner(), tts_func, progress_callback)
     else:
-        if tts_func:
-            _orchestrator.tts = tts_func
-            _orchestrator.executor.tts_wrapper = tts_func
+        if tts_func: _orchestrator.tts = tts_func; _orchestrator.executor.tts_wrapper = tts_func
+        if progress_callback: _orchestrator.progress_callback = progress_callback
     return _orchestrator

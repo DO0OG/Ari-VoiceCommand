@@ -62,6 +62,8 @@ class ResourceManager:
 
         resources = [
             ('images', 'images'),
+            ('theme', 'theme'),
+            ('plugins', 'plugins'),
             ('DNFBitBitv2.ttf', 'DNFBitBitv2.ttf'),
             ('icon.png', 'icon.png'),
             ('reference.wav', 'reference.wav'),
@@ -92,3 +94,53 @@ class ResourceManager:
         if os.path.exists(writable):
             return writable
         return ResourceManager.get_bundle_path('images')
+
+    @staticmethod
+    def get_theme_dir() -> str:
+        """테마 디렉토리 경로 반환 (appdata > 프로젝트/번들 순)."""
+        writable = ResourceManager.get_writable_path("theme")
+        if os.path.exists(writable):
+            return writable
+        return ResourceManager.get_bundle_path("theme")
+
+    @staticmethod
+    def ensure_theme_files() -> str:
+        """테마 JSON 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        writable = ResourceManager.get_writable_path("theme")
+        source = ResourceManager.get_bundle_path("theme")
+        os.makedirs(writable, exist_ok=True)
+
+        try:
+            if os.path.isdir(source):
+                for name in os.listdir(source):
+                    src = os.path.join(source, name)
+                    dst = os.path.join(writable, name)
+                    if os.path.isdir(src):
+                        if not os.path.exists(dst):
+                            shutil.copytree(src, dst)
+                    elif os.path.isfile(src) and not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+        except Exception as e:
+            logging.warning(f"테마 파일 준비 실패: {e}")
+        return writable
+
+    @staticmethod
+    def ensure_plugin_files() -> str:
+        """플러그인 템플릿 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        writable = ResourceManager.get_writable_path("plugins")
+        source = ResourceManager.get_bundle_path("plugins")
+        os.makedirs(writable, exist_ok=True)
+
+        try:
+            if os.path.isdir(source):
+                for name in os.listdir(source):
+                    src = os.path.join(source, name)
+                    dst = os.path.join(writable, name)
+                    if os.path.isdir(src):
+                        if not os.path.exists(dst):
+                            shutil.copytree(src, dst)
+                    elif os.path.isfile(src) and not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+        except Exception as e:
+            logging.warning(f"플러그인 파일 준비 실패: {e}")
+        return writable

@@ -1,40 +1,38 @@
 """
-능동적 스케줄러 (Proactive Scheduler)
-사용자 호출 없이도 지정된 시각에 자율적으로 작업을 실행합니다.
-
-사용 예:
-  scheduler.schedule("오늘 날씨 요약해서 말해줘", "매일 오전 9시")
-  scheduler.schedule("작업 디렉토리 정리해줘", "30분 후")
+능동적 스케줄러 (Proactive Scheduler) — Phase 3.4 고도화
+지정 시각 알람, 주제 기반 선제 제안, 예약 작업 관리를 담당합니다.
 """
 import json
 import logging
 import os
 import threading
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Any
 
 _SCHEDULE_FILE = os.path.join(os.path.dirname(__file__), "scheduled_tasks.json")
-_TICK_INTERVAL = 30   # 초: 예약 작업 체크 주기
+_TICK_INTERVAL = 30
 _MAX_TASKS = 50
-
 
 @dataclass
 class ScheduledTask:
     task_id: str
     goal: str
-    schedule_desc: str    # 원문 ("매일 오전 9시" 등)
-    next_run: str         # ISO datetime
+    schedule_desc: str
+    next_run: str         # ISO format
+    task_type: str = "agent" # "agent" | "alarm" | "suggestion"
     repeat: bool = False
     repeat_seconds: int = 0
+    repeat_rule: str = ""
+    except_dates: List[str] = field(default_factory=list)
+    alarm_sound: str = ""
     enabled: bool = True
     last_run: str = ""
     last_result: str = ""
 
-
 class ProactiveScheduler:
-    """지정된 시각에 에이전트 작업을 자율 실행하는 스케줄러"""
+    """사용자의 컨텍스트를 학습하여 선제적으로 제안하고 지정 시각에 작업을 수행합니다."""
 
     def __init__(self, tts_func: Optional[Callable] = None):
         self.tts = tts_func
@@ -45,57 +43,106 @@ class ProactiveScheduler:
         self._load()
         self._start_ticker()
 
-    # ── 공개 API ──────────────────────────────────────────────────────────────
-
     def set_orchestrator_func(self, func: Callable):
-        """ai_command에서 orchestrator.run을 주입 (순환 임포트 방지용 늦은 바인딩)"""
         self._orchestrator_func = func
 
-    def schedule(
-        self,
-        goal: str,
-        next_run_dt: datetime,
-        schedule_desc: str,
-        repeat: bool = False,
-        repeat_seconds: int = 0,
-    ) -> str:
-        """작업을 등록하고 task_id를 반환합니다."""
+    # ── 스케줄 관리 ────────────────────────────────────────────────────────────
+
+    def schedule(self, goal: str, next_run_dt: datetime, desc: str, 
+                 task_type: str = "agent", repeat: bool = False, repeat_sec: int = 0,
+                 repeat_rule: str = "", except_dates: Optional[List[str]] = None,
+                 alarm_sound: str = "") -> str:
         task_id = str(uuid.uuid4())[:8]
         task = ScheduledTask(
-            task_id=task_id,
-            goal=goal,
-            schedule_desc=schedule_desc,
-            next_run=next_run_dt.isoformat(),
-            repeat=repeat,
-            repeat_seconds=repeat_seconds,
+            task_id=task_id, goal=goal, schedule_desc=desc,
+            next_run=next_run_dt.isoformat(), task_type=task_type,
+            repeat=repeat, repeat_seconds=repeat_sec,
+            repeat_rule=repeat_rule,
+            except_dates=list(except_dates or []),
+            alarm_sound=alarm_sound,
         )
         with self._lock:
             self._tasks[task_id] = task
             self._save()
-        logging.info(f"[Scheduler] 예약: {task_id} / {schedule_desc} / {next_run_dt.strftime('%Y-%m-%d %H:%M')}")
+        logging.info(f"[Scheduler] 새 작업 등록: {task_id} ({desc})")
         return task_id
 
     def cancel(self, task_id: str) -> bool:
         with self._lock:
             if task_id in self._tasks:
-                del self._tasks[task_id]
-                self._save()
-                return True
+                del self._tasks[task_id]; self._save(); return True
         return False
 
     def list_tasks(self) -> List[ScheduledTask]:
         with self._lock:
             return [t for t in self._tasks.values() if t.enabled]
 
-    def stop(self):
-        """백그라운드 스레드를 정지합니다."""
-        self._stop_event.set()
+    # ── 선제적 제안 (Phase 3.4 핵심) ──────────────────────────────────────────
 
-    # ── 내부 ──────────────────────────────────────────────────────────────────
+    def get_proactive_suggestions(self) -> List[Dict[str, str]]:
+        """사용자 컨텍스트(주제, 빈도)를 분석하여 할 일을 제안합니다."""
+        from memory.user_context import get_context_manager
+        ctx_mgr = get_context_manager()
+        ctx = ctx_mgr.context
+        
+        suggestions = []
+        now = datetime.now()
+        
+        # 1. 주제 기반 제안
+        topics = ctx.get("conversation_topics", {})
+        if topics:
+            top_topic = max(topics.items(), key=lambda x: x[1])[0]
+            if topics[top_topic] >= 3:
+                suggestions.append({
+                    "type": "topic",
+                    "text": f"최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?",
+                    "goal": f"최근 관심사인 '{top_topic}'에 대한 최신 뉴스나 유용한 정보를 정리해줘"
+                })
+        for topic_item in ctx_mgr.get_topic_recommendations(limit=2, include_strategy=True):
+            topic_name = topic_item.split(":", 1)[0]
+            suggestions.append({
+                "type": "topic_strategy",
+                "text": f"최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?",
+                "goal": f"최근 주제 '{topic_name}' 관련 작업 이어서 정리해줘",
+            })
+
+        # 2. 시간대/습관 기반 제안
+        hour = now.hour
+        habitual_commands = ctx_mgr.get_time_based_suggestions(hour=hour, limit=2)
+        for cmd in habitual_commands:
+            suggestions.append({
+                "type": "habit",
+                "text": f"이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?",
+                "goal": cmd,
+            })
+
+        if 7 <= hour <= 9:
+            suggestions.append({
+                "type": "routine",
+                "text": "좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?",
+                "goal": "오늘 날씨와 주요 뉴스 요약 브리핑"
+            })
+        elif 22 <= hour <= 23:
+            suggestions.append({
+                "type": "routine",
+                "text": "오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?",
+                "goal": "내일 날씨와 기온 확인"
+            })
+
+        deduped = []
+        seen_goals = set()
+        for item in suggestions:
+            goal = item.get("goal", "")
+            if goal in seen_goals:
+                continue
+            deduped.append(item)
+            seen_goals.add(goal)
+        return deduped[:5]
+
+    # ── 내부 실행 로직 ────────────────────────────────────────────────────────
 
     def _start_ticker(self):
-        t = threading.Thread(target=self._tick_loop, daemon=True, name="ProactiveScheduler")
-        t.start()
+        threading.Thread(target=self._tick_loop, daemon=True, name="SchedulerTicker").start()
 
     def _tick_loop(self):
         while not self._stop_event.wait(timeout=_TICK_INTERVAL):
@@ -103,94 +150,109 @@ class ProactiveScheduler:
 
     def _check_due_tasks(self):
         now = datetime.now()
-        due: List[ScheduledTask] = []
-
+        due = []
         with self._lock:
-            for task in list(self._tasks.values()):
-                if not task.enabled:
+            for tid, t in list(self._tasks.items()):
+                if not t.enabled:
                     continue
                 try:
-                    next_run = datetime.fromisoformat(task.next_run)
-                except Exception:
-                    continue
-                if now >= next_run:
-                    due.append(task)
-                    task.last_run = now.isoformat()
-                    if task.repeat and task.repeat_seconds > 0:
-                        task.next_run = (now + timedelta(seconds=task.repeat_seconds)).isoformat()
-                    else:
-                        task.enabled = False
-            self._save()
+                    dt = datetime.fromisoformat(t.next_run)
+                    if self._is_except_date(t, dt.date().isoformat()):
+                        if t.repeat:
+                            t.next_run = self._compute_next_run(t, dt, now).isoformat()
+                        else:
+                            t.enabled = False
+                        continue
+                    if now >= dt:
+                        due.append(t)
+                        t.last_run = now.isoformat()
+                        if t.repeat:
+                            t.next_run = self._compute_next_run(t, dt, now).isoformat()
+                        else:
+                            t.enabled = False
+                except Exception as exc:
+                    logging.debug(f"[Scheduler] 작업 시간 해석 실패: {tid} ({exc})")
+            if due:
+                self._save()
 
-        # 락 밖에서 실행 (교착 방지)
-        for task in due:
-            threading.Thread(
-                target=self._execute_task,
-                args=(task,),
-                daemon=True,
-                name=f"ScheduledTask-{task.task_id}",
-            ).start()
+        for t in due:
+            threading.Thread(target=self._execute_task, args=(t,), daemon=True).start()
 
     def _execute_task(self, task: ScheduledTask):
-        logging.info(f"[Scheduler] 실행: {task.task_id} / {task.goal[:50]}")
-        if self.tts:
-            self.tts(f"예약된 작업을 실행할게요. {task.goal[:30]}")
-
-        if not self._orchestrator_func:
-            logging.warning("[Scheduler] orchestrator_func 미설정, 건너뜀")
+        if task.task_type == "alarm":
+            message = f"(기쁨) 알람 시간이에요! 요청하신 '{task.goal}' 시각입니다."
+            if task.alarm_sound:
+                message += f" 알림 사운드: {task.alarm_sound}"
+            if self.tts: self.tts(message)
             return
 
+        logging.info(f"[Scheduler] 작업 실행: {task.goal}")
+        if self.tts: self.tts(f"(진지) 예약된 작업을 시작할게요: {task.goal}")
+        
+        if not self._orchestrator_func: return
+
         try:
-            result = self._orchestrator_func(task.goal)
-            summary = getattr(result, "summary_kr", str(result))[:200]
+            res = self._orchestrator_func(task.goal)
+            summary = getattr(res, "summary_kr", "작업 완료")
             with self._lock:
-                if task.task_id in self._tasks:
-                    self._tasks[task.task_id].last_result = summary
-                self._save()
-            if self.tts and summary:
-                self.tts(summary)
+                if task.task_id in self._tasks: self._tasks[task.task_id].last_result = summary
+            if self.tts: self.tts(summary)
         except Exception as e:
-            logging.error(f"[Scheduler] 실행 오류 ({task.task_id}): {e}")
+            logging.error(f"[Scheduler] 실행 실패: {e}")
 
     def _load(self):
-        try:
-            if not os.path.exists(_SCHEDULE_FILE):
-                return
-            with open(_SCHEDULE_FILE, encoding="utf-8") as f:
-                data = json.load(f)
-            now = datetime.now()
-            for item in data:
-                task = ScheduledTask(**item)
-                # 과거 일회성 작업은 복구하지 않음
-                if not task.repeat:
-                    try:
-                        if datetime.fromisoformat(task.next_run) < now:
-                            continue
-                    except Exception:
-                        continue
-                self._tasks[task.task_id] = task
-            logging.info(f"[Scheduler] {len(self._tasks)}개 작업 복구")
-        except Exception as e:
-            logging.warning(f"[Scheduler] 로드 실패: {e}")
+        if os.path.exists(_SCHEDULE_FILE):
+            try:
+                with open(_SCHEDULE_FILE, encoding="utf-8") as f:
+                    data = json.load(f)
+                self._tasks = {it["task_id"]: self._normalize_task(it) for it in data}
+            except Exception as e:
+                logging.warning(f"[Scheduler] 로드 실패: {e}")
 
     def _save(self):
         try:
-            tasks = list(self._tasks.values())[:_MAX_TASKS]
+            data = [asdict(t) for t in list(self._tasks.values())[:_MAX_TASKS]]
             with open(_SCHEDULE_FILE, "w", encoding="utf-8") as f:
-                json.dump([asdict(t) for t in tasks], f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logging.warning(f"[Scheduler] 저장 실패: {e}")
+            logging.error(f"[Scheduler] 저장 실패: {e}")
 
+    def _normalize_task(self, raw: Dict[str, Any]) -> ScheduledTask:
+        payload = dict(raw)
+        payload.setdefault("repeat_rule", "")
+        payload.setdefault("except_dates", [])
+        payload.setdefault("alarm_sound", "")
+        return ScheduledTask(**payload)
 
-# ── 싱글톤 ─────────────────────────────────────────────────────────────────────
+    def _is_except_date(self, task: ScheduledTask, date_text: str) -> bool:
+        return date_text in set(task.except_dates or [])
 
-_scheduler: Optional[ProactiveScheduler] = None
+    def _compute_next_run(self, task: ScheduledTask, last_due: datetime, now: datetime) -> datetime:
+        if task.repeat_rule == "daily":
+            next_run = last_due + timedelta(days=1)
+        elif task.repeat_rule == "weekly":
+            next_run = last_due + timedelta(days=7)
+        elif task.repeat_rule == "hourly":
+            next_run = last_due + timedelta(hours=1)
+        elif task.repeat_seconds > 0:
+            next_run = now + timedelta(seconds=task.repeat_seconds)
+        else:
+            next_run = now + timedelta(days=1)
+        while self._is_except_date(task, next_run.date().isoformat()):
+            if task.repeat_rule == "weekly":
+                next_run += timedelta(days=7)
+            elif task.repeat_rule == "hourly":
+                next_run += timedelta(hours=1)
+            else:
+                next_run += timedelta(days=1)
+        return next_run
 
+_instance: Optional[ProactiveScheduler] = None
 
 def get_scheduler(tts_func: Optional[Callable] = None) -> ProactiveScheduler:
-    global _scheduler
-    if _scheduler is None:
-        _scheduler = ProactiveScheduler(tts_func)
+    global _instance
+    if _instance is None:
+        _instance = ProactiveScheduler(tts_func)
     elif tts_func:
-        _scheduler.tts = tts_func
-    return _scheduler
+        _instance.tts = tts_func
+    return _instance

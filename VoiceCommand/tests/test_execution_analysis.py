@@ -13,6 +13,7 @@ from agent.execution_analysis import (
     describes_storage_action,
     existing_paths,
     extract_artifacts,
+    extract_step_targets,
     is_read_only_step_content,
 )
 
@@ -38,6 +39,14 @@ class ExecutionAnalysisTests(unittest.TestCase):
         self.assertTrue(describes_storage_action("문서 저장"))
         self.assertTrue(describes_open_action("앱 실행"))
         self.assertFalse(describes_open_action("정보 수집"))
+
+    def test_extract_step_targets_includes_windows_and_goal_hints(self):
+        targets = extract_step_targets(
+            "result = run_desktop_workflow(goal_hint='메모장 저장', expected_window='메모장')\nopen_url('https://example.com')"
+        )
+        self.assertIn("메모장", targets["windows"])
+        self.assertIn("메모장 저장", targets["goal_hints"])
+        self.assertIn("example.com", targets["domains"])
 
 
 if __name__ == "__main__":

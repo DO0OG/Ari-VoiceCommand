@@ -13,6 +13,8 @@ import logging
 import threading
 import time
 import subprocess
+from functools import lru_cache
+from collections import deque
 
 import numpy as np
 import pyaudio
@@ -82,6 +84,58 @@ def _normalize_text(text: str) -> str:
     # 나머지 숫자 → 한자어
     text = re.sub(r'\d+', lambda m: _sino(int(m.group(0))), text)
     return text
+
+
+@lru_cache(maxsize=256)
+def _normalize_text_cached(text: str) -> str:
+    return _normalize_text(text)
+
+
+class _PCMChunkBuffer:
+    """콜백 재생용 PCM 청크 버퍼.
+
+    bytearray 슬라이싱 삭제 대신 deque를 사용해 긴 문장에서도
+    메모리 이동 비용과 누적 사용량을 줄입니다.
+    """
+    def __init__(self):
+        self._chunks = deque()
+        self._size = 0
+
+    def clear(self):
+        self._chunks.clear()
+        self._size = 0
+
+    def append(self, data: bytes):
+        if not data:
+            return
+        self._chunks.append(data)
+        self._size += len(data)
+
+    def pop_bytes(self, nbytes: int) -> bytes:
+        if nbytes <= 0 or self._size <= 0:
+            return b""
+
+        remaining = nbytes
+        parts = []
+        while remaining > 0 and self._chunks:
+            chunk = self._chunks[0]
+            if len(chunk) <= remaining:
+                parts.append(chunk)
+                self._chunks.popleft()
+                self._size -= len(chunk)
+                remaining -= len(chunk)
+            else:
+                parts.append(chunk[:remaining])
+                self._chunks[0] = chunk[remaining:]
+                self._size -= remaining
+                remaining = 0
+        return b"".join(parts)
+
+    @property
+    def size(self) -> int:
+        return self._size
+
+
 COSYVOICE_DIR = r"D:\Git\CosyVoice"
 DEFAULT_MODEL_DIR = os.path.join(COSYVOICE_DIR, "pretrained_models", "Fun-CosyVoice3-0.5B")
 
@@ -102,6 +156,8 @@ def _get_worker_script() -> str:
 
 class CosyVoiceTTS(QObject):
     playback_finished = Signal()
+    _MAX_PCM_BUFFER_BYTES = 24000 * 4 * 12
+    _AUDIO_FRAMES_PER_BUFFER = 512
 
     def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9):
         super().__init__()
@@ -117,10 +173,16 @@ class CosyVoiceTTS(QObject):
         self._proc = None
         self._ready = threading.Event()
         self._warmup_ready = threading.Event()  # 추가: 웜업 완료 이벤트
-        self._ctrl_q = []
+        self._ctrl_q = deque()
         self._ctrl_lock = threading.Lock()
         self._speak_lock = threading.Lock()
         self._stopping = False  # 종료 플래그 추가
+        self._stream = None
+        self._stream_rate = None
+        self._stream_lock = threading.Lock()
+        self._pcm_buffer = _PCMChunkBuffer()
+        self._pcm_lock = threading.Lock()
+        self._pcm_done = threading.Event()
 
         self._start_worker()
 
@@ -140,16 +202,12 @@ class CosyVoiceTTS(QObject):
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,   # 이진 PCM 스트림
             stderr=subprocess.PIPE,   # 텍스트 제어 메시지
+            bufsize=0,
         )
         self._stderr_thread = threading.Thread(target=self._stderr_reader, daemon=True)
         self._stderr_thread.start()
 
         logging.info("CosyVoice3 워커 시작 중 (모델 로드 중, 약 30~60초)...")
-        # 워커가 READY 신호를 보낼 때까지 대기
-        if not self._ready.wait(timeout=300):
-            logging.error("CosyVoice3 워커 타임아웃 (300초 초과) — 워커 프로세스를 확인하세요.")
-        else:
-            logging.info(f"CosyVoice3 워커 준비 완료 (sample_rate={self.sample_rate})")
 
     def _stderr_reader(self):
         """워커 stderr(제어 채널)을 읽어 이벤트 설정"""
@@ -194,15 +252,66 @@ class CosyVoiceTTS(QObject):
         while time.time() < deadline and not self._stopping:
             with self._ctrl_lock:
                 if self._ctrl_q:
-                    return self._ctrl_q.pop(0)
+                    return self._ctrl_q.popleft()
             time.sleep(0.05)
         return "ERROR:timeout"
+
+    def _clear_pcm_state(self):
+        with self._pcm_lock:
+            self._pcm_buffer.clear()
+        self._pcm_done.clear()
+
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        needed = frame_count * 4  # float32 mono
+        with self._pcm_lock:
+            chunk = self._pcm_buffer.pop_bytes(needed)
+            empty_and_done = self._pcm_done.is_set() and self._pcm_buffer.size == 0
+
+        if len(chunk) < needed:
+            chunk += b"\x00" * (needed - len(chunk))
+
+        flag = pyaudio.paComplete if empty_and_done else pyaudio.paContinue
+        return (chunk, flag)
+
+    def _ensure_stream(self):
+        with self._stream_lock:
+            self._close_stream_unlocked()
+            self._stream = self.pa.open(
+                format=pyaudio.paFloat32,
+                channels=1,
+                rate=self.sample_rate,
+                output=True,
+                frames_per_buffer=self._AUDIO_FRAMES_PER_BUFFER,
+                stream_callback=self._audio_callback,
+            )
+            self._stream_rate = self.sample_rate
+            return self._stream
+
+    def _close_stream(self):
+        with self._stream_lock:
+            self._close_stream_unlocked()
+
+    def _close_stream_unlocked(self):
+        if not self._stream:
+            self._stream_rate = None
+            return
+        try:
+            if self._stream.is_active():
+                self._stream.stop_stream()
+        except Exception:  # nosec B110
+            pass
+        try:
+            self._stream.close()
+        except Exception:  # nosec B110
+            pass
+        self._stream = None
+        self._stream_rate = None
 
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
     def speak(self, text: str) -> bool:
         from audio_manager import _audio_output_lock as _audio_lock
-        text = _normalize_text(text)
+        text = _normalize_text_cached(text or "")
         if not text or self._proc is None or self._proc.poll() is not None:
             return False
 
@@ -224,10 +333,7 @@ class CosyVoiceTTS(QObject):
                     self._proc.stdin.write((text.replace("\n", " ").strip() + "\n").encode("utf-8"))
                     self._proc.stdin.flush()
 
-                    # 링 버퍼 + 완료 이벤트
-                    ring = bytearray()
-                    ring_lock = threading.Lock()
-                    gen_done = threading.Event()
+                    self._clear_pcm_state()
 
                     def pipe_reader():
                         first = True
@@ -245,49 +351,31 @@ class CosyVoiceTTS(QObject):
                                 if first:
                                     logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
                                     first = False
-                                with ring_lock:
-                                    ring.extend(data)
+                                max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
+                                while not self._stopping:
+                                    with self._pcm_lock:
+                                        if self._pcm_buffer.size + len(data) <= max_buffer_bytes:
+                                            self._pcm_buffer.append(data)
+                                            break
+                                    time.sleep(0.01)
                         except Exception as e:
                             if not self._stopping:
                                 logging.debug(f"pipe_reader 오류: {e}")
                         finally:
-                            gen_done.set()
+                            self._pcm_done.set()
 
                     reader_t = threading.Thread(target=pipe_reader, daemon=True)
                     reader_t.start()
 
-                    # PyAudio 콜백 모드 — 오디오 클록이 독립적으로 동작,
-                    # 데이터 부족 시 무음 패딩 → 언더플로 끊김 완전 방지
-                    def audio_callback(in_data, frame_count, time_info, status):
-                        needed = frame_count * 4  # float32 = 4바이트
-                        with ring_lock:
-                            avail = len(ring)
-                            take = min(avail, needed)
-                            chunk = bytes(ring[:take])
-                            del ring[:take]
-                            empty_and_done = gen_done.is_set() and len(ring) == 0
-
-                        if take < needed:
-                            chunk += b"\x00" * (needed - take)  # 무음으로 패딩
-
-                        flag = pyaudio.paComplete if empty_and_done else pyaudio.paContinue
-                        return (chunk, flag)
-
-                    pa_stream = self.pa.open(
-                        format=pyaudio.paFloat32,
-                        channels=1,
-                        rate=self.sample_rate,
-                        output=True,
-                        frames_per_buffer=1024,  # 콜백 모드: 작을수록 레이턴시 ↓
-                        stream_callback=audio_callback,
-                    )
-                    pa_stream.start_stream()
+                    pa_stream = self._ensure_stream()
+                    if not pa_stream.is_active():
+                        pa_stream.start_stream()
 
                     # 생성 완료 대기 (최대 300초)
                     reader_t.join(timeout=300)
-                    # reader가 끝났거나 타임아웃됐어도 gen_done을 강제 설정
+                    # reader가 끝났거나 타임아웃됐어도 완료 플래그를 강제 설정
                     # → 콜백이 paComplete를 반환할 수 있게 함
-                    gen_done.set()
+                    self._pcm_done.set()
                     # 남은 오디오 재생 완료 대기 (드레인 강화)
                     deadline = time.time() + 30
                     if pa_stream:
@@ -296,8 +384,7 @@ class CosyVoiceTTS(QObject):
 
                     try:
                         if pa_stream:
-                            pa_stream.stop_stream()
-                            pa_stream.close()
+                            self._close_stream()
                     except Exception:  # nosec B110
                         pass
                     if self._stopping:
@@ -349,13 +436,23 @@ class CosyVoiceTTS(QObject):
                 self._proc.stdin.write(b"EXIT\n")
                 self._proc.stdin.flush()
                 # 2. 잠시 대기
-                if self._proc.wait(timeout=2) is None:
+                self._proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
                     self._proc.terminate()
+                    self._proc.wait(timeout=2)
+                except Exception:  # nosec B110
+                    try:
+                        self._proc.kill()
+                    except Exception:  # nosec B110
+                        pass
             except Exception:
                 try:
                     self._proc.kill()
                 except Exception:  # nosec B110
                     pass
+        self._close_stream()
+        self._clear_pcm_state()
 
         # PyAudio 정리는 AriCore.cleanup()에서 GlobalAudio.terminate() 호출로 통합 관리
     def __del__(self):

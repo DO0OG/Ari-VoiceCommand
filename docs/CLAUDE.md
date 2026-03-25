@@ -31,6 +31,12 @@ python install_dependencies.py
 py -3 validate_repo.py
 
 # Individual checks
+py -3 validate_repo.py --compile-only
+py -3 validate_repo.py --tests-only
+py -3 validate_repo.py --smoke-only
+py -3 validate_repo.py --no-smoke
+py -3 validate_repo.py --list
+py -3 validate_repo.py --json
 py -3 -m py_compile agent/execution_analysis.py agent/agent_orchestrator.py agent/real_verifier.py agent/strategy_memory.py memory/user_context.py memory/memory_manager.py build_exe.py
 py -3 -m unittest discover -s tests -p "test_*.py"
 ```
@@ -128,6 +134,12 @@ Add new command classes in `commands/` and register them in `commands/command_re
 
 ## Optimization Notes (Recent Fixes)
 
+- **Self-Reflection & Lesson Learning**: Implemented a "Post-mortem" analysis step in `AgentOrchestrator`. When a task fails, the LLM analyzes the failure and stores a "lesson" in `StrategyMemory`, which is then used as context for future plans to avoid repeating the same mistakes.
+- **Thinking State Visualization**: Added `set_thinking` signal/slot to `CharacterWidget`. The `AgentOrchestrator` now triggers this "Thinking" state (slower animation + "Thinking..." bubble) during execution for better visual feedback.
+- **Memory Optimization & Decay**: Added a confidence decay system and `optimize_memory()` method to `UserContextManager`. Facts now have a TTL and naturally lose confidence over time if not updated, ensuring the user profile stays relevant.
+- **UI Modularization**: Extracted shared UI constants (colors, fonts, dimensions, common styles) into `ui/theme.py` and reusable layout components into `ui/common.py`. `text_interface.py`, `settings_dialog.py`, `character_widget.py`, and other panels have been refactored to use this centralized theme architecture.
+- **Agent Orchestrator Logging**: Standardized module-level logging in `agent/agent_orchestrator.py` for uniform tracking (`logger.info/warning`).
+- **Tests Infrastructure**: Expanded `tests/support.py` with mock objects (`DummyExecutor`, `DummyPlanner`, etc.) for more robust unit tests.
 - **TTS Sync**: Added `is_processing` flag to `TTSThread` and `is_tts_playing()` helper to ensure voice recognition doesn't start until TTS finishes.
 - **Fish Audio Latency**: Reduced playback termination delay from 10s to 1.5s for faster response in Game Mode.
 - **Audio Lock**: Input and Output locks are separated to allow concurrent microphone listening and speaker playback (though usually kept sequential for recognition accuracy).

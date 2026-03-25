@@ -1,6 +1,30 @@
 import logging
 from core.config_manager import ConfigManager
 
+_TTS_SIGNATURE_KEYS = (
+    "tts_mode",
+    "fish_api_key",
+    "fish_reference_id",
+    "cosyvoice_reference_text",
+    "cosyvoice_speed",
+    "openai_tts_api_key",
+    "openai_api_key",
+    "openai_tts_voice",
+    "openai_tts_model",
+    "elevenlabs_api_key",
+    "elevenlabs_voice_id",
+    "elevenlabs_model_id",
+    "edge_tts_voice",
+    "edge_tts_rate",
+)
+
+
+def build_tts_signature(settings=None):
+    """현재 TTS 설정의 비교용 시그니처."""
+    settings = settings or ConfigManager.load_settings()
+    return tuple(settings.get(key) for key in _TTS_SIGNATURE_KEYS)
+
+
 def create_tts_provider():
     """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성"""
     settings = ConfigManager.load_settings()

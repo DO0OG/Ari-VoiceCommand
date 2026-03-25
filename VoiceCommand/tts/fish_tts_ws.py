@@ -3,7 +3,6 @@ Fish Audio WebSocket TTS (Streaming Optimized)
 첫 청크 수신 즉시 재생을 시작하여 레이턴시를 최소화합니다.
 """
 import logging
-import io
 import time
 import threading
 import queue
@@ -14,6 +13,7 @@ from PySide6.QtCore import QObject, Signal
 
 class FishTTSWebSocket(QObject):
     playback_finished = Signal()  # TTS 재생 완료 시그널
+    _QUEUE_MAX_CHUNKS = 24
 
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
@@ -49,7 +49,7 @@ class FishTTSWebSocket(QObject):
 
             # 재생용 큐와 이벤트
             # self.stop_event를 공유해야 cleanup()이 play_worker도 중단시킬 수 있음
-            audio_queue = queue.Queue()
+            audio_queue = queue.Queue(maxsize=self._QUEUE_MAX_CHUNKS)
             self.stop_event.clear()
             stop_event = self.stop_event
             download_done = threading.Event()
@@ -148,7 +148,12 @@ class FishTTSWebSocket(QObject):
             for chunk in audio_stream:
                 if self.stop_event.is_set():
                     break
-                audio_queue.put(chunk)
+                while not self.stop_event.is_set():
+                    try:
+                        audio_queue.put(chunk, timeout=0.2)
+                        break
+                    except queue.Full:
+                        continue
                 chunk_count += 1
                 if chunk_count == 1:
                     logging.info("첫 청크 수신")

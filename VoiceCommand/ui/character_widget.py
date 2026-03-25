@@ -44,6 +44,7 @@ class CharacterWidget(QWidget):
     show_speech_bubble_signal = Signal(str, int)  # text, duration
     hide_speech_bubble_signal = Signal()
     change_emotion_signal = Signal(str)  # 추가: 감정 변경 시그널
+    thinking_signal = Signal(bool)       # 추가: 생각 중 상태 시그널
 
     def get_char_x(self):
         return self.x()
@@ -66,6 +67,7 @@ class CharacterWidget(QWidget):
         self.animations = {}
         self.image_cache = LRUCache()
         self.facing_right = True  # 캐릭터 방향
+        self.is_thinking = False   # 추가: 생각 중 여부
 
         # 물리 엔진
         self.velocity_x = 0
@@ -100,6 +102,7 @@ class CharacterWidget(QWidget):
         self.show_speech_bubble_signal.connect(self._show_speech_bubble_slot)
         self.hide_speech_bubble_signal.connect(self._hide_speech_bubble_slot)
         self.change_emotion_signal.connect(self._change_emotion_slot)
+        self.thinking_signal.connect(self.set_thinking)
 
         # 시간별 인사 타이머
         self.greeting_timer = QTimer(self)
@@ -152,6 +155,20 @@ class CharacterWidget(QWidget):
             self.topmost_timer = QTimer(self)
             self.topmost_timer.timeout.connect(self._enforce_topmost)
             self.topmost_timer.start(500)
+
+    @Slot(bool)
+    def set_thinking(self, thinking: bool):
+        """생각 중 상태 설정 (메인 스레드 호출)"""
+        self.is_thinking = thinking
+        if thinking:
+            self.set_animation("idle")
+            # 생각 중일 때는 애니메이션 속도를 늦추거나 시각적 효과 부여 가능
+            self.animation_timer.setInterval(120) 
+            if random.random() < 0.5:  # nosec B311 - UI 애니메이션용 비보안 난수
+                self.say("생각 중...", duration=0)
+        else:
+            self.animation_timer.setInterval(70)
+            self._hide_speech_bubble_slot()
 
     def load_and_cache_image(self, path, flip=False, rotation=0):
         """이미지 로드, 캐싱 및 변형 (반전, 회전)"""
@@ -628,7 +645,9 @@ class CharacterWidget(QWidget):
     def contextMenuEvent(self, event):
         """우클릭 메뉴"""
         from VoiceCommand import learning_mode
+        from ui import theme as theme_module
         menu = QMenu(self)
+        menu.setStyleSheet(theme_module.MENU_STYLE)
 
         # 텍스트 대화
         chat_action = QAction("💬 텍스트 대화", self)
@@ -702,8 +721,22 @@ class CharacterWidget(QWidget):
         from ui.settings_dialog import SettingsDialog
         dialog = SettingsDialog()
         if dialog.exec():
-            from VoiceCommand import initialize_tts
-            initialize_tts()
+            if dialog.tts_settings_changed():
+                from VoiceCommand import initialize_tts
+                initialize_tts()
+            if dialog.theme_settings_changed():
+                try:
+                    from ui.theme_runtime import apply_live_theme
+                    apply_live_theme(character_widget=self)
+                except Exception as e:
+                    logging.error(f"실시간 테마 반영 실패: {e}")
+
+    def refresh_theme(self):
+        """테마 변경 후 캐릭터 관련 UI를 갱신합니다."""
+        if self.speech_bubble:
+            text = self.speech_bubble.text
+            self._hide_speech_bubble_slot()
+            self._show_speech_bubble_slot(text, 5000)
 
     def exit_program(self):
         """프로그램 종료 요청"""

@@ -2,14 +2,23 @@
 설정 창 GUI — 탭 기반 구성 (RP, AI & TTS, 장치)
 """
 import logging
+import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
     QComboBox, QGroupBox, QScrollArea, QWidget,
-    QTabWidget,
+    QTabWidget, QMessageBox, QListWidget, QListWidgetItem, QFrame,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QDesktopServices
+from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
+from ui.theme import (
+    FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
+    TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE,
+    available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
+)
+from ui.common import create_muted_label
 
 # ── 제공자 정의 ────────────────────────────────────────────────────────────────
 
@@ -33,12 +42,27 @@ _TTS_MODES = [
 
 
 class SettingsDialog(QDialog):
+    TTS_KEYS = {
+        "tts_mode", "fish_api_key", "fish_reference_id", "cosyvoice_reference_text",
+        "cosyvoice_speed", "openai_tts_api_key", "openai_tts_voice", "openai_tts_model",
+        "elevenlabs_api_key", "elevenlabs_voice_id", "edge_tts_voice", "edge_tts_rate",
+    }
+    LLM_KEYS = {
+        "llm_provider", "llm_model", "llm_planner_model", "llm_execution_model",
+        "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
+        "gemini_api_key", "openrouter_api_key", "system_prompt", "personality",
+        "scenario", "history_instruction",
+    }
+    THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("아리 설정")
         self.setMinimumWidth(600)
         self.setMinimumHeight(550)
         self.settings = ConfigManager.load_settings()
+        self.original_settings = dict(self.settings)
+        self.changed_keys = set()
         self._llm_key_inputs = {}   # data 키 → QLineEdit
         self._tts_groups = {}       # data 키 → QGroupBox
         self._init_ui()
@@ -46,10 +70,13 @@ class SettingsDialog(QDialog):
     # ── UI 구성 ────────────────────────────────────────────────────────────────
 
     def _init_ui(self):
+        self.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL))
+        self.setStyleSheet(INPUT_STYLE)
         layout = QVBoxLayout(self)
 
         # 탭 위젯 생성
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(TAB_STYLE)
         layout.addWidget(self.tabs)
 
         # 1. RP 설정 탭
@@ -61,15 +88,48 @@ class SettingsDialog(QDialog):
         # 3. 장치 설정 탭
         self.tabs.addTab(self._create_device_tab(), "장치 설정")
 
+        # 4. 확장 설정 탭
+        self.tabs.addTab(self._create_extensions_tab(), "확장")
+
         # 하단 버튼
         btn_layout = QHBoxLayout()
         save_btn = QPushButton("저장")
-        save_btn.setFixedHeight(40)
-        save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        save_btn.setMinimumHeight(45)
+        save_btn.setMinimumWidth(120)
+        # COLOR_SUCCESS를 사용하여 성공(저장) 버튼 스타일 적용 (강조 버전)
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLOR_SUCCESS};
+                color: white;
+                font-weight: bold;
+                font-size: {FONT_SIZE_NORMAL + 1}px;
+                border-radius: 10px;
+                padding: 0 20px;
+            }}
+            QPushButton:hover {{
+                background-color: #219150;
+            }}
+            QPushButton:pressed {{
+                background-color: #1a7a43;
+            }}
+        """)
         save_btn.clicked.connect(self._save)
         
         cancel_btn = QPushButton("취소")
-        cancel_btn.setFixedHeight(40)
+        cancel_btn.setMinimumHeight(45)
+        cancel_btn.setMinimumWidth(100)
+        cancel_btn.setStyleSheet("""
+            QPushButton {{
+                background-color: #f1f3f5;
+                color: #333;
+                font-weight: normal;
+                border-radius: 10px;
+                padding: 0 15px;
+            }}
+            QPushButton:hover {{
+                background-color: #e9ecef;
+            }}
+        """)
         cancel_btn.clicked.connect(self.reject)
         
         btn_layout.addStretch()
@@ -115,6 +175,7 @@ class SettingsDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet(SCROLLBAR_STYLE)
         
         container = QWidget()
         vbox = QVBoxLayout(container)
@@ -136,6 +197,16 @@ class SettingsDialog(QDialog):
         self.llm_model_input = QLineEdit(self.settings.get("llm_model", ""))
         self.llm_model_input.setPlaceholderText("예: gpt-4o, llama-3.3-70b-versatile...")
         llm_vbox.addWidget(self.llm_model_input)
+
+        llm_vbox.addWidget(QLabel("플래너 모델 (선택):"))
+        self.llm_planner_model_input = QLineEdit(self.settings.get("llm_planner_model", ""))
+        self.llm_planner_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
+        llm_vbox.addWidget(self.llm_planner_model_input)
+
+        llm_vbox.addWidget(QLabel("실행/수정 모델 (선택):"))
+        self.llm_execution_model_input = QLineEdit(self.settings.get("llm_execution_model", ""))
+        self.llm_execution_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
+        llm_vbox.addWidget(self.llm_execution_model_input)
 
         # API Key 입력 필드들 (동적 표시)
         for _label, data, key, placeholder in _LLM_PROVIDERS:
@@ -281,12 +352,89 @@ class SettingsDialog(QDialog):
         # 스피커 안내
         gvbox.addSpacing(30)
         gvbox.addWidget(QLabel("스피커 출력 장치:"))
-        info = QLabel("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다.")
-        info.setStyleSheet("color: gray;")
+        info = create_muted_label("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다.")
         gvbox.addWidget(info)
 
         vbox.addWidget(group)
+
+        theme_group = QGroupBox("UI 테마 설정")
+        tvbox = QVBoxLayout(theme_group)
+
+        tvbox.addWidget(QLabel("테마 프리셋:"))
+        self.theme_preset_combo = QComboBox()
+        for preset_key, preset_name in available_theme_presets():
+            self.theme_preset_combo.addItem(preset_name, preset_key)
+        self._set_combo(self.theme_preset_combo, self.settings.get("ui_theme_preset", "default"))
+        tvbox.addWidget(self.theme_preset_combo)
+
+        tvbox.addWidget(QLabel("글꼴 배율 (0.9 ~ 1.35):"))
+        self.theme_scale_input = QLineEdit(str(self.settings.get("ui_theme_scale", 1.0)))
+        self.theme_scale_input.setPlaceholderText("예: 1.0")
+        tvbox.addWidget(self.theme_scale_input)
+
+        tvbox.addWidget(QLabel("글꼴 패밀리 재정의 (선택):"))
+        self.theme_font_input = QLineEdit(self.settings.get("ui_font_family", ""))
+        self.theme_font_input.setPlaceholderText("비워두면 테마 기본 글꼴 사용")
+        tvbox.addWidget(self.theme_font_input)
+
+        self.theme_preview_frame = QFrame()
+        self.theme_preview_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        preview_layout = QVBoxLayout(self.theme_preview_frame)
+        preview_layout.setContentsMargins(10, 10, 10, 10)
+        self.theme_preview_title = QLabel("테마 미리보기")
+        self.theme_preview_colors = QLabel("")
+        self.theme_preview_colors.setWordWrap(True)
+        preview_layout.addWidget(self.theme_preview_title)
+        preview_layout.addWidget(self.theme_preview_colors)
+        tvbox.addWidget(self.theme_preview_frame)
+
+        preview_btn = QPushButton("테마 폴더 안내")
+        preview_btn.setStyleSheet(secondary_btn_style())
+        preview_btn.clicked.connect(self._show_theme_hint)
+        tvbox.addWidget(preview_btn)
+
+        self.theme_preset_combo.currentIndexChanged.connect(self._refresh_theme_preview)
+        self._refresh_theme_preview()
+
+        vbox.addWidget(theme_group)
         vbox.addStretch()
+        return widget
+
+    def _create_extensions_tab(self):
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+
+        plugin_group = QGroupBox("사용자 플러그인")
+        pvbox = QVBoxLayout(plugin_group)
+
+        try:
+            from core.resource_manager import ResourceManager
+            plugin_dir = ResourceManager.ensure_plugin_files()
+        except Exception:
+            plugin_dir = os.path.join(os.getcwd(), "plugins")
+
+        pvbox.addWidget(QLabel("플러그인 폴더:"))
+        self.plugin_dir_input = QLineEdit(plugin_dir)
+        self.plugin_dir_input.setReadOnly(True)
+        pvbox.addWidget(self.plugin_dir_input)
+
+        self.plugin_list = QListWidget()
+        pvbox.addWidget(self.plugin_list)
+
+        btn_row = QHBoxLayout()
+        open_btn = QPushButton("플러그인 폴더 열기")
+        open_btn.setStyleSheet(secondary_btn_style())
+        open_btn.clicked.connect(self._open_plugin_folder)
+        reload_btn = QPushButton("플러그인 목록 새로고침")
+        reload_btn.setStyleSheet(secondary_btn_style())
+        reload_btn.clicked.connect(self._refresh_plugin_list)
+        btn_row.addWidget(open_btn)
+        btn_row.addWidget(reload_btn)
+        pvbox.addLayout(btn_row)
+
+        vbox.addWidget(plugin_group)
+        vbox.addStretch()
+        self._refresh_plugin_list()
         return widget
 
     # ── 유틸리티 및 이벤트 ───────────────────────────────────────────────────────
@@ -312,6 +460,57 @@ class SettingsDialog(QDialog):
             if grp:
                 grp.setVisible(key == selected)
 
+    def _show_theme_hint(self):
+        QMessageBox.information(
+            self,
+            "테마 폴더",
+            f"테마 JSON 파일은 아래 폴더에서 직접 수정할 수 있습니다.\n\n{theme_dir()}\n\n저장 후 설정창에서 다시 적용하면 열린 UI에 즉시 반영됩니다.",
+        )
+
+    def _refresh_theme_preview(self):
+        theme_key = self.theme_preset_combo.currentData() or "default"
+        palette = load_theme_palette(theme_key)
+        primary = palette.colors.get("primary", "#4a90e2")
+        accent = palette.colors.get("accent", "#ff7b54")
+        panel = palette.colors.get("bg_panel", "#f5f7fa")
+        text = palette.colors.get("text_primary", "#333333")
+        self.theme_preview_frame.setStyleSheet(
+            f"QFrame {{ background: {panel}; border: 1px solid {primary}; border-radius: 10px; }}"
+            f"QLabel {{ color: {text}; }}"
+        )
+        self.theme_preview_title.setText(f"{palette.name} 미리보기")
+        self.theme_preview_colors.setText(
+            f"Primary {primary} | Accent {accent} | Font {palette.font_family}"
+        )
+
+    def _refresh_plugin_list(self):
+        self.plugin_list.clear()
+        try:
+            from core.plugin_loader import get_plugin_manager
+            plugins = get_plugin_manager().discover_plugins()
+        except Exception as exc:
+            item = QListWidgetItem(f"플러그인 목록 로드 실패: {exc}")
+            self.plugin_list.addItem(item)
+            return
+
+        if not plugins:
+            self.plugin_list.addItem(QListWidgetItem("플러그인이 없습니다. sample_plugin.py를 복사해 시작할 수 있습니다."))
+            return
+        for plugin in plugins:
+            label = f"{plugin.name} ({plugin.version}) - {plugin.description or '설명 없음'}"
+            self.plugin_list.addItem(QListWidgetItem(label))
+
+    def _open_plugin_folder(self):
+        path = self.plugin_dir_input.text().strip()
+        if not path:
+            return
+        try:
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            if not opened:
+                raise RuntimeError("폴더 열기 실패")
+        except Exception:
+            QMessageBox.information(self, "플러그인 폴더", path)
+
     # ── 저장 로직 ───────────────────────────────────────────────────────────────
 
     def _save(self):
@@ -332,6 +531,8 @@ class SettingsDialog(QDialog):
             # LLM
             "llm_provider": self.llm_provider_combo.currentData(),
             "llm_model": self.llm_model_input.text().strip(),
+            "llm_planner_model": self.llm_planner_model_input.text().strip(),
+            "llm_execution_model": self.llm_execution_model_input.text().strip(),
             **llm_keys,
             
             # TTS
@@ -350,18 +551,42 @@ class SettingsDialog(QDialog):
             
             # Device
             "microphone": self.mic_combo.currentData(),
+            "ui_theme_preset": self.theme_preset_combo.currentData(),
+            "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
+            "ui_font_family": self.theme_font_input.text().strip(),
         }
 
-        ConfigManager.save_settings(new_settings)
+        merged_settings = {**self.original_settings, **new_settings}
+        self.changed_keys = {
+            key for key, value in merged_settings.items()
+            if self.original_settings.get(key) != value
+        }
+        ConfigManager.save_settings(merged_settings)
 
-        # 리셋 호출
-        try:
-            from llm_provider import reset_llm_provider
-            reset_llm_provider()
-        except Exception:
-            pass
+        if self.llm_settings_changed():
+            try:
+                from llm_provider import reset_llm_provider
+                reset_llm_provider()
+            except Exception as exc:
+                logging.debug(f"LLM provider reset 생략: {exc}")
+
+        if self.theme_settings_changed():
+            QMessageBox.information(
+                self,
+                "테마 저장",
+                "테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다.",
+            )
 
         self.accept()
+
+    def tts_settings_changed(self) -> bool:
+        return any(key in self.changed_keys for key in self.TTS_KEYS)
+
+    def llm_settings_changed(self) -> bool:
+        return any(key in self.changed_keys for key in self.LLM_KEYS)
+
+    def theme_settings_changed(self) -> bool:
+        return any(key in self.changed_keys for key in self.THEME_KEYS)
 
     @staticmethod
     def _float(text: str, default: float) -> float:

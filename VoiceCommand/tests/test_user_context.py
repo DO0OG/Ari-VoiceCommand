@@ -35,6 +35,36 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertEqual(manager.context["facts"]["좋아함"]["value"], "커피")
             self.assertIn("confidence", manager.context["facts"]["좋아함"])
 
+    def test_preference_and_time_based_helpers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            manager = UserContextManager(context_file=path)
+            manager.record_preference("음악", "로파이")
+            manager.record_preference("음악", "로파이")
+            manager.record_preference("음료", "커피")
+            manager.record_command("weather")
+            manager.record_command("weather")
+
+            prefs = manager.get_top_preferences(limit=2)
+            suggestions = manager.get_time_based_suggestions(limit=2)
+
+            self.assertIn("음악:로파이", prefs)
+            self.assertIn("weather", suggestions)
+
+    def test_fact_conflicts_and_topic_recommendations_are_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            manager = UserContextManager(context_file=path)
+            manager.record_fact("favorite_drink", "coffee", confidence=0.8)
+            manager.record_fact("favorite_drink", "tea", confidence=0.6)
+            manager.record_topics(["자동화", "자동화", "브라우저"])
+
+            conflicts = manager.get_fact_conflicts("favorite_drink")
+            recommendations = manager.get_topic_recommendations(limit=2, include_strategy=False)
+
+            self.assertEqual(conflicts[0]["conflicted_with"], "coffee")
+            self.assertTrue(any(item.startswith("자동화:") for item in recommendations))
+
 
 if __name__ == "__main__":
     unittest.main()

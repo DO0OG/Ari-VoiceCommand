@@ -75,6 +75,11 @@ def main():
         import torch
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
+        torch.set_grad_enabled(False)
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception as exc:
+            ctrl(f"INFO:matmul precision 설정 생략 ({exc})")
     except Exception:
         pass
 
@@ -122,7 +127,7 @@ def main():
     try:
         import torch
         frontend = model.frontend
-        with torch.no_grad():
+        with torch.inference_mode():
             prompt_text_token, prompt_text_token_len = frontend._extract_text_token(ref_text)
             speech_feat, speech_feat_len = frontend._extract_speech_feat(args.reference_wav)
             speech_token, speech_token_len = frontend._extract_speech_token(args.reference_wav)
@@ -186,8 +191,9 @@ def main():
         try:
             ctrl("INFO:백그라운드 GPU warmup 시작 (torch.compile 초회 컴파일 포함)...")
             with _inference_lock:
-                for _ in make_gen("네.", stream=True):
-                    pass
+                with torch.inference_mode():
+                    for _ in make_gen("네.", stream=True):
+                        pass
             ctrl("INFO:백그라운드 GPU warmup 완료")
         except Exception as e:
             ctrl(f"INFO:백그라운드 warmup 실패 ({e})")
@@ -203,12 +209,13 @@ def main():
         try:
             n = 0
             with _inference_lock:
-                for result in make_gen(text, stream=True):
-                    chunk = result.get("tts_speech") if isinstance(result, dict) else result
-                    if chunk is not None:
-                        arr = chunk.squeeze().cpu().numpy().astype(np.float32)
-                        write_chunk(arr.tobytes())
-                        n += 1
+                with torch.inference_mode():
+                    for result in make_gen(text, stream=True):
+                        chunk = result.get("tts_speech") if isinstance(result, dict) else result
+                        if chunk is not None:
+                            arr = chunk.squeeze().cpu().numpy().astype(np.float32)
+                            write_chunk(arr.tobytes())
+                            n += 1
             write_end()
             ctrl(f"DONE:{n}")
 

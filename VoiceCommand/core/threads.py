@@ -112,9 +112,11 @@ class VoiceRecognitionThread(QThread):
 
 class TTSThread(QThread):
     """TTS 전용 작업 스레드: 큐를 통해 순차 재생"""
+    _MAX_QUEUE_SIZE = 32
+
     def __init__(self):
         super().__init__()
-        self.queue = Queue()
+        self.queue = Queue(maxsize=self._MAX_QUEUE_SIZE)
         self.is_processing = False
 
     def run(self):
@@ -141,7 +143,14 @@ class TTSThread(QThread):
                 continue
 
     def speak(self, text):
-        self.queue.put(text)
+        if not text:
+            return False
+        try:
+            self.queue.put_nowait(text)
+            return True
+        except queue.Full:
+            logging.warning("TTSThread 큐가 가득 차서 마지막 요청을 폐기했습니다.")
+            return False
 
 
 # ───────────────────────────────────────────────────────────────────────────
