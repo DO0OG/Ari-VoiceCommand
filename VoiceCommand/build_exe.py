@@ -31,6 +31,7 @@ import os
 import shutil
 import sys
 import multiprocessing
+import importlib.util
 from datetime import datetime
 
 # 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
@@ -63,6 +64,20 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(HERE, "dist", "Ari")
 
+
+def _module_exists(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+
+def _optional_include_packages(*module_names: str) -> list[str]:
+    args: list[str] = []
+    for module_name in module_names:
+        if _module_exists(module_name):
+            args.append(f"--include-package={module_name}")
+        else:
+            print(f"• 선택 패키지 생략: {module_name}")
+    return args
+
 # 클린 빌드 처리
 if clean_build and os.path.exists(os.path.join(HERE, "dist")):
     print("기존 빌드 캐시 및 출력물 삭제 중...")
@@ -85,7 +100,6 @@ nuitka_args = [
     # 데이터 자원 포함
     "--include-data-dir=images=images",
     "--include-data-dir=theme=theme",
-    "--include-data-dir=plugins=plugins",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
@@ -93,6 +107,7 @@ nuitka_args = [
     "--include-data-files=ari_settings.json=ari_settings.json",
     "--include-data-files=cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
+    *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
 
     # 아이콘 설정
     *( ["--windows-icon-from-ico=icon.ico"] if os.path.exists("icon.ico") else [] ),
@@ -126,27 +141,29 @@ nuitka_args = [
     "--include-package=services",
     "--include-package-data=agent",
     "--include-package-data=memory",
-    "--include-package=pycaw",
-    "--include-package=comtypes",
-    "--include-package=groq",
-    "--include-package=fish_audio_sdk",
-    "--include-package=speech_recognition",
-    "--include-package=pyaudio",
-    "--include-package=certifi",
-    "--include-package=websockets",
-    "--include-package=pydub",
-    "--include-package=watchdog",
-    "--include-package=requests",
-    "--include-package=httpx",
-    "--include-package=psutil",
-    "--include-package=reportlab",
-    "--include-package=ddgs",
-    "--include-package=duckduckgo_search",
-    "--include-package=pyautogui",
-    "--include-package=pyperclip",
-    "--include-package=pygetwindow",
-    "--include-package=selenium",
-    "--include-package=webdriver_manager",
+    *_optional_include_packages(
+        "pycaw",
+        "comtypes",
+        "groq",
+        "fish_audio_sdk",
+        "speech_recognition",
+        "pyaudio",
+        "certifi",
+        "websockets",
+        "pydub",
+        "watchdog",
+        "requests",
+        "httpx",
+        "psutil",
+        "reportlab",
+        "ddgs",
+        "duckduckgo_search",
+        "pyautogui",
+        "pyperclip",
+        "pygetwindow",
+        "selenium",
+        "webdriver_manager",
+    ),
 
     # 불필요한 모듈 제외 (빌드 속도 및 용량 최적화)
     "--nofollow-import-to=matplotlib",
