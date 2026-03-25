@@ -173,6 +173,10 @@ nuitka_args = [
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
     "--nofollow-import-to=PIL",
+    "--nofollow-import-to=openai.types.audio.translation",
+    "--nofollow-import-to=openai.types.audio.translation_create_params",
+    "--nofollow-import-to=openai.types.audio.translation_create_response",
+    "--nofollow-import-to=openai.types.audio.translation_verbose",
     
     "Main.py"
 ]
