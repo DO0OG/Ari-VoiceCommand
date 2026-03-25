@@ -241,7 +241,8 @@ class AICommand(BaseCommand):
             repeat_sec=repeat_seconds,
         )
         repeat_str = " (반복)" if repeat else ""
-        return f"작업 예약 완료 (ID: {task_id}){repeat_str}. {next_run.strftime('%m월 %d일 %H시 %M분')}에 실행됩니다."
+        formatted = self._format_datetime_kr(next_run)
+        return f"작업 예약 완료 (ID: {task_id}){repeat_str}. {formatted}에 실행됩니다."
 
     def _handle_cancel_scheduled_task(self, args: dict) -> Optional[str]:
         """예약 작업 취소"""
@@ -368,6 +369,9 @@ class AICommand(BaseCommand):
                 return 12
             return hour + 12 if hour < 12 else None
         return hour
+
+    def _format_datetime_kr(self, dt: datetime) -> str:
+        return f"{dt.month:02d}월 {dt.day:02d}일 {dt.hour:02d}시 {dt.minute:02d}분"
 
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
 
