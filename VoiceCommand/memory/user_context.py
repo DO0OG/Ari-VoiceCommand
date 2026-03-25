@@ -308,8 +308,8 @@ class UserContextManager:
                     else:
                         enriched.append(item)
                 recommendations = enriched
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[UserContext] 전략 기반 추천 보강 생략: {exc}")
         return recommendations[:limit]
 
     def optimize_memory(self):

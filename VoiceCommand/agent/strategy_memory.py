@@ -212,7 +212,7 @@ class StrategyMemory:
         return vector
 
     def _stable_bucket(self, value: str) -> int:
-        digest = hashlib.md5(value.encode("utf-8")).digest()
+        digest = hashlib.sha256(value.encode("utf-8")).digest()
         return int.from_bytes(digest[:4], "big") % _EMBED_DIM
 
     def _embedding_similarity(self, left: List[float], right: List[float]) -> float:

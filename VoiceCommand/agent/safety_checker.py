@@ -6,7 +6,7 @@ AI가 생성한 코드/명령/URL의 위험 수준을 분류합니다.
 import re
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Any, Optional
 
 
 class DangerLevel(Enum):

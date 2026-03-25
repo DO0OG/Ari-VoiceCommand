@@ -154,7 +154,6 @@ def initialize_tts():
 
 def reconnect_tts_signals():
     """현재 TTS 프로바이더와 캐릭터 위젯 시그널을 다시 연결."""
-    global fish_tts, character_widget
     if not fish_tts or not character_widget or not hasattr(fish_tts, 'playback_finished'):
         return
     try:

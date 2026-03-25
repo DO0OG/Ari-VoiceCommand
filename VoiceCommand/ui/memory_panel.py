@@ -13,7 +13,7 @@ import logging
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+    QFrame, QGridLayout, QHBoxLayout, QLabel,
     QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -23,7 +23,7 @@ from ui.common import (
 )
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
-    COLOR_PRIMARY, COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS,
+    COLOR_PRIMARY, COLOR_DANGER, COLOR_MUTED,
     COLOR_BG_WHITE, COLOR_BG_CHIP_PRIMARY, COLOR_BG_CHIP_WARN,
     SCROLLBAR_THIN_STYLE, TAB_STYLE, primary_btn_style,
     WINDOW_W_MEMORY, WINDOW_H_MEMORY,

@@ -164,7 +164,7 @@ class CharacterWidget(QWidget):
             self.set_animation("idle")
             # 생각 중일 때는 애니메이션 속도를 늦추거나 시각적 효과 부여 가능
             self.animation_timer.setInterval(120) 
-            if random.random() < 0.5:
+            if random.random() < 0.5:  # nosec B311 - UI 애니메이션용 비보안 난수
                 self.say("생각 중...", duration=0)
         else:
             self.animation_timer.setInterval(70)

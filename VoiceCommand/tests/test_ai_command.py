@@ -110,7 +110,8 @@ class AICommandTests(unittest.TestCase):
 
         class _FixedDateTime(datetime):
             @classmethod
-            def now(cls):
+            def now(cls, tz=None):
+                del tz
                 return cls(2026, 3, 25, 3, 31, 51)
 
         with patch("commands.ai_command.datetime", _FixedDateTime):
@@ -125,7 +126,8 @@ class AICommandTests(unittest.TestCase):
 
         class _FixedDateTime(datetime):
             @classmethod
-            def now(cls):
+            def now(cls, tz=None):
+                del tz
                 return cls(2026, 3, 25, 3, 31, 51)
 
         with patch("commands.ai_command.datetime", _FixedDateTime):
@@ -140,7 +142,8 @@ class AICommandTests(unittest.TestCase):
 
         class _FixedDateTime(datetime):
             @classmethod
-            def now(cls):
+            def now(cls, tz=None):
+                del tz
                 return cls(2026, 3, 25, 3, 31, 51)
 
         with patch("commands.ai_command.datetime", _FixedDateTime):
@@ -155,7 +158,8 @@ class AICommandTests(unittest.TestCase):
 
         class _FixedDateTime(datetime):
             @classmethod
-            def now(cls):
+            def now(cls, tz=None):
+                del tz
                 return cls(2026, 3, 25, 12, 10, 0)
 
         with patch("commands.ai_command.datetime", _FixedDateTime):

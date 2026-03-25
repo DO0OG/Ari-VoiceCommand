@@ -153,7 +153,8 @@ class ProactiveScheduler:
         due = []
         with self._lock:
             for tid, t in list(self._tasks.items()):
-                if not t.enabled: continue
+                if not t.enabled:
+                    continue
                 try:
                     dt = datetime.fromisoformat(t.next_run)
                     if self._is_except_date(t, dt.date().isoformat()):
@@ -169,8 +170,10 @@ class ProactiveScheduler:
                             t.next_run = self._compute_next_run(t, dt, now).isoformat()
                         else:
                             t.enabled = False
-                except Exception: continue
-            if due: self._save()
+                except Exception as exc:
+                    logging.debug(f"[Scheduler] 작업 시간 해석 실패: {tid} ({exc})")
+            if due:
+                self._save()
 
         for t in due:
             threading.Thread(target=self._execute_task, args=(t,), daemon=True).start()

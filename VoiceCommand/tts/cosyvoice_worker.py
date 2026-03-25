@@ -78,8 +78,8 @@ def main():
         torch.set_grad_enabled(False)
         try:
             torch.set_float32_matmul_precision("high")
-        except Exception:
-            pass
+        except Exception as exc:
+            ctrl(f"INFO:matmul precision 설정 생략 ({exc})")
     except Exception:
         pass
 

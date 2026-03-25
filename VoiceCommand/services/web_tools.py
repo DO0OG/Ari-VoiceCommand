@@ -44,6 +44,9 @@ def web_search(query: str, max_results: int = 5) -> str:
 def web_fetch(url: str, max_chars: int = 3000) -> str:
     """URL의 본문 텍스트를 추출합니다."""
     try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            return f"허용되지 않은 URL 스킴: {parsed.scheme or 'unknown'}"
         req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=10) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
@@ -180,8 +183,8 @@ class SmartBrowser:
                     matched_selector = sel
                     self._remember_selector(current_domain, action_key, sel)
                     break
-            except Exception:
-                continue
+            except Exception as exc:
+                logging.debug(f"[SmartBrowser] 셀렉터 실패: {sel} ({exc})")
         return found_el, matched_selector
 
     def _wait_for_url_contains(self, fragment: str, timeout: float = 15.0) -> str:
