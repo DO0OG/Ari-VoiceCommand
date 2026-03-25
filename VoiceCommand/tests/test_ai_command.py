@@ -16,6 +16,10 @@ class _FakeAssistant:
     def chat_with_tools(self, text, include_context=True):
         return "무엇을 도와드릴까요?", []
 
+    def feed_tool_result(self, original_text, tool_calls, results):
+        del original_text, tool_calls, results
+        return ""
+
 
 class _FakeScheduler:
     def __init__(self):
@@ -45,6 +49,27 @@ class AICommandTests(unittest.TestCase):
     def test_simple_chat_is_not_escalated(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         self.assertFalse(command._should_escalate_to_agent_task("안녕?", "안녕하세요!"))
+
+    def test_get_current_time_returns_direct_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return cls(2026, 3, 25, 16, 48, 0)
+
+        with patch("commands.ai_command.datetime", _FixedDateTime):
+            result = command._handle_get_current_time({})
+
+        self.assertEqual(result, "현재 시간은 오후 4시 48분입니다.")
+
+    def test_preface_response_filters_ellipsis_placeholder(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        self.assertFalse(command._should_emit_preface_response("(평온)..."))
+        self.assertFalse(command._should_emit_preface_response("get_current_time"))
+        self.assertTrue(command._should_emit_preface_response("알겠습니다. 바로 확인해볼게요."))
 
     def test_delayed_shutdown_is_scheduled_not_executed_immediately(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

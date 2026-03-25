@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 import subprocess
+from collections import deque
 
 import numpy as np
 import pyaudio
@@ -96,12 +97,17 @@ class CosyVoiceTTS(QObject):
             "--cosyvoice-dir", COSYVOICE_DIR,
             "--speed", str(self.speed),
         ]
+        popen_kwargs = {
+            "stdin": subprocess.PIPE,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "bufsize": 0,
+        }
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         self._proc = subprocess.Popen(  # nosec B603 - controlled local worker process
             cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,   # 이진 PCM 스트림
-            stderr=subprocess.PIPE,   # 텍스트 제어 메시지
-            bufsize=0,
+            **popen_kwargs,
         )
         self._stderr_thread = threading.Thread(target=self._stderr_reader, daemon=True)
         self._stderr_thread.start()

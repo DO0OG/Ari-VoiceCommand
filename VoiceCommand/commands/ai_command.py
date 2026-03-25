@@ -121,9 +121,10 @@ class AICommand(BaseCommand):
         return None
 
     def _handle_get_current_time(self, args: dict) -> Optional[str]:
-        from VoiceCommand import execute_command
-        execute_command("지금 몇 시야")
-        return None
+        now = datetime.now()
+        am_pm = "오전" if now.hour < 12 else "오후"
+        hour = now.hour if now.hour < 12 else (now.hour - 12 if now.hour > 12 else 12)
+        return f"현재 시간은 {am_pm} {hour}시 {now.minute}분입니다."
 
     def _handle_shutdown_computer(self, args: dict) -> Optional[str]:
         scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
@@ -599,24 +600,21 @@ class AICommand(BaseCommand):
                     logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격: %s", text[:80])
 
                 if tool_calls:
-                    # AI 텍스트 응답 먼저 TTS (경로/명령어 잔해 없는 자연어만)
-                    if response:
+                    # 도구 호출 전 자연스러운 안내 문장만 선행 출력
+                    if response and self._should_emit_preface_response(response):
                         self.tts_wrapper(response)
-                    else:
-                        for tc in tool_calls:
-                            exp = tc.get("arguments", {}).get("explanation", "")
-                            if exp:
-                                self.tts_wrapper(exp)
-                                break
-                        else:
-                            self.tts_wrapper("명령을 실행할게요.")
 
                     results = self._execute_tool_calls(tool_calls)
 
-                    # 에이전틱 루프: 실행 결과를 LLM에 피드백하여 최종 응답 TTS
                     non_none = [r for r in results if r is not None]
+                    followup = None
                     if non_none and hasattr(self.ai_assistant, 'feed_tool_result'):
-                        self._run_agentic_followup(text, tool_calls, results)
+                        followup = self._run_agentic_followup(text, tool_calls, results)
+                    if followup:
+                        self.tts_wrapper(followup)
+                    elif non_none:
+                        for result in non_none:
+                            self.tts_wrapper(str(result))
                 else:
                     if response:
                         self.tts_wrapper(response)
@@ -671,14 +669,26 @@ class AICommand(BaseCommand):
                 results.append(None)
         return results
 
-    def _run_agentic_followup(self, original_text: str, tool_calls: list, results: List[Optional[str]]):
-        """도구 실행 결과를 LLM에 피드백하고 최종 응답을 TTS"""
+    def _run_agentic_followup(self, original_text: str, tool_calls: list, results: List[Optional[str]]) -> Optional[str]:
+        """도구 실행 결과를 LLM에 피드백하고 최종 응답 문자열을 반환."""
         try:
-            followup = self.ai_assistant.feed_tool_result(original_text, tool_calls, results)
-            if followup:
-                self.tts_wrapper(followup)
+            return self.ai_assistant.feed_tool_result(original_text, tool_calls, results)
         except Exception as e:
             logging.error(f"에이전틱 후속 처리 오류: {e}", exc_info=True)
+            return None
+
+    def _should_emit_preface_response(self, response: str) -> bool:
+        normalized = (response or "").strip()
+        if not normalized:
+            return False
+        if normalized.endswith("...") or normalized in {"...", "(평온)..."}:
+            return False
+        lowered = normalized.lower()
+        if any(token in lowered for token in ("<function=", "shutdown_computer", "get_current_time", "run_agent_task")):
+            return False
+        if len(normalized) <= 8:
+            return False
+        return True
 
     def _record_user_pattern(self, user_input: str):
         try:

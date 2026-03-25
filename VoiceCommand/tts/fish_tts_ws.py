@@ -2,13 +2,43 @@
 Fish Audio WebSocket TTS (Streaming Optimized)
 첫 청크 수신 즉시 재생을 시작하여 레이턴시를 최소화합니다.
 """
+import os
 import logging
 import time
 import threading
 import queue
+import subprocess
+from contextlib import contextmanager
 import pyaudio
 from fishaudio import FishAudio
 from PySide6.QtCore import QObject, Signal
+
+
+@contextmanager
+def _suppress_decoder_console():
+    if os.name != "nt":
+        yield
+        return
+
+    original_popen = subprocess.Popen
+
+    def _wrapped_popen(*args, **kwargs):
+        kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return original_popen(*args, **kwargs)
+
+    subprocess.Popen = _wrapped_popen
+    try:
+        yield
+    finally:
+        subprocess.Popen = original_popen
+
+
+def _decode_mp3_segment(audio_bytes: bytes):
+    from pydub import AudioSegment
+    import io
+
+    with _suppress_decoder_console():
+        return AudioSegment.from_mp3(io.BytesIO(audio_bytes))
 
 
 class FishTTSWebSocket(QObject):
@@ -32,9 +62,6 @@ class FishTTSWebSocket(QObject):
             return False
 
         try:
-            from pydub import AudioSegment
-            import io
-
             def text_gen():
                 yield text
 
@@ -73,7 +100,7 @@ class FishTTSWebSocket(QObject):
 
                     # 첫 재생 장치 열기 및 즉시 재생
                     combined = b"".join(chunk_buffer)
-                    segment = AudioSegment.from_mp3(io.BytesIO(combined))
+                    segment = _decode_mp3_segment(combined)
 
                     from audio_manager import _audio_output_lock
                     # pa.open()만 락으로 보호 (stream.write는 블로킹 콜이므로 락 밖으로)
@@ -100,7 +127,7 @@ class FishTTSWebSocket(QObject):
 
                             if len(mp3_buffer) >= MIN_DECODE_SIZE:
                                 try:
-                                    segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
+                                    segment = _decode_mp3_segment(mp3_buffer)
                                     stream.write(segment.raw_data)
                                     mp3_buffer = b""
                                 except Exception:
@@ -113,7 +140,7 @@ class FishTTSWebSocket(QObject):
                     # 3단계: 남은 데이터 처리 및 스트림 드레인
                     if mp3_buffer:
                         try:
-                            segment = AudioSegment.from_mp3(io.BytesIO(mp3_buffer))
+                            segment = _decode_mp3_segment(mp3_buffer)
                             stream.write(segment.raw_data)
                         except Exception:  # nosec B110
                             pass
@@ -135,7 +162,7 @@ class FishTTSWebSocket(QObject):
                             stream.close()
                         except Exception:  # nosec B110
                             pass
-                    logging.info("재생 장치 닫기 완료")
+                    logging.debug("재생 장치 닫기 완료")
 
             # 재생 스레드 시작
             self.is_playing = True
@@ -156,12 +183,12 @@ class FishTTSWebSocket(QObject):
                         continue
                 chunk_count += 1
                 if chunk_count == 1:
-                    logging.info("첫 청크 수신")
+                    logging.info("[TTS] 첫 청크 수신")
 
             # 다운로드 완료 알림
             download_done.set()
             audio_queue.put(None)
-            logging.info(f"다운로드 완료 ({chunk_count}개 청크)")
+            logging.debug(f"다운로드 완료 ({chunk_count}개 청크)")
 
             # 재생 완료 대기 — 최대 15초, 초과 시 강제 중단
             self.play_thread.join(timeout=15.0)
@@ -175,7 +202,7 @@ class FishTTSWebSocket(QObject):
             
             self.is_playing = False
             self.playback_finished.emit()
-            logging.info("TTS 재생 프로세스 완전 종료")
+            logging.debug("TTS 재생 프로세스 완전 종료")
 
             return True
 
