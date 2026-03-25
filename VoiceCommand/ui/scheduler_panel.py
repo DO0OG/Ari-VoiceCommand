@@ -6,7 +6,7 @@ FloatingPanel 기반 클래스를 사용해 구조를 공유합니다.
 import logging
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -19,9 +19,9 @@ from ui.common import (
 )
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
-    COLOR_PRIMARY, COLOR_SUCCESS, COLOR_DANGER, COLOR_MUTED, COLOR_WARNING,
+    COLOR_PRIMARY, COLOR_SUCCESS, COLOR_DANGER, COLOR_MUTED,
     COLOR_BG_WHITE, COLOR_BORDER_CARD,
-    SCROLLBAR_THIN_STYLE, primary_btn_style, icon_btn_style,
+    SCROLLBAR_THIN_STYLE, primary_btn_style,
     WINDOW_W_SCHEDULER, WINDOW_H_SCHEDULER,
 )
 
