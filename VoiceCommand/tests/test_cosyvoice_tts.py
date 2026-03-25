@@ -7,7 +7,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from tts.cosyvoice_tts import _PCMChunkBuffer, _normalize_text_cached
+from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached
 
 
 class PCMChunkBufferTests(unittest.TestCase):

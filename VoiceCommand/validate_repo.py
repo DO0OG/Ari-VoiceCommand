@@ -36,6 +36,7 @@ COMPILE_TARGETS = [
     "commands/ai_command.py",
     "core/threads.py",
     "tts/cosyvoice_tts.py",
+    "tts/cosyvoice_utils.py",
     "tts/cosyvoice_worker.py",
     "tts/fish_tts_ws.py",
     "tts/tts_factory.py",

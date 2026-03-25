@@ -6,19 +6,17 @@ CosyVoice3 Local TTS — 서브프로세스 격리 + 이진 스트리밍
 """
 import sys
 import os
-import re
 import shutil
 import struct
 import logging
 import threading
 import time
 import subprocess
-from functools import lru_cache
-from collections import deque
 
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
+from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -36,105 +34,6 @@ def _get_python_exe() -> str:
             )
         return python
     return sys.executable
-
-# ── 한국어 숫자 정규화 ────────────────────────────────────────────────────────
-_NATIVE_HOURS = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉',
-                 '열', '열한', '열두']
-_SINO_ONES = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
-_DIGIT_NAMES = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
-
-
-def _sino(n: int) -> str:
-    """정수를 한자어 수사 문자열로 (0~9999)"""
-    if n < 0:
-        return '마이너스 ' + _sino(abs(n))
-    if n == 0:
-        return '영'
-    if n > 9999:
-        # 비정상적으로 긴 숫자는 한 자리씩 읽어 TTS 예외를 막는다.
-        return ''.join(_DIGIT_NAMES[int(d)] for d in str(n))
-    result = ''
-    if n >= 1000:
-        t = n // 1000
-        result += ('' if t == 1 else _SINO_ONES[t]) + '천'
-        n %= 1000
-    if n >= 100:
-        h = n // 100
-        result += ('' if h == 1 else _SINO_ONES[h]) + '백'
-        n %= 100
-    if n >= 10:
-        t = n // 10
-        result += ('' if t == 1 else _SINO_ONES[t]) + '십'
-        n %= 10
-    if n > 0:
-        result += _SINO_ONES[n]
-    return result
-
-
-def _normalize_text(text: str) -> str:
-    """TTS 전 숫자를 한국어 발음으로 변환"""
-    # 시(時): 1~12는 고유어, 그 외는 한자어
-    def repl_hour(m):
-        h = int(m.group(1))
-        return (_NATIVE_HOURS[h] if 1 <= h <= 12 else _sino(h)) + '시'
-
-    text = re.sub(r'(\d{1,2})시', repl_hour, text)
-    text = re.sub(r'(\d{1,2})분', lambda m: _sino(int(m.group(1))) + '분', text)
-    text = re.sub(r'(\d{1,2})초', lambda m: _sino(int(m.group(1))) + '초', text)
-    # 나머지 숫자 → 한자어
-    text = re.sub(r'\d+', lambda m: _sino(int(m.group(0))), text)
-    return text
-
-
-@lru_cache(maxsize=256)
-def _normalize_text_cached(text: str) -> str:
-    return _normalize_text(text)
-
-
-class _PCMChunkBuffer:
-    """콜백 재생용 PCM 청크 버퍼.
-
-    bytearray 슬라이싱 삭제 대신 deque를 사용해 긴 문장에서도
-    메모리 이동 비용과 누적 사용량을 줄입니다.
-    """
-    def __init__(self):
-        self._chunks = deque()
-        self._size = 0
-
-    def clear(self):
-        self._chunks.clear()
-        self._size = 0
-
-    def append(self, data: bytes):
-        if not data:
-            return
-        self._chunks.append(data)
-        self._size += len(data)
-
-    def pop_bytes(self, nbytes: int) -> bytes:
-        if nbytes <= 0 or self._size <= 0:
-            return b""
-
-        remaining = nbytes
-        parts = []
-        while remaining > 0 and self._chunks:
-            chunk = self._chunks[0]
-            if len(chunk) <= remaining:
-                parts.append(chunk)
-                self._chunks.popleft()
-                self._size -= len(chunk)
-                remaining -= len(chunk)
-            else:
-                parts.append(chunk[:remaining])
-                self._chunks[0] = chunk[remaining:]
-                self._size -= remaining
-                remaining = 0
-        return b"".join(parts)
-
-    @property
-    def size(self) -> int:
-        return self._size
-
 
 COSYVOICE_DIR = r"D:\Git\CosyVoice"
 DEFAULT_MODEL_DIR = os.path.join(COSYVOICE_DIR, "pretrained_models", "Fun-CosyVoice3-0.5B")
