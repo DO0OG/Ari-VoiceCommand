@@ -10,7 +10,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -112,25 +112,19 @@ class PluginManager:
         plugin.version = str(metadata.get("version", "0.1.0"))
         plugin.description = str(metadata.get("description", ""))
 
-        register_func = self._resolve_register(module)
-        if register_func is None:
+        register = getattr(module, "register", None)
+        if register is None:
             plugin.loaded = True
             plugin.error = ""
             return plugin
-        exports = register_func(context) or {}
+        if not callable(register):
+            raise TypeError("register는 callable이어야 합니다.")
+        exports = register(context) or {}
         if isinstance(exports, dict):
             plugin.exports = exports
         plugin.loaded = True
         plugin.error = ""
         return plugin
-
-    def _resolve_register(self, module: ModuleType) -> Optional[Callable[[PluginContext], Any]]:
-        register = getattr(module, "register", None)
-        if register is None:
-            return None
-        if not callable(register):
-            raise TypeError("register는 callable이어야 합니다.")
-        return cast(Callable[[PluginContext], Any], register)
 
 
 _plugin_manager: Optional[PluginManager] = None

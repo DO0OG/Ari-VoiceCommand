@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
 from ui.theme import (
-    FONT_KO, FONT_SIZE_NORMAL, COLOR_PRIMARY, COLOR_SUCCESS,
+    FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
     TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE, primary_btn_style,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
