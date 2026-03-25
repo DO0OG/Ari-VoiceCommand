@@ -18,6 +18,8 @@ class ConfigManager:
         # ── LLM 제공자 ──────────────────────────────────────────────────────
         "llm_provider": "groq",        # groq | openai | anthropic | mistral | gemini | openrouter
         "llm_model": "",               # 비워두면 제공자별 기본 모델 사용
+        "llm_planner_model": "",       # 비워두면 llm_model 공유
+        "llm_execution_model": "",     # 비워두면 llm_model 공유
         "groq_api_key": "",
         "openai_api_key": "",
         "anthropic_api_key": "",
@@ -47,6 +49,9 @@ class ConfigManager:
         "microphone": "",
         "tts_speed": 1.0,
         "tts_volume": 1.0,
+        "ui_theme_preset": "default",
+        "ui_theme_scale": 1.0,
+        "ui_font_family": "",
     }
     _cached_settings: Optional[Dict[str, Any]] = None
 

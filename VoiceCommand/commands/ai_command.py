@@ -10,6 +10,28 @@ from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 
 class AICommand(BaseCommand):
     """AI 어시스턴트 대화 명령 (기본/fallback)"""
+    _COMPLEX_TASK_KEYWORDS = (
+        "저장", "정리", "요약", "보고서", "리포트", "분석", "검색", "찾아",
+        "만들", "생성", "열어", "실행", "복사", "이동", "삭제", "로그인",
+        "브라우저", "파일", "폴더", "문서", "다운로드", "자동화",
+    )
+    _SIMPLE_CHAT_KEYWORDS = (
+        "안녕", "고마워", "감사", "잘자", "반가", "미안", "사랑", "농담",
+        "몇 시", "시간", "날씨", "볼륨", "음악", "노래", "타이머",
+    )
+    _SHUTDOWN_KEYWORDS = ("컴퓨터", "pc", "시스템", "윈도우")
+    _SCHEDULE_PATTERN_STRINGS = (
+        r'(\d+\s*초\s*(?:후|뒤))',
+        r'(\d+\s*분\s*(?:후|뒤))',
+        r'(\d+\s*시간\s*(?:후|뒤))',
+        r'(\d+\s*일\s*(?:후|뒤))',
+        r'(매시간)',
+        r'(매일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
+        r'(내일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
+        r'((?:오늘\s*)?(?:오전|오후)\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
+        r'((?:오늘\s*)?\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
+        r'(\d{1,2}\s*분에)',
+    )
 
     def __init__(self, ai_assistant, tts_func, learning_mode_ref):
         self.ai_assistant = ai_assistant
@@ -104,6 +126,9 @@ class AICommand(BaseCommand):
         return None
 
     def _handle_shutdown_computer(self, args: dict) -> Optional[str]:
+        scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
+        if scheduled:
+            return scheduled
         from VoiceCommand import execute_command
         execute_command("컴퓨터 종료")
         return None
@@ -206,14 +231,14 @@ class AICommand(BaseCommand):
 
         next_run, repeat, repeat_seconds = self._parse_schedule(when)
         if next_run is None:
-            return f"'{when}' 시간 표현을 이해하지 못했어요. '30분 후', '매일 오전 9시' 형식으로 말씀해 주세요."
+            return f"'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
 
         task_id = self.scheduler.schedule(
             goal=goal,
             next_run_dt=next_run,
-            schedule_desc=when,
+            desc=when,
             repeat=repeat,
-            repeat_seconds=repeat_seconds,
+            repeat_sec=repeat_seconds,
         )
         repeat_str = " (반복)" if repeat else ""
         return f"작업 예약 완료 (ID: {task_id}){repeat_str}. {next_run.strftime('%m월 %d일 %H시 %M분')}에 실행됩니다."
@@ -254,68 +279,95 @@ class AICommand(BaseCommand):
         파싱 실패 시 (None, False, 0) 반환.
         """
         now = datetime.now()
+        normalized = re.sub(r"\s+", " ", (when_kr or "").strip())
 
-        # "N초 후"
-        m = re.search(r'(\d+)\s*초\s*후', when_kr)
-        if m:
-            return now + timedelta(seconds=int(m.group(1))), False, 0
+        relative_target = self._parse_relative_schedule(normalized, now)
+        if relative_target is not None:
+            return relative_target, False, 0
 
-        # "N분 후"
-        m = re.search(r'(\d+)\s*분\s*후', when_kr)
-        if m:
-            return now + timedelta(minutes=int(m.group(1))), False, 0
-
-        # "N시간 후"
-        m = re.search(r'(\d+)\s*시간\s*후', when_kr)
-        if m:
-            return now + timedelta(hours=int(m.group(1))), False, 0
-
-        # "N일 후"
-        m = re.search(r'(\d+)\s*일\s*후', when_kr)
-        if m:
-            return now + timedelta(days=int(m.group(1))), False, 0
+        minute_target = self._parse_minute_of_hour_schedule(normalized, now)
+        if minute_target is not None:
+            return minute_target, False, 0
             
         # "매시간" (1시간 마다 반복)
-        if "매시간" in when_kr.replace(" ", ""):
+        if "매시간" in normalized.replace(" ", ""):
             return now + timedelta(hours=1), True, 3600
 
         # "매일 [오전|오후] N시 [M분]" → 반복 (매 24시간)
-        m = re.search(r'매일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?', when_kr)
+        m = re.search(r'매일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
         if m:
-            ampm, hour_s, min_s = m.group(1), int(m.group(2)), int(m.group(3) or 0)
-            hour = hour_s
-            if ampm == "오후" and hour < 12:
-                hour += 12
-            elif ampm is None and hour < 7:  # 모호한 경우 오전 가정
-                pass
-            target = now.replace(hour=hour, minute=min_s, second=0, microsecond=0)
+            hour = self._resolve_hour(m.group(1), int(m.group(2)))
+            minute = int(m.group(3) or 0)
+            if hour is None or minute > 59:
+                return None, False, 0
+            target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if target <= now:
                 target += timedelta(days=1)
             return target, True, 86400
 
         # "내일 [오전|오후] N시 [M분]"
-        m = re.search(r'내일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?', when_kr)
+        m = re.search(r'내일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
         if m:
-            ampm, hour_s, min_s = m.group(1), int(m.group(2)), int(m.group(3) or 0)
-            hour = hour_s
-            if ampm == "오후" and hour < 12:
-                hour += 12
-            target = (now + timedelta(days=1)).replace(hour=hour, minute=min_s, second=0, microsecond=0)
+            hour = self._resolve_hour(m.group(1), int(m.group(2)))
+            minute = int(m.group(3) or 0)
+            if hour is None or minute > 59:
+                return None, False, 0
+            target = (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
             return target, False, 0
 
         # "[오늘] [오전|오후] N시 [M분]"
-        m = re.search(r'(?:오늘\s*)?(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?', when_kr)
+        m = re.search(r'(?:오늘\s*)?(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
         if m:
-            ampm, hour_s, min_s = m.group(1), int(m.group(2)), int(m.group(3) or 0)
-            hour = hour_s
-            if ampm == "오후" and hour < 12:
-                hour += 12
-            target = now.replace(hour=hour, minute=min_s, second=0, microsecond=0)
-            if target <= now:
+            hour = self._resolve_hour(m.group(1), int(m.group(2)))
+            minute = int(m.group(3) or 0)
+            if hour is None or minute > 59:
+                return None, False, 0
+            target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if target <= now and "오늘" not in normalized:
                 target += timedelta(days=1)
             return target, False, 0
 
         return None, False, 0
+
+    def _parse_relative_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
+        patterns = (
+            (r'(\d+)\s*초\s*(?:후|뒤)', "seconds"),
+            (r'(\d+)\s*분\s*(?:후|뒤)', "minutes"),
+            (r'(\d+)\s*시간\s*(?:후|뒤)', "hours"),
+            (r'(\d+)\s*일\s*(?:후|뒤)', "days"),
+        )
+        for pattern, unit in patterns:
+            match = re.search(pattern, when_kr)
+            if not match:
+                continue
+            amount = int(match.group(1))
+            return now + timedelta(**{unit: amount})
+        return None
+
+    def _parse_minute_of_hour_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
+        if "시" in when_kr:
+            return None
+        match = re.search(r'(\d{1,2})\s*분에', when_kr)
+        if not match:
+            return None
+        minute = int(match.group(1))
+        if minute > 59:
+            return None
+        target = now.replace(minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(hours=1)
+        return target
+
+    def _resolve_hour(self, ampm: Optional[str], hour: int) -> Optional[int]:
+        if hour < 0 or hour > 23:
+            return None
+        if ampm == "오전":
+            return 0 if hour == 12 else hour
+        if ampm == "오후":
+            if hour == 12:
+                return 12
+            return hour + 12 if hour < 12 else None
+        return hour
 
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
 
@@ -340,6 +392,24 @@ class AICommand(BaseCommand):
             return []
 
         recovered: List[dict] = []
+        normalized_when = self._extract_schedule_phrase(user_text)
+
+        if re.search(r'set_timer', response, flags=re.IGNORECASE):
+            if self._is_shutdown_request(user_text) and normalized_when:
+                recovered.append({
+                    "id": "ai_command_recover_1",
+                    "name": "schedule_task",
+                    "arguments": {"goal": "컴퓨터 종료", "when": normalized_when},
+                })
+                return recovered
+            timer_args = self._extract_timer_args_from_response(response)
+            if timer_args:
+                recovered.append({
+                    "id": "ai_command_recover_1",
+                    "name": "set_timer",
+                    "arguments": timer_args,
+                })
+                return recovered
 
         if re.search(r'run_agent_task', response, flags=re.IGNORECASE):
             recovered.append({
@@ -358,6 +428,13 @@ class AICommand(BaseCommand):
             return recovered
 
         if re.search(r'(컴퓨터|시스템|pc).*(종료|꺼)', response, flags=re.IGNORECASE) or re.search(r'shutdown', response, flags=re.IGNORECASE):
+            if normalized_when:
+                recovered.append({
+                    "id": "ai_command_recover_1",
+                    "name": "schedule_task",
+                    "arguments": {"goal": "컴퓨터 종료", "when": normalized_when},
+                })
+                return recovered
             recovered.append({
                 "id": "ai_command_recover_1",
                 "name": "shutdown_computer",
@@ -398,6 +475,66 @@ class AICommand(BaseCommand):
             return recovered
 
         return recovered
+
+    def _extract_schedule_phrase(self, text: str) -> str:
+        normalized = (text or "").strip()
+        if not normalized:
+            return ""
+        for pattern in self._SCHEDULE_PATTERN_STRINGS:
+            match = re.search(pattern, normalized, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return ""
+
+    def _is_shutdown_request(self, text: str) -> bool:
+        lowered = (text or "").lower()
+        return (
+            any(token in lowered for token in self._SHUTDOWN_KEYWORDS)
+            and ("종료" in text or "꺼" in text)
+        )
+
+    def _extract_timer_args_from_response(self, response: str) -> Optional[dict]:
+        match = re.search(
+            r'set_timer[^>]*>\s*\{\s*"minutes"\s*:\s*(\d+)\s*,\s*"seconds"\s*:\s*(\d+)\s*\}',
+            response,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+        return {
+            "minutes": int(match.group(1)),
+            "seconds": int(match.group(2)),
+        }
+
+    def _maybe_schedule_shutdown_from_goal(self, goal_text: str) -> Optional[str]:
+        when = self._extract_schedule_phrase(goal_text)
+        if not when:
+            return None
+        if not self._is_shutdown_request(goal_text):
+            return None
+        return self._handle_schedule_task({"goal": "컴퓨터 종료", "when": when})
+
+    def _should_escalate_to_agent_task(self, user_text: str, response: Optional[str]) -> bool:
+        """도구 호출이 없을 때 복잡한 작업 요청을 에이전트 태스크로 승격할지 판단."""
+        normalized = (user_text or "").strip()
+        lower = normalized.lower()
+        if not normalized:
+            return False
+        if any(token in lower for token in self._SIMPLE_CHAT_KEYWORDS):
+            return False
+        if len(normalized) < 8:
+            return False
+
+        has_complex_keyword = any(token in normalized for token in self._COMPLEX_TASK_KEYWORDS)
+        if not has_complex_keyword:
+            return False
+
+        generic_response = not response or any(
+            phrase in response for phrase in (
+                "이해하지 못", "무엇을 도와", "다시 말씀", "잘 모르겠", "죄송합니다"
+            )
+        )
+        return generic_response or self.learning_mode_ref.get("enabled", False)
 
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
@@ -445,6 +582,17 @@ class AICommand(BaseCommand):
                             "[AICommand] 텍스트 기반 도구 호출 복구: %s",
                             [tc.get("name") for tc in tool_calls],
                         )
+
+                if not tool_calls and self._should_escalate_to_agent_task(text, response):
+                    tool_calls = [{
+                        "id": "ai_command_escalate_1",
+                        "name": "run_agent_task",
+                        "arguments": {
+                            "goal": text,
+                            "explanation": "복합 작업으로 판단되어 단계별 실행으로 전환할게요.",
+                        },
+                    }]
+                    logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격: %s", text[:80])
 
                 if tool_calls:
                     # AI 텍스트 응답 먼저 TTS (경로/명령어 잔해 없는 자연어만)

@@ -40,6 +40,7 @@ from core.VoiceCommand import (
 
 from core.core_manager import AriCore
 from ui.tray_icon import SystemTrayIcon
+from core.plugin_loader import PluginContext, get_plugin_manager
 
 # 전역 변수 선언
 ai_assistant = None
@@ -135,6 +136,7 @@ def main():
     character = None
     tray_icon = None
     text_interface = None
+    plugin_manager = None
     try:
         setup_logging()
         logging.info("프로그램 시작")
@@ -186,6 +188,17 @@ def main():
         if use_system_tray and tray_icon:
             tray_icon.set_character_widget(character)
             tray_icon.set_text_interface(text_interface)
+
+        plugin_manager = get_plugin_manager()
+        plugin_manager.load_plugins(
+            PluginContext(
+                app=app,
+                tray_icon=tray_icon,
+                character_widget=character,
+                text_interface=text_interface,
+            )
+        )
+        logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용

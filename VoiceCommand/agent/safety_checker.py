@@ -1,12 +1,12 @@
 """
 안전 검사기 (Safety Checker)
-AI가 생성한 코드/명령의 위험 수준을 분류합니다.
+AI가 생성한 코드/명령/URL의 위험 수준을 분류합니다.
 패턴은 모듈 로드 시 한 번만 컴파일됩니다.
 """
 import re
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any, Optional
 
 
 class DangerLevel(Enum):
@@ -20,6 +20,7 @@ class SafetyReport:
     level: DangerLevel
     matched_patterns: List[str] = field(default_factory=list)
     summary_kr: str = ""
+    category: str = "general"
 
 
 # 패턴은 (compiled_re, 한국어_설명) 튜플로 모듈 로드 시 1회 컴파일
@@ -34,15 +35,19 @@ _DANGEROUS_PYTHON: List[_CompiledRule] = [
     (_c(r'shutil\s*\.\s*rmtree\s*\('),             "폴더 강제 삭제"),
     (_c(r'\bctypes\b'),                             "저수준 시스템 접근"),
     (_c(r'win32api|win32con|winreg'),               "Windows API/레지스트리 접근"),
+    (_c(r'requests\s*\.\s*(post|put|delete)'),      "데이터 외부 전송/수정"),
 ]
 
 _CAUTION_PYTHON: List[_CompiledRule] = [
     (_c(r"open\s*\([^)]*['\"][^'\"]*['\"],\s*['\"]w"), "파일 쓰기"),
     (_c(r'\bsubprocess\b'),                             "외부 프로세스 실행"),
+    (_c(r'pyautogui\s*\.\s*(click|typewrite|press)'),  "GUI 직접 제어"),
 ]
 
 _DANGEROUS_SHELL: List[_CompiledRule] = [
     (_c(r'\bshutdown\b',    re.I), "컴퓨터 종료"),
+    (_c(r'\blogoff\b|\btsdiscon\b', re.I), "세션 종료"),
+    (_c(r'\bshutdown\b.*\b/r\b', re.I), "컴퓨터 재시작"),
     (_c(r'\bformat\s+\w:',  re.I), "디스크 포맷"),
     (_c(r'del\s+/[fFsS]',   re.I), "강제 파일 삭제"),
     (_c(r'rd\s+/[sS]',      re.I), "폴더 강제 삭제"),
@@ -50,6 +55,7 @@ _DANGEROUS_SHELL: List[_CompiledRule] = [
     (_c(r'netsh\s+.*firewall', re.I), "방화벽 설정 변경"),
     (_c(r'\bbcdedit\b',     re.I), "부트 설정 변경"),
     (_c(r'\bdiskpart\b',    re.I), "디스크 파티션 조작"),
+    (_c(r'\bcurl\b|\bwget\b', re.I), "외부 데이터 전송"),
 ]
 
 _CAUTION_SHELL: List[_CompiledRule] = [
@@ -58,6 +64,17 @@ _CAUTION_SHELL: List[_CompiledRule] = [
     (_c(r'\bsc\s+(stop|start)\b', re.I), "서비스 중지/시작"),
 ]
 
+_DANGEROUS_URL_KEYWORDS = [
+    "banking", "finance", "login", "password", "reset", "delete-account", 
+    "account-settings", "payment", "checkout", "transfer"
+]
+_SENSITIVE_INPUT_KEYWORDS = ["password", "otp", "2fa", "인증", "비밀번호", "보안", "결제"]
+
+_ALWAYS_ALLOWED_APPS = ["notepad", "calc", "explorer", "chrome", "msedge", "cmd", "powershell"]
+_BLOCKED_APPS = ["regedit", "powershell_ise", "processhacker", "wireshark"]
+_TRUSTED_SITE_KEYWORDS = ["github.com", "google.com", "naver.com", "youtube.com"]
+_BLOCKED_SITE_KEYWORDS = ["bank", "payment", "wallet", "admin", "delete-account"]
+
 
 def _scan(rules: List[_CompiledRule], text: str) -> List[str]:
     """일치하는 모든 규칙의 설명 목록 반환"""
@@ -65,22 +82,32 @@ def _scan(rules: List[_CompiledRule], text: str) -> List[str]:
 
 
 class SafetyChecker:
-    """코드/명령의 위험 수준을 분류하는 검사기"""
+    """코드/명령/URL의 위험 수준을 분류하는 검사기 (Phase 1.3 고도화)"""
 
     def check_python(self, code: str) -> SafetyReport:
         matched = _scan(_DANGEROUS_PYTHON, code)
+        if "browser_login" in code:
+            matched.append("로그인 자동화")
+        if any(token in code.lower() for token in _SENSITIVE_INPUT_KEYWORDS) and any(
+            action in code for action in ("type_text", "write_clipboard", "press_keys")
+        ):
+            matched.append("민감 정보 입력 자동화")
         if matched:
             return SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary_kr=f"위험한 작업 감지: {', '.join(matched)}",
+                summary_kr=f"위험한 파이썬 작업 감지: {', '.join(matched)}",
+                category="web" if "로그인" in "".join(matched) else ("file_system" if "삭제" in "".join(matched) else "system")
             )
         caution = _scan(_CAUTION_PYTHON, code)
+        if any(token in code for token in ("click_image", "focus_window", "wait_for_download")):
+            caution.append("상태 인식 자동화")
         if caution:
             return SafetyReport(
                 level=DangerLevel.CAUTION,
                 matched_patterns=caution,
-                summary_kr=f"주의가 필요한 작업: {', '.join(caution)}",
+                summary_kr=f"주의가 필요한 파이썬 작업: {', '.join(caution)}",
+                category="automation" if "GUI" in "".join(caution) else "file_system"
             )
         return SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 코드입니다.")
 
@@ -90,7 +117,8 @@ class SafetyChecker:
             return SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary_kr=f"위험한 명령 감지: {', '.join(matched)}",
+                summary_kr=f"위험한 시스템 명령 감지: {', '.join(matched)}",
+                category="system"
             )
         caution = _scan(_CAUTION_SHELL, command)
         if caution:
@@ -98,8 +126,56 @@ class SafetyChecker:
                 level=DangerLevel.CAUTION,
                 matched_patterns=caution,
                 summary_kr=f"주의가 필요한 명령: {', '.join(caution)}",
+                category="system"
             )
         return SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 명령입니다.")
+
+    def check_url(self, url: str) -> SafetyReport:
+        """URL의 안전성을 검사합니다."""
+        url_lower = url.lower()
+        blocked = [kw for kw in _BLOCKED_SITE_KEYWORDS if kw in url_lower]
+        if blocked:
+            return SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                matched_patterns=blocked,
+                summary_kr=f"민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({', '.join(blocked)}).",
+                category="web"
+            )
+        matched = [kw for kw in _DANGEROUS_URL_KEYWORDS if kw in url_lower]
+        if matched:
+            return SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                matched_patterns=matched,
+                summary_kr=f"민감한 페이지 접근 감지 ({', '.join(matched)}). 자동화 시 보안 위험이 있습니다.",
+                category="web"
+            )
+        if not url_lower.startswith("https://"):
+            return SafetyReport(
+                level=DangerLevel.CAUTION,
+                summary_kr="암호화되지 않은(HTTP) 사이트 접근입니다.",
+                category="web"
+            )
+        if any(keyword in url_lower for keyword in _TRUSTED_SITE_KEYWORDS):
+            return SafetyReport(level=DangerLevel.SAFE, summary_kr="신뢰 정책에 포함된 사이트입니다.", category="web")
+        return SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 URL입니다.")
+
+    def check_app_launch(self, app_name: str) -> SafetyReport:
+        """앱 실행의 안전성을 검사합니다."""
+        app_lower = app_name.lower()
+        if any(blocked in app_lower for blocked in _BLOCKED_APPS):
+            return SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                summary_kr=f"위험 앱 정책에 의해 차단된 대상입니다: {app_name}",
+                category="app"
+            )
+        if any(allowed in app_lower for allowed in _ALWAYS_ALLOWED_APPS):
+            return SafetyReport(level=DangerLevel.SAFE, summary_kr="신뢰할 수 있는 앱입니다.")
+        
+        return SafetyReport(
+            level=DangerLevel.CAUTION,
+            summary_kr=f"알 수 없는 외부 앱({app_name}) 실행 시도입니다.",
+            category="app"
+        )
 
 
 _checker_instance: "SafetyChecker | None" = None

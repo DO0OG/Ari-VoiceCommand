@@ -1,10 +1,8 @@
 {
-  "personality": "",
-  "scenario": "",
-  "system_prompt": "",
-  "history_instruction": "",
   "llm_provider": "groq",
   "llm_model": "",
+  "llm_planner_model": "",
+  "llm_execution_model": "",
   "groq_api_key": "",
   "openai_api_key": "",
   "anthropic_api_key": "",
@@ -21,7 +19,17 @@
   "openai_tts_model": "tts-1",
   "elevenlabs_api_key": "",
   "elevenlabs_voice_id": "",
+  "elevenlabs_model_id": "eleven_multilingual_v2",
   "edge_tts_voice": "ko-KR-SunHiNeural",
   "edge_tts_rate": "+0%",
-  "microphone": ""
+  "personality": "",
+  "scenario": "",
+  "system_prompt": "",
+  "history_instruction": "",
+  "microphone": "",
+  "tts_speed": 1.0,
+  "tts_volume": 1.0,
+  "ui_theme_preset": "default",
+  "ui_theme_scale": 1.0,
+  "ui_font_family": ""
 }

@@ -1,5 +1,51 @@
-# 패키지 구조 정리(2026-03-23): core / agent / services / ui / tts / memory / audio
-# 메모리/검증 보강(2026-03-23): 자동 주제 추적, 전략 실패 분류, 문서/경로 기반 실제 검증 강화
+# 패키지 구조 고도화(2026-03-25):
+#   - 플래너/실행 모델 분리 및 아키텍처 개선
+#   - 파일 작업군 확대(이름 변경, 병합, 정리, 분석, 보고서)
+#   - GUI/브라우저 자동화 강화 (창 제어, 스마트 셀렉터, 이미지 인식 기반, 다운로드 상태 확인)
+#   - 지능형 메모리 (사실 충돌 해소, 신뢰도 감쇄 로직)
+#   - 자율성 향상 (병렬 단계 실행, 선제적 제안, 지정 시각 알람)
+#   - 실제 상태 검증 계층 강화 (창 제목, URL, 파일 존재 확인)
+#   - 설정 UI 확장 (플래너/실행 모델 분리, 외부 JSON 테마/글꼴 배율)
+#   - 실시간 JSON 테마 hot-swap 및 위젯 단위 반영
+#   - 로컬 TTS 최적화 (워커 재사용, 안정화된 출력 스트리밍, bounded buffer)
+#   - 메모리 패널 통계 탭 레이아웃 보정
+#   - 자율성 보강 (의존성 그래프, 시간대 습관/선호 요약, 전략 회수 강화)
+#   - 도구 호출 누락 시 복합 작업 자동 승격
+#   - 브라우저 셀렉터 전략 지속 메모리
+#   - 실행 상태 기반 재계획 힌트
+#   - 규칙 기반 파일 작업 템플릿 확대 (rename/merge/organize/analyze/log report)
+#   - GUI 상태 스냅샷 및 브라우저 액션 상태 보강
+#   - 예약 종료/지연 작업 안전 가드
+#   - 브라우저 액션 시퀀스 전략 기억(goal_hint 기반)
+#   - 데스크톱 창 타깃 전략 기억(goal_hint 기반)
+#   - 데스크톱 워크플로우 헬퍼(run_desktop_workflow) 추가
+#   - 화면 이미지 기반 읽기 전용 GUI 검증(is_image_visible)
+#   - 전략 기억에 workflow hint 축적 및 재사용
+#   - 앱 실행 템플릿을 run_desktop_workflow 중심으로 확장
+#   - workflow JSON output 기반 휴리스틱 검증
+#   - 유사 goal_hint fallback 기반 브라우저/데스크톱 전략 재사용
+#   - Chrome/Edge/VS Code 실행 경로 탐색 및 데스크톱 액션 타입 확장
+#   - 완전히 성공한 자동화 전략만 기억하도록 품질 게이트 추가
+#   - wait_image / clipboard 액션까지 데스크톱 워크플로우 확장
+#   - wait_url / wait_title / read_title 기반 브라우저 상태 대기 추가
+#   - 데스크톱 액션 디스패치 내부 모듈화
+#   - wait_selector / read_url 기반 브라우저 액션 확장
+#   - 브라우저 마지막 액션 요약을 활용한 실제 상태 검증 보강
+#   - 브라우저 다운로드 템플릿도 goal_hint 기반 전략 재사용 직접 연결
+#   - get_learned_strategies로 브라우저/데스크톱 학습 전략 조회 가능
+#   - 재계획 컨텍스트에 learned_strategies_json 주입
+#   - 생성된 Python runner도 learned strategies / desktop state / open windows를 공통 노출
+#   - get_learned_strategy_summary로 전략 요약 우선 참조 경로 추가
+#   - get_planning_snapshot / summary로 현재 상태 + 학습 전략 요약 통합
+#   - run_adaptive_browser_workflow / run_adaptive_desktop_workflow 추가
+#   - 앱/브라우저 템플릿이 adaptive workflow를 직접 사용하도록 전환
+#   - build_adaptive_browser_plan / build_adaptive_desktop_plan 합성 계층 추가
+#   - adaptive plan이 현재 상태를 보고 wait/focus/read 액션 자동 보강
+#   - build_resilient_browser_plans / build_resilient_desktop_plans 다중 시도안 합성 추가
+#   - run_resilient_browser_workflow / run_resilient_desktop_workflow 자동 재시도 추가
+#   - 사용자 플러그인 로더 및 `%AppData%/Ari/plugins` 템플릿 추가
+#   - 설정창 테마 미리보기 및 확장 탭 추가
+# 개발 검증: validate_repo.py + unittest discover
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
 SpeechRecognition==3.10.1
@@ -10,6 +56,7 @@ PySide6==6.6.1
 pyautogui
 pygetwindow
 pyperclip
+opencv-python-headless
 
 # ── AI / LLM ───────────────────────────────────────────────────────────────────
 groq>=0.11.0
@@ -28,7 +75,6 @@ websockets==12.0
 
 # ── 네트워크 / 브라우저 자동화 ─────────────────────────────────────────────────
 certifi
-ddgs
 duckduckgo-search
 httpx
 requests>=2.32.0
@@ -44,5 +90,5 @@ pycaw>=20230407
 huggingface_hub
 nuitka
 python-dotenv
-reportlab
+reportlab  # auto/pdf 문서 저장
 watchdog

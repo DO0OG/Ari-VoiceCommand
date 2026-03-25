@@ -56,7 +56,11 @@
       "Bash(for f:*)",
       "Bash(do)",
       "Bash(\"$PY\" -m py_compile \"D:/Git/AI-Assistant/VoiceCommand/$f\")",
-      "Bash(echo \"OK  $f\")"
+      "Bash(echo \"OK  $f\")",
+      "Bash(wc -l /d/Git/AI-Assistant/VoiceCommand/agent/*.py)",
+      "Bash(python3:*)",
+      "Bash(xargs -I {} python3 -m py_compile {} 근데 py 명령어로 해야할걸?)",
+      "Bash(wc:*)"
     ]
   }
 }

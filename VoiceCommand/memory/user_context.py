@@ -1,32 +1,35 @@
 """
-사용자 컨텍스트 학습 및 관리
+사용자 컨텍스트 학습 및 관리 — Phase 3.1 고도화
+사실 충돌 해소, 신뢰도 학습, 지능형 메모리 정리를 지원합니다.
 """
 import json
 import os
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
+_context_manager: Optional["UserContextManager"] = None
 
 
-_MAX_FACTS = 100
+_MAX_FACTS = 150
 _MAX_COMMANDS = 50
 _MAX_TIME_PATTERNS_PER_SLOT = 20
 _MAX_COMMAND_FREQ = 100
 _MAX_SEQUENCE_ROOTS = 100
 _MAX_SEQUENCE_EDGES = 20
 _MAX_BIO_LIST_ITEMS = 30
-_MAX_TOPIC_COUNT = 40
-_SUMMARY_FACT_LIMIT = 5
-_SUMMARY_TOPIC_LIMIT = 3
+_MAX_TOPIC_COUNT = 50
+_SUMMARY_FACT_LIMIT = 10
+_SUMMARY_TOPIC_LIMIT = 5
 _DEFAULT_FACT_TTL_DAYS = 180
+_MAX_FACT_HISTORY = 8
+
 _KOREAN_STOPWORDS = {
     "그리고", "하지만", "그러나", "오늘", "지금", "이번", "저번", "관련", "대한",
     "해주세요", "해줘", "정리", "요약", "저장", "실행", "작업", "요청", "결과",
     "사용자", "아리", "파일", "폴더", "문서", "정보", "내용",
-}
-_ENGLISH_STOPWORDS = {
-    "the", "and", "for", "with", "this", "that", "from", "into", "your",
-    "user", "task", "save", "open", "file", "folder", "report", "summary",
 }
 
 
@@ -35,7 +38,7 @@ class UserContextManager:
 
     def __init__(self, context_file="user_context.json"):
         try:
-            from resource_manager import ResourceManager
+            from core.resource_manager import ResourceManager
             self.context_file = ResourceManager.get_writable_path(context_file)
         except Exception:
             self.context_file = context_file
@@ -54,32 +57,24 @@ class UserContextManager:
         return self._default_context()
 
     def _default_context(self):
-        """기본 컨텍스트 구조"""
         return self._normalize_context({
-            "user_bio": {
-                "name": "사용자",
-                "location": "",
-                "interests": [],
-                "memos": []
-            },
-            "facts": {},  # 사용자에 대한 단편적 사실들 (예: "커피를 좋아함": "2025-02-21")
-            "command_frequency": {},  # 명령어 사용 빈도
-            "command_sequences": {},  # 명령어 연속 사용 패턴 (예: "날씨" -> ["유튜브"])
-            "time_patterns": {},  # 시간대별 활동
-            "preferences": {},  # 선호도 (음악 장르, 온도 등)
-            "last_commands": [],  # 최근 명령어 (최대 50개)
-            "conversation_topics": {}  # 대화 주제 빈도
+            "user_bio": {"name": "사용자", "location": "", "interests": [], "memos": []},
+            "facts": {},
+            "fact_history": {},
+            "command_frequency": {},
+            "command_sequences": {},
+            "time_patterns": {},
+            "preferences": {},
+            "last_commands": [],
+            "conversation_topics": {}
         })
 
     def _normalize_context(self, data):
-        """구버전 구조를 현재 스키마로 보정하고 크기 제한을 적용"""
         context = self._default_context_structure()
         if isinstance(data, dict):
             context.update(data)
 
-        bio = context.get("user_bio")
-        if not isinstance(bio, dict):
-            bio = {}
+        bio = context.get("user_bio", {})
         context["user_bio"] = {
             "name": bio.get("name", "사용자"),
             "location": bio.get("location", ""),
@@ -90,99 +85,75 @@ class UserContextManager:
         facts = {}
         for key, raw in (context.get("facts") or {}).items():
             normalized = self._normalize_fact_entry(raw)
-            if normalized is not None:
-                facts[key] = normalized
+            if normalized: facts[key] = normalized
         context["facts"] = self._limit_facts(facts)
+        context["fact_history"] = self._normalize_fact_history(context.get("fact_history", {}))
 
         context["command_frequency"] = self._limit_frequency_map(context.get("command_frequency", {}))
         context["command_sequences"] = self._limit_sequences(context.get("command_sequences", {}))
-        context["time_patterns"] = self._normalize_time_patterns(context.get("time_patterns", {}))
-        context["preferences"] = self._normalize_preferences(context.get("preferences", {}))
-        context["last_commands"] = self._normalize_last_commands(context.get("last_commands", []))
-        context["conversation_topics"] = self._limit_frequency_map(
-            context.get("conversation_topics", {}), max_items=_MAX_TOPIC_COUNT
-        )
+        context["conversation_topics"] = self._limit_frequency_map(context.get("conversation_topics", {}), max_items=_MAX_TOPIC_COUNT)
         return context
 
     def _default_context_structure(self):
         return {
-            "user_bio": {
-                "name": "사용자",
-                "location": "",
-                "interests": [],
-                "memos": []
-            },
-            "facts": {},
-            "command_frequency": {},
-            "command_sequences": {},
-            "time_patterns": {},
-            "preferences": {},
-            "last_commands": [],
-            "conversation_topics": {},
+            "user_bio": {"name": "사용자", "location": "", "interests": [], "memos": []},
+            "facts": {}, "fact_history": {}, "command_frequency": {}, "command_sequences": {},
+            "time_patterns": {}, "preferences": {}, "last_commands": [], "conversation_topics": {},
         }
 
     def save_context(self):
-        """컨텍스트 저장"""
         try:
             with open(self.context_file, 'w', encoding='utf-8') as f:
                 json.dump(self.context, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logging.error(f"컨텍스트 저장 실패: {e}")
 
-    def record_command(self, command_type, params=None):
-        """명령어 사용 기록 및 패턴 학습"""
-        # 연속성 기록 (패턴 학습)
-        if self.context["last_commands"]:
-            last_cmd = self.context["last_commands"][-1]["command"]
-            if last_cmd != command_type:
-                if last_cmd not in self.context["command_sequences"]:
-                    self.context["command_sequences"][last_cmd] = {}
-                if command_type not in self.context["command_sequences"][last_cmd]:
-                    self.context["command_sequences"][last_cmd][command_type] = 0
-                self.context["command_sequences"][last_cmd][command_type] += 1
-                self.context["command_sequences"] = self._limit_sequences(self.context["command_sequences"])
+    # ── 지능형 사실 관리 (Phase 3.1) ──────────────────────────────────────────
 
-        # 빈도 업데이트
-        if command_type not in self.context["command_frequency"]:
-            self.context["command_frequency"][command_type] = 0
-        self.context["command_frequency"][command_type] += 1
-        self.context["command_frequency"] = self._limit_frequency_map(self.context["command_frequency"])
-
-        # 시간대별 패턴
-        hour = datetime.now().hour
-        time_slot = f"{hour:02d}:00"
-        if time_slot not in self.context["time_patterns"]:
-            self.context["time_patterns"][time_slot] = []
-        self.context["time_patterns"][time_slot].append(command_type)
-        if len(self.context["time_patterns"][time_slot]) > _MAX_TIME_PATTERNS_PER_SLOT:
-            self.context["time_patterns"][time_slot] = \
-                self.context["time_patterns"][time_slot][-_MAX_TIME_PATTERNS_PER_SLOT:]
-
-        # 최근 명령어
-        self.context["last_commands"].append({
-            "command": command_type,
-            "params": self._truncate_param_repr(params),
-            "timestamp": datetime.now().isoformat()
+    def record_fact(self, key: str, value: str, source: str = "assistant", confidence: float = 0.7, ttl_days: int = _DEFAULT_FACT_TTL_DAYS):
+        """사용자에 대한 사실 기록 및 충돌 해소."""
+        existing = self.context["facts"].get(key)
+        final_confidence = max(0.1, min(float(confidence), 1.0))
+        history_bucket = self.context.setdefault("fact_history", {}).setdefault(key, [])
+        conflict_count = int(existing.get("conflict_count", 0)) if existing else 0
+        
+        if existing:
+            # 동일한 키에 다른 값이 들어온 경우 (충돌)
+            if existing["value"] != value:
+                conflict_count += 1
+                # 1. 신뢰도가 훨씬 높으면 덮어쓰기
+                if final_confidence > existing.get("confidence", 0.0) + 0.2:
+                    logger.info(f"[UserContext] 사실 업데이트 (높은 신뢰도): {key} -> {value}")
+                    final_confidence = min(1.0, final_confidence + 0.05)
+                # 2. 신뢰도가 비슷하면 시간순/보수적 통합 (여기서는 최신값 유지하되 신뢰도 하락)
+                else:
+                    logger.info(f"[UserContext] 사실 충돌 감지: {key}. 신규 정보 신뢰도 보정.")
+                    final_confidence = (final_confidence + existing.get("confidence", 0.5)) / 2.5
+                    final_confidence = max(0.15, final_confidence - min(conflict_count * 0.03, 0.15))
+            else:
+                # 동일한 값이면 신뢰도 보상
+                reinforcement = 0.1 + min(existing.get("reinforcement_count", 0) * 0.02, 0.08)
+                final_confidence = min(1.0, existing.get("confidence", 0.7) + reinforcement)
+        
+        expires_at = (datetime.now() + timedelta(days=ttl_days)).isoformat() if ttl_days else None
+        history_bucket.append({
+            "value": value,
+            "source": source,
+            "confidence": round(final_confidence, 2),
+            "recorded_at": datetime.now().isoformat(),
+            "conflicted_with": existing.get("value", "") if existing and existing.get("value") != value else "",
         })
-
-        if len(self.context["last_commands"]) > _MAX_COMMANDS:
-            self.context["last_commands"] = self.context["last_commands"][-_MAX_COMMANDS:]
-
-        self.save_context()
-
-    def record_fact(self, key, value, source="assistant_tag", confidence=0.7, ttl_days=_DEFAULT_FACT_TTL_DAYS):
-        """사용자에 대한 사실 기록"""
-        expires_at = None
-        if ttl_days:
-            expires_at = (datetime.now() + timedelta(days=ttl_days)).isoformat()
+        self.context["fact_history"][key] = history_bucket[-_MAX_FACT_HISTORY:]
+        
         self.context["facts"][key] = {
             "value": value,
             "updated_at": datetime.now().isoformat(),
             "source": source,
-            "confidence": max(0.0, min(float(confidence), 1.0)),
+            "confidence": round(final_confidence, 2),
             "expires_at": expires_at,
+            "conflict_count": conflict_count,
+            "reinforcement_count": int(existing.get("reinforcement_count", 0)) + 1 if existing and existing.get("value") == value else 1,
         }
-        self.context["facts"] = self._limit_facts(self.context["facts"])
         self.save_context()
 
     def update_bio(self, field, value):
@@ -192,293 +163,272 @@ class UserContextManager:
                 if value not in self.context["user_bio"][field]:
                     self.context["user_bio"][field].append(value)
                 self.context["user_bio"][field] = self._dedupe_recent(
-                    self.context["user_bio"][field],
-                    _MAX_BIO_LIST_ITEMS,
+                    self.context["user_bio"][field], _MAX_BIO_LIST_ITEMS
                 )
             else:
                 self.context["user_bio"][field] = value
             self.save_context()
 
-    def record_preference(self, category, value):
-        """선호도 기록 (예: 음악 장르, 선호 온도)"""
-        if category not in self.context["preferences"]:
-            self.context["preferences"][category] = {}
+    def record_topics(self, topics):
+        """대화 주제 빈도 기록"""
+        for topic in topics or []:
+            token = str(topic).strip().lower()
+            if len(token) < 2 or token in _KOREAN_STOPWORDS: continue
+            self.context["conversation_topics"][token] = self.context["conversation_topics"].get(token, 0) + 1
+        
+        self.context["conversation_topics"] = self._limit_frequency_map(
+            self.context["conversation_topics"], max_items=_MAX_TOPIC_COUNT
+        )
+        self.save_context()
 
-        if value not in self.context["preferences"][category]:
-            self.context["preferences"][category][value] = 0
-        self.context["preferences"][category][value] += 1
+    def record_preference(self, category: str, value: str):
+        """선호도 기록."""
+        category = str(category or "").strip()
+        value = str(value or "").strip()
+        if not category or not value:
+            return
 
-        if len(self.context["preferences"][category]) > 50:
-            sorted_vals = sorted(
-                self.context["preferences"][category].items(),
-                key=lambda x: x[1], reverse=True
+        prefs = self.context.setdefault("preferences", {})
+        bucket = prefs.setdefault(category, {})
+        bucket[value] = bucket.get(value, 0) + 1
+        prefs[category] = self._limit_frequency_map(bucket, max_items=50)
+        self.save_context()
+
+    def get_top_preferences(self, limit: int = 3) -> List[str]:
+        """상위 선호도를 '카테고리:값' 형식으로 반환."""
+        prefs = []
+        for category, values in (self.context.get("preferences") or {}).items():
+            if not values:
+                continue
+            top_name, top_score = max(values.items(), key=lambda item: item[1])
+            prefs.append((top_score, f"{category}:{top_name}"))
+        return [label for _, label in sorted(prefs, key=lambda item: item[0], reverse=True)[:limit]]
+
+    def get_fact_conflicts(self, key: str = "", limit: int = 5) -> List[Dict[str, Any]]:
+        history = self.context.get("fact_history", {}) or {}
+        if key:
+            return [entry for entry in reversed(history.get(key, [])) if entry.get("conflicted_with")][:limit]
+        flattened: List[Dict[str, Any]] = []
+        for fact_key, entries in history.items():
+            for entry in entries:
+                if entry.get("conflicted_with"):
+                    flattened.append({"key": fact_key, **entry})
+        flattened.sort(key=lambda item: item.get("recorded_at", ""), reverse=True)
+        return flattened[:limit]
+
+    def record_command(self, command_type, params=None):
+        """명령어 패턴 기록"""
+        # 최근 명령어와의 시퀀스 학습
+        if self.context["last_commands"]:
+            last = self.context["last_commands"][-1]["command"]
+            if last != command_type:
+                seq = self.context["command_sequences"].setdefault(last, {})
+                seq[command_type] = seq.get(command_type, 0) + 1
+
+        # 빈도 및 시간대 패턴
+        self.context["command_frequency"][command_type] = self.context["command_frequency"].get(command_type, 0) + 1
+        
+        hour_slot = f"{datetime.now().hour:02d}:00"
+        slot_list = self.context["time_patterns"].setdefault(hour_slot, [])
+        slot_list.append(command_type)
+        if len(slot_list) > _MAX_TIME_PATTERNS_PER_SLOT:
+            self.context["time_patterns"][hour_slot] = slot_list[-_MAX_TIME_PATTERNS_PER_SLOT:]
+
+        self.context["last_commands"].append({
+            "command": command_type, "params": str(params)[:200] if params else None,
+            "timestamp": datetime.now().isoformat()
+        })
+        if len(self.context["last_commands"]) > _MAX_COMMANDS:
+            self.context["last_commands"] = self.context["last_commands"][-_MAX_COMMANDS:]
+        
+        self.save_context()
+
+    def extract_topics(self, user_msg: str, ai_response: str = "") -> List[str]:
+        """대화 텍스트에서 간단한 주제 후보를 추출."""
+        text = f"{user_msg or ''} {ai_response or ''}".lower()
+        tokens = re.findall(r"[가-힣a-zA-Z0-9]{2,}", text)
+        seen = []
+        for token in tokens:
+            if token in _KOREAN_STOPWORDS:
+                continue
+            if token.isdigit():
+                continue
+            if token not in seen:
+                seen.append(token)
+            if len(seen) >= 8:
+                break
+        return seen
+
+    def get_predicted_next_commands(self) -> List[str]:
+        """이전 명령 흐름과 빈도를 바탕으로 다음 명령 후보를 반환."""
+        predictions = []
+        last_commands = self.context.get("last_commands", [])
+        sequences = self.context.get("command_sequences", {})
+        command_frequency = self.context.get("command_frequency", {})
+
+        if last_commands:
+            last = last_commands[-1].get("command")
+            next_candidates = sequences.get(last, {})
+            predictions.extend(
+                cmd for cmd, _ in sorted(next_candidates.items(), key=lambda x: x[1], reverse=True)
             )
-            self.context["preferences"][category] = dict(sorted_vals[:50])
+
+        for cmd, _ in sorted(command_frequency.items(), key=lambda x: x[1], reverse=True):
+            if cmd not in predictions:
+                predictions.append(cmd)
+
+        return predictions[:5]
+
+    def get_time_based_suggestions(self, hour: Optional[int] = None, limit: int = 3) -> List[str]:
+        """현재 시간대에 자주 사용된 명령 후보를 반환."""
+        target_hour = datetime.now().hour if hour is None else int(hour)
+        slot = f"{target_hour:02d}:00"
+        commands = self.context.get("time_patterns", {}).get(slot, [])
+        counts: Dict[str, int] = {}
+        for cmd in commands:
+            counts[cmd] = counts.get(cmd, 0) + 1
+        return [cmd for cmd, _ in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:limit]]
+
+    def get_topic_recommendations(self, limit: int = 5, include_strategy: bool = True) -> List[str]:
+        topics = self.context.get("conversation_topics", {}) or {}
+        recommendations = [
+            f"{topic}:{score}"
+            for topic, score in sorted(topics.items(), key=lambda item: item[1], reverse=True)[: max(limit * 2, limit)]
+        ]
+        if include_strategy:
+            try:
+                from agent.strategy_memory import get_strategy_memory
+                memory = get_strategy_memory()
+                enriched: List[str] = []
+                for item in recommendations:
+                    topic = item.split(":", 1)[0]
+                    similar = memory.search_similar_records(topic, limit=1)
+                    if similar:
+                        enriched.append(f"{item}|전략:{similar[0].goal_summary[:40]}")
+                    else:
+                        enriched.append(item)
+                recommendations = enriched
+            except Exception:
+                pass
+        return recommendations[:limit]
+
+    def optimize_memory(self):
+        """주기적 메모리 최적화 및 감쇄(Decay) 적용."""
+        logger.info("[UserContext] 메모리 최적화 수행 중...")
+        now = datetime.now()
+        
+        # 1. 사실 신뢰도 감쇄 및 만료 정리
+        facts = self.context.get("facts", {})
+        for key in list(facts.keys()):
+            f = facts[key]
+            # 만료 체크
+            if f.get("expires_at") and datetime.fromisoformat(f["expires_at"]) < now:
+                del facts[key]; continue
+            
+            # 신뢰도 감쇄 (30일당 5%)
+            if f.get("updated_at"):
+                days = (now - datetime.fromisoformat(f["updated_at"])).days
+                if days > 30:
+                    f["confidence"] *= (0.95 ** (days // 30))
+            
+            # 너무 낮은 신뢰도 제거
+            if f.get("confidence", 1.0) < 0.15:
+                del facts[key]
+
+        # 2. 주제(Topic) 점수 감쇄 (오래된 관심사 제거)
+        topics = self.context.get("conversation_topics", {})
+        for t in list(topics.keys()):
+            topics[t] = int(topics[t] * 0.8) # 20% 감소
+            if topics[t] < 1: del topics[t]
 
         self.save_context()
 
-    def record_topics(self, topics):
-        """대화 주제 빈도 기록"""
-        changed = False
-        for topic in topics or []:
-            normalized = self._normalize_topic(topic)
-            if not normalized:
-                continue
-            self.context["conversation_topics"][normalized] = (
-                self.context["conversation_topics"].get(normalized, 0) + 1
-            )
-            changed = True
+    # ── 유틸리티 ───────────────────────────────────────────────────────────────
 
-        if changed:
-            self.context["conversation_topics"] = self._limit_frequency_map(
-                self.context["conversation_topics"],
-                max_items=_MAX_TOPIC_COUNT,
-            )
-            self.save_context()
-
-    def extract_topics(self, *texts):
-        """간단한 규칙 기반 주제 후보 추출"""
-        scores = {}
-        for text in texts:
-            if not text:
-                continue
-            for token in re.findall(r"[가-힣A-Za-z][가-힣A-Za-z0-9_-]{1,20}", text):
-                normalized = self._normalize_topic(token)
-                if not normalized:
-                    continue
-                scores[normalized] = scores.get(normalized, 0) + 1
-        ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
-        return [topic for topic, _ in ranked[:_SUMMARY_TOPIC_LIMIT]]
-
-    def get_predicted_next_commands(self):
-        """현재 패턴을 바탕으로 다음 예상 명령 제안"""
-        if not self.context["last_commands"]:
-            return []
-        
-        last_cmd = self.context["last_commands"][-1]["command"]
-        if last_cmd in self.context["command_sequences"]:
-            candidates = sorted(
-                self.context["command_sequences"][last_cmd].items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
-            return [cmd for cmd, count in candidates[:2]]
-        return []
-
-    def get_context_summary(self):
-        """컨텍스트 요약 (프롬프트용)"""
-        self._prune_expired_facts()
-        summary = []
-
-        # 기본 정보
+    def get_context_summary(self) -> str:
+        """프롬프트 주입용 요약 텍스트 생성."""
+        lines = []
         bio = self.context.get("user_bio", {})
-        if bio.get("name") and bio["name"] != "사용자":
-            summary.append(f"사용자 이름: {bio['name']}")
-        if bio.get("location"):
-            summary.append(f"사용자 위치: {bio['location']}")
-        for field, label in (("interests", "관심사"), ("memos", "메모")):
-            values = bio.get(field) or []
-            if values:
-                summary.append(f"{label}: {', '.join(values[:3])}")
+        if bio.get("name") != "사용자": lines.append(f"사용자 이름: {bio['name']}")
+        if bio.get("interests"): lines.append(f"관심사: {', '.join(bio['interests'][:5])}")
         
-        # 사실들
         facts = self.context.get("facts", {})
         if facts:
-            ranked_facts = sorted(
-                facts.items(),
-                key=lambda item: (
-                    item[1].get("confidence", 0.0),
-                    item[1].get("updated_at", ""),
-                ),
-                reverse=True,
-            )
-            fact_list = [f"{k}: {v['value']}" for k, v in ranked_facts[:_SUMMARY_FACT_LIMIT]]
-            summary.append(f"사용자에 대한 사실: {', '.join(fact_list)}")
-
-        # 자주 사용하는 명령어
-        if self.context["command_frequency"]:
-            top_commands = sorted(
-                self.context["command_frequency"].items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:3]
-            commands_str = ", ".join([cmd for cmd, _ in top_commands])
-            summary.append(f"자주 사용하는 명령: {commands_str}")
-
-        # 예상 다음 명령
-        predictions = self.get_predicted_next_commands()
-        if predictions:
-            summary.append(f"패턴 기반 추천: {', '.join(predictions)}")
-
-        # 현재 시간대 활동
-        hour = datetime.now().hour
-        time_slot = f"{hour:02d}:00"
-        if time_slot in self.context["time_patterns"]:
-            recent = self.context["time_patterns"][time_slot][-3:]
-            if recent:
-                summary.append(f"이 시간대 활동: {', '.join(set(recent))}")
-
-        # 선호도
-        if self.context["preferences"]:
-            prefs = []
-            for category, values in self.context["preferences"].items():
-                if values:
-                    top_pref = max(values.items(), key=lambda x: x[1])
-                    prefs.append(f"{category}: {top_pref[0]}")
-            if prefs:
-                summary.append(f"선호: {', '.join(prefs)}")
-
+            sorted_facts = sorted(facts.items(), key=lambda x: x[1].get("confidence", 0), reverse=True)
+            fact_str = ", ".join([f"{k}({v['value']})" for k, v in sorted_facts[:_SUMMARY_FACT_LIMIT]])
+            lines.append(f"학습된 사실: {fact_str}")
+            
         topics = self.context.get("conversation_topics", {})
         if topics:
-            top_topics = sorted(topics.items(), key=lambda item: item[1], reverse=True)[:_SUMMARY_TOPIC_LIMIT]
-            summary.append(f"최근 대화 주제: {', '.join(topic for topic, _ in top_topics)}")
-
-        return "\n".join(summary) if summary else ""
+            top_t = sorted(topics.items(), key=lambda x: x[1], reverse=True)[:_SUMMARY_TOPIC_LIMIT]
+            lines.append(f"최근 대화 주제: {', '.join(t[0] for t in top_t)}")
+            
+        return "\n".join(lines)
 
     def _normalize_fact_entry(self, raw):
         if isinstance(raw, dict):
-            value = raw.get("value")
-            if value in (None, ""):
-                return None
-            expires_at = raw.get("expires_at")
-            if expires_at and self._is_expired(expires_at):
-                return None
             return {
-                "value": str(value),
-                "updated_at": raw.get("updated_at") or datetime.now().isoformat(),
-                "source": raw.get("source", "legacy"),
-                "confidence": max(0.0, min(float(raw.get("confidence", 0.6)), 1.0)),
-                "expires_at": expires_at,
+                "value": str(raw.get("value", "")),
+                "updated_at": raw.get("updated_at", datetime.now().isoformat()),
+                "source": raw.get("source", "assistant"),
+                "confidence": float(raw.get("confidence", 0.6)),
+                "expires_at": raw.get("expires_at"),
+                "conflict_count": int(raw.get("conflict_count", 0)),
+                "reinforcement_count": int(raw.get("reinforcement_count", 1)),
             }
-        if raw in (None, ""):
-            return None
-        return {
-            "value": str(raw),
-            "updated_at": datetime.now().isoformat(),
-            "source": "legacy",
-            "confidence": 0.6,
-            "expires_at": None,
-        }
+        if raw is not None:
+            return {
+                "value": str(raw),
+                "updated_at": datetime.now().isoformat(),
+                "source": "legacy",
+                "confidence": 0.6,
+                "expires_at": None,
+                "conflict_count": 0,
+                "reinforcement_count": 1,
+            }
+        return None
+
+    def _normalize_fact_history(self, raw_history):
+        normalized: Dict[str, List[Dict[str, Any]]] = {}
+        if not isinstance(raw_history, dict):
+            return normalized
+        for key, entries in raw_history.items():
+            bucket: List[Dict[str, Any]] = []
+            for entry in entries or []:
+                if not isinstance(entry, dict):
+                    continue
+                bucket.append({
+                    "value": str(entry.get("value", "")),
+                    "source": str(entry.get("source", "assistant")),
+                    "confidence": float(entry.get("confidence", 0.5)),
+                    "recorded_at": str(entry.get("recorded_at", datetime.now().isoformat())),
+                    "conflicted_with": str(entry.get("conflicted_with", "")),
+                })
+            if bucket:
+                normalized[str(key)] = bucket[-_MAX_FACT_HISTORY:]
+        return normalized
 
     def _limit_facts(self, facts):
-        ranked = sorted(
-            facts.items(),
-            key=lambda item: (
-                item[1].get("updated_at", ""),
-                item[1].get("confidence", 0.0),
-            ),
-            reverse=True,
-        )
-        return dict(ranked[:_MAX_FACTS])
+        return dict(sorted(facts.items(), key=lambda x: x[1].get("updated_at", ""), reverse=True)[:_MAX_FACTS])
 
     def _limit_frequency_map(self, mapping, max_items=_MAX_COMMAND_FREQ):
-        if not isinstance(mapping, dict):
-            return {}
-        ranked = sorted(mapping.items(), key=lambda item: item[1], reverse=True)
-        return {str(key): int(value) for key, value in ranked[:max_items]}
+        return dict(sorted(mapping.items(), key=lambda x: x[1], reverse=True)[:max_items])
 
     def _limit_sequences(self, sequences):
-        if not isinstance(sequences, dict):
-            return {}
-        limited = {}
-        root_items = sorted(
-            sequences.items(),
-            key=lambda item: sum((item[1] or {}).values()) if isinstance(item[1], dict) else 0,
-            reverse=True,
-        )[:_MAX_SEQUENCE_ROOTS]
-        for root, edges in root_items:
-            if not isinstance(edges, dict):
-                continue
-            ranked_edges = sorted(edges.items(), key=lambda item: item[1], reverse=True)[:_MAX_SEQUENCE_EDGES]
-            limited[str(root)] = {str(key): int(value) for key, value in ranked_edges}
-        return limited
-
-    def _normalize_time_patterns(self, patterns):
-        normalized = {}
-        if not isinstance(patterns, dict):
-            return normalized
-        for slot, values in patterns.items():
-            if not isinstance(values, list):
-                continue
-            normalized[str(slot)] = [str(v) for v in values[-_MAX_TIME_PATTERNS_PER_SLOT:]]
-        return normalized
-
-    def _normalize_preferences(self, preferences):
-        normalized = {}
-        if not isinstance(preferences, dict):
-            return normalized
-        for category, values in preferences.items():
-            if not isinstance(values, dict):
-                continue
-            normalized[str(category)] = self._limit_frequency_map(values, max_items=50)
-        return normalized
-
-    def _normalize_last_commands(self, commands):
-        normalized = []
-        if not isinstance(commands, list):
-            return normalized
-        for item in commands[-_MAX_COMMANDS:]:
-            if not isinstance(item, dict):
-                continue
-            normalized.append({
-                "command": str(item.get("command", "")),
-                "params": self._truncate_param_repr(item.get("params")),
-                "timestamp": item.get("timestamp") or datetime.now().isoformat(),
-            })
-        return normalized
+        return {k: dict(sorted(v.items(), key=lambda x: x[1], reverse=True)[:_MAX_SEQUENCE_EDGES]) 
+                for k, v in sorted(sequences.items(), key=lambda x: sum(x[1].values()), reverse=True)[:_MAX_SEQUENCE_ROOTS]}
 
     def _dedupe_recent(self, values, max_items):
-        seen = set()
-        deduped = []
-        for value in reversed(list(values or [])):
-            text = str(value).strip()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            deduped.append(text)
-            if len(deduped) >= max_items:
-                break
-        deduped.reverse()
-        return deduped
-
-    def _truncate_param_repr(self, params):
-        if params is None:
-            return None
-        text = str(params)
-        return text[:200]
-
-    def _normalize_topic(self, topic):
-        token = str(topic).strip().lower()
-        if len(token) < 2:
-            return ""
-        if token in _KOREAN_STOPWORDS or token in _ENGLISH_STOPWORDS:
-            return ""
-        if token.isdigit():
-            return ""
-        return token
-
-    def _prune_expired_facts(self):
-        facts = self.context.get("facts", {})
-        expired_keys = [key for key, value in facts.items() if self._is_expired(value.get("expires_at"))]
-        for key in expired_keys:
-            del facts[key]
-        if expired_keys:
-            self.save_context()
-
-    def _is_expired(self, expires_at):
-        if not expires_at:
-            return False
-        try:
-            return datetime.fromisoformat(expires_at) < datetime.now()
-        except ValueError:
-            return False
+        res, seen = [], set()
+        for v in reversed(values or []):
+            if v not in seen:
+                res.append(v); seen.add(v)
+                if len(res) >= max_items: break
+        return list(reversed(res))
 
 
-# 싱글톤 인스턴스
-_context_manager = None
-
-def get_context_manager():
-    """UserContextManager 싱글톤"""
+def get_context_manager() -> UserContextManager:
+    """앱 전역에서 공유하는 사용자 컨텍스트 매니저 반환."""
     global _context_manager
     if _context_manager is None:
         _context_manager = UserContextManager()

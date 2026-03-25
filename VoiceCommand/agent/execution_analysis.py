@@ -12,13 +12,23 @@ from typing import Dict, Iterable, List
 _MUTATING_TOKENS = (
     "save_document", "open(", "write_", "os.makedirs", "mkdir", "remove",
     "delete", "unlink", "copy", "move", "rename", "launch_app", "open_url",
-    "open_path", "click_screen", "type_text", "press_keys", "hotkey",
-    "browser_login", "shutdown", "set-content", "new-item", "move-item",
+    "open_path", "click_screen", "click_image", "type_text", "press_keys", "hotkey",
+    "browser_login", "run_browser_actions", "run_desktop_workflow", "shutdown", "set-content", "new-item", "move-item",
     "copy-item", "remove-item", "rename-item", "start-process",
 )
 
 _STORAGE_DESC_TOKENS = ("저장", "생성", "폴더", "파일", "문서", "보고서", "목록", "요약")
 _OPEN_DESC_TOKENS = ("열기", "실행")
+_STATEFUL_UI_TOKENS = (
+    "open_url", "open_path", "launch_app", "click_screen", "move_mouse",
+    "click_image", "type_text", "press_keys", "hotkey", "browser_login",
+    "focus_window", "run_browser_actions", "run_desktop_workflow",
+)
+_PATH_LITERAL_RE = re.compile(r"[A-Za-z]:\\[^\r\n\"']+")
+_URL_RE = re.compile(r"https?://[^\s)\"']+")
+_GOAL_HINT_RE = re.compile(r"goal_hint\s*=\s*['\"]([^'\"]+)['\"]")
+_WORKFLOW_CALL_RE = re.compile(r"\b(run_browser_actions|run_desktop_workflow|focus_window|wait_for_window)\b")
+_WINDOW_TARGET_RE = re.compile(r"(?:expected_window|window|title_substring)\s*=\s*['\"]([^'\"]+)['\"]")
 
 
 def classify_failure_message(message: str) -> str:
@@ -78,3 +88,56 @@ def describes_storage_action(description: str) -> bool:
 
 def describes_open_action(description: str) -> bool:
     return any(token in (description or "") for token in _OPEN_DESC_TOKENS)
+
+
+def mutates_runtime_state(content: str, description: str = "") -> bool:
+    lowered_content = (content or "").lower()
+    lowered_desc = (description or "").lower()
+    return any(token in lowered_content or token in lowered_desc for token in _STATEFUL_UI_TOKENS)
+
+
+def extract_step_targets(text: str) -> Dict[str, List[str]]:
+    """단계 코드/명령에서 경로/URL 타깃을 추출합니다."""
+    text = text or ""
+    paths = [p.strip().strip('"').strip("'") for p in _PATH_LITERAL_RE.findall(text)]
+    urls = [u.strip().strip('"').strip("'") for u in _URL_RE.findall(text)]
+    domains = []
+    windows = []
+    goal_hints = []
+    for url in urls:
+        normalized = url.lower()
+        domain = normalized.split("//", 1)[-1].split("/", 1)[0]
+        if domain:
+            domains.append(domain)
+    for window in _WINDOW_TARGET_RE.findall(text):
+        cleaned = window.strip()
+        if cleaned:
+            windows.append(cleaned)
+    for goal_hint in _GOAL_HINT_RE.findall(text):
+        cleaned = goal_hint.strip()
+        if cleaned:
+            goal_hints.append(cleaned)
+    return {
+        "paths": list(dict.fromkeys(paths)),
+        "urls": list(dict.fromkeys(urls)),
+        "domains": list(dict.fromkeys(domains)),
+        "windows": list(dict.fromkeys(windows)),
+        "goal_hints": list(dict.fromkeys(goal_hints)),
+    }
+
+
+def extract_workflow_hints(texts: Iterable[str]) -> List[str]:
+    """단계 코드/설명에서 재사용 가능한 워크플로우 힌트를 추출합니다."""
+    hints: List[str] = []
+    for text in texts:
+        if not text:
+            continue
+        for match in _GOAL_HINT_RE.findall(text):
+            cleaned = match.strip()
+            if cleaned:
+                hints.append(cleaned)
+        if _WORKFLOW_CALL_RE.search(text):
+            compact = " ".join(text.strip().split())
+            if compact:
+                hints.append(compact[:120])
+    return list(dict.fromkeys(hints))

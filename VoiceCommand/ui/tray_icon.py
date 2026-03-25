@@ -11,6 +11,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.text_interface = None
 
         self.menu = QMenu(parent)
+        self._apply_menu_theme()
         self.setContextMenu(self.menu)
 
         self.chat_action = self.menu.addAction("💬 텍스트 대화")
@@ -47,6 +48,11 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.menu.aboutToShow.connect(self.update_game_mode_status)
         self.menu.aboutToShow.connect(self.update_smart_mode_status)
         self.menu.aboutToShow.connect(self.update_mouse_reaction_status)
+        self.menu.aboutToShow.connect(self._apply_menu_theme)
+
+    def _apply_menu_theme(self):
+        from ui import theme as theme_module
+        self.menu.setStyleSheet(theme_module.MENU_STYLE)
 
     def toggle_game_mode(self):
         from VoiceCommand import enable_game_mode, disable_game_mode
@@ -87,16 +93,39 @@ class SystemTrayIcon(QSystemTrayIcon):
     def open_settings(self):
         dialog = SettingsDialog()
         if dialog.exec() == QDialog.Accepted:
-            from VoiceCommand import initialize_tts, _tts_init_event
-            import threading
-            _tts_init_event.clear()
-            def _reinit():
+            if dialog.tts_settings_changed():
+                from VoiceCommand import initialize_tts, _tts_init_event
+                import threading
+                _tts_init_event.clear()
+
+                def _reinit():
+                    try:
+                        initialize_tts()
+                    except Exception as e:
+                        logging.error(f"TTS 재초기화 실패: {e}")
+
+                threading.Thread(target=_reinit, daemon=True, name="TTS-Reinit").start()
+                logging.info("TTS 관련 설정이 변경되어 TTS 재초기화를 시작했습니다.")
+
+            if dialog.theme_settings_changed():
                 try:
-                    initialize_tts()
+                    from ui.theme_runtime import apply_live_theme
+                    apply_live_theme(tray_icon=self, character_widget=self.character_widget)
                 except Exception as e:
-                    logging.error(f"TTS 재초기화 실패: {e}")
-            threading.Thread(target=_reinit, daemon=True, name="TTS-Reinit").start()
-            logging.info("설정이 저장되고 TTS 재초기화를 시작했습니다.")
+                    logging.error(f"실시간 테마 반영 실패: {e}")
+
+            try:
+                from core.plugin_loader import PluginContext, get_plugin_manager
+                get_plugin_manager().load_plugins(
+                    PluginContext(
+                        app=QApplication.instance(),
+                        tray_icon=self,
+                        character_widget=self.character_widget,
+                        text_interface=self.text_interface,
+                    )
+                )
+            except Exception as e:
+                logging.error(f"플러그인 재로드 실패: {e}")
 
     def exit(self):
         self.should_exit = True
