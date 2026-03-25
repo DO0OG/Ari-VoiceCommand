@@ -21,6 +21,11 @@ _HEADERS = {
     )
 }
 
+
+def _is_safe_http_url(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
 # ── DuckDuckGo 검색 및 단순 Fetch ─────────────────────────────────────────────
 
 def web_search(query: str, max_results: int = 5) -> str:
@@ -44,11 +49,11 @@ def web_search(query: str, max_results: int = 5) -> str:
 def web_fetch(url: str, max_chars: int = 3000) -> str:
     """URL의 본문 텍스트를 추출합니다."""
     try:
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in {"http", "https"}:
+        if not _is_safe_http_url(url):
+            parsed = urllib.parse.urlparse(url)
             return f"허용되지 않은 URL 스킴: {parsed.scheme or 'unknown'}"
         req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - http/https만 허용
             raw = resp.read().decode("utf-8", errors="replace")
         
         # 스크립트, 스타일, 태그 제거

@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (
     QTabWidget, QMessageBox, QListWidget, QListWidgetItem, QFrame,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QDesktopServices
+from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
 from ui.theme import (
-    FONT_KO, FONT_SIZE_NORMAL, COLOR_MUTED, COLOR_PRIMARY, COLOR_SUCCESS,
+    FONT_KO, FONT_SIZE_NORMAL, COLOR_PRIMARY, COLOR_SUCCESS,
     TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE, primary_btn_style,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
@@ -117,7 +118,7 @@ class SettingsDialog(QDialog):
         cancel_btn = QPushButton("취소")
         cancel_btn.setMinimumHeight(45)
         cancel_btn.setMinimumWidth(100)
-        cancel_btn.setStyleSheet(f"""
+        cancel_btn.setStyleSheet("""
             QPushButton {{
                 background-color: #f1f3f5;
                 color: #333;
@@ -504,7 +505,9 @@ class SettingsDialog(QDialog):
         if not path:
             return
         try:
-            os.startfile(path)
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+            if not opened:
+                raise RuntimeError("폴더 열기 실패")
         except Exception:
             QMessageBox.information(self, "플러그인 폴더", path)
 
@@ -564,8 +567,8 @@ class SettingsDialog(QDialog):
             try:
                 from llm_provider import reset_llm_provider
                 reset_llm_provider()
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.debug(f"LLM provider reset 생략: {exc}")
 
         if self.theme_settings_changed():
             QMessageBox.information(

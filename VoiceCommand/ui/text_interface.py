@@ -38,11 +38,10 @@ except Exception as _e:
 # UI 공용 모듈
 from ui.common import (
     apply_shadow, clear_layout,
-    create_icon_button, show_temp_status,
     PanelTitleBar,
 )
 from ui.theme import (
-    FONT_KO, FONT_SIZE_TITLE, FONT_SIZE_LARGE, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
+    FONT_KO, FONT_SIZE_LARGE, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
     COLOR_PRIMARY, COLOR_PRIMARY_DARK, COLOR_ACCENT, COLOR_MUTED, COLOR_MUTED_LIGHT,
     COLOR_SUCCESS, COLOR_WARNING, COLOR_DANGER,
     COLOR_TEXT_PRIMARY,
@@ -104,7 +103,6 @@ class ChatWidget(QFrame):
             if pure_text:
                 display_message = f"{emoji} {pure_text}".strip() if emoji else pure_text
 
-        is_aari = not is_user
         sender_name  = "나" if is_user else "아리"
         sender_color = COLOR_PRIMARY if is_user else COLOR_ACCENT
         bg_color     = COLOR_BG_CHAT_USER if is_user else COLOR_BG_CHAT_AARI
@@ -422,15 +420,15 @@ class TextInterfaceThread(QThread):
         try:
             from agent.agent_orchestrator import get_orchestrator
             get_orchestrator().set_progress_callback(self._on_progress)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"오케스트레이터 progress 연결 생략: {exc}")
 
     def _detach_progress_callback(self) -> None:
         try:
             from agent.agent_orchestrator import get_orchestrator
             get_orchestrator().set_progress_callback(None)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"오케스트레이터 progress 해제 생략: {exc}")
 
     def _on_progress(self, event_type: str, **kwargs) -> None:
         self.progress_event.emit(event_type, kwargs)

@@ -132,7 +132,7 @@ class SchedulerPanel(FloatingPanel):
 
         # 작업 추가 폼
         form = QFrame()
-        form.setStyleSheet(f"""
+        form.setStyleSheet("""
             QFrame {{ background: white; border-top: 1px solid #eee;
                       border-bottom-left-radius: 14px;
                       border-bottom-right-radius: 14px; }}

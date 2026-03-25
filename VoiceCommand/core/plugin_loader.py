@@ -112,21 +112,25 @@ class PluginManager:
         plugin.version = str(metadata.get("version", "0.1.0"))
         plugin.description = str(metadata.get("description", ""))
 
-        register = getattr(module, "register", None)
-        if register is None:
+        register_func = self._resolve_register(module)
+        if register_func is None:
             plugin.loaded = True
             plugin.error = ""
             return plugin
-        if not callable(register):
-            raise TypeError("register는 callable이어야 합니다.")
-
-        register_func = cast(Callable[[PluginContext], Any], register)
         exports = register_func(context) or {}
         if isinstance(exports, dict):
             plugin.exports = exports
         plugin.loaded = True
         plugin.error = ""
         return plugin
+
+    def _resolve_register(self, module: ModuleType) -> Optional[Callable[[PluginContext], Any]]:
+        register = getattr(module, "register", None)
+        if register is None:
+            return None
+        if not callable(register):
+            raise TypeError("register는 callable이어야 합니다.")
+        return cast(Callable[[PluginContext], Any], register)
 
 
 _plugin_manager: Optional[PluginManager] = None
