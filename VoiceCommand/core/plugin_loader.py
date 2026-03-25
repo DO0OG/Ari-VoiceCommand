@@ -120,12 +120,15 @@ class PluginManager:
             return plugin
         if not isinstance(register, FunctionType):
             raise TypeError("register는 callable이어야 합니다.")
-        exports = register(context) or {}
+        exports = self._invoke_register(register, context) or {}
         if isinstance(exports, dict):
             plugin.exports = exports
         plugin.loaded = True
         plugin.error = ""
         return plugin
+
+    def _invoke_register(self, register: FunctionType, context: PluginContext) -> Any:
+        return register(context)
 
 
 _plugin_manager: Optional[PluginManager] = None
