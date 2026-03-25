@@ -9,6 +9,7 @@ import importlib.util
 import logging
 import os
 from dataclasses import dataclass, field
+from types import FunctionType
 from types import ModuleType
 from typing import Any, Dict, List, Optional
 
@@ -117,7 +118,7 @@ class PluginManager:
             plugin.loaded = True
             plugin.error = ""
             return plugin
-        if not callable(register):
+        if not isinstance(register, FunctionType):
             raise TypeError("register는 callable이어야 합니다.")
         exports = register(context) or {}
         if isinstance(exports, dict):

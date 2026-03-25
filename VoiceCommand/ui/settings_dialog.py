@@ -15,7 +15,7 @@ from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
-    TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE, primary_btn_style,
+    TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
 from ui.common import create_muted_label
