@@ -51,7 +51,9 @@ if sys.stdout.encoding != 'utf-8':
 
 clean_build = "--clean" in sys.argv
 one_file = "--onefile" in sys.argv
-jobs = multiprocessing.cpu_count()
+# GitHub Actions 등 CI 환경은 메모리 제한이 있어 병렬 작업 수를 절반으로 제한
+_cpu = multiprocessing.cpu_count()
+jobs = max(1, _cpu // 2) if os.environ.get("CI") else _cpu
 
 print("=" * 60)
 print("   Ari EXE 최적화 빌드 시스템 (Nuitka)")
@@ -186,6 +188,8 @@ nuitka_args = [
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
     "--nofollow-import-to=PIL",
+    "--nofollow-import-to=lxml",
+    "--nofollow-import-to=mouseinfo",
     "--nofollow-import-to=openai.types.audio.translation",
     "--nofollow-import-to=openai.types.audio.translation_create_params",
     "--nofollow-import-to=openai.types.audio.translation_create_response",
