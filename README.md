@@ -11,6 +11,15 @@
 
 ## 개발 현황
 
+### 최근 업데이트 (2026-03-26)
+
+- **NVIDIA NIM LLM 추가**: `https://integrate.api.nvidia.com/v1` 엔드포인트를 지원합니다. 설정창에서 NVIDIA NIM을 선택하고 `nvapi-...` 키를 입력하면 `meta/llama-3.3-70b-instruct` 등 NIM 호스팅 모델을 바로 사용할 수 있습니다.
+- **시스템 명령 시간 파싱**: `"7시에 컴퓨터 꺼줘"`, `"30분 뒤에 꺼줘"` 처럼 시간 접두사가 붙은 종료 명령을 올바르게 파싱해 `shutdown /s /t <초>` 로 예약합니다. 기존에는 즉시 종료됐습니다.
+- **AI 자율성 강화**: `_COMPLEX_TASK_KEYWORDS` 에 설치·업데이트·백업·스케줄·스크린샷 등 키워드를 추가하고, LLM 이 요청을 이해 못 할 때 에이전트 루프로 자동 승격되는 조건을 보강했습니다.
+- **로컬 TTS 추가 최적화**: CosyVoice3 워커에 `cudnn.benchmark=True` 와 동적 ODE 스텝(짧은 문장 ≤15자는 3스텝, 일반 5스텝) 을 추가해 짧은 응답의 지연을 약 200ms 단축했습니다.
+- **코드 품질 개선**: `AppState` 패턴으로 13개 전역 변수 통합, `ConfigManager` `RLock` 교착 해결, 루트 래퍼 파일 38개 제거, 패키지 import 경로 일괄 정리, 로그 자동 순환(최대 10개 보관).
+- **requirements 정리**: `anthropic>=0.25.0` 정식 포함, NVIDIA NIM 주석 추가.
+
 ### 최근 업데이트 (2026-03-25)
 
 - **자율 실행 엔진 고도화**: Plan → Execute + Self-Fix → Verify 루프, 상태 기반 재계획, adaptive/resilient workflow를 추가해 반복 작업의 복원력과 재현성을 높였습니다.
@@ -58,7 +67,7 @@
 |------|------|
 | **웨이크워드** | SimpleWakeWord(Google STT) "아리야" |
 | **음성 인식** | Google STT (기본) · Vosk 오프라인 옵션 |
-| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter 선택 |
+| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter · NVIDIA NIM 선택 |
 | **감정 표현** | AI 태그(`(기쁨)` 등) 기반 캐릭터 애니메이션 반응 |
 | **TTS** | Fish Audio WS · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그 · 물리 엔진 · 마우스 반응 |
@@ -120,7 +129,7 @@
 |------|------|
 | **웨이크워드** | "아리야" 호출 → 음성 입력 대기 |
 | **음성 인식** | Google STT (기본) |
-| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter 선택 |
+| **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter · NVIDIA NIM 선택 |
 | **감정 표현** | AI가 내용에 따라 (기쁨), (슬픔) 등 태그를 생성하고 캐릭터가 반응 |
 | **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS 선택 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 |
@@ -141,22 +150,58 @@
 
 ## 빠른 시작
 
-```bash
-# 1. 의존성 설치
-py -3.11 -m pip install -r VoiceCommand/requirements.txt
+### 요구 사항
 
-# 2. 실행 (Windows)
+| 항목 | 최소 | 권장 |
+|------|------|------|
+| Python | 3.11 | 3.11 |
+| OS | Windows 10 | Windows 11 |
+| RAM | 4 GB | 8 GB |
+| GPU (로컬 TTS) | — | CUDA 12.x, VRAM 4 GB+ |
+
+> **CUDA 버전 확인**: `nvidia-smi` 실행 후 상단 우측의 `CUDA Version`을 확인하세요.
+> CosyVoice3 로컬 TTS는 CUDA 11.8 이상이 필요합니다.
+
+### 설치
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/DO0OG/AI-Assistant.git
+cd AI-Assistant
+
+# 2. 가상환경 생성 (권장)
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+
+# 3. 의존성 설치
+pip install -r VoiceCommand/requirements.txt
+
+# 4. 실행
 cd VoiceCommand
 py -3.11 Main.py
 
-# 3. 권장 검증
+# 5. 검증 (선택)
 py -3.11 validate_repo.py
 ```
 
-### 로컬 TTS (CosyVoice3) 설치
-고품질 로컬 TTS를 사용하려면 아래 스크립트를 실행하세요 (GPU 권장).
+### CosyVoice3 로컬 TTS 설치 (선택)
+
+고품질 로컬 TTS를 사용하려면 CUDA GPU가 필요합니다.
+
 ```bash
-python VoiceCommand/install_cosyvoice.py
+# 자동 설치 스크립트
+py -3.11 VoiceCommand/install_cosyvoice.py
+```
+
+설치 후 설정에서 **TTS 모드 → 로컬 (CosyVoice3)** 으로 변경하세요.
+
+CosyVoice 경로를 수동으로 지정하려면 설정 파일(`%AppData%\Ari\ari_settings.json`)의
+`cosyvoice_dir` 항목에 설치 경로를 입력하세요.
+
+```json
+{
+  "cosyvoice_dir": "C:/path/to/CosyVoice"
+}
 ```
 
 ---
@@ -175,6 +220,11 @@ python VoiceCommand/install_cosyvoice.py
 - 기본 사용 순서는 [프로그램 사용 가이드](docs/USAGE.md)에 정리했습니다.
 - 예약 명령은 `5분 뒤`, `5분 후`, `11시에`, `11시 30분에`처럼 말할 수 있습니다.
 - 텍스트 채팅 UI와 음성 명령은 같은 실행 경로를 사용하므로, 둘 다 자율 실행 기능을 사용할 수 있습니다.
+- 경로를 직접 말하지 않아도 `다운로드 폴더 정리해줘`, `바탕화면 파일 세트 확인해줘`, `문서 폴더 목록 저장해줘`처럼 자주 쓰는 사용자 폴더는 자동으로 추론해 처리할 수 있습니다.
+- 시스템 점검 계열은 `시스템 상태 확인해줘`, `자체 보안 점검 진행해줘`, `내 PC 상태 보고서 저장해줘`처럼 말하면 템플릿 기반 점검 경로를 우선 사용합니다.
+- 브라우저 작업은 `https://example.com 링크 목록 수집해줘`, `https://example.com 에서 파일 다운로드해서 저장해줘`처럼 말하면 resilient workflow와 페이지별 전략 재사용 경로를 우선 사용합니다.
+- URL과 함께 `검색창에 "아리" 입력해줘`, `로그인 페이지 열어줘`처럼 말하면 공통 입력 필드/로그인 버튼 템플릿을 먼저 시도합니다.
+- `링크 목록 수집해서 저장해줘`, `검색창에 "아리" 입력하고 저장해줘`, `로그인 후 링크 수집해줘`처럼 후속 결과 저장/수집 흐름도 브라우저 템플릿으로 바로 연결됩니다.
 
 ### 외부 테마 커스터마이징
 
@@ -197,11 +247,12 @@ python VoiceCommand/install_cosyvoice.py
 
 ### 로컬 TTS 최적화 포인트
 
-- 로컬 TTS(`CosyVoice3`)는 워커 프로세스를 계속 유지하고, `reference.wav` 특징을 미리 추출해 반복 호출 비용을 줄입니다.
-- 워커 로드는 백그라운드에서 진행되며, UI는 READY까지 동기 대기하지 않습니다.
-- 재생 출력은 안정성을 우선해 문장마다 새 스트림을 열고, 모델 워커만 재사용합니다.
+- 워커 프로세스를 계속 유지하고, `reference.wav` 특징을 시작 시 한 번만 추출해 반복 호출마다 ONNX 추출(2~3초)을 생략합니다.
+- `torch.compile(mode="reduce-overhead")` + `fp16=True` + `cudnn.benchmark=True` + `tf32` matmul 정밀도로 GPU 추론을 최적화합니다.
+- ODE 스텝을 짧은 텍스트(≤15자)는 3스텝, 일반 텍스트는 5스텝으로 동적 조정해 짧은 응답의 지연을 약 200ms 단축합니다.
+- `stream=True` 청크 스트리밍으로 첫 오디오 청크가 생성되는 즉시 재생을 시작합니다.
+- 백그라운드 GPU warmup 스레드로 `torch.compile` 초회 컴파일을 앱 로드 중에 미리 처리합니다.
 - PCM 수신 버퍼는 상한을 둬 긴 문장에서도 메모리가 과도하게 늘어나지 않도록 제한합니다.
-- 현재 앱 레벨에서 안전하게 넣을 수 있는 최적화는 대부분 반영된 상태이며, 그 이상은 CosyVoice 엔진 자체 수정 영역에 가깝습니다.
 
 ---
 
@@ -277,7 +328,7 @@ tts_factory.py              ← 호환 wrapper (실제 구현: tts/tts_factory.p
 │   ├── autonomous_executor.py ← Python/Shell 실행기 + 문서 저장 + runner 기반 격리 실행
 │   ├── execution_analysis.py  ← 실패 분류 / 읽기 전용 단계 판정 / 실행 산출물 추출 공용 유틸
 │   ├── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 공통 헬퍼
-│   ├── llm_provider.py        ← 다중 LLM 제공자 통합 및 tool routing
+│   ├── llm_provider.py        ← 다중 LLM 제공자 통합 (Groq·OpenAI·Anthropic·Mistral·Gemini·OpenRouter·NIM)
 │   ├── real_verifier.py       ← 부작용 없는 실행 검증기
 │   ├── safety_checker.py      ← 코드/명령 위험 수준 분류
 │   └── ...

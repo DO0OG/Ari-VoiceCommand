@@ -10,7 +10,7 @@ class ConversationHistory:
 
     def __init__(self, max_size=50):
         self.history = deque(maxlen=max_size)
-        from resource_manager import ResourceManager
+        from core.resource_manager import ResourceManager
         self.file_path = ResourceManager.get_writable_path("conversation_history.json")
         self.load()
 

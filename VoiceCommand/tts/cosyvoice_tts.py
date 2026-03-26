@@ -13,6 +13,7 @@ import threading
 import time
 import subprocess
 from collections import deque
+from typing import Optional
 
 import numpy as np
 import pyaudio
@@ -36,12 +37,38 @@ def _get_python_exe() -> str:
         return python
     return sys.executable
 
-COSYVOICE_DIR = r"D:\Git\CosyVoice"
-DEFAULT_MODEL_DIR = os.path.join(COSYVOICE_DIR, "pretrained_models", "Fun-CosyVoice3-0.5B")
+def _get_cosyvoice_dir() -> str:
+    """CosyVoice 설치 경로: 설정값 → 자동 탐색 순으로 결정."""
+    try:
+        from core.config_manager import ConfigManager
+        configured = ConfigManager.load_settings().get("cosyvoice_dir", "")
+        if configured and os.path.isdir(configured):
+            return configured
+    except Exception:
+        pass
+    # 자동 탐색: 프로젝트 루트 인근 경로 후보
+    candidates = [
+        os.path.join(os.path.dirname(_HERE), "..", "CosyVoice"),
+        os.path.join(os.path.dirname(_HERE), "..", "..", "CosyVoice"),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return os.path.abspath(c)
+    return ""
+
+# 첫 사용 시 1회만 확인 — 경로 문자열 자체를 캐시
+_cached_cosyvoice_dir: Optional[str] = None
+
+def _get_cosyvoice_dir_cached() -> str:
+    """_get_cosyvoice_dir()의 결과를 캐시해서 반복 fs 탐색 방지."""
+    global _cached_cosyvoice_dir
+    if _cached_cosyvoice_dir is None:
+        _cached_cosyvoice_dir = _get_cosyvoice_dir()
+    return _cached_cosyvoice_dir
 
 def _get_reference_wav() -> str:
     """reference.wav 경로: appdata 우선, 없으면 번들"""
-    from resource_manager import ResourceManager
+    from core.resource_manager import ResourceManager
     appdata_path = ResourceManager.get_writable_path("reference.wav")
     if os.path.exists(appdata_path):
         return appdata_path
@@ -61,8 +88,11 @@ class CosyVoiceTTS(QObject):
 
     def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9):
         super().__init__()
-        from audio_manager import GlobalAudio
-        self.model_dir = model_dir or DEFAULT_MODEL_DIR
+        from audio.audio_manager import GlobalAudio
+        cosyvoice_dir = _get_cosyvoice_dir_cached()
+        default_model_dir = os.path.join(cosyvoice_dir, "pretrained_models", "Fun-CosyVoice3-0.5B") if cosyvoice_dir else ""
+        self.model_dir = model_dir or default_model_dir
+        self._cosyvoice_dir = cosyvoice_dir
         self.reference_wav = reference_wav or _get_reference_wav()
         self.reference_text = reference_text
         self.speed = speed
@@ -94,7 +124,7 @@ class CosyVoiceTTS(QObject):
             "--model-dir", self.model_dir,
             "--reference-wav", self.reference_wav,
             "--reference-text", self.reference_text,
-            "--cosyvoice-dir", COSYVOICE_DIR,
+            "--cosyvoice-dir", self._cosyvoice_dir,
             "--speed", str(self.speed),
         ]
         popen_kwargs = {
@@ -215,7 +245,7 @@ class CosyVoiceTTS(QObject):
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
     def speak(self, text: str) -> bool:
-        from audio_manager import _audio_output_lock as _audio_lock
+        from audio.audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text_cached(text or "")
         if not text or self._proc is None or self._proc.poll() is not None:
             return False

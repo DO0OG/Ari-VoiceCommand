@@ -5,6 +5,7 @@ import logging
 
 class LearningCommand(BaseCommand):
     """학습 모드 제어 명령"""
+    priority = 20
 
     def __init__(self, tts_func, learning_mode_ref):
         self.tts_wrapper = tts_func

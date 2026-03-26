@@ -56,11 +56,29 @@ if not os.path.exists(icon_path):
     icon_path = None
 
 # 로그 설정
+_MAX_LOG_FILES = 10  # 보관할 최대 로그 파일 수
+
+def _cleanup_old_logs(log_dir: str) -> None:
+    """오래된 로그 파일 자동 삭제 (최대 _MAX_LOG_FILES개 유지)."""
+    try:
+        logs = sorted(
+            [f for f in os.listdir(log_dir) if f.startswith("ari_log_") and f.endswith(".log")],
+            reverse=True,
+        )
+        for old in logs[_MAX_LOG_FILES:]:
+            try:
+                os.remove(os.path.join(log_dir, old))
+            except OSError as e:
+                logging.debug(f"로그 파일 삭제 실패: {e}")
+    except OSError as e:
+        logging.debug(f"로그 디렉터리 읽기 실패: {e}")
+
 def setup_logging():
     from core.resource_manager import ResourceManager
     log_dir = ResourceManager.get_writable_path("logs")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    os.makedirs(log_dir, exist_ok=True)
+
+    _cleanup_old_logs(log_dir)
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(log_dir, f"ari_log_{current_time}.log")
@@ -81,9 +99,10 @@ def check_cosyvoice_first_run(app):
     """최초 실행 시 CosyVoice 설치 여부 확인"""
     from core.resource_manager import ResourceManager
     FLAG_FILE = ResourceManager.get_writable_path(".cosyvoice_asked")
-    COSYVOICE_DIR = r"D:\Git\CosyVoice"
+    from tts.cosyvoice_tts import _get_cosyvoice_dir_cached
+    cosyvoice_dir = _get_cosyvoice_dir_cached()
 
-    if os.path.exists(FLAG_FILE) or os.path.exists(COSYVOICE_DIR):
+    if os.path.exists(FLAG_FILE) or (cosyvoice_dir and os.path.isdir(cosyvoice_dir)):
         return  # 이미 물어봤거나 설치됨
 
     msg = QMessageBox()
@@ -100,7 +119,8 @@ def check_cosyvoice_first_run(app):
     msg.button(QMessageBox.No).setText("나중에")
 
     # 플래그 파일 생성 (다시 묻지 않음)
-    open(FLAG_FILE, "w").close()
+    with open(FLAG_FILE, "w"):
+        pass
 
     if msg.exec() == QMessageBox.Yes:
         import threading

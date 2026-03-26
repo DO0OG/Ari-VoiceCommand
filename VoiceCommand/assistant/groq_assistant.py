@@ -242,7 +242,7 @@ class GroqAssistant:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 Groq API 키를 입력하세요.", []
 
         try:
-            from memory_manager import get_memory_manager
+            from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
 
             if self.system_prompt:
@@ -358,7 +358,7 @@ class GroqAssistant:
             return "AI 기능이 비활성화되어 있습니다. 설정에서 Groq API 키를 입력하세요."
 
         try:
-            from memory_manager import get_memory_manager
+            from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
 
             # 시스템 프롬프트 결정: 사용자 설정 우선, 없으면 기본값
@@ -480,13 +480,13 @@ _groq_assistant = None
 
 def get_groq_assistant():
     """하위 호환: 다중 제공자 LLMProvider로 위임"""
-    from llm_provider import get_llm_provider
+    from agent.llm_provider import get_llm_provider
     return get_llm_provider()
 
 
 def set_groq_api_key(api_key):
     """Groq API 키 설정 (하위 호환 — llm_provider 싱글톤 리셋)"""
-    from llm_provider import reset_llm_provider
-    from config_manager import ConfigManager
+    from agent.llm_provider import reset_llm_provider
+    from core.config_manager import ConfigManager
     ConfigManager.set_value("groq_api_key", api_key)
     reset_llm_provider()

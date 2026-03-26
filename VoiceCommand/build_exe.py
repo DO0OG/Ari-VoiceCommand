@@ -7,20 +7,25 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 
 출력: dist/Ari/
 
+포함 모듈 (2026-03-26):
+  agent/llm_provider.py     — NVIDIA NIM 제공자 추가 (OpenAI-호환, nvapi- 키)
+  commands/system_command.py — 시간 파싱 기반 예약 종료 (N분 뒤/HH시에 꺼줘)
+  commands/ai_command.py     — 자율성 강화 (복합 키워드 확장, escalation 조건 보강)
+  tts/cosyvoice_worker.py   — cudnn.benchmark + 동적 ODE steps(짧은 문장 3스텝) 추가
+  core/VoiceCommand.py      — AppState 패턴으로 전역 변수 통합
+  core/config_manager.py    — RLock 교착 해결, nvidia_nim_api_key 추가
+  Main.py                   — 로그 자동 순환 (최대 10개 보관)
+
 포함 모듈 (2026-03-25):
   agent/agent_orchestrator  — 병렬 실행 및 자율 반성(Reflection) 지원
   agent/agent_planner       — 플래너/실행 모델 분리, 앱 워크플로우 템플릿 확장
-  agent/agent_orchestrator  — 실행 상태 기반 재계획 힌트 주입
   agent/file_tools.py       — 확장된 파일 작업군 (이름 변경, 병합, 정리, 분석, 로그 리포트)
   agent/proactive_scheduler — 주제 기반 선제 제안 및 지정 시각 알람
   agent/real_verifier.py    — 창/URL/이미지/workflow JSON 기반 실제 상태 검증 강화
-  agent/execution_analysis.py — 경로/상태 기반 의존성 분석
-  commands/ai_command.py     — 도구 호출 누락 시 복합 요청 자동 승격 + 예약 종료 안전 가드
-  services/web_tools.py      — 브라우저 셀렉터/액션 전략 지속 메모리 + goal_hint 재사용 + wait_url/wait_title/wait_selector/read_url 상태 적응
-  agent/automation_helpers.py — 데스크톱 창 타깃/워크플로우 기억 + 유사 goal_hint 재사용 + 풍부한 데스크톱 액션 + wait_image
+  services/web_tools.py      — 브라우저 셀렉터/액션 전략 지속 메모리 + goal_hint 재사용
+  agent/automation_helpers.py — 데스크톱 창 타깃/워크플로우 기억 + wait_image
   agent/strategy_memory.py    — workflow hint 축적 및 재사용
-  agent/agent_planner.py      — 메모장/탐색기/브라우저/VS Code/계산기 앱 워크플로우 템플릿
-  agent/autonomous_executor.py — 메인/runner 공통 adaptive/resilient workflow + 상태 기반 자동 보강 + planning snapshot 노출
+  agent/autonomous_executor.py — adaptive/resilient workflow + planning snapshot 노출
   core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점
   ui/theme.py, ui/common.py — `%AppData%/Ari/theme/*.json` 기반 UI 테마 시스템
   plugins/sample_plugin.py   — 사용자 플러그인 템플릿
@@ -145,6 +150,7 @@ nuitka_args = [
         "pycaw",
         "comtypes",
         "groq",
+        "anthropic",
         "fish_audio_sdk",
         "speech_recognition",
         "pyaudio",

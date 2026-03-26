@@ -47,7 +47,7 @@ class FishTTSWebSocket(QObject):
 
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
-        from audio_manager import GlobalAudio
+        from audio.audio_manager import GlobalAudio
         self.client = FishAudio(api_key=api_key) if api_key else FishAudio()
         self.reference_id = reference_id
         self.pa = GlobalAudio.get_instance()
@@ -102,7 +102,7 @@ class FishTTSWebSocket(QObject):
                     combined = b"".join(chunk_buffer)
                     segment = _decode_mp3_segment(combined)
 
-                    from audio_manager import _audio_output_lock
+                    from audio.audio_manager import _audio_output_lock
                     # pa.open()만 락으로 보호 (stream.write는 블로킹 콜이므로 락 밖으로)
                     with _audio_output_lock:
                         stream = self.pa.open(

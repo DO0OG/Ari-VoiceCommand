@@ -340,7 +340,8 @@ class RealVerifier:
             path = os.path.join(log_dir, f"verifier_trace_{datetime.now().strftime('%Y%m%d')}.log")
             with open(path, "a", encoding="utf-8") as f:
                 f.write(f"[{datetime.now().strftime('%H:%M:%S')}] goal: {goal}\n{code}\n{'=' * 80}\n")
-        except Exception: pass
+        except OSError as e:
+            logging.debug(f"[Verifier] 추적 로그 쓰기 실패: {e}")
 
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 

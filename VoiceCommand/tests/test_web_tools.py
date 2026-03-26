@@ -164,6 +164,25 @@ class WebToolsTests(unittest.TestCase):
 
             self.assertEqual(result, "성공: wait_selector(#download)")
 
+    def test_find_element_for_action_uses_text_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            selector_path = os.path.join(tmp, "selectors.json")
+            browser = _TempBrowser(selector_path=selector_path, download_dir=tmp)
+            marker = object()
+            browser._find_element_by_text = lambda text_query: marker if text_query == "다운로드" else None
+
+            found, matched = browser._find_element_for_action(
+                {"type": "click_text", "text_contains": "다운로드", "selectors": []},
+                "example.com",
+                "download",
+                None,
+                None,
+                None,
+            )
+
+            self.assertIs(found, marker)
+            self.assertEqual(matched, "text:다운로드")
+
 
 if __name__ == "__main__":
     unittest.main()

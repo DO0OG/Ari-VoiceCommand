@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -v \"^/d/Git/AI-Assistant/VoiceCommand$\")",
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//d/Git/AI-Assistant/VoiceCommand/**)",
+      "Bash(done)",
+      "Bash(find /d/Git/AI-Assistant/VoiceCommand/memory -maxdepth 1 -type f -name *.py)",
+      "Bash(grep -r \"from VoiceCommand\\\\.\\\\\\(agent_orchestrator\\\\|agent_planner\\\\|automation_helpers\\\\|autonomous_executor\\\\|confirmation_manager\\\\|llm_provider\\\\|proactive_scheduler\\\\|real_verifier\\\\|safety_checker\\\\|strategy_memory\\\\|cosyvoice_tts\\\\|cosyvoice_worker\\\\|fish_tts_ws\\\\|tts_base\\\\|tts_edge\\\\|tts_elevenlabs\\\\|tts_factory\\\\|tts_openai\\\\|character_widget\\\\|settings_dialog\\\\|speech_bubble\\\\|text_interface\\\\|tray_icon\\\\|config_manager\\\\|constants\\\\|core_manager\\\\|resource_manager\\\\|rp_generator\\\\|threads\\\\|timer_manager\\\\|weather_service\\\\|web_tools\\\\|ai_assistant\\\\|groq_assistant\\\\|audio_manager\\\\|simple_wake\\\\|user_context\\\\|conversation_history\\\\|memory_manager\\\\\\)\" --include=*.py -l)",
+      "Bash(grep -rn \"import agent_orchestrator\\\\|import agent_planner\\\\|import automation_helpers\\\\|import config_manager\\\\|import tts_factory\\\\|import audio_manager\" --include=*.py d:/Git/AI-Assistant/VoiceCommand/)",
+      "Bash(ls /d/Git/AI-Assistant/VoiceCommand/*.py)",
+      "Bash(py -3 -m py_compile VoiceCommand/Main.py VoiceCommand/VoiceCommand.py)",
+      "Bash(py -3 -m py_compile VoiceCommand/Main.py VoiceCommand/core/VoiceCommand.py VoiceCommand/core/config_manager.py VoiceCommand/agent/safety_checker.py VoiceCommand/commands/command_registry.py VoiceCommand/commands/base_command.py VoiceCommand/tts/cosyvoice_tts.py)",
+      "Bash(py -3 -m py_compile VoiceCommand/agent/autonomous_executor.py VoiceCommand/agent/automation_helpers.py VoiceCommand/commands/system_command.py VoiceCommand/commands/ai_command.py VoiceCommand/commands/learning_command.py VoiceCommand/commands/timer_command.py)",
+      "Bash(git -C /d/Git/AI-Assistant log --all --oneline --diff-filter=D -- VoiceCommand/tts/reference.wav)",
+      "Bash(git -C /d/Git/AI-Assistant log --all --oneline -- */reference.wav)",
+      "Bash(py -3:*)",
+      "Bash(grep -n \"except Exception: pass\\\\|except Exception:\\\\s*$\" /d/Git/AI-Assistant/VoiceCommand/agent/llm_provider.py)",
+      "Bash(grep -rn \"except Exception: pass$\\\\|except Exception:\\\\s*\\\\n\\\\s*pass\" /d/Git/AI-Assistant/VoiceCommand/ --include=\"*.py\")",
+      "Bash(cd /d D:GitAI-AssistantVoiceCommand)",
+      "Bash(python3 -c \"from pathlib import Path; p = Path\\(''regedit''\\); print\\(''stem:'', p.stem, ''resolved:'', p.resolve\\(\\)\\); p2 = Path\\(''C:\\\\\\\\Windows\\\\\\\\regedit.exe''\\); print\\(''stem:'', p2.stem, ''resolved:'', p2.resolve\\(\\)\\)\")",
+      "Bash(grep -n \"remove.*os\\\\|os.remove\\\\|oldlog\\\\|old.*log\\\\|MAX_LOG\" /d/Git/AI-Assistant/VoiceCommand/Main.py /d/Git/AI-Assistant/VoiceCommand/core/*.py /d/Git/AI-Assistant/VoiceCommand/agent/*.py)",
+      "Bash(python3:*)",
+      "Bash(grep -n \"class.*State\\\\|class.*Manager\\\\|class.*Container\" /d/Git/AI-Assistant/VoiceCommand/core/*.py /d/Git/AI-Assistant/VoiceCommand/audio/*.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''VoiceCommand/build_exe.py''\\).read\\(\\)\\); print\\(''build_exe.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''VoiceCommand/build_exe.py''\\).read\\(\\)\\); print\\(''build_exe.py syntax OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''VoiceCommand/requirements.txt''\\).read\\(\\).replace\\(''#'',''''\\).replace\\(''>='',''==''\\).replace\\(''=='',''''\\).replace\\(''\\\\n'',''''\\).replace\\(''pyaudio0.2.14'',''''\\).replace\\(''-'',''_''\\)\\)\")",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\(''build_exe.py''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''build_exe.py''\\).read\\(\\)\\); print\\(''build_exe.py OK''\\)\")",
+      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''commands/system_command.py''\\).read\\(\\)\\); print\\(''system_command.py OK''\\)\")",
+      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''agent/llm_provider.py''\\).read\\(\\)\\); print\\(''llm_provider.py OK''\\)\")"
+    ]
+  }
+}
