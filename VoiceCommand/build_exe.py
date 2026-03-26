@@ -225,6 +225,7 @@ nuitka_args = [
     "--nofollow-import-to=PIL",
     "--nofollow-import-to=lxml",
     "--nofollow-import-to=mouseinfo",
+    "--nofollow-import-to=comtypes.test",  # comtypes 테스트 코드 — COM/Word 의존성으로 컴파일 실패
     "--nofollow-import-to=openai.types.audio.translation",
     "--nofollow-import-to=openai.types.audio.translation_create_params",
     "--nofollow-import-to=openai.types.audio.translation_create_response",
