@@ -1,9 +1,13 @@
 """
 Nuitka EXE 빌드 스크립트 (최적화 버전)
-실행: python build_exe.py          # 증분 빌드 (캐시 재사용, 빠름)
-실행: python build_exe.py --clean  # 클린 빌드 (캐시 삭제)
-실행: python build_exe.py --onefile # 단일 파일 빌드 (배포용, 느림)
-권장: python validate_repo.py      # 빌드 전 검증
+실행: py -3.11 build_exe.py          # 증분 빌드 (캐시 재사용, 빠름)
+실행: py -3.11 build_exe.py --clean  # 클린 빌드 (캐시 삭제)
+실행: py -3.11 build_exe.py --onefile # 단일 파일 빌드 (배포용, 느림)
+권장: py -3.11 validate_repo.py      # 빌드 전 검증
+
+nofollow 정책:
+  numpy, torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
+  API 클라이언트는 --nofollow-import-to 처리. 런타임에 site-packages에서 직접 로드됨.
 
 출력: dist/Ari/
 
@@ -203,11 +207,22 @@ nuitka_args = [
         "pytesseract",
         "sentence_transformers",
         "torch",
+        # 데이터 분석 / 문서 생성 / 시스템 (요청 시 설치된 경우만 포함)
+        "matplotlib",
+        "pandas",
+        "openpyxl",
+        "PIL",
+        "docx",
+        "bs4",
+        "wmi",
+        "win32api",
     ),
 
-    # 불필요한 모듈 제외 (빌드 속도 및 용량 최적화)
-    # numpy/torch 계열: C 확장이므로 Nuitka가 직접 컴파일하지 않도록 제외
-    # (런타임에는 site-packages의 사전 컴파일된 .pyd/.dll로 동작)
+    # ── nofollow: C 확장 / 컴파일 불가 패키지 ──────────────────────────────────
+    # Nuitka가 C로 컴파일하지 않도록 제외. 런타임에는 site-packages의
+    # 사전 컴파일된 .pyd/.dll 또는 순수 Python 파일로 동작.
+
+    # ML / 수치 연산
     "--nofollow-import-to=numpy",
     "--nofollow-import-to=torch",
     "--nofollow-import-to=torchvision",
@@ -220,16 +235,29 @@ nuitka_args = [
     "--nofollow-import-to=pandas",
     "--nofollow-import-to=sklearn",
     "--nofollow-import-to=scipy",
+
+    # LLM / API 클라이언트 (pydantic v2 Rust 확장 포함, clcache 전처리기 실패)
+    "--nofollow-import-to=groq",
+    "--nofollow-import-to=openai",
+    "--nofollow-import-to=anthropic",
+    "--nofollow-import-to=mistralai",
+    "--nofollow-import-to=httpx",
+    "--nofollow-import-to=pydantic",
+    "--nofollow-import-to=pydantic_core",
+    "--nofollow-import-to=huggingface_hub",
+
+    # 기타
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
     "--nofollow-import-to=PIL",
     "--nofollow-import-to=lxml",
     "--nofollow-import-to=mouseinfo",
-    "--nofollow-import-to=comtypes.test",  # comtypes 테스트 코드 — COM/Word 의존성으로 컴파일 실패
-    "--nofollow-import-to=openai.types.audio.translation",
-    "--nofollow-import-to=openai.types.audio.translation_create_params",
-    "--nofollow-import-to=openai.types.audio.translation_create_response",
-    "--nofollow-import-to=openai.types.audio.translation_verbose",
+    "--nofollow-import-to=comtypes.test",
+    "--nofollow-import-to=wmi",
+    "--nofollow-import-to=win32api",
+    "--nofollow-import-to=win32con",
+    "--nofollow-import-to=win32com",
+    "--nofollow-import-to=openpyxl",
     
     "Main.py"
 ]

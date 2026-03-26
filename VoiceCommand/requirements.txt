@@ -1,7 +1,8 @@
 # AI-Assistant (Ari) 의존성
 # 업데이트: 2026-03-26
-#   신규 선택 의존성: easyocr, pytesseract, sentence-transformers (OCR / 임베딩 기능)
-# 이전 업데이트: NVIDIA NIM 추가, CosyVoice3 최적화, 역할별 LLM 분리
+#   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
+#   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
+#   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs
 # 개발 검증: validate_repo.py + unittest discover
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
@@ -38,17 +39,32 @@ httpx>=0.27.0
 requests>=2.32.0
 selenium>=4.18.0
 webdriver-manager>=4.0.1
+beautifulsoup4>=4.12.0   # HTML 파싱 (웹 스크래핑, 자율 실행 웹 작업)
+
+# ── 데이터 분석 / 시각화 ────────────────────────────────────────────────────────
+# numpy<2 와 호환: matplotlib 3.8+ (numpy>=1.21), pandas 2.x (numpy>=1.23) 모두 충족
+matplotlib>=3.8.0,<4     # 그래프·차트 생성 (CPU 온도 추이, 데이터 시각화 등)
+pandas>=2.1.0            # CSV/Excel 데이터 조작·분석
+openpyxl>=3.1.0          # Excel .xlsx 읽기/쓰기 (pandas Excel I/O 의존성)
+
+# ── 이미지 처리 ──────────────────────────────────────────────────────────────
+Pillow>=10.0.0           # 이미지 변환·편집·저장 (스크린샷 후처리 등)
+
+# ── 문서 생성 ────────────────────────────────────────────────────────────────
+python-docx>=1.1.0       # Word .docx 문서 생성·편집
+reportlab>=4.1.0         # PDF 문서 생성
 
 # ── 시스템 (Windows) ───────────────────────────────────────────────────────────
 comtypes>=1.4.1
 psutil>=5.9.0
 pycaw>=20230407
+pywin32>=306             # Windows API — 레지스트리·COM·셸·프로세스 관리
+wmi>=1.5.1               # CPU·GPU 온도·하드웨어 정보 (pywin32 기반)
 
 # ── 빌드 및 유틸리티 ───────────────────────────────────────────────────────────
 huggingface_hub>=0.22.0
 nuitka>=2.1.0
 python-dotenv>=1.0.0
-reportlab>=4.1.0  # auto/pdf 문서 저장
 watchdog>=4.0.0
 
 # ── 선택 의존성 (없어도 앱 실행 가능, 기능 저하만 발생) ─────────────────────────

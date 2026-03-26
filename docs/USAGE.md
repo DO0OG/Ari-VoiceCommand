@@ -14,12 +14,33 @@ py -3.11 Main.py
 py -3.11 validate_repo.py
 ```
 
+### 선택 의존성 설치
+
+기본 의존성만 설치해도 앱이 실행되지만, 아래 기능은 추가 패키지가 필요합니다.
+
+```bash
+# OCR 기반 화면 텍스트 검증 (비전 검증 기능)
+pip install "easyocr>=1.7.0"          # 권장, 한국어 지원
+# pip install "pytesseract>=0.3.10"   # 경량 대안 (Tesseract 별도 설치 필요)
+
+# 의미 기반 전략 기억 검색
+pip install sentence-transformers torch
+
+# Edge TTS (무료 클라우드 TTS)
+pip install edge-tts
+
+# ElevenLabs TTS
+pip install elevenlabs
+```
+
+> **주의**: easyocr는 NumPy를 업그레이드할 수 있습니다. `numpy<2` 제약이 `requirements.txt`에 명시되어 있으므로 설치 순서와 관계없이 `numpy 1.x`가 유지됩니다.
+
 ## 2. 기본 사용 흐름
 
 1. 앱을 실행합니다.
 2. 트레이 아이콘 우클릭으로 설정창을 엽니다.
 3. AI 모델, TTS, UI 테마를 원하는 값으로 조정합니다.
-4. 웨이크워드 또는 텍스트 채팅 UI로 명령합니다.
+4. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
 
 ## 3. 텍스트 채팅 UI
 
@@ -43,12 +64,25 @@ py -3.11 validate_repo.py
 - `CSV 분석해서 저장해줘`
 - `로그 리포트 만들어줘`
 
-## 6. 로컬 TTS 사용 시
+## 6. 로컬 TTS (CosyVoice3) 사용 시
 
 - `CosyVoice3`는 초기 로드가 백그라운드에서 진행됩니다.
 - 모델 워커는 재사용되므로 첫 실행 후 반복 호출이 더 안정적입니다.
 - 짧은 응답(15자 이하)은 ODE 3스텝으로 자동 전환되어 약 200ms 더 빠릅니다.
 - TTS 품질/지연을 바꾸려면 엔진 설정을 조정하고, 테마 변경과는 별개로 보시면 됩니다.
+
+### CosyVoice3 설치
+
+```bash
+# 대화형 설치 (기본 경로: %USERPROFILE%\CosyVoice)
+py -3.11 install_cosyvoice.py
+
+# 경로 직접 지정
+py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
+```
+
+설치 후 설정창 → **AI & TTS → TTS 모드 → 로컬 (CosyVoice3)** 선택,
+**CosyVoice 경로**란에 설치 경로를 입력하거나 자동 감지 버튼을 클릭합니다.
 
 ## 7. NVIDIA NIM 사용 시
 
@@ -56,12 +90,21 @@ py -3.11 validate_repo.py
 2. 설정창 → AI&TTS 탭 → 제공자를 **NVIDIA NIM** 으로 변경합니다.
 3. API 키를 입력하고 저장합니다.
 4. 모델 이름은 비워두면 `meta/llama-3.3-70b-instruct` 가 기본값입니다.
-   다른 모델을 사용하려면 NIM 카탈로그에서 모델 ID 를 복사해 직접 입력하세요.
+   다른 모델을 사용하려면 NIM 카탈로그에서 모델 ID를 복사해 직접 입력하세요.
 
 ## 8. 플러그인 확장
 
-- 사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 둘 수 있습니다.
-- 설정창의 `확장` 탭에서 플러그인 폴더 경로와 현재 목록을 확인할 수 있습니다.
-- 플러그인으로는 텍스트 UI 보조 기능, 트레이 연동, 캐릭터 위젯 반응, 시작 시 사용자 초기화 로직 같은 확장을 만들 수 있습니다.
-- 현재 플러그인은 Python 파일 기반 확장이며, `register(context)`에서 앱/트레이/캐릭터/UI 객체를 받아 필요한 연결을 수행하는 구조입니다.
-- 자세한 작성 방법은 [플러그인 가이드](./PLUGIN_GUIDE.md)를 참고하세요.
+사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 Python 파일로 추가합니다.
+앱 시작 시 자동 로드되며, 설정창 `확장` 탭에서 목록과 로드 상태를 확인할 수 있습니다.
+
+플러그인에서 사용할 수 있는 훅:
+
+| 훅 | 설명 |
+|----|------|
+| `context.register_menu_action(label, callback)` | 트레이 메뉴 항목 추가 |
+| `context.register_command(BaseCommand)` | 음성 명령 동적 등록 |
+| `context.register_tool(schema, handler)` | LLM tool calling 확장 |
+| `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+
+`PLUGIN_INFO`에 `"api_version": "1.0"` 선언이 필수입니다.
+자세한 작성 방법은 [플러그인 가이드](./PLUGIN_GUIDE.md)를 참고하세요.
