@@ -52,6 +52,21 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertTrue(saved_path)
             self.assertTrue(os.path.exists(saved_path))
 
+    def test_system_status_goal_builds_template_without_save(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("시스템 상태 확인해줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("psutil.virtual_memory", steps[0].content)
+
+    def test_security_audit_goal_builds_security_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("자체 보안 점검 진행해줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("Windows Defender", steps[0].content)
+        self.assertIn("netsh", steps[0].content)
+
     def test_strategy_memory_uses_token_similarity(self):
         with tempfile.TemporaryDirectory() as tmp:
             mem = StrategyMemory(filepath=os.path.join(tmp, "strategy.json"))
@@ -68,6 +83,55 @@ class AgentIntegrationTests(unittest.TestCase):
         self.assertEqual(steps[0].description_kr, "다운로드 결과 폴더 준비")
         self.assertIn("run_resilient_browser_workflow", steps[1].content)
         self.assertIn("goal_hint", steps[1].content)
+        self.assertIn("click_text", steps[1].content)
+
+    def test_browser_link_collection_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("https://example.com 링크 목록 수집해줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("read_links", steps[0].content)
+        self.assertIn("run_resilient_browser_workflow", steps[0].content)
+
+    def test_browser_link_collection_save_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("https://example.com 링크 목록 수집해서 저장해줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 3)
+        self.assertIn("read_links", steps[1].content)
+        self.assertIn("save_document", steps[2].content)
+
+    def test_browser_login_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("https://example.com 로그인 페이지 열어줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("click_text", steps[0].content)
+        self.assertIn("로그인", steps[0].content)
+
+    def test_browser_input_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose('https://example.com 검색창에 "아리" 입력해줘', {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("'type'", steps[0].content)
+        self.assertIn("아리", steps[0].content)
+
+    def test_browser_input_save_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose('https://example.com 검색창에 "아리" 입력하고 저장해줘', {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 3)
+        self.assertIn("'type'", steps[1].content)
+        self.assertIn("save_document", steps[2].content)
+
+    def test_browser_login_and_collect_goal_builds_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("https://example.com 로그인 후 링크 수집해줘", {})
+        self.assertTrue(steps)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("click_text", steps[0].content)
+        self.assertIn("read_links", steps[0].content)
 
     def test_notepad_goal_builds_desktop_workflow_template(self):
         planner = AgentPlanner(DummyLLMProvider())
@@ -128,6 +192,19 @@ class AgentIntegrationTests(unittest.TestCase):
     def test_file_set_scan_goal_builds_template(self):
         planner = AgentPlanner(DummyLLMProvider())
         steps = planner._build_template_plan(r"C:\temp 폴더 대량 파일 세트 인식해줘")
+        self.assertTrue(steps)
+        self.assertIn("detect_file_set", steps[0].content)
+
+    def test_downloads_folder_organize_goal_builds_template_without_explicit_path(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("다운로드 폴더 정리해줘", {})
+        self.assertTrue(steps)
+        self.assertIn("organize_folder", steps[0].content)
+        self.assertIn("Downloads", steps[0].content)
+
+    def test_desktop_file_set_scan_goal_builds_template_without_explicit_path(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        steps = planner.decompose("바탕화면 파일 세트 확인해줘", {})
         self.assertTrue(steps)
         self.assertIn("detect_file_set", steps[0].content)
 

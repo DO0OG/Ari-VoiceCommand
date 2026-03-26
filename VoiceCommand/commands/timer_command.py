@@ -5,6 +5,7 @@ import logging
 
 class TimerCommand(BaseCommand):
     """타이머 명령"""
+    priority = 30
 
     def __init__(self, timer_manager, tts_func):
         self.timer_manager = timer_manager

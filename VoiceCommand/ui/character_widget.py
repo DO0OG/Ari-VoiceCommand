@@ -206,7 +206,7 @@ class CharacterWidget(QWidget):
 
     def load_animations(self):
         """애니메이션 프레임 로드"""
-        from resource_manager import ResourceManager
+        from core.resource_manager import ResourceManager
 
         animations = {
             "idle": 8,

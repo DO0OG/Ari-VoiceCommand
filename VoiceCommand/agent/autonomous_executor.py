@@ -45,10 +45,8 @@ class AutonomousExecutor:
         self._automation = AutomationHelpers()
 
         # 실행 시 기본적으로 제공할 전역 변수들
+        # os, subprocess, sys 는 직접 노출하지 않고 래퍼 함수를 통해서만 허용
         self.execution_globals = {
-            'os': os,
-            'sys': sys,
-            'subprocess': subprocess,
             'threading': threading,
             'logging': logging,
             'time': __import__('time'),
@@ -127,10 +125,7 @@ class AutonomousExecutor:
             pass
         
         try:
-            try:
-                from services.web_tools import web_search, web_fetch, get_smart_browser
-            except ImportError:
-                from web_tools import web_search, web_fetch, get_smart_browser
+            from services.web_tools import web_search, web_fetch, get_smart_browser
             self.execution_globals['web_search'] = web_search
             self.execution_globals['web_fetch'] = web_fetch
             self.execution_globals['get_browser'] = get_smart_browser
@@ -345,7 +340,7 @@ class AutonomousExecutor:
     def _ask_confirmation(self, action_desc: str, report) -> bool:
         """확인 다이얼로그 요청 (Qt 환경에서만 동작, 그 외엔 False 반환)"""
         try:
-            from confirmation_manager import get_confirmation_manager
+            from agent.confirmation_manager import get_confirmation_manager
             return get_confirmation_manager().request_confirmation(
                 action_desc, report, self.tts_wrapper
             )
@@ -576,12 +571,9 @@ def save_document(directory: str, base_name: str, content: str, preferred_format
 
 try:
     from services.web_tools import web_search, web_fetch
-except Exception:
-    try:
-        from web_tools import web_search, web_fetch
-    except Exception:
-        web_search = None
-        web_fetch = None
+except ImportError:
+    web_search = None
+    web_fetch = None
 
 try:
     from agent.file_tools import (

@@ -10,10 +10,16 @@ from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 
 class AICommand(BaseCommand):
     """AI 어시스턴트 대화 명령 (기본/fallback)"""
+    priority = 100
     _COMPLEX_TASK_KEYWORDS = (
         "저장", "정리", "요약", "보고서", "리포트", "분석", "검색", "찾아",
         "만들", "생성", "열어", "실행", "복사", "이동", "삭제", "로그인",
         "브라우저", "파일", "폴더", "문서", "다운로드", "자동화",
+        "보안", "점검", "진단", "검사",
+        "설치", "업데이트", "업그레이드", "백업", "복원",
+        "관리", "모니터링", "알림", "알려줘", "확인해줘",
+        "스케줄", "예약", "반복", "매일", "매주",
+        "스크린샷", "캡처", "녹화", "클립보드",
     )
     _SIMPLE_CHAT_KEYWORDS = (
         "안녕", "고마워", "감사", "잘자", "반가", "미안", "사랑", "농담",
@@ -44,7 +50,7 @@ class AICommand(BaseCommand):
 
         # 능동적 스케줄러 초기화 (늦은 바인딩으로 순환 임포트 방지)
         try:
-            from proactive_scheduler import get_scheduler
+            from agent.proactive_scheduler import get_scheduler
             self.scheduler = get_scheduler(tts_func)
             self.scheduler.set_orchestrator_func(self.orchestrator.run)
         except Exception as e:
@@ -200,7 +206,7 @@ class AICommand(BaseCommand):
             return None
         max_results = int(args.get("max_results", 5))
         try:
-            from web_tools import web_search
+            from services.web_tools import web_search
             result = web_search(query, max_results=max_results)
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
@@ -213,7 +219,7 @@ class AICommand(BaseCommand):
         if not url:
             return None
         try:
-            from web_tools import web_fetch
+            from services.web_tools import web_fetch
             result = web_fetch(url)
             return result
         except Exception as e:
@@ -531,12 +537,24 @@ class AICommand(BaseCommand):
             return False
 
         has_complex_keyword = any(token in normalized for token in self._COMPLEX_TASK_KEYWORDS)
-        if not has_complex_keyword:
+        has_complex_phrase = any(
+            phrase in normalized for phrase in (
+                "시스템 상태",
+                "상태 확인",
+                "보안 점검",
+                "자체 보안 점검",
+                "건강 점검",
+                "헬스 체크",
+                "폴더 정리",
+            )
+        )
+        if not has_complex_keyword and not has_complex_phrase:
             return False
 
         generic_response = not response or any(
             phrase in response for phrase in (
-                "이해하지 못", "무엇을 도와", "다시 말씀", "잘 모르겠", "죄송합니다"
+                "이해하지 못", "무엇을 도와", "다시 말씀", "잘 모르겠", "죄송합니다",
+                "잘 이해가", "정확히 어떤", "좀 더 구체적",
             )
         )
         return generic_response or self.learning_mode_ref.get("enabled", False)
@@ -631,7 +649,7 @@ class AICommand(BaseCommand):
 
             if response:
                 try:
-                    from conversation_history import add_conversation
+                    from memory.conversation_history import add_conversation
                     add_conversation(text, response)
                 except Exception:
                     pass
@@ -692,7 +710,7 @@ class AICommand(BaseCommand):
 
     def _record_user_pattern(self, user_input: str):
         try:
-            from user_context import get_context_manager
+            from memory.user_context import get_context_manager
             context_mgr = get_context_manager()
             if any(word in user_input for word in ["날씨", "기온", "온도"]):
                 context_mgr.record_command("weather")

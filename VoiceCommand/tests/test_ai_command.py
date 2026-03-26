@@ -46,6 +46,15 @@ class AICommandTests(unittest.TestCase):
             )
         )
 
+    def test_security_check_request_is_escalated_to_agent_task(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        self.assertTrue(
+            command._should_escalate_to_agent_task(
+                "자체 보안 점검 진행해줘",
+                "무엇을 도와드릴까요?",
+            )
+        )
+
     def test_simple_chat_is_not_escalated(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         self.assertFalse(command._should_escalate_to_agent_task("안녕?", "안녕하세요!"))

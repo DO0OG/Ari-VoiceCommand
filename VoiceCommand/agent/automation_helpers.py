@@ -14,6 +14,8 @@ from typing import Optional, List, Any
 
 logger = logging.getLogger(__name__)
 
+_VSCODE_EXE = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe")
+
 
 class AutomationHelpers:
     def __init__(self):
@@ -32,9 +34,9 @@ class AutomationHelpers:
             "msedge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
             "edge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
             "엣지": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            "code": r"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-            "vscode": r"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-            "visual studio code": r"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+            "code": _VSCODE_EXE,
+            "vscode": _VSCODE_EXE,
+            "visual studio code": _VSCODE_EXE,
         }
         self._window_target_history = self._load_window_target_history()
         self._desktop_workflow_history = self._load_desktop_workflow_history()
@@ -329,7 +331,7 @@ class AutomationHelpers:
         try:
             from services.web_tools import get_smart_browser
         except Exception:
-            from web_tools import get_smart_browser
+            from services.web_tools import get_smart_browser
         return get_smart_browser().get_state()
 
     def get_browser_current_url(self) -> str:
@@ -470,7 +472,7 @@ class AutomationHelpers:
         try:
             from services.web_tools import get_smart_browser
         except Exception:
-            from web_tools import get_smart_browser
+            from services.web_tools import get_smart_browser
         return get_smart_browser().wait_for_download(timeout=timeout, stable_seconds=stable_seconds)
 
     def suggest_browser_actions(self, goal_hint: str, domain: str = "") -> List[dict]:
@@ -552,7 +554,7 @@ class AutomationHelpers:
         try:
             from services.web_tools import get_smart_browser
         except Exception:
-            from web_tools import get_smart_browser
+            from services.web_tools import get_smart_browser
         browser = get_smart_browser(headless=headless)
         summary = browser.navigate_and_action(url, actions, goal_hint=goal_hint)
         return {"summary": summary, "state": browser.get_state()}

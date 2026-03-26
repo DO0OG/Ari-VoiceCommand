@@ -6,6 +6,7 @@ AI가 생성한 코드/명령/URL의 위험 수준을 분류합니다.
 import re
 from enum import Enum
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Tuple
 
 
@@ -161,8 +162,14 @@ class SafetyChecker:
 
     def check_app_launch(self, app_name: str) -> SafetyReport:
         """앱 실행의 안전성을 검사합니다."""
+        # Path.resolve() 기반 정규화로 대소문자/유니코드 우회 방지
+        try:
+            resolved_stem = Path(app_name).resolve().stem.lower()
+        except Exception:
+            resolved_stem = ""
         app_lower = app_name.lower()
-        if any(blocked in app_lower for blocked in _BLOCKED_APPS):
+        normalized = resolved_stem or app_lower
+        if any(blocked in normalized for blocked in _BLOCKED_APPS):
             return SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 summary_kr=f"위험 앱 정책에 의해 차단된 대상입니다: {app_name}",

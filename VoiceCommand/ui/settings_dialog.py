@@ -29,7 +29,8 @@ _LLM_PROVIDERS = [
     ("Anthropic (Claude)",     "anthropic",  "anthropic_api_key",  "https://console.anthropic.com"),
     ("Mistral AI",             "mistral",    "mistral_api_key",    "https://console.mistral.ai"),
     ("Google Gemini",          "gemini",     "gemini_api_key",     "https://aistudio.google.com/app/apikey"),
-    ("OpenRouter (멀티모델)",   "openrouter", "openrouter_api_key", "https://openrouter.ai/keys"),
+    ("OpenRouter (멀티모델)",   "openrouter",   "openrouter_api_key",  "https://openrouter.ai/keys"),
+    ("NVIDIA NIM",             "nvidia_nim",   "nvidia_nim_api_key",  "https://build.nvidia.com 에서 nvapi- 키 발급"),
 ]
 
 _TTS_MODES = [
@@ -50,7 +51,7 @@ class SettingsDialog(QDialog):
     LLM_KEYS = {
         "llm_provider", "llm_model", "llm_planner_model", "llm_execution_model",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
-        "gemini_api_key", "openrouter_api_key", "system_prompt", "personality",
+        "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
@@ -565,7 +566,7 @@ class SettingsDialog(QDialog):
 
         if self.llm_settings_changed():
             try:
-                from llm_provider import reset_llm_provider
+                from agent.llm_provider import reset_llm_provider
                 reset_llm_provider()
             except Exception as exc:
                 logging.debug(f"LLM provider reset 생략: {exc}")

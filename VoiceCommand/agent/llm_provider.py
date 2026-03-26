@@ -41,6 +41,11 @@ _PROVIDER_CONFIG = {
         "default_model": "meta-llama/llama-3.3-70b-instruct:free",
         "label": "OpenRouter",
     },
+    "nvidia_nim": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_model": "meta/llama-3.3-70b-instruct",
+        "label": "NVIDIA NIM",
+    },
 }
 
 
@@ -299,7 +304,7 @@ class LLMProvider:
                 )
                 raw_msg = resp.choices[0].message.content or ""
             
-            from memory_manager import get_memory_manager
+            from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
             msg = memory_manager.clean_response(raw_msg)
@@ -335,7 +340,7 @@ class LLMProvider:
             choice = response.choices[0]
             tool_calls = []
             if choice.message.tool_calls:
-                from memory_manager import get_memory_manager
+                from memory.memory_manager import get_memory_manager
                 ctx_mgr = get_memory_manager().context_manager
                 for tc in choice.message.tool_calls:
                     try: args = json.loads(tc.function.arguments)
@@ -351,7 +356,7 @@ class LLMProvider:
                     raw_msg = re.sub(r'```.*?```', '', raw_msg, flags=re.DOTALL)
                     raw_msg = re.sub(r'\{.*\}', '', raw_msg, flags=re.DOTALL)
             
-            from memory_manager import get_memory_manager
+            from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
             msg = memory_manager.clean_response(raw_msg)
@@ -463,9 +468,10 @@ class LLMProvider:
         if self.personality: sys += f"\n성격: {self.personality}"
         if include_context:
             try:
-                from memory_manager import get_memory_manager
+                from memory.memory_manager import get_memory_manager
                 sys += f"\n\n컨텍스트:\n{get_memory_manager().get_full_context_prompt()}"
-            except Exception: pass
+            except Exception as e:
+                logging.debug(f"[LLM] 메모리 컨텍스트 주입 실패: {e}")
         sys += "\n한국어 응답 필수. 감정 태그 (기쁨), (진지) 등 필수 사용."
         return sys
 
@@ -485,11 +491,11 @@ def get_llm_provider() -> LLMProvider:
     global _instance
     if _instance is None:
         try:
-            from config_manager import ConfigManager
+            from core.config_manager import ConfigManager
             s = ConfigManager.load_settings()
         except Exception: s = {}
         provider = s.get("llm_provider", "groq")
-        key_map = {"groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key", "mistral": "mistral_api_key", "gemini": "gemini_api_key", "openrouter": "openrouter_api_key"}
+        key_map = {"groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key", "mistral": "mistral_api_key", "gemini": "gemini_api_key", "openrouter": "openrouter_api_key", "nvidia_nim": "nvidia_nim_api_key"}
         api_key = s.get(key_map.get(provider, ""), "")
         _instance = LLMProvider(
             provider=provider, api_key=api_key,

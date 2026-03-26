@@ -190,7 +190,50 @@ class SmartBrowser:
                     break
             except Exception as exc:
                 logging.debug(f"[SmartBrowser] 셀렉터 실패: {sel} ({exc})")
+        if found_el:
+            return found_el, matched_selector
+
+        text_query = str(action.get("text_contains") or action.get("text") or "").strip()
+        if text_query:
+            text_element = self._find_element_by_text(text_query)
+            if text_element is not None:
+                return text_element, f"text:{text_query}"
         return found_el, matched_selector
+
+    def _find_element_by_text(self, text_query: str):
+        if not self.driver or not text_query:
+            return None
+        try:
+            from selenium.webdriver.common.by import By
+        except Exception:
+            return None
+        variants = [text_query]
+        lowered = text_query.lower()
+        if lowered == "다운로드":
+            variants.extend(["download", "다운받기"])
+        elif lowered == "로그인":
+            variants.extend(["login", "sign in", "log in"])
+
+        for variant in variants:
+            escaped = variant.replace("'", "\\'")
+            xpath = (
+                "//*[self::a or self::button or self::span or self::div]"
+                f"[contains(translate(normalize-space(.), "
+                "'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
+                f"'{escaped.lower()}')]"
+            )
+            try:
+                elements = self.driver.find_elements(By.XPATH, xpath)
+            except Exception as exc:
+                logging.debug(f"[SmartBrowser] 텍스트 요소 검색 실패: {variant} ({exc})")
+                continue
+            for element in elements:
+                try:
+                    if element.is_displayed():
+                        return element
+                except Exception:
+                    continue
+        return None
 
     def _wait_for_url_contains(self, fragment: str, timeout: float = 15.0) -> str:
         target = (fragment or "").strip().lower()

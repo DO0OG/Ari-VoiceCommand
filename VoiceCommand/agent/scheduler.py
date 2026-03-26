@@ -236,7 +236,7 @@ class AriScheduler(QThread):
     @staticmethod
     def _resolve_path(filename: str) -> str:
         try:
-            from resource_manager import ResourceManager
+            from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path(filename)
         except Exception:
             return filename

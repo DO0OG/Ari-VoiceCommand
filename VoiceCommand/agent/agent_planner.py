@@ -30,6 +30,23 @@ _SITE_ALIASES = {
     "gmail": "https://mail.google.com",
 }
 
+_SPECIAL_FOLDER_ALIASES = {
+    "바탕화면": "Desktop",
+    "desktop": "Desktop",
+    "다운로드": "Downloads",
+    "download": "Downloads",
+    "downloads": "Downloads",
+    "문서": "Documents",
+    "documents": "Documents",
+    "사진": "Pictures",
+    "pictures": "Pictures",
+    "이미지": "Pictures",
+    "동영상": "Videos",
+    "videos": "Videos",
+    "음악": "Music",
+    "music": "Music",
+}
+
 
 @dataclass
 class ActionStep:
@@ -66,7 +83,9 @@ class GoalProfile:
     wants_organize: bool = False
     wants_analyze: bool = False
     wants_log_report: bool = False
+    wants_security_audit: bool = False
     wants_type_text: bool = False
+    wants_link_collection: bool = False
     wants_batch_rename: bool = False
     wants_file_set_scan: bool = False
     source_path: str = ""
@@ -251,17 +270,35 @@ class AgentPlanner:
         """LLM이 자주 실패하는 검색-요약-저장 계열 작업은 안정적인 템플릿으로 우선 처리."""
         profile = self._profile_goal(goal)
 
-        if profile.wants_system_info and profile.wants_save:
+        if profile.wants_system_info or profile.wants_security_audit:
             return self._build_system_info_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.wants_login and profile.wants_link_collection:
+            return self._build_browser_login_and_collect_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.wants_login:
+            return self._build_browser_login_prep_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.input_text and profile.wants_save:
+            return self._build_browser_input_save_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.input_text:
+            return self._build_browser_input_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.wants_link_collection and profile.wants_save:
+            return self._build_browser_link_collection_save_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.wants_link_collection:
+            return self._build_browser_link_collection_plan(profile)
+
+        if profile.wants_browser and profile.url and profile.wants_download:
+            return self._build_browser_download_plan(profile)
 
         if profile.wants_open and profile.target_name in {"notepad", "explorer", "chrome", "msedge", "code", "calculator"}:
             return self._build_desktop_app_plan(profile)
 
         if profile.wants_open and (profile.url or profile.source_path or profile.target_name not in {"result", "summary"}):
             return self._build_open_target_plan(profile)
-
-        if profile.wants_browser and profile.url and profile.wants_download:
-            return self._build_browser_download_plan(profile)
 
         if profile.wants_rename and profile.source_path and profile.rename_target:
             return self._build_rename_plan(profile)
@@ -337,6 +374,8 @@ class AgentPlanner:
         if len(all_paths) >= 2:
             source_path = all_paths[0]
             destination_path = all_paths[1]
+        if not source_path:
+            source_path = self._infer_special_folder_path(normalized, lower)
         preferred_format = "auto"
         for fmt in ("pdf", "md", "txt"):
             if fmt in lower:
@@ -378,7 +417,13 @@ class AgentPlanner:
             wants_desktop="바탕화면" in normalized or "desktop" in lower,
             wants_folder="폴더" in normalized or "디렉토리" in normalized,
             wants_file="파일" in normalized or bool(source_path),
-            wants_system_info=any(token in normalized for token in ("시스템 정보", "pc 정보", "컴퓨터 정보", "사양", "process", "프로세스")),
+            wants_system_info=any(
+                token in normalized
+                for token in (
+                    "시스템 정보", "pc 정보", "컴퓨터 정보", "사양", "process", "프로세스",
+                    "시스템 상태", "상태 확인", "상태 점검", "시스템 점검", "헬스 체크", "건강 점검",
+                )
+            ),
             wants_copy=any(token in normalized for token in ("복사", "copy")),
             wants_move=any(token in normalized for token in ("이동", "옮겨", "move")),
             wants_list=any(token in normalized for token in ("목록", "리스트", "나열", "보여줘")),
@@ -387,11 +432,16 @@ class AgentPlanner:
             wants_login=any(token in normalized for token in ("로그인", "sign in", "login")),
             wants_browser=bool(url) or any(token in normalized for token in ("브라우저", "사이트", "웹", "크롬", "엣지")),
             wants_download=any(token in normalized for token in ("다운로드", "download", "내려받", "저장")),
+            wants_link_collection=any(token in normalized for token in ("링크", "url 목록", "주소 목록", "링크 수집", "링크 목록")),
             wants_rename=any(token in normalized for token in ("이름 변경", "이름바꿔", "이름 바꿔", "이름을", "파일명", "rename")),
             wants_merge=any(token in normalized for token in ("병합", "합쳐", "merge")),
             wants_organize=any(token in normalized for token in ("정리", "분류", "확장자별")),
             wants_analyze=any(token in normalized for token in ("분석", "통계", "구조 확인", "요약")),
             wants_log_report="로그" in normalized and any(token in normalized for token in ("리포트", "보고", "분석", "요약")),
+            wants_security_audit=any(
+                token in normalized
+                for token in ("보안 점검", "자체 보안 점검", "보안 검사", "보안 진단", "security check", "security audit")
+            ),
             wants_type_text=any(token in normalized for token in ("입력", "적어", "써", "작성", "type")),
             wants_batch_rename=any(token in normalized for token in ("일괄 변경", "일괄변경", "한꺼번에 이름", "규칙 기반 이름", "batch rename")),
             wants_file_set_scan=any(token in normalized for token in ("파일 세트", "대량 파일", "묶음 파일", "확장자 통계")),
@@ -404,6 +454,21 @@ class AgentPlanner:
             all_paths=all_paths,
             input_text=input_text,
         )
+
+    def _infer_special_folder_path(self, normalized_goal: str, lower_goal: str) -> str:
+        matched_alias = ""
+        for alias in _SPECIAL_FOLDER_ALIASES:
+            haystack = lower_goal if alias.isascii() else normalized_goal
+            needle = alias if alias.isascii() else alias
+            if needle in haystack:
+                matched_alias = alias
+                break
+        if not matched_alias:
+            return ""
+        folder_name = _SPECIAL_FOLDER_ALIASES[matched_alias]
+        if folder_name == "Desktop":
+            return os.path.join(os.path.expanduser("~"), folder_name)
+        return os.path.join(os.path.expanduser("~"), folder_name)
 
     def _extract_rename_target(self, goal: str, current_path: str = "") -> str:
         quoted = re.findall(r'["\']([^"\']+)["\']', goal)
@@ -467,6 +532,36 @@ class AgentPlanner:
 
     def _build_browser_download_plan(self, profile: GoalProfile) -> List[ActionStep]:
         folder_name = profile.target_name if profile.target_name not in {"result", "summary"} else "downloads"
+        fallback_actions = [
+            {"type": "wait_title", "contains": "download", "timeout": 6.0},
+            {"type": "wait_title", "contains": "다운로드", "timeout": 6.0},
+            {
+                "type": "click_text",
+                "text_contains": "다운로드",
+                "selectors": [
+                    "a[download]",
+                    "button[download]",
+                    "a[href*='download']",
+                    "button[id*='download']",
+                    ".download",
+                    "[aria-label*='다운로드']",
+                ],
+            },
+            {
+                "type": "click_text",
+                "text_contains": "download",
+                "selectors": [
+                    "a[download]",
+                    "button[download]",
+                    "a[href*='download']",
+                    "button[id*='download']",
+                    ".download",
+                    "[aria-label*='download']",
+                ],
+            },
+            {"type": "download_wait", "timeout": 30.0},
+            {"type": "read_url"},
+        ]
         return [
             ActionStep(
                 step_id=0,
@@ -487,7 +582,8 @@ class AgentPlanner:
                 content=(
                     f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
                     f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
-                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=[])\n"
+                    f"fallback_actions = {json.dumps(fallback_actions, ensure_ascii=False)}\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
                     "print(result)"
                 ),
                 description_kr="브라우저 상태 열기",
@@ -503,6 +599,206 @@ class AgentPlanner:
                 expected_output="",
                 condition="len(step_outputs.get('step_1_output', '')) > 0",
                 on_failure="continue",
+            ),
+        ]
+
+    def _build_browser_link_collection_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
+                    f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "fallback_actions = [\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'read_links', 'selector': 'a', 'limit': 12},\n"
+                    "]\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
+                    "print(result)"
+                ),
+                description_kr="브라우저 링크 수집",
+                expected_output="browser link summary",
+                on_failure="abort",
+            ),
+        ]
+
+    def _build_browser_link_collection_save_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        folder_name = profile.target_name if profile.target_name not in {"result", "summary"} else "browser_links"
+        title = "브라우저 링크 수집 결과"
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    "import os\n"
+                    f"folder_path = os.path.join(desktop_path, '{folder_name}')\n"
+                    "os.makedirs(folder_path, exist_ok=True)\n"
+                    "print(folder_path)"
+                ),
+                description_kr="브라우저 링크 저장 폴더 준비",
+                expected_output="folder path",
+                on_failure="abort",
+            ),
+            ActionStep(
+                step_id=1,
+                step_type="python",
+                content=(
+                    f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
+                    f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "fallback_actions = [\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'read_links', 'selector': 'a', 'limit': 20},\n"
+                    "]\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
+                    "print(result)"
+                ),
+                description_kr="브라우저 링크 수집",
+                expected_output="browser link summary",
+                condition="len(step_outputs.get('step_0_output', '')) > 0",
+                on_failure="abort",
+            ),
+            ActionStep(
+                step_id=2,
+                step_type="python",
+                content=(
+                    "folder_path = step_outputs.get('step_0_output', '').strip()\n"
+                    "content = step_outputs.get('step_1_output', '')\n"
+                    f"saved_path = save_document(folder_path, 'browser_links', content, preferred_format={json.dumps(profile.preferred_format)}, title={json.dumps(title, ensure_ascii=False)})\n"
+                    "print(saved_path)"
+                ),
+                description_kr="브라우저 링크 수집 결과 저장",
+                expected_output="saved browser link path",
+                condition="len(step_outputs.get('step_1_output', '')) > 0",
+                on_failure="abort",
+            ),
+        ]
+
+    def _build_browser_login_prep_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
+                    f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "fallback_actions = [\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'wait_selector', 'selectors': ['a[href*=login]', 'a[href*=signin]', 'button[id*=login]', 'button[class*=login]']},\n"
+                    "    {'type': 'click_text', 'text_contains': '로그인', 'selectors': ['a[href*=login]', 'a[href*=signin]', 'button[id*=login]', 'button[class*=login]', '[aria-label*=로그인]']},\n"
+                    "    {'type': 'click_text', 'text_contains': 'login', 'selectors': ['a[href*=login]', 'a[href*=signin]', 'button[id*=login]', 'button[class*=login]', '[aria-label*=login]']},\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "]\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
+                    "print(result)"
+                ),
+                description_kr="브라우저 로그인 진입 준비",
+                expected_output="browser login page state",
+                on_failure="abort",
+            ),
+        ]
+
+    def _build_browser_login_and_collect_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
+                    f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "fallback_actions = [\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'click_text', 'text_contains': '로그인', 'selectors': ['a[href*=login]', 'a[href*=signin]', 'button[id*=login]', 'button[class*=login]', '[aria-label*=로그인]']},\n"
+                    "    {'type': 'click_text', 'text_contains': 'login', 'selectors': ['a[href*=login]', 'a[href*=signin]', 'button[id*=login]', 'button[class*=login]', '[aria-label*=login]']},\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'read_links', 'selector': 'a', 'limit': 12},\n"
+                    "]\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
+                    "print(result)"
+                ),
+                description_kr="브라우저 로그인 후 링크 수집 준비",
+                expected_output="browser login+links result",
+                on_failure="abort",
+            ),
+        ]
+
+    def _build_browser_input_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        search_like = any(token in profile.normalized_goal for token in ("검색", "찾아", "query", "검색창"))
+        submit_text = "검색" if search_like else "확인"
+        submit_text_en = "search" if search_like else "submit"
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
+                    f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    f"input_text = {json.dumps(profile.input_text, ensure_ascii=False)}\n"
+                    "fallback_actions = [\n"
+                    "    {'type': 'wait_selector', 'selectors': ['input[type=search]', 'input[name=q]', 'input[type=text]', 'textarea']},\n"
+                    "    {'type': 'type', 'text': input_text, 'selectors': ['input[type=search]', 'input[name=q]', 'input[type=text]', 'textarea']},\n"
+                    f"    {{'type': 'click_text', 'text_contains': {json.dumps(submit_text, ensure_ascii=False)}, 'selectors': ['button[type=submit]', 'input[type=submit]', '.search', '[aria-label*=search]']}},\n"
+                    f"    {{'type': 'click_text', 'text_contains': {json.dumps(submit_text_en, ensure_ascii=False)}, 'selectors': ['button[type=submit]', 'input[type=submit]', '.search', '[aria-label*=search]']}},\n"
+                    "    {'type': 'read_title'},\n"
+                    "    {'type': 'read_url'},\n"
+                    "    {'type': 'read_links', 'selector': 'a', 'limit': 8},\n"
+                    "]\n"
+                    "result = run_resilient_browser_workflow(url, goal_hint=goal_hint, fallback_actions=fallback_actions)\n"
+                    "print(result)"
+                ),
+                description_kr="브라우저 입력 및 후속 상태 확인",
+                expected_output="browser input workflow result",
+                on_failure="abort",
+            ),
+        ]
+
+    def _build_browser_input_save_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        folder_name = profile.target_name if profile.target_name not in {"result", "summary"} else "browser_result"
+        title = "브라우저 입력 결과"
+        input_steps = self._build_browser_input_plan(profile)
+        browser_step = input_steps[0]
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    "import os\n"
+                    f"folder_path = os.path.join(desktop_path, '{folder_name}')\n"
+                    "os.makedirs(folder_path, exist_ok=True)\n"
+                    "print(folder_path)"
+                ),
+                description_kr="브라우저 결과 저장 폴더 준비",
+                expected_output="folder path",
+                on_failure="abort",
+            ),
+            ActionStep(
+                step_id=1,
+                step_type=browser_step.step_type,
+                content=browser_step.content,
+                description_kr=browser_step.description_kr,
+                expected_output=browser_step.expected_output,
+                condition="len(step_outputs.get('step_0_output', '')) > 0",
+                on_failure=browser_step.on_failure,
+            ),
+            ActionStep(
+                step_id=2,
+                step_type="python",
+                content=(
+                    "folder_path = step_outputs.get('step_0_output', '').strip()\n"
+                    "content = step_outputs.get('step_1_output', '')\n"
+                    f"saved_path = save_document(folder_path, 'browser_result', content, preferred_format={json.dumps(profile.preferred_format)}, title={json.dumps(title, ensure_ascii=False)})\n"
+                    "print(saved_path)"
+                ),
+                description_kr="브라우저 입력 결과 저장",
+                expected_output="saved browser result path",
+                condition="len(step_outputs.get('step_1_output', '')) > 0",
+                on_failure="abort",
             ),
         ]
 
@@ -789,64 +1085,109 @@ class AgentPlanner:
 
     def _build_system_info_plan(self, profile: GoalProfile) -> List[ActionStep]:
         folder_name = profile.target_name if profile.target_name not in {"result", "summary"} else "system_report"
-        title = "시스템 정보 보고서"
-        return [
-            ActionStep(
-                step_id=0,
-                step_type="python",
-                content=(
-                    "import os\n"
-                    f"folder_path = os.path.join(desktop_path, '{folder_name}')\n"
-                    "os.makedirs(folder_path, exist_ok=True)\n"
-                    "print(folder_path)"
-                ),
-                description_kr="보고서 폴더 준비",
-                expected_output="folder path",
-                on_failure="abort",
-            ),
-            ActionStep(
-                step_id=1,
-                step_type="python",
-                content=(
-                    "import os\n"
-                    "import platform\n"
-                    "import psutil\n"
-                    "lines = ['# 시스템 정보 보고서', '']\n"
-                    "lines.append(f'- OS: {platform.platform()}')\n"
-                    "lines.append(f'- Python: {platform.python_version()}')\n"
-                    "lines.append(f'- CPU 코어: {psutil.cpu_count(logical=True)}')\n"
-                    "vm = psutil.virtual_memory()\n"
-                    "lines.append(f'- 메모리: {round(vm.total / (1024**3), 2)} GB')\n"
-                    "disk = psutil.disk_usage(os.path.expanduser('~'))\n"
-                    "lines.append(f'- 디스크 사용률: {disk.percent}%')\n"
-                    "lines.append('')\n"
-                    "lines.append('## 실행 중 프로세스 상위 10개')\n"
-                    "for proc in sorted(psutil.process_iter(['name', 'memory_info']), key=lambda p: (p.info['memory_info'].rss if p.info['memory_info'] else 0), reverse=True)[:10]:\n"
-                    "    mem = proc.info['memory_info'].rss / (1024**2) if proc.info['memory_info'] else 0\n"
-                    "    lines.append(f'- {proc.info[\"name\"]}: {mem:.1f} MB')\n"
-                    "report = '\\n'.join(lines)\n"
-                    "print(report)"
-                ),
-                description_kr="시스템 정보 수집",
-                expected_output="system info markdown",
-                condition="len(step_outputs.get('step_0_output', '')) > 0",
-                on_failure="abort",
-            ),
-            ActionStep(
-                step_id=2,
-                step_type="python",
-                content=(
-                    "folder_path = step_outputs.get('step_0_output', '').strip()\n"
-                    "report = step_outputs.get('step_1_output', '')\n"
-                    f"saved_path = save_document(folder_path, 'system_report', report, preferred_format={json.dumps(profile.preferred_format)}, title={json.dumps(title, ensure_ascii=False)})\n"
-                    "print(saved_path)"
-                ),
-                description_kr="시스템 정보 저장",
-                expected_output="saved report path",
-                condition="len(step_outputs.get('step_1_output', '')) > 0",
-                on_failure="abort",
-            ),
+        title = "기본 보안 점검 보고서" if profile.wants_security_audit else "시스템 정보 보고서"
+        heading = "# 기본 보안 점검 보고서" if profile.wants_security_audit else "# 시스템 정보 보고서"
+        steps: List[ActionStep] = []
+
+        if profile.wants_save:
+            steps.append(
+                ActionStep(
+                    step_id=0,
+                    step_type="python",
+                    content=(
+                        "import os\n"
+                        f"folder_path = os.path.join(desktop_path, '{folder_name}')\n"
+                        "os.makedirs(folder_path, exist_ok=True)\n"
+                        "print(folder_path)"
+                    ),
+                    description_kr="보고서 폴더 준비",
+                    expected_output="folder path",
+                    on_failure="abort",
+                )
+            )
+
+        gather_step_id = len(steps)
+        gather_condition = "len(step_outputs.get('step_0_output', '')) > 0" if profile.wants_save else ""
+        gather_lines = [
+            "import os",
+            "import platform",
+            "import psutil",
+            f"lines = [{json.dumps(heading, ensure_ascii=False)}, '']",
+            "lines.append(f'- OS: {platform.platform()}')",
+            "lines.append(f'- Python: {platform.python_version()}')",
+            "lines.append(f'- CPU 코어: {psutil.cpu_count(logical=True)}')",
+            "vm = psutil.virtual_memory()",
+            "lines.append(f'- 메모리: {round(vm.total / (1024**3), 2)} GB')",
+            "disk = psutil.disk_usage(os.path.expanduser('~'))",
+            "lines.append(f'- 디스크 사용률: {disk.percent}%')",
+            "lines.append('')",
         ]
+        if profile.wants_security_audit:
+            gather_lines.extend([
+                "import ctypes",
+                "import subprocess",
+                "lines.append('## 기본 보안 점검')",
+                "try:",
+                "    is_admin = bool(ctypes.windll.shell32.IsUserAnAdmin())",
+                "except Exception:",
+                "    is_admin = False",
+                "lines.append(f'- 관리자 권한 실행 여부: {is_admin}')",
+                "defender_running = any((proc.info.get('name') or '').lower() == 'msmpeng.exe' for proc in psutil.process_iter(['name']))",
+                "defender_status = '실행 중' if defender_running else '확인되지 않음'",
+                "lines.append(f'- Windows Defender 프로세스: {defender_status}')",
+                "if os.name == 'nt':",
+                "    try:",
+                "        firewall = subprocess.run(['netsh', 'advfirewall', 'show', 'allprofiles', 'state'], capture_output=True, text=True, timeout=8)",
+                "        firewall_lines = [line.strip() for line in firewall.stdout.splitlines() if 'State' in line or '상태' in line]",
+                "        if firewall_lines:",
+                "            lines.append('- 방화벽 상태: ' + '; '.join(firewall_lines[:3]))",
+                "        else:",
+                "            lines.append('- 방화벽 상태: 출력 없음')",
+                "    except Exception as exc:",
+                "        lines.append(f'- 방화벽 상태 확인 실패: {exc}')",
+                "else:",
+                "    lines.append('- 방화벽 상태: Windows 전용 점검 항목')",
+                "lines.append('')",
+            ])
+        gather_lines.extend([
+            "lines.append('## 실행 중 프로세스 상위 10개')",
+            "for proc in sorted(psutil.process_iter(['name', 'memory_info']), key=lambda p: (p.info['memory_info'].rss if p.info['memory_info'] else 0), reverse=True)[:10]:",
+            "    mem = proc.info['memory_info'].rss / (1024**2) if proc.info['memory_info'] else 0",
+            "    lines.append(f'- {proc.info[\"name\"]}: {mem:.1f} MB')",
+            "report = '\\n'.join(lines)",
+            "print(report)",
+        ])
+        steps.append(
+            ActionStep(
+                step_id=gather_step_id,
+                step_type="python",
+                content="\n".join(gather_lines),
+                description_kr="기본 보안 점검 수행" if profile.wants_security_audit else "시스템 상태 점검",
+                expected_output="system info markdown",
+                condition=gather_condition,
+                on_failure="abort",
+            )
+        )
+
+        if profile.wants_save:
+            steps.append(
+                ActionStep(
+                    step_id=gather_step_id + 1,
+                    step_type="python",
+                    content=(
+                        "folder_path = step_outputs.get('step_0_output', '').strip()\n"
+                        f"report = step_outputs.get('step_{gather_step_id}_output', '')\n"
+                        f"saved_path = save_document(folder_path, 'system_report', report, preferred_format={json.dumps(profile.preferred_format)}, title={json.dumps(title, ensure_ascii=False)})\n"
+                        "print(saved_path)"
+                    ),
+                    description_kr="시스템 정보 저장",
+                    expected_output="saved report path",
+                    condition=f"len(step_outputs.get('step_{gather_step_id}_output', '')) > 0",
+                    on_failure="abort",
+                )
+            )
+
+        return steps
 
     def _build_directory_listing_plan(self, profile: GoalProfile) -> List[ActionStep]:
         source = profile.source_path.replace("\\", "\\\\") if profile.source_path else ""
@@ -1198,7 +1539,7 @@ class AgentPlanner:
             return get_strategy_memory().get_relevant_context(goal)
         except Exception:
             try:
-                from strategy_memory import get_strategy_memory
+                from agent.strategy_memory import get_strategy_memory
                 return get_strategy_memory().get_relevant_context(goal)
             except Exception:
                 return ""
@@ -1211,7 +1552,7 @@ class AgentPlanner:
             return "\n".join(f"- {f}" for f in failures) if failures else ""
         except Exception:
             try:
-                from strategy_memory import get_strategy_memory
+                from agent.strategy_memory import get_strategy_memory
                 failures = get_strategy_memory().recent_failures(goal)
                 return "\n".join(f"- {f}" for f in failures) if failures else ""
             except Exception:
@@ -1329,6 +1670,6 @@ def get_planner() -> AgentPlanner:
         try:
             from agent.llm_provider import get_llm_provider
         except Exception:
-            from llm_provider import get_llm_provider
+            from agent.llm_provider import get_llm_provider
         _planner = AgentPlanner(get_llm_provider())
     return _planner

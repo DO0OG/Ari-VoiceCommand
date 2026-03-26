@@ -75,6 +75,7 @@ def main():
         import torch
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True   # 고정 입력크기 반복 시 자동 커널 튜닝
         torch.set_grad_enabled(False)
         try:
             torch.set_float32_matmul_precision("high")
@@ -101,17 +102,21 @@ def main():
         except Exception as e:
             ctrl(f"INFO:torch.compile 생략 ({e})")
 
-    # ── 최적화 1: Flow ODE steps 10→5 (각 청크 ~50% 빠름, 품질 소폭 하락)
-    # register_forward_pre_hook으로 n_timesteps 인자만 교체 (nn.Module 호환)
+    # ── 최적화 1: Flow ODE steps 동적 조정 (짧은 텍스트 3스텝, 일반 5스텝)
+    # 짧은 응답("네.", "알겠어요" 등)은 3스텝으로 ~200ms 단축, 긴 문장은 5스텝 유지
+    _SHORT_TEXT_THRESHOLD = 15  # 이하면 3스텝
+
     try:
         def _ode_hook(module, args, kwargs):
             kwargs = dict(kwargs)
-            kwargs['n_timesteps'] = 5
+            kwargs['n_timesteps'] = _current_ode_steps[0]
             return args, kwargs
         model.model.flow.decoder.register_forward_pre_hook(_ode_hook, with_kwargs=True)
-        ctrl("INFO:Flow ODE steps 10→5 적용됨")
+        ctrl("INFO:Flow ODE steps 동적 조정 적용됨 (짧은 텍스트 3스텝, 일반 5스텝)")
     except Exception as e:
         ctrl(f"INFO:Flow ODE patch 생략 ({e})")
+
+    _current_ode_steps = [5]  # mutable reference shared with hook
 
     sample_rate = model.sample_rate
 
@@ -208,6 +213,7 @@ def main():
 
         try:
             n = 0
+            _current_ode_steps[0] = 3 if len(text) <= _SHORT_TEXT_THRESHOLD else 5
             with _inference_lock:
                 with torch.inference_mode():
                     for result in make_gen(text, stream=True):

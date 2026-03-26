@@ -34,7 +34,19 @@ jobs:
         run: |
           py -3.11 -m pip install --upgrade pip
           py -3.11 -m pip install -r VoiceCommand/requirements.txt
+          py -3.11 -m pip install bandit
 
       - name: Validate repository
         working-directory: VoiceCommand
         run: py -3.11 validate_repo.py
+
+      - name: Run unit tests
+        working-directory: VoiceCommand
+        run: py -3.11 -m unittest discover -s tests -p "test_*.py" -v
+        continue-on-error: true
+
+      - name: Security scan (bandit)
+        working-directory: VoiceCommand
+        run: |
+          py -3.11 -m bandit -r . -x tests,__pycache__ --severity-level medium --confidence-level medium -q
+        continue-on-error: true
