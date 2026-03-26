@@ -57,6 +57,10 @@ class ActionStep:
     expected_output: str = ""
     condition: str = ""        # Python 표현식. 비어있으면 항상 실행.
     on_failure: str = "abort"  # "abort"(중단) | "skip"(건너뜀) | "continue"(계속)
+    depends_on: List[int] = field(default_factory=list)
+    writes: List[str] = field(default_factory=list)
+    reads: List[str] = field(default_factory=list)
+    parallel_group: int = -1
 
 
 @dataclass
@@ -237,10 +241,19 @@ class AgentPlanner:
 
     def decompose(self, goal: str, context: Dict[str, str] = None) -> List[ActionStep]:
         """목표를 실행 단계 목록으로 분해 (planner_model 사용)"""
+        from agent.dag_builder import extract_resources, build_dag, assign_parallel_groups, annotate_steps
+
+        def _annotate(steps: List[ActionStep]) -> List[ActionStep]:
+            for step in steps:
+                step.reads, step.writes = extract_resources(step.content, step.step_type)
+            dag = build_dag(steps)
+            groups = assign_parallel_groups(dag)
+            return annotate_steps(steps, dag, groups)
+
         templated = self._build_template_plan(goal)
         if templated:
             logging.info(f"[Planner] 템플릿 계획 사용: {goal}")
-            return templated
+            return _annotate(templated)
 
         # 과거 전략 기억 주입
         strategy_ctx = self._get_strategy_context(goal)
@@ -257,7 +270,7 @@ class AgentPlanner:
         if not items:
             logging.warning(f"[Planner] decompose 파싱 실패: {raw[:200]}")
             return []
-        return [
+        steps = [
             ActionStep(
                 step_id=i,
                 step_type=s.get("step_type", "python"),
@@ -269,6 +282,7 @@ class AgentPlanner:
             )
             for i, s in enumerate(items)
         ]
+        return _annotate(steps)
 
     def _build_template_plan(self, goal: str) -> List[ActionStep]:
         """LLM이 자주 실패하는 검색-요약-저장 계열 작업은 안정적인 템플릿으로 우선 처리."""
@@ -433,10 +447,10 @@ class AgentPlanner:
             wants_list=any(token in normalized for token in ("목록", "리스트", "나열", "보여줘")),
             wants_delete=any(token in normalized for token in ("삭제", "지워", "제거")),
             wants_open=any(token in normalized for token in ("열어", "열고", "실행", "켜", "오픈", "launch", "open")),
-            wants_login=any(token in normalized for token in ("로그인", "sign in", "login")),
+            wants_login=any(token in normalized for token in ("로그인", "sign in", "login", "log in", "signin")),
             wants_browser=bool(url) or any(token in normalized for token in ("브라우저", "사이트", "웹", "크롬", "엣지")),
             wants_download=any(token in normalized for token in ("다운로드", "download", "내려받", "저장")),
-            wants_link_collection=any(token in normalized for token in ("링크", "url 목록", "주소 목록", "링크 수집", "링크 목록")),
+            wants_link_collection=any(token in normalized for token in ("링크", "url 목록", "주소 목록", "링크 수집", "링크 목록", "collect links", "collect link", "gather links", "link list", "links")),
             wants_rename=any(token in normalized for token in ("이름 변경", "이름바꿔", "이름 바꿔", "이름을", "파일명", "rename")),
             wants_merge=any(token in normalized for token in ("병합", "합쳐", "merge")),
             wants_organize=any(token in normalized for token in ("정리", "분류", "확장자별")),
@@ -614,6 +628,7 @@ class AgentPlanner:
                 content=(
                     f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
                     f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "replan_on_dom = True\n"
                     "fallback_actions = [\n"
                     "    {'type': 'read_title'},\n"
                     "    {'type': 'read_url'},\n"
@@ -651,6 +666,7 @@ class AgentPlanner:
                 content=(
                     f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
                     f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "replan_on_dom = True\n"
                     "fallback_actions = [\n"
                     "    {'type': 'read_title'},\n"
                     "    {'type': 'read_url'},\n"
@@ -688,6 +704,7 @@ class AgentPlanner:
                 content=(
                     f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
                     f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "replan_on_dom = True\n"
                     "fallback_actions = [\n"
                     "    {'type': 'read_title'},\n"
                     "    {'type': 'read_url'},\n"
@@ -714,6 +731,7 @@ class AgentPlanner:
                 content=(
                     f"url = {json.dumps(profile.url, ensure_ascii=False)}\n"
                     f"goal_hint = {json.dumps(profile.normalized_goal, ensure_ascii=False)}\n"
+                    "replan_on_dom = True\n"
                     "fallback_actions = [\n"
                     "    {'type': 'read_title'},\n"
                     "    {'type': 'read_url'},\n"

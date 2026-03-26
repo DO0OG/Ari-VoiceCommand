@@ -31,6 +31,11 @@ from agent.execution_analysis import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from services.dom_analyser import suggest_next_actions
+except Exception:
+    suggest_next_actions = None
+
 # executor._lock 경합 시 반환되는 오류 문자열 — self-fix 대상에서 제외
 _LOCK_CONTENTION_ERRORS = frozenset({
     "이미 다른 코드가 실행 중입니다.",
@@ -172,7 +177,7 @@ class AgentOrchestrator:
     def _run_loop(self, goal: str) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
-        context: Dict[str, str] = {}
+        context: Dict[str, str] = {"goal": goal}
 
         for iteration in range(self.MAX_PLAN_ITERATIONS):
             run_result.total_iterations = iteration + 1
@@ -293,9 +298,26 @@ class AgentOrchestrator:
         return res, att, fixed
 
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:
+        self._inject_dom_suggestions(step, context, goal_hint=context.get("goal", ""))
         if step.step_type == "python":
             return self.executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
         return self.executor.run_shell(step.content) if step.step_type == "shell" else ExecutionResult(success=True, output="")
+
+    def _inject_dom_suggestions(self, step: ActionStep, context: Dict[str, str], goal_hint: str = "") -> None:
+        content = (getattr(step, "content", "") or "")
+        if '"replan_on_dom": true' not in content.lower() and "replan_on_dom=True" not in content and "replan_on_dom" not in content.lower():
+            return
+        if suggest_next_actions is None:
+            return
+        try:
+            state = self.executor.execution_globals.get("get_browser_state_detailed", lambda: {})()
+            dom_state = state.get("dom_analysis") if isinstance(state, dict) else {}
+            if not dom_state:
+                return
+            suggestions = suggest_next_actions(dom_state, goal_hint or context.get("goal", ""))
+            context["dom_suggestions"] = json.dumps(suggestions, ensure_ascii=False)
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] DOM suggestion 주입 생략: {exc}")
 
     def _verify(self, goal: str, step_results: List[StepResult]) -> Tuple[bool, str]:
         try:
@@ -367,9 +389,29 @@ class AgentOrchestrator:
             context["runtime_state_json"] = json.dumps(runtime_state, ensure_ascii=False)[:500]
 
     def _group_by_dependency(self, steps: List[ActionStep]) -> List[List[ActionStep]]:
-        """단계별 의존성(step_outputs 참조 및 write 작업)을 분석하여 실행 레이어 생성."""
+        """parallel_group 우선, 없으면 기존 의존성 분석으로 실행 레이어 생성."""
         if not steps:
             return []
+
+        explicit_groups = [step for step in steps if getattr(step, "parallel_group", -1) >= 0]
+        if explicit_groups:
+            # step_id 오름차순으로 순회하면서 sequential은 단독 리스트로,
+            # 같은 parallel_group은 첫 등장 시 한 번만 묶어서 추가한다.
+            # 이렇게 해야 원래 단계 순서가 보장된다.
+            result: List[List[ActionStep]] = []
+            seen_groups: set = set()
+            for step in sorted(steps, key=lambda s: s.step_id):
+                pg = getattr(step, "parallel_group", -1)
+                if pg < 0:
+                    result.append([step])
+                elif pg not in seen_groups:
+                    seen_groups.add(pg)
+                    group_steps = sorted(
+                        [s for s in steps if getattr(s, "parallel_group", -1) == pg],
+                        key=lambda s: s.step_id,
+                    )
+                    result.append(group_steps)
+            return result
 
         graph = {s.step_id: set() for s in steps}
         step_map = {s.step_id: s for s in steps}

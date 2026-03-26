@@ -16,6 +16,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+PLUGIN_API_VERSION = "1.0"
+_COMPATIBLE_API_VERSIONS = {"1.0"}
+
 
 @dataclass
 class PluginContext:
@@ -23,6 +26,10 @@ class PluginContext:
     tray_icon: Any = None
     character_widget: Any = None
     text_interface: Any = None
+    register_menu_action: Any = None
+    register_command: Any = None
+    register_tool: Any = None
+    run_sandboxed: Any = None
 
 
 @dataclass
@@ -35,6 +42,7 @@ class PluginInfo:
     loaded: bool = False
     error: str = ""
     exports: Dict[str, Any] = field(default_factory=dict)
+    api_version: str = "1.0"
 
 
 class PluginManager:
@@ -70,6 +78,9 @@ class PluginManager:
 
     def load_plugins(self, context: Optional[PluginContext] = None) -> List[PluginInfo]:
         context = context or PluginContext()
+        if context.run_sandboxed is None:
+            from core.plugin_sandbox import run_sandboxed as _sandbox_fn
+            context.run_sandboxed = _sandbox_fn
         loaded_plugins: List[PluginInfo] = []
         for plugin in self.discover_plugins():
             try:
@@ -95,6 +106,7 @@ class PluginManager:
                 "path": plugin.path,
                 "loaded": str(plugin.loaded),
                 "error": plugin.error,
+                "api_version": plugin.api_version,
             }
             for plugin in self._plugins
         ]
@@ -112,6 +124,13 @@ class PluginManager:
         plugin.name = str(metadata.get("name", plugin.name))
         plugin.version = str(metadata.get("version", "0.1.0"))
         plugin.description = str(metadata.get("description", ""))
+        api_ver = str(metadata.get("api_version", "1.0"))
+        if api_ver not in _COMPATIBLE_API_VERSIONS:
+            raise RuntimeError(
+                f"호환되지 않는 플러그인 API 버전: {api_ver!r} "
+                f"(지원: {sorted(_COMPATIBLE_API_VERSIONS)})"
+            )
+        plugin.api_version = api_ver
 
         register = getattr(module, "register", None)
         if register is None:

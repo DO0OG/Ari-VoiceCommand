@@ -12,6 +12,7 @@ from agent.execution_analysis import (
     existing_paths,
     extract_artifacts,
 )
+from agent.ocr_helper import ocr_contains, ocr_screen
 
 _VERIFY_CODE_PROMPT = """\
 다음 목표가 실제로 달성됐는지 확인하는 파이썬 검증 코드를 작성하세요.
@@ -58,20 +59,25 @@ class RealVerifier:
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
     def verify(self, goal: str, step_results: list) -> VerificationResult:
-        """검증 코드 실행 → 실패 시 LLM 텍스트 판단 폴백."""
+        """휴리스틱 → OCR → 코드 → LLM 순으로 검증한다."""
         # 1. 휴리스틱 검증 (빠른 판단)
         heuristic = self._heuristic_verify(goal, step_results)
         if heuristic is not None:
             return heuristic
 
-        # 2. 코드 기반 실제 상태 검증 (Phase 2.2 핵심)
+        # 2. OCR 기반 화면 검증
+        ocr_result = self._ocr_verify(goal, step_results)
+        if ocr_result is not None:
+            return ocr_result
+
+        # 3. 코드 기반 실제 상태 검증 (Phase 2.2 핵심)
         code = self._generate_verification_code(goal, step_results)
         if code:
             result = self._run_verification(code)
             if result is not None:
                 return result
 
-        # 3. 폴백: LLM 텍스트 판단
+        # 4. 폴백: LLM 텍스트 판단
         return self._llm_verify(goal, step_results)
 
     # ── 내부 ──────────────────────────────────────────────────────────────────
@@ -197,6 +203,16 @@ class RealVerifier:
                 summary_kr="화면 이미지 인식을 통해 목표 상태를 확인했습니다.",
             )
 
+        if describes_open_action(goal):
+            app_name = self._extract_app_name_from_goal(goal)
+            if app_name and ocr_contains(app_name, region=(0, 0, 1920, 40)):
+                return VerificationResult(
+                    verified=True,
+                    method="ocr_heuristic",
+                    evidence=f"화면 상단에서 '{app_name}' 텍스트 확인됨",
+                    summary_kr=f"'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨",
+                )
+
         for payload in workflow_payloads:
             opened_url = str(payload.get("opened_url", "") or "")
             window_title = str(payload.get("window_title", "") or "")
@@ -234,6 +250,55 @@ class RealVerifier:
             )
 
         return None
+
+    def _ocr_verify(self, goal: str, step_results: list) -> Optional[VerificationResult]:
+        expected_keywords = self._extract_expected_keywords(goal, step_results)
+        if not expected_keywords:
+            return None
+        screen_text = ocr_screen()
+        if not screen_text:
+            return None
+        lowered = screen_text.lower()
+        keywords_found = [kw for kw in expected_keywords if kw.lower() in lowered]
+        score = len(keywords_found) / max(len(expected_keywords), 1)
+        if score < 0.6:
+            return None
+        evidence = ", ".join(keywords_found[:5])
+        return VerificationResult(
+            verified=True,
+            method="ocr",
+            evidence=evidence[:200],
+            summary_kr=f"화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({len(keywords_found)}/{len(expected_keywords)})",
+        )
+
+    def _extract_expected_keywords(self, goal: str, step_results: list) -> list[str]:
+        keywords: List[str] = []
+        try:
+            artifacts = extract_artifacts([goal])
+            keywords.extend(os.path.basename(path) for path in artifacts.get("paths", []) if path)
+            for url in artifacts.get("urls", []):
+                domain = url.split("//")[-1].split("/")[0]
+                keywords.extend(part for part in re.split(r"[.\-_/]", domain) if len(part) >= 2)
+        except Exception:
+            pass
+        keywords.extend(token for token in re.findall(r"[A-Za-z가-힣0-9._-]+", goal) if len(token) >= 2)
+        for sr in step_results:
+            exec_r = getattr(sr, "exec_result", sr)
+            output = str(getattr(exec_r, "output", "") or "")
+            keywords.extend(token for token in re.findall(r"[A-Za-z가-힣0-9._-]+", output) if len(token) >= 3)
+        deduped: List[str] = []
+        for item in keywords:
+            normalized = item.strip()
+            if normalized and normalized not in deduped:
+                deduped.append(normalized)
+        return deduped[:10]
+
+    def _extract_app_name_from_goal(self, goal: str) -> str:
+        tokens = [token for token in re.findall(r"[A-Za-z가-힣0-9._-]+", goal) if len(token) >= 2]
+        for token in tokens:
+            if token.lower() not in {"열어줘", "실행해줘", "열기", "실행"}:
+                return token
+        return ""
 
     def _parse_json_output(self, output: str) -> Optional[Dict[str, Any]]:
         text = (output or "").strip()

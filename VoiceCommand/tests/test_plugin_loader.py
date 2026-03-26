@@ -26,7 +26,7 @@ class PluginLoaderTests(unittest.TestCase):
             plugin_path = os.path.join(tmp, "hello_plugin.py")
             with open(plugin_path, "w", encoding="utf-8") as handle:
                 handle.write(
-                    "PLUGIN_INFO = {'name': 'hello', 'version': '1.2.0', 'description': '테스트 플러그인'}\n"
+                    "PLUGIN_INFO = {'name': 'hello', 'version': '1.2.0', 'api_version': '1.0', 'description': '테스트 플러그인'}\n"
                     "def register(context):\n"
                     "    return {'has_app': bool(context.app)}\n"
                 )
@@ -38,6 +38,7 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertTrue(plugins[0].loaded)
             self.assertEqual(plugins[0].name, "hello")
             self.assertEqual(plugins[0].exports["has_app"], True)
+            self.assertEqual(plugins[0].api_version, "1.0")
 
 
 if __name__ == "__main__":

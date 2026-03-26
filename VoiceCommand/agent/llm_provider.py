@@ -74,6 +74,7 @@ class LLMProvider:
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
+        self._plugin_tools: list = []
 
         if api_key:
             self._init_client()
@@ -121,7 +122,7 @@ class LLMProvider:
 
     def get_available_tools(self):
         """OpenAI-호환 function calling 스키마"""
-        return [
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -292,9 +293,15 @@ class LLMProvider:
                 },
             },
         ]
+        tools.extend(self._plugin_tools)
+        return tools
 
     def get_available_functions(self):
         return [t["function"] for t in self.get_available_tools()]
+
+    def register_plugin_tool(self, schema: dict) -> None:
+        """플러그인 도구 스키마를 등록한다."""
+        self._plugin_tools.append(schema)
 
     # ── 대화 ───────────────────────────────────────────────────────────────────
 

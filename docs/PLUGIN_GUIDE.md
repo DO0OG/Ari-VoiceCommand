@@ -18,42 +18,30 @@ VoiceCommand/plugins
 
 ## 2. 플러그인으로 할 수 있는 일
 
-현재 플러그인은 "앱 로드 시점에 Python 코드를 실행하고, Ari의 주요 UI 객체에 접근해 확장 기능을 붙이는 방식"입니다.
-
-예를 들어 아래 같은 확장이 가능합니다.
-
-- 텍스트 UI가 열릴 때 추가 패널이나 상태 표시를 붙이기
-- 시스템 트레이 메뉴와 연동되는 보조 동작 추가
-- 캐릭터 위젯 상태를 읽어 별도 반응 로직 붙이기
-- 앱 시작 시 사용자 환경 점검, 로그 기록, 외부 설정 로드
-- 내부 도구나 외부 스크립트와 연결되는 작은 사용자 확장 작성
-
-현재 구조에서 적합한 용도는 아래 쪽입니다.
-
-- UI 보조 기능
-- 사용자별 개인화 로직
-- 시작 시 초기화 훅
-- 로컬 파일 기반 확장
-
-반대로 아래는 플러그인에서 직접 크게 벌리기보다 코어 기능으로 넣는 편이 낫습니다.
-
-- 음성 인식 핵심 파이프라인 전체 교체
-- TTS 엔진 내부 구현 수정
-- 에이전트 플래너/실행기 핵심 아키텍처 변경
-- 장시간 블로킹 작업을 앱 시작 시 바로 수행하는 구조
+| 훅 | 설명 |
+|----|------|
+| `context.register_menu_action(label, callback)` | 트레이 메뉴에 항목 추가 |
+| `context.register_command(BaseCommand 인스턴스)` | 음성 명령 동적 등록 |
+| `context.register_tool(schema, handler)` | LLM tool calling 스키마·핸들러 확장 |
+| `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+| `context.app` | Qt 애플리케이션 인스턴스 참조 |
+| `context.tray_icon` | 트레이 아이콘 객체 참조 |
+| `context.character_widget` | 캐릭터 위젯 참조 |
+| `context.text_interface` | 텍스트 채팅 UI 참조 |
 
 ## 3. 로드 방식
 
 - 플러그인은 앱 시작 시 자동 로드됩니다.
 - 설정창의 `확장` 탭을 다시 적용하면 플러그인도 재로드됩니다.
 - 로드 실패 시 앱 전체가 종료되지는 않고, 해당 플러그인만 실패로 기록됩니다.
-- 설정창 `확장` 탭에서 플러그인 폴더 경로와 현재 감지된 플러그인 목록을 확인할 수 있습니다.
+- 설정창 `확장` 탭에서 플러그인 목록, api_version, 로드 상태, 오류 메시지를 확인할 수 있습니다.
+- `_`로 시작하는 파일과 비 `.py` 파일은 로드되지 않습니다.
 
 ## 4. 시작 방법
 
 1. `sample_plugin.py`를 복사합니다.
 2. 파일 이름을 원하는 이름으로 바꿉니다.
-3. `PLUGIN_INFO`의 이름, 버전, 설명을 수정합니다.
+3. `PLUGIN_INFO`의 이름, 버전, 설명을 수정합니다. **`api_version`은 `"1.0"`으로 유지합니다.**
 4. `register(context)` 함수 안에서 필요한 초기화 코드를 작성합니다.
 5. 파일을 `%AppData%\Ari\plugins`에 두고 앱을 다시 열거나 설정창에서 다시 적용합니다.
 
@@ -63,6 +51,7 @@ VoiceCommand/plugins
 PLUGIN_INFO = {
     "name": "my_plugin",
     "version": "0.1.0",
+    "api_version": "1.0",          # 필수 — 이 값으로 호환성 검사
     "description": "내 플러그인 설명",
 }
 
@@ -73,124 +62,226 @@ def register(context):
     }
 ```
 
-## 6. `register(context)`에서 받는 값
+`api_version`이 현재 Ari가 지원하는 버전과 일치하지 않으면 로드가 거부됩니다. 현재 지원 버전은 `"1.0"`입니다.
 
-`context`는 Ari가 현재 실행 중인 주요 객체를 담고 있습니다.
+## 6. 훅 사용법
 
-### `context.app`
+### 6-1. 트레이 메뉴 항목 추가
 
-- 현재 Qt 애플리케이션 인스턴스
-- 전역 이벤트 처리나 앱 단위 상태 조회에 활용 가능
+```python
+def _on_click():
+    import logging
+    logging.info("[MyPlugin] 메뉴 클릭")
 
-### `context.tray_icon`
 
-- 시스템 트레이 아이콘 객체
-- 현재 메뉴 상태 확인이나 트레이 기반 확장에 활용 가능
+def register(context):
+    if callable(getattr(context, "register_menu_action", None)):
+        context.register_menu_action("내 플러그인 실행", _on_click)
+```
 
-### `context.character_widget`
+- 항목은 트레이 메뉴의 "설정" 바로 위에 삽입됩니다.
+- `register()`는 Qt 메인 스레드에서 호출되므로 안전합니다.
 
-- 캐릭터 위젯 객체
-- 캐릭터 표시 상태 확인, 말풍선/캐릭터 반응 연동에 활용 가능
+### 6-2. 음성 명령 등록
 
-### `context.text_interface`
+```python
+from commands.base_command import BaseCommand
 
-- 텍스트 채팅 UI 객체
-- 텍스트 UI 상태 확인, 보조 패널/기능 연동에 활용 가능
 
-플러그인은 이 객체들을 읽거나, 안전한 범위에서 연결만 하는 식으로 쓰는 편이 좋습니다.
+class MyCommand(BaseCommand):
+    priority = 45  # 낮을수록 먼저 매칭 (AICommand=100, SystemCommand=10)
+
+    def matches(self, text: str) -> bool:
+        return "내명령" in text
+
+    def execute(self, text: str) -> None:
+        from core.VoiceCommand import tts_wrapper
+        tts_wrapper("내 플러그인 명령이 실행됩니다.")
+
+
+def register(context):
+    if callable(getattr(context, "register_command", None)):
+        context.register_command(MyCommand())
+```
+
+- `priority` 정렬은 등록 시 자동으로 유지됩니다.
+- 기존 내장 명령과 `matches()` 패턴이 겹치지 않도록 주의하세요.
+
+### 6-3. LLM 도구(tool) 등록
+
+LLM이 tool calling을 통해 플러그인 기능을 직접 호출할 수 있게 합니다.
+
+```python
+_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "my_plugin_greet",          # 전역 고유 이름 (충돌 시 등록 거부)
+        "description": "사용자에게 인사합니다.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "인사할 대상 이름"},
+            },
+            "required": ["name"],
+        },
+    },
+}
+
+
+def _handle_greet(args: dict):
+    name = args.get("name", "사용자")
+    return f"안녕하세요, {name}님!"  # 반환 str은 TTS로 읽힙니다
+
+
+def register(context):
+    if callable(getattr(context, "register_tool", None)):
+        context.register_tool(_TOOL_SCHEMA, _handle_greet)
+```
+
+- 핸들러 시그니처: `(args: dict) -> Optional[str]`
+- `str`을 반환하면 TTS로 읽어줍니다. `None`을 반환하면 무시합니다.
+- 내장 도구 이름(예: `play_youtube`, `set_timer` 등)과 충돌하면 등록이 거부됩니다.
+
+### 6-4. 샌드박스 실행
+
+무거운 연산이나 외부 의존성이 있는 코드를 메인 프로세스와 격리해 실행합니다.
+
+```python
+def register(context):
+    if callable(getattr(context, "run_sandboxed", None)):
+        result = context.run_sandboxed(
+            "import math; print(math.factorial(20))",
+            timeout=5,
+        )
+        if result["ok"]:
+            print("결과:", result["output"].strip())
+        else:
+            print("오류:", result["error"])
+```
+
+반환값:
+
+| 키 | 타입 | 설명 |
+|----|------|------|
+| `ok` | bool | 정상 완료 여부 |
+| `output` | str | stdout 출력 (최대 4096자) |
+| `error` | str | 오류 메시지 또는 traceback |
+
+- 기본 타임아웃은 15초입니다.
+- 타임아웃 초과 시 `ok=False`, `error="타임아웃 (N초) 초과"` 반환.
+- 완전한 OS-레벨 격리가 아니므로 신뢰할 수 없는 코드 실행에는 적합하지 않습니다.
 
 ## 7. `register()` 반환값
 
-`register()`는 선택적으로 `dict`를 반환할 수 있습니다.
-
-이 값은 플러그인 로더 내부에서 `exports`로 저장됩니다. 현재는 주로 상태 확인과 디버깅 용도이며, 아래처럼 간단한 메타데이터를 반환하는 방식이 적합합니다.
+`register()`는 선택적으로 `dict`를 반환할 수 있습니다. 이 값은 `exports`로 저장되며 로드 상태 확인과 디버깅에 사용됩니다.
 
 ```python
 def register(context):
+    ...
     return {
         "message": "my plugin loaded",
-        "has_text_interface": bool(getattr(context, "text_interface", None)),
+        "has_tray_icon": bool(getattr(context, "tray_icon", None)),
+        "has_sandbox": callable(getattr(context, "run_sandboxed", None)),
     }
 ```
 
-## 8. 추천 패턴
-
-### 8-1. UI 존재 여부를 먼저 확인하기
+## 8. 전체 예시 (sample_plugin.py)
 
 ```python
-def register(context):
-    if context.text_interface is None:
-        return {"message": "text interface not ready"}
-    return {"message": "text interface ready"}
-```
+import logging
 
-### 8-2. 가벼운 초기화만 수행하기
-
-- 파일 읽기
-- 설정값 체크
-- UI 연결
-- 작은 상태 표시
-
-앱 시작 시 오래 걸리는 네트워크 호출이나 무거운 연산은 피하는 편이 안전합니다.
-
-### 8-3. 실패해도 앱 전체를 망가뜨리지 않게 만들기
-
-- 예외 처리를 플러그인 안에서도 하는 편이 좋습니다.
-- 파일 경로, UI 객체 존재 여부, 외부 프로그램 의존성을 먼저 확인하세요.
-
-## 9. 샘플 확장 아이디어
-
-### 예시 1. 텍스트 UI 존재 여부 기록
-
-```python
 PLUGIN_INFO = {
-    "name": "ui_probe",
+    "name": "sample_plugin",
     "version": "0.1.0",
-    "description": "텍스트 UI 연결 여부를 기록하는 예시",
+    "api_version": "1.0",
+    "description": "플러그인 로더 동작 확인용 예시 플러그인",
+}
+
+_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "sample_plugin_greet",
+        "description": "사용자에게 인사를 합니다.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "인사할 대상 이름"},
+            },
+            "required": ["name"],
+        },
+    },
 }
 
 
+def _handle_greet(args: dict):
+    name = args.get("name", "사용자")
+    return f"안녕하세요, {name}님!"
+
+
+def _on_menu_click():
+    logging.info("[SamplePlugin] 트레이 메뉴 클릭")
+
+
 def register(context):
+    # 트레이 메뉴 등록
+    if callable(getattr(context, "register_menu_action", None)):
+        context.register_menu_action("샘플 플러그인 실행", _on_menu_click)
+
+    # 음성 명령 등록
+    if callable(getattr(context, "register_command", None)):
+        from commands.base_command import BaseCommand
+
+        class SampleCommand(BaseCommand):
+            priority = 45
+
+            def matches(self, text: str) -> bool:
+                return "샘플" in text and "실행" in text
+
+            def execute(self, text: str) -> None:
+                from core.VoiceCommand import tts_wrapper
+                tts_wrapper("샘플 플러그인 명령 실행됩니다.")
+
+        context.register_command(SampleCommand())
+
+    # LLM 도구 등록
+    if callable(getattr(context, "register_tool", None)):
+        context.register_tool(_TOOL_SCHEMA, _handle_greet)
+
     return {
-        "text_interface_ready": bool(getattr(context, "text_interface", None)),
+        "message": "sample plugin loaded",
+        "has_tray_icon": bool(getattr(context, "tray_icon", None)),
+        "has_sandbox": callable(getattr(context, "run_sandboxed", None)),
     }
 ```
 
-### 예시 2. 캐릭터 위젯 사용 가능 여부 확인
+## 9. 추천 패턴
+
+### 9-1. 훅 존재 여부를 항상 확인하기
+
+훅은 환경에 따라 `None`일 수 있습니다. `callable(getattr(..., None))` 패턴을 사용하세요.
 
 ```python
-PLUGIN_INFO = {
-    "name": "character_probe",
-    "version": "0.1.0",
-    "description": "캐릭터 위젯 연결 여부 확인",
-}
-
-
-def register(context):
-    widget = getattr(context, "character_widget", None)
-    return {
-        "character_visible": bool(widget and widget.isVisible()),
-    }
+if callable(getattr(context, "register_command", None)):
+    context.register_command(MyCommand())
 ```
+
+### 9-2. 가벼운 초기화만 수행하기
+
+`register()`는 앱 시작 시 메인 스레드에서 실행됩니다. 무거운 작업은 별도 스레드나 `run_sandboxed()`를 활용하세요.
+
+### 9-3. 실패해도 앱을 망가뜨리지 않게 만들기
+
+플러그인 내부에서도 예외 처리를 하는 편이 좋습니다. 로드 실패는 앱 전체가 아닌 해당 플러그인만 영향을 받습니다.
 
 ## 10. 현재 한계
 
-현재 플러그인 시스템은 "사용자 Python 확장 로더"에 가깝습니다.
-
-아직 기본 제공되지 않는 것은 아래와 같습니다.
-
-- 전용 플러그인 API 버전 협상
-- 메뉴 액션 자동 등록 규약
-- 음성 명령/도구 자동 등록 규약
-- 샌드박스 실행
-- 마켓플레이스 형태의 배포/설치 시스템
-
-즉, 지금은 자유도가 높은 대신, 플러그인 작성자가 Python 코드를 직접 관리해야 합니다.
+- **마켓플레이스 미지원**: 플러그인 배포·설치 시스템은 미구현. 파일을 수동으로 폴더에 복사해야 합니다.
+- **샌드박스 격리 수준**: 서브프로세스 기반 타임아웃·예외 격리이며, OS-레벨 보안 격리는 아닙니다.
+- **핫 리로드 미지원**: 플러그인 수정 후에는 앱 재시작 또는 설정창 재적용이 필요합니다.
 
 ## 11. 주의사항
 
-- `_`로 시작하는 파일과 비 `.py` 파일은 로드되지 않습니다.
 - 파일명은 곧 기본 플러그인 이름이 되므로 알아보기 쉽게 작성하세요.
+- LLM 도구 이름은 전역 고유해야 합니다. `myplugin_` 접두사 사용을 권장합니다.
 - 플러그인 파일 하나에 여러 역할을 몰아넣기보다, 기능별로 나누는 편이 유지보수에 좋습니다.
-- 앱 시작 시점에 너무 무거운 작업을 하면 시작 체감이 나빠질 수 있습니다.
 - 코어 파일을 직접 수정해야 하는 구조라면 플러그인보다는 본체 기능으로 넣는 편이 낫습니다.

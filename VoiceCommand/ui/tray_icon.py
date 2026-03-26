@@ -1,4 +1,5 @@
 import logging
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
 from ui.settings_dialog import SettingsDialog
 
@@ -34,7 +35,8 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.mouse_reaction_action.setCheckable(True)
         self.mouse_reaction_action.triggered.connect(self.toggle_mouse_reaction)
 
-        self.menu.addSeparator()
+        self._plugin_separator = self.menu.addSeparator()
+        self._plugin_actions: list = []
 
         self.settings_action = self.menu.addAction("설정")
         self.settings_action.triggered.connect(self.open_settings)
@@ -49,6 +51,13 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.menu.aboutToShow.connect(self.update_smart_mode_status)
         self.menu.aboutToShow.connect(self.update_mouse_reaction_status)
         self.menu.aboutToShow.connect(self._apply_menu_theme)
+
+    def add_plugin_menu_action(self, label: str, callback) -> None:
+        """플러그인이 트레이 메뉴에 항목을 추가하는 공개 API."""
+        action = QAction(label, self.menu)
+        action.triggered.connect(callback)
+        self.menu.insertAction(self.settings_action, action)
+        self._plugin_actions.append(action)
 
     def _apply_menu_theme(self):
         from ui import theme as theme_module
@@ -116,12 +125,32 @@ class SystemTrayIcon(QSystemTrayIcon):
 
             try:
                 from core.plugin_loader import PluginContext, get_plugin_manager
+                from core.VoiceCommand import _state
+                from commands.ai_command import AICommand
+                from agent.llm_provider import get_llm_provider
+
+                cmd_registry = _state.command_registry
+                ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)
+
+                def _register_tool_for_plugin(schema: dict, handler) -> None:
+                    tool_name = str(schema.get("function", {}).get("name", "") or "")
+                    if not tool_name or ai_command is None:
+                        return
+                    if tool_name in ai_command._dispatch:
+                        logging.warning(f"[PluginLoader] 중복 도구 등록 거부: {tool_name}")
+                        return
+                    get_llm_provider().register_plugin_tool(schema)
+                    ai_command.register_plugin_tool_handler(tool_name, handler)
+
                 get_plugin_manager().load_plugins(
                     PluginContext(
                         app=QApplication.instance(),
                         tray_icon=self,
                         character_widget=self.character_widget,
                         text_interface=self.text_interface,
+                        register_menu_action=self.add_plugin_menu_action,
+                        register_command=cmd_registry.register_command if cmd_registry else None,
+                        register_tool=_register_tool_for_plugin,
                     )
                 )
             except Exception as e:

@@ -57,6 +57,7 @@ class AICommand(BaseCommand):
             logging.warning(f"[AICommand] 스케줄러 초기화 실패: {e}")
             self.scheduler = None
 
+        self._plugin_handlers: Dict[str, Callable] = {}
         self._dispatch = self._build_dispatch_table()
 
     def matches(self, text: str) -> bool:
@@ -65,7 +66,7 @@ class AICommand(BaseCommand):
     # ── 디스패치 테이블 ─────────────────────────────────────────────────────────
 
     def _build_dispatch_table(self) -> Dict[str, Callable]:
-        return {
+        table = {
             "play_youtube":          self._handle_play_youtube,
             "set_timer":             self._handle_set_timer,
             "cancel_timer":          self._handle_cancel_timer,
@@ -83,6 +84,15 @@ class AICommand(BaseCommand):
             "cancel_scheduled_task":    self._handle_cancel_scheduled_task,
             "list_scheduled_tasks":     self._handle_list_scheduled_tasks,
         }
+        for name, handler in self._plugin_handlers.items():
+            if name not in table:
+                table[name] = handler
+        return table
+
+    def register_plugin_tool_handler(self, tool_name: str, handler: Callable) -> None:
+        """플러그인 도구 핸들러를 등록하고 디스패치 테이블을 갱신한다."""
+        self._plugin_handlers[tool_name] = handler
+        self._dispatch = self._build_dispatch_table()
 
     # ── 핸들러들 ────────────────────────────────────────────────────────────────
 

@@ -112,48 +112,67 @@ class UserContextManager:
 
     def record_fact(self, key: str, value: str, source: str = "assistant", confidence: float = 0.7, ttl_days: int = _DEFAULT_FACT_TTL_DAYS):
         """사용자에 대한 사실 기록 및 충돌 해소."""
-        existing = self.context["facts"].get(key)
-        final_confidence = max(0.1, min(float(confidence), 1.0))
+        from memory.trust_engine import compute_reinforcement, compute_conflict_update, SOURCE_WEIGHTS, DEFAULT_SOURCE_WEIGHT
+
+        facts = self.context["facts"]
         history_bucket = self.context.setdefault("fact_history", {}).setdefault(key, [])
-        conflict_count = int(existing.get("conflict_count", 0)) if existing else 0
-        
+        now = datetime.now()
+        existing = facts.get(key)
+
         if existing:
-            # 동일한 키에 다른 값이 들어온 경우 (충돌)
-            if existing["value"] != value:
-                conflict_count += 1
-                # 1. 신뢰도가 훨씬 높으면 덮어쓰기
-                if final_confidence > existing.get("confidence", 0.0) + 0.2:
-                    logger.info(f"[UserContext] 사실 업데이트 (높은 신뢰도): {key} -> {value}")
-                    final_confidence = min(1.0, final_confidence + 0.05)
-                # 2. 신뢰도가 비슷하면 시간순/보수적 통합 (여기서는 최신값 유지하되 신뢰도 하락)
-                else:
-                    logger.info(f"[UserContext] 사실 충돌 감지: {key}. 신규 정보 신뢰도 보정.")
-                    final_confidence = (final_confidence + existing.get("confidence", 0.5)) / 2.5
-                    final_confidence = max(0.15, final_confidence - min(conflict_count * 0.03, 0.15))
+            ex_value = existing.get("value", "")
+            ex_confidence = float(existing.get("confidence", 0.7))
+            ex_source = existing.get("source", "assistant")
+            ex_reinforce = int(existing.get("reinforcement_count", 0))
+            ex_conflict = int(existing.get("conflict_count", 0))
+
+            if ex_value == value:
+                result = compute_reinforcement(ex_confidence, source, ex_reinforce)
+                existing["confidence"] = round(result.new_confidence, 2)
+                existing["reinforcement_count"] = ex_reinforce + 1
+                existing["access_count"] = int(existing.get("access_count", 0)) + 1
             else:
-                # 동일한 값이면 신뢰도 보상
-                reinforcement = 0.1 + min(existing.get("reinforcement_count", 0) * 0.02, 0.08)
-                final_confidence = min(1.0, existing.get("confidence", 0.7) + reinforcement)
-        
-        expires_at = (datetime.now() + timedelta(days=ttl_days)).isoformat() if ttl_days else None
+                result = compute_conflict_update(ex_confidence, confidence, ex_source, source, ex_conflict)
+                if result.action == "conflict_replace":
+                    existing["value"] = value
+                    existing["source"] = source
+                existing["confidence"] = round(result.new_confidence, 2)
+                existing["conflict_count"] = ex_conflict + 1
+                existing["last_conflict_at"] = now.isoformat()
+                conflict_values = list(existing.get("conflict_values", []))
+                conflict_values.append(ex_value)
+                existing["conflict_values"] = conflict_values[-5:]
+
+            existing["updated_at"] = now.isoformat()
+            existing["expires_at"] = (now + timedelta(days=ttl_days)).isoformat() if ttl_days else None
+            source_history = list(existing.get("source_history", []))
+            source_history.append(source)
+            existing["source_history"] = source_history[-5:]
+        else:
+            sw = SOURCE_WEIGHTS.get(source, DEFAULT_SOURCE_WEIGHT)
+            initial_confidence = min(float(confidence) * sw + 0.1, 1.0)
+            facts[key] = {
+                "value": value,
+                "updated_at": now.isoformat(),
+                "source": source,
+                "confidence": round(initial_confidence, 2),
+                "expires_at": (now + timedelta(days=ttl_days)).isoformat() if ttl_days else None,
+                "conflict_count": 0,
+                "reinforcement_count": 0,
+                "access_count": 0,
+                "source_history": [source],
+                "conflict_values": [],
+                "last_conflict_at": "",
+            }
+
         history_bucket.append({
             "value": value,
             "source": source,
-            "confidence": round(final_confidence, 2),
-            "recorded_at": datetime.now().isoformat(),
+            "confidence": round(float(facts[key]["confidence"]), 2),
+            "recorded_at": now.isoformat(),
             "conflicted_with": existing.get("value", "") if existing and existing.get("value") != value else "",
         })
         self.context["fact_history"][key] = history_bucket[-_MAX_FACT_HISTORY:]
-        
-        self.context["facts"][key] = {
-            "value": value,
-            "updated_at": datetime.now().isoformat(),
-            "source": source,
-            "confidence": round(final_confidence, 2),
-            "expires_at": expires_at,
-            "conflict_count": conflict_count,
-            "reinforcement_count": int(existing.get("reinforcement_count", 0)) + 1 if existing and existing.get("value") == value else 1,
-        }
         self.save_context()
 
     def update_bio(self, field, value):
@@ -319,21 +338,19 @@ class UserContextManager:
         
         # 1. 사실 신뢰도 감쇄 및 만료 정리
         facts = self.context.get("facts", {})
+        from memory.trust_engine import compute_decay, should_remove
         for key in list(facts.keys()):
             f = facts[key]
-            # 만료 체크
             if f.get("expires_at") and datetime.fromisoformat(f["expires_at"]) < now:
-                del facts[key]; continue
-            
-            # 신뢰도 감쇄 (30일당 5%)
+                del facts[key]
+                continue
             if f.get("updated_at"):
                 days = (now - datetime.fromisoformat(f["updated_at"])).days
-                if days > 30:
-                    f["confidence"] *= (0.95 ** (days // 30))
-            
-            # 너무 낮은 신뢰도 제거
-            if f.get("confidence", 1.0) < 0.15:
-                del facts[key]
+                result = compute_decay(float(f.get("confidence", 0.7)), days, int(f.get("access_count", 0)))
+                if should_remove(result.new_confidence, int(f.get("conflict_count", 0)), days):
+                    del facts[key]
+                    continue
+                f["confidence"] = round(result.new_confidence, 2)
 
         # 2. 주제(Topic) 점수 감쇄 (오래된 관심사 제거)
         topics = self.context.get("conversation_topics", {})
@@ -355,7 +372,12 @@ class UserContextManager:
         facts = self.context.get("facts", {})
         if facts:
             sorted_facts = sorted(facts.items(), key=lambda x: x[1].get("confidence", 0), reverse=True)
-            fact_str = ", ".join([f"{k}({v['value']})" for k, v in sorted_facts[:_SUMMARY_FACT_LIMIT]])
+            fact_items = []
+            for k, v in sorted_facts[:_SUMMARY_FACT_LIMIT]:
+                conf = float(v.get("confidence", 0.7))
+                label = "(불확실)" if conf < 0.4 else ""
+                fact_items.append(f"{k}({v['value']}){label}[{conf:.2f}]")
+            fact_str = ", ".join(fact_items)
             lines.append(f"학습된 사실: {fact_str}")
             
         topics = self.context.get("conversation_topics", {})
@@ -375,6 +397,10 @@ class UserContextManager:
                 "expires_at": raw.get("expires_at"),
                 "conflict_count": int(raw.get("conflict_count", 0)),
                 "reinforcement_count": int(raw.get("reinforcement_count", 1)),
+                "access_count": int(raw.get("access_count", 0)),
+                "source_history": list(raw.get("source_history", []))[-5:],
+                "conflict_values": list(raw.get("conflict_values", []))[-5:],
+                "last_conflict_at": str(raw.get("last_conflict_at", "")),
             }
         if raw is not None:
             return {
@@ -385,6 +411,10 @@ class UserContextManager:
                 "expires_at": None,
                 "conflict_count": 0,
                 "reinforcement_count": 1,
+                "access_count": 0,
+                "source_history": ["legacy"],
+                "conflict_values": [],
+                "last_conflict_at": "",
             }
         return None
 

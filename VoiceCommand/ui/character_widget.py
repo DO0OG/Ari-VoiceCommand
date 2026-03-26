@@ -568,6 +568,12 @@ class CharacterWidget(QWidget):
             if self.move_animation:
                 self.move_animation.stop()
 
+            # 벽/천장 타기 도중 드래그 시 is_climbing 리셋
+            # (move_animation.stop()은 finished 시그널을 발생시키지 않으므로
+            # stop_climbing()이 호출되지 않아 is_climbing이 True로 남음)
+            if self.is_climbing:
+                self.is_climbing = False
+
             self.physics_timer.stop()
             self.behavior_timer.stop()
 

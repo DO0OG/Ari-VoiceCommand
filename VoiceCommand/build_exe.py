@@ -7,16 +7,36 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 
 출력: dist/Ari/
 
-포함 모듈 (2026-03-26):
+포함 모듈 (2026-03-26 최신):
+  ui/character_widget.py     — 벽/천장 타기 도중 드래그 시 중력 미적용 버그 수정
+  ui/theme_editor.py         — ThemeEditorDialog 추가 (팔레트 편집 별도 창)
+  ui/settings_dialog.py      — 인라인 팔레트 에디터 → ThemeEditorDialog 분리
+  core/plugin_loader.py      — PluginContext 등록 훅(메뉴/명령/도구/샌드박스) + API 버전 협상
+  core/plugin_sandbox.py     — 서브프로세스 기반 플러그인 샌드박스 실행기
+  commands/command_registry.py — register_command() 런타임 동적 등록
+  commands/ai_command.py     — register_plugin_tool_handler() LLM 도구 동적 디스패치
+  agent/llm_provider.py      — register_plugin_tool() 동적 스키마 확장
+  ui/tray_icon.py            — add_plugin_menu_action() 트레이 메뉴 동적 삽입
+  plugins/sample_plugin.py   — 메뉴·명령·도구·샌드박스 등록 예시 업데이트
+  Main.py                    — PluginContext 훅 주입 (menu/command/tool/sandbox)
+
+포함 모듈 (이전 2026-03-26):
+  agent/ocr_helper.py        — easyocr/pytesseract 화면 텍스트 추출 (선택 의존성)
+  agent/dag_builder.py       — 리소스 충돌 기반 의존성 DAG + 병렬 그룹 계산
+  agent/embedder.py          — sentence-transformers/API/해시 임베딩 + cross-encoder 재랭킹
+  agent/real_verifier.py     — 4단계 검증 파이프라인 (휴리스틱→OCR→코드→LLM)
+  agent/agent_planner.py     — ActionStep DAG 필드 추가, decompose() DAG 주석
+  agent/agent_orchestrator.py — 병렬 그룹 실행 + DOM 재계획 플래그 처리
+  agent/strategy_memory.py   — embedding 필드 + 3단계 검색 파이프라인
+  services/dom_analyser.py   — Selenium DOM 분석 + 다음 액션 제안
+  services/web_tools.py      — login_and_run DOM 재계획, get_state DOM 분석 포함
+  memory/trust_engine.py     — FACT 신뢰도 업데이트 엔진 (출처 가중치/충돌/decay)
+  memory/user_context.py     — record_fact trust_engine 연동, optimize_memory decay 교체
+  ui/theme_editor.py         — 팔레트 색상 피커 + JSON 편집 위젯
+  ui/settings_dialog.py      — ThemeEditorWidget 통합, 팔레트 편집 토글
   agent/llm_provider.py      — 역할별 독립 LLM 제공자(플래너/실행) + API 키 검증 UI
-  ui/settings_dialog.py      — 제공자별 API Key 상시 표시, CosyVoice 경로 수동/자동 설정
-  core/config_manager.py     — llm_planner_provider, llm_execution_provider, cosyvoice_dir 추가
-  agent/agent_planner.py     — _call_llm에 client_override/provider_override 지원
-  commands/system_command.py — 시간 파싱 기반 예약 종료 (N분 뒤/HH시에 꺼줘)
-  commands/ai_command.py     — 자율성 강화 (복합 키워드 확장, escalation 조건 보강)
-  tts/cosyvoice_worker.py    — cudnn.benchmark + 동적 ODE steps(짧은 문장 3스텝) 추가
-  core/VoiceCommand.py       — AppState 패턴으로 전역 변수 통합
-  core/config_manager.py     — RLock 교착 해결, nvidia_nim_api_key 추가
+  core/config_manager.py     — llm_planner_provider, llm_execution_provider, cosyvoice_dir
+  tts/cosyvoice_worker.py    — cudnn.benchmark + 동적 ODE steps
   Main.py                    — 로그 자동 순환 (최대 10개 보관)
 
 포함 모듈 (2026-03-25):
@@ -138,6 +158,7 @@ nuitka_args = [
     "--include-module=agent.strategy_memory",
     "--include-module=agent.automation_helpers",
     "--include-module=core.plugin_loader",
+    "--include-module=core.plugin_sandbox",
     "--include-module=core.resource_manager",
     "--include-module=services.web_tools",
     "--include-module=ui.theme",
@@ -178,13 +199,27 @@ nuitka_args = [
         "pygetwindow",
         "selenium",
         "webdriver_manager",
+        "easyocr",
+        "pytesseract",
+        "sentence_transformers",
+        "torch",
     ),
 
     # 불필요한 모듈 제외 (빌드 속도 및 용량 최적화)
+    # numpy/torch 계열: C 확장이므로 Nuitka가 직접 컴파일하지 않도록 제외
+    # (런타임에는 site-packages의 사전 컴파일된 .pyd/.dll로 동작)
+    "--nofollow-import-to=numpy",
+    "--nofollow-import-to=torch",
+    "--nofollow-import-to=torchvision",
+    "--nofollow-import-to=torchaudio",
+    "--nofollow-import-to=sentence_transformers",
+    "--nofollow-import-to=easyocr",
+    "--nofollow-import-to=cv2",
     "--nofollow-import-to=matplotlib",
     "--nofollow-import-to=tensorflow",
     "--nofollow-import-to=pandas",
-    "--nofollow-import-to=numpy.distutils",
+    "--nofollow-import-to=sklearn",
+    "--nofollow-import-to=scipy",
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
     "--nofollow-import-to=PIL",
