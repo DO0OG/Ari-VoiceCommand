@@ -115,17 +115,20 @@ nuitka_args = [
     "--include-data-files=ari_settings.json=ari_settings.json",
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
+    *(["--include-data-files=agent/scheduled_tasks.json=agent/scheduled_tasks.json"] if os.path.exists(os.path.join(HERE, "agent", "scheduled_tasks.json")) else []),
     *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
 
     # 아이콘 설정
     *( ["--windows-icon-from-ico=icon.ico"] if os.path.exists("icon.ico") else [] ),
 
-    # 필수 패키지 명시
-    "--include-module=confirmation_manager",
+    # 필수 모듈 명시 (--include-package 로 자동 포함되지 않는 경우 대비)
+    "--include-module=agent.confirmation_manager",
     "--include-module=agent.agent_orchestrator",
     "--include-module=agent.agent_planner",
     "--include-module=agent.autonomous_executor",
+    "--include-module=agent.execution_analysis",
     "--include-module=agent.file_tools",
+    "--include-module=agent.llm_provider",
     "--include-module=agent.real_verifier",
     "--include-module=agent.safety_checker",
     "--include-module=agent.scheduler",
@@ -133,11 +136,12 @@ nuitka_args = [
     "--include-module=agent.strategy_memory",
     "--include-module=agent.automation_helpers",
     "--include-module=core.plugin_loader",
+    "--include-module=core.resource_manager",
     "--include-module=services.web_tools",
     "--include-module=ui.theme",
     "--include-module=ui.theme_runtime",
     "--include-module=ui.common",
-    # agent.scheduler는 --include-package=agent 로 자동 포함
+    "--include-module=ui.scheduler_panel",
     "--include-package=agent",
     "--include-package=assistant",
     "--include-package=audio",
