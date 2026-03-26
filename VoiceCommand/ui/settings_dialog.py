@@ -91,7 +91,7 @@ _TTS_MODES = [
 class SettingsDialog(QDialog):
     TTS_KEYS = {
         "tts_mode", "fish_api_key", "fish_reference_id", "cosyvoice_reference_text",
-        "cosyvoice_speed", "openai_tts_api_key", "openai_tts_voice", "openai_tts_model",
+        "cosyvoice_speed", "cosyvoice_dir", "openai_tts_api_key", "openai_tts_voice", "openai_tts_model",
         "elevenlabs_api_key", "elevenlabs_voice_id", "edge_tts_voice", "edge_tts_rate",
     }
     LLM_KEYS = {
@@ -350,6 +350,27 @@ class SettingsDialog(QDialog):
         # --- CosyVoice3 설정 ---
         cv_grp = QGroupBox("CosyVoice3 설정 (로컬 GPU)")
         cvl = QVBoxLayout(cv_grp)
+
+        # CosyVoice 설치 경로
+        cvl.addWidget(QLabel("CosyVoice 설치 경로 (비워두면 자동 감지):"))
+        dir_row = QHBoxLayout()
+        self.cosyvoice_dir_input = QLineEdit(self.settings.get("cosyvoice_dir", ""))
+        self.cosyvoice_dir_input.setPlaceholderText("예: C:/CosyVoice")
+        dir_row.addWidget(self.cosyvoice_dir_input)
+        browse_btn = QPushButton("찾아보기")
+        browse_btn.setFixedWidth(72)
+        browse_btn.setStyleSheet(secondary_btn_style())
+        browse_btn.clicked.connect(self._browse_cosyvoice_dir)
+        dir_row.addWidget(browse_btn)
+        detect_btn = QPushButton("자동 감지")
+        detect_btn.setFixedWidth(72)
+        detect_btn.setStyleSheet(secondary_btn_style())
+        detect_btn.clicked.connect(self._detect_cosyvoice_dir)
+        dir_row.addWidget(detect_btn)
+        cvl.addLayout(dir_row)
+        self.cosyvoice_dir_status = create_muted_label("")
+        cvl.addWidget(self.cosyvoice_dir_status)
+
         cvl.addWidget(QLabel("Reference WAV 텍스트 (Cross-lingual 시 비움):"))
         self.cosyvoice_ref_text = QTextEdit()
         self.cosyvoice_ref_text.setPlainText(self.settings.get("cosyvoice_reference_text", ""))
@@ -691,6 +712,7 @@ class SettingsDialog(QDialog):
             "tts_mode": self.tts_mode_combo.currentData(),
             "fish_api_key": self.fish_key_input.text().strip(),
             "fish_reference_id": self.fish_ref_input.text().strip(),
+            "cosyvoice_dir": self.cosyvoice_dir_input.text().strip(),
             "cosyvoice_reference_text": self.cosyvoice_ref_text.toPlainText().strip(),
             "cosyvoice_speed": self._float(self.cosyvoice_speed_input.text(), 0.9),
             "openai_tts_api_key": self.openai_tts_key_input.text().strip(),
@@ -739,6 +761,39 @@ class SettingsDialog(QDialog):
 
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)
+
+    def _browse_cosyvoice_dir(self):
+        from PySide6.QtWidgets import QFileDialog
+        path = QFileDialog.getExistingDirectory(self, "CosyVoice 설치 폴더 선택",
+                                                self.cosyvoice_dir_input.text() or "C:/")
+        if path:
+            self.cosyvoice_dir_input.setText(path)
+            self._check_cosyvoice_dir(path)
+
+    def _detect_cosyvoice_dir(self):
+        try:
+            from tts.cosyvoice_tts import _get_cosyvoice_dir
+            path = _get_cosyvoice_dir()
+        except Exception:
+            path = ""
+        if path:
+            self.cosyvoice_dir_input.setText(path)
+            self.cosyvoice_dir_status.setText(f"✓ 감지됨: {path}")
+            self.cosyvoice_dir_status.setStyleSheet("color: #27ae60;")
+        else:
+            self.cosyvoice_dir_status.setText("✗ 자동 감지 실패 — 경로를 직접 입력하세요.")
+            self.cosyvoice_dir_status.setStyleSheet("color: #e74c3c;")
+
+    def _check_cosyvoice_dir(self, path: str):
+        """입력된 경로에 CosyVoice 구조가 있는지 확인 후 상태 표시."""
+        import os
+        marker = os.path.join(path, "pretrained_models")
+        if os.path.isdir(marker):
+            self.cosyvoice_dir_status.setText("✓ 유효한 CosyVoice 경로")
+            self.cosyvoice_dir_status.setStyleSheet("color: #27ae60;")
+        else:
+            self.cosyvoice_dir_status.setText("⚠ pretrained_models 폴더가 없습니다. 경로를 확인하세요.")
+            self.cosyvoice_dir_status.setStyleSheet("color: #e67e22;")
 
     def closeEvent(self, event):
         for thread in self._validator_threads.values():

@@ -8,13 +8,16 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 출력: dist/Ari/
 
 포함 모듈 (2026-03-26):
-  agent/llm_provider.py     — NVIDIA NIM 제공자 추가 (OpenAI-호환, nvapi- 키)
+  agent/llm_provider.py      — 역할별 독립 LLM 제공자(플래너/실행) + API 키 검증 UI
+  ui/settings_dialog.py      — 제공자별 API Key 상시 표시, CosyVoice 경로 수동/자동 설정
+  core/config_manager.py     — llm_planner_provider, llm_execution_provider, cosyvoice_dir 추가
+  agent/agent_planner.py     — _call_llm에 client_override/provider_override 지원
   commands/system_command.py — 시간 파싱 기반 예약 종료 (N분 뒤/HH시에 꺼줘)
   commands/ai_command.py     — 자율성 강화 (복합 키워드 확장, escalation 조건 보강)
-  tts/cosyvoice_worker.py   — cudnn.benchmark + 동적 ODE steps(짧은 문장 3스텝) 추가
-  core/VoiceCommand.py      — AppState 패턴으로 전역 변수 통합
-  core/config_manager.py    — RLock 교착 해결, nvidia_nim_api_key 추가
-  Main.py                   — 로그 자동 순환 (최대 10개 보관)
+  tts/cosyvoice_worker.py    — cudnn.benchmark + 동적 ODE steps(짧은 문장 3스텝) 추가
+  core/VoiceCommand.py       — AppState 패턴으로 전역 변수 통합
+  core/config_manager.py     — RLock 교착 해결, nvidia_nim_api_key 추가
+  Main.py                    — 로그 자동 순환 (최대 10개 보관)
 
 포함 모듈 (2026-03-25):
   agent/agent_orchestrator  — 병렬 실행 및 자율 반성(Reflection) 지원
@@ -110,7 +113,7 @@ nuitka_args = [
     "--include-data-files=icon.ico=icon.ico",
     "--include-data-files=reference.wav=reference.wav",
     "--include-data-files=ari_settings.json=ari_settings.json",
-    "--include-data-files=cosyvoice_worker.py=cosyvoice_worker.py",
+    "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
     *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
 
