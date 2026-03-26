@@ -205,12 +205,12 @@ class GroqAssistant:
         """Function 실행 (하위 호환용 — 직접 실행)"""
         try:
             if function_name == "get_weather":
-                from weather_service import WeatherService
+                from services.weather_service import WeatherService
                 weather_service = WeatherService(api_key="")
                 return weather_service.get_weather()
 
             elif function_name == "set_timer":
-                from timer_manager import TimerManager
+                from services.timer_manager import TimerManager
                 timer_manager = TimerManager(tts_callback=None)
                 minutes = arguments.get("minutes", 5)
                 timer_manager.set_timer(minutes)

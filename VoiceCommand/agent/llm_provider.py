@@ -54,6 +54,8 @@ class LLMProvider:
 
     def __init__(self, provider="groq", api_key="", model="",
                  planner_model="", execution_model="",
+                 planner_provider="", execution_provider="",
+                 planner_api_key="", execution_api_key="",
                  system_prompt="", personality="", scenario=""):
         cfg = _PROVIDER_CONFIG.get(provider, _PROVIDER_CONFIG["groq"])
         self.provider = provider
@@ -61,39 +63,59 @@ class LLMProvider:
         self.model = model.strip() or cfg["default_model"]
         self.planner_model = planner_model.strip() or self.model
         self.execution_model = execution_model.strip() or self.model
+        # 역할별 제공자 (비어있으면 기본 제공자 사용)
+        self.planner_provider = planner_provider.strip() or provider
+        self.execution_provider = execution_provider.strip() or provider
         self.system_prompt = system_prompt
         self.personality = personality
         self.scenario = scenario
         self.conversation_history = []
         self.max_history = 10
         self.client = None
+        self.planner_client = None   # None = 기본 client 사용
+        self.execution_client = None  # None = 기본 client 사용
 
         if api_key:
             self._init_client()
+        # 별도 제공자가 지정된 경우 추가 클라이언트 초기화
+        if planner_provider and planner_provider != provider and planner_api_key:
+            self.planner_client = self._make_client(self.planner_provider, planner_api_key)
+            if self.planner_client:
+                logging.info(f"플래너 클라이언트 초기화 완료 ({self.planner_provider} / {self.planner_model})")
+        if execution_provider and execution_provider != provider and execution_api_key:
+            self.execution_client = self._make_client(self.execution_provider, execution_api_key)
+            if self.execution_client:
+                logging.info(f"실행 클라이언트 초기화 완료 ({self.execution_provider} / {self.execution_model})")
 
     # ── 초기화 ─────────────────────────────────────────────────────────────────
 
-    def _init_client(self):
-        cfg = _PROVIDER_CONFIG.get(self.provider, _PROVIDER_CONFIG["groq"])
+    def _make_client(self, provider: str, api_key: str):
+        """제공자와 API 키로 클라이언트 객체를 생성합니다."""
+        cfg = _PROVIDER_CONFIG.get(provider, _PROVIDER_CONFIG["groq"])
         try:
-            if self.provider == "anthropic":
+            if provider == "anthropic":
                 import anthropic
-                self.client = anthropic.Anthropic(api_key=self.api_key)
+                return anthropic.Anthropic(api_key=api_key)
             else:
                 from openai import OpenAI
-                kwargs = {"api_key": self.api_key}
+                kwargs = {"api_key": api_key}
                 if cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
-                if self.provider == "openrouter":
+                if provider == "openrouter":
                     kwargs["default_headers"] = {
                         "HTTP-Referer": "https://github.com/Ari-Assistant",
                         "X-Title": "Ari Voice Assistant",
                     }
-                self.client = OpenAI(**kwargs)
-            logging.info(f"LLM 클라이언트 초기화 완료 ({self.provider} / {self.model})")
-            logging.info(f"  - Planner: {self.planner_model}, Execution: {self.execution_model}")
+                return OpenAI(**kwargs)
         except Exception as e:
-            logging.error(f"LLM 클라이언트 초기화 실패 ({self.provider}): {e}")
+            logging.error(f"LLM 클라이언트 초기화 실패 ({provider}): {e}")
+            return None
+
+    def _init_client(self):
+        self.client = self._make_client(self.provider, self.api_key)
+        if self.client:
+            logging.info(f"LLM 클라이언트 초기화 완료 ({self.provider} / {self.model})")
+            logging.info(f"  - Planner: {self.planner_provider}/{self.planner_model}, Execution: {self.execution_provider}/{self.execution_model}")
 
     # ── 도구 정의 ──────────────────────────────────────────────────────────────
 
@@ -487,6 +509,12 @@ class LLMProvider:
 
 _instance: LLMProvider | None = None
 
+_KEY_MAP = {
+    "groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key",
+    "mistral": "mistral_api_key", "gemini": "gemini_api_key",
+    "openrouter": "openrouter_api_key", "nvidia_nim": "nvidia_nim_api_key",
+}
+
 def get_llm_provider() -> LLMProvider:
     global _instance
     if _instance is None:
@@ -495,13 +523,20 @@ def get_llm_provider() -> LLMProvider:
             s = ConfigManager.load_settings()
         except Exception: s = {}
         provider = s.get("llm_provider", "groq")
-        key_map = {"groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key", "mistral": "mistral_api_key", "gemini": "gemini_api_key", "openrouter": "openrouter_api_key", "nvidia_nim": "nvidia_nim_api_key"}
-        api_key = s.get(key_map.get(provider, ""), "")
+        api_key = s.get(_KEY_MAP.get(provider, ""), "")
+        planner_provider = s.get("llm_planner_provider", "") or provider
+        execution_provider = s.get("llm_execution_provider", "") or provider
+        planner_api_key = s.get(_KEY_MAP.get(planner_provider, ""), "") if planner_provider != provider else ""
+        execution_api_key = s.get(_KEY_MAP.get(execution_provider, ""), "") if execution_provider != provider else ""
         _instance = LLMProvider(
             provider=provider, api_key=api_key,
             model=s.get("llm_model", ""),
             planner_model=s.get("llm_planner_model", ""),
             execution_model=s.get("llm_execution_model", ""),
+            planner_provider=planner_provider if planner_provider != provider else "",
+            execution_provider=execution_provider if execution_provider != provider else "",
+            planner_api_key=planner_api_key,
+            execution_api_key=execution_api_key,
             system_prompt=s.get("system_prompt", ""),
             personality=s.get("personality", ""),
             scenario=s.get("scenario", "")

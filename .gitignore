@@ -174,4 +174,3 @@ VoiceCommand/desktop_workflow_plans.json
 VoiceCommand/vosk-model-*/
 VoiceCommand/*.ppn
 VoiceCommand/porcupine_params_ko.pv
-VoiceCommand/reference.wav

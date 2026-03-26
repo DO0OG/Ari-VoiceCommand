@@ -394,7 +394,8 @@ class TextInterfaceThread(QThread):
     def _execute_query(self) -> str:
         # AICommand 경로 우선 시도 (tool calling, agent 포함)
         try:
-            from VoiceCommand import _command_registry
+            from core.VoiceCommand import _state
+            _command_registry = _state.command_registry
             if _command_registry:
                 from commands.ai_command import AICommand
                 for command in _command_registry.commands:

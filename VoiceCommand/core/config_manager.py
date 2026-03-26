@@ -19,7 +19,9 @@ class ConfigManager:
         # ── LLM 제공자 ──────────────────────────────────────────────────────
         "llm_provider": "groq",
         "llm_model": "",
+        "llm_planner_provider": "",   # 비워두면 기본 제공자와 동일
         "llm_planner_model": "",
+        "llm_execution_provider": "",  # 비워두면 기본 제공자와 동일
         "llm_execution_model": "",
         "groq_api_key": "",
         "openai_api_key": "",

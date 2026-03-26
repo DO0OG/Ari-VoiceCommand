@@ -143,7 +143,8 @@ class AICommand(BaseCommand):
     def _handle_get_screen_status(self, args: dict) -> Optional[str]:
         """현재 화면 상태 (작업표시줄, 전체화면 등) 정보를 수집하여 반환"""
         try:
-            from VoiceCommand import character_widget
+            from core.VoiceCommand import _state
+            character_widget = _state.character_widget
             if not character_widget:
                 return "캐릭터 위젯이 아직 초기화되지 않았습니다."
 

@@ -162,7 +162,7 @@ def main():
         logging.info("프로그램 시작")
 
         # 리소스 추출
-        from resource_manager import ResourceManager
+        from core.resource_manager import ResourceManager
         logging.info("리소스 추출 확인 중...")
         ResourceManager.extract_resources()
 

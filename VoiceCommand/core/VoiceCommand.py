@@ -384,3 +384,9 @@ def disable_game_mode():
 
 def is_game_mode() -> bool:
     return _state.game_mode
+
+
+# ── 하위 호환 모듈 수준 별칭 ──────────────────────────────────────────────────
+# 이전에 모듈 전역으로 노출됐던 이름들. 같은 객체를 가리키므로 변경이 양쪽에 반영됨.
+learning_mode = _state.learning_mode          # dict, 재할당 없음 → 안전한 별칭
+_tts_init_event = _state.tts_init_event       # threading.Event, 재할당 없음 → 안전한 별칭

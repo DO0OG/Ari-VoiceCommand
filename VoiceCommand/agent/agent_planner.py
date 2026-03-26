@@ -225,7 +225,9 @@ class AgentPlanner:
         """실패 원인 분석 및 교훈 도출 (planner_model 사용)"""
         prompt = _REFLECT_PROMPT.format(goal=goal, history_summary=history_summary)
         try:
-            resp = self.llm.chat(prompt, system_override=_SYS_JSON_ONLY, model_override=self.llm.planner_model)
+            resp = self._call_llm(prompt, model=self.llm.planner_model,
+                                  client_override=self.llm.planner_client,
+                                  provider_override=self.llm.planner_provider)
             return self._parse_object(resp) or {}
         except Exception as e:
             logging.error(f"[Planner] 반성 실패: {e}")
@@ -247,7 +249,9 @@ class AgentPlanner:
             ctx_block = strategy_ctx + "\n" + ctx_block
 
         prompt = _DECOMPOSE_PROMPT.format(goal=goal, context_block=ctx_block)
-        raw = self._call_llm(prompt, model=self.llm.planner_model)
+        raw = self._call_llm(prompt, model=self.llm.planner_model,
+                             client_override=self.llm.planner_client,
+                             provider_override=self.llm.planner_provider)
         self._write_trace("decompose", goal, raw)
         items = self._parse_array(raw)
         if not items:
@@ -1441,7 +1445,9 @@ class AgentPlanner:
             goal=goal,
             context_block=ctx_block,
         )
-        raw = self._call_llm(prompt, model=self.llm.execution_model)
+        raw = self._call_llm(prompt, model=self.llm.execution_model,
+                             client_override=self.llm.execution_client,
+                             provider_override=self.llm.execution_provider)
         self._write_trace("fix_step", goal, raw)
         data = self._parse_object(raw)
         if not data or not data.get("content"):
@@ -1525,7 +1531,9 @@ class AgentPlanner:
             lines.append(f"  단계 {i+1} [{status}]: {out}")
         results_summary = "\n".join(lines)
         prompt = _VERIFY_PROMPT.format(goal=goal, results_summary=results_summary)
-        raw = self._call_llm(prompt, model=self.llm.planner_model)
+        raw = self._call_llm(prompt, model=self.llm.planner_model,
+                             client_override=self.llm.planner_client,
+                             provider_override=self.llm.planner_provider)
         self._write_trace("verify", goal, raw)
         data = self._parse_object(raw)
         return data if data else {"achieved": False, "summary_kr": "검증 실패"}
@@ -1558,14 +1566,16 @@ class AgentPlanner:
             except Exception:
                 return ""
 
-    def _call_llm(self, prompt: str, model: str = "") -> str:
+    def _call_llm(self, prompt: str, model: str = "", client_override=None, provider_override: str = "") -> str:
         """대화 히스토리와 독립적으로 LLM 호출. model이 없으면 planner_model 사용."""
         target_model = model or self.llm.planner_model
+        client = client_override if client_override is not None else self.llm.client
+        provider = provider_override or self.llm.provider
         try:
-            if not self.llm.client:
+            if not client:
                 return ""
-            if self.llm.provider == "anthropic":
-                resp = self.llm.client.messages.create(
+            if provider == "anthropic":
+                resp = client.messages.create(
                     model=target_model,
                     max_tokens=1000,
                     system=_SYS_JSON_ONLY,
@@ -1573,7 +1583,7 @@ class AgentPlanner:
                 )
                 return " ".join(b.text for b in resp.content if b.type == "text")
             else:
-                resp = self.llm.client.chat.completions.create(
+                resp = client.chat.completions.create(
                     model=target_model,
                     messages=[
                         {"role": "system", "content": _SYS_JSON_ONLY},

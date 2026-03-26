@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QComboBox, QGroupBox, QScrollArea, QWidget,
     QTabWidget, QMessageBox, QListWidget, QListWidgetItem, QFrame,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
@@ -19,6 +19,52 @@ from ui.theme import (
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
 from ui.common import create_muted_label
+
+# ── API 검증 스레드 ────────────────────────────────────────────────────────────
+
+class _ValidatorThread(QThread):
+    """LLM API 키 + 모델 검증을 백그라운드에서 실행하는 스레드."""
+    done = Signal(bool, str)  # (success, message)
+
+    def __init__(self, provider: str, api_key: str, model: str):
+        super().__init__()
+        self.provider = provider
+        self.api_key = api_key
+        self.model = model
+
+    def run(self):
+        try:
+            from agent.llm_provider import _PROVIDER_CONFIG
+            cfg = _PROVIDER_CONFIG.get(self.provider, _PROVIDER_CONFIG["groq"])
+            model = self.model.strip() or cfg["default_model"]
+
+            if self.provider == "anthropic":
+                import anthropic
+                client = anthropic.Anthropic(api_key=self.api_key)
+                client.messages.create(
+                    model=model, max_tokens=1,
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+            else:
+                from openai import OpenAI
+                kwargs: dict = {"api_key": self.api_key}
+                if cfg["base_url"]:
+                    kwargs["base_url"] = cfg["base_url"]
+                client = OpenAI(**kwargs)
+                client.chat.completions.create(
+                    model=model, max_tokens=1,
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+            self.done.emit(True, f"✓ {model} 연결 성공")
+        except Exception as e:
+            msg = str(e)
+            # 핵심 오류 메시지만 표시
+            for marker in ("Error code:", "status code", "error_code"):
+                if marker in msg:
+                    msg = msg.split("\n")[0]
+                    break
+            self.done.emit(False, f"✗ {msg[:80]}")
+
 
 # ── 제공자 정의 ────────────────────────────────────────────────────────────────
 
@@ -49,7 +95,9 @@ class SettingsDialog(QDialog):
         "elevenlabs_api_key", "elevenlabs_voice_id", "edge_tts_voice", "edge_tts_rate",
     }
     LLM_KEYS = {
-        "llm_provider", "llm_model", "llm_planner_model", "llm_execution_model",
+        "llm_provider", "llm_model",
+        "llm_planner_provider", "llm_planner_model",
+        "llm_execution_provider", "llm_execution_model",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction",
@@ -64,8 +112,12 @@ class SettingsDialog(QDialog):
         self.settings = ConfigManager.load_settings()
         self.original_settings = dict(self.settings)
         self.changed_keys = set()
-        self._llm_key_inputs = {}   # data 키 → QLineEdit
-        self._tts_groups = {}       # data 키 → QGroupBox
+        self._llm_key_inputs = {}         # data 키 → QLineEdit
+        self._llm_model_inputs = {}       # data 키 → QLineEdit (테스트 모델명)
+        self._tts_groups = {}             # data 키 → QGroupBox
+        self._role_provider_combos = {}   # role 키 → QComboBox
+        self._validator_threads = {}      # data 키 → _ValidatorThread
+        self._validate_labels = {}        # data 키 → QLabel
         self._init_ui()
 
     # ── UI 구성 ────────────────────────────────────────────────────────────────
@@ -199,29 +251,76 @@ class SettingsDialog(QDialog):
         self.llm_model_input.setPlaceholderText("예: gpt-4o, llama-3.3-70b-versatile...")
         llm_vbox.addWidget(self.llm_model_input)
 
+        llm_vbox.addWidget(QLabel("플래너 제공자 (선택):"))
+        self._role_provider_combos["llm_planner_provider"] = self._make_role_provider_combo(
+            self.settings.get("llm_planner_provider", "")
+        )
+        llm_vbox.addWidget(self._role_provider_combos["llm_planner_provider"])
+
         llm_vbox.addWidget(QLabel("플래너 모델 (선택):"))
         self.llm_planner_model_input = QLineEdit(self.settings.get("llm_planner_model", ""))
         self.llm_planner_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
         llm_vbox.addWidget(self.llm_planner_model_input)
+
+        llm_vbox.addWidget(QLabel("실행/수정 제공자 (선택):"))
+        self._role_provider_combos["llm_execution_provider"] = self._make_role_provider_combo(
+            self.settings.get("llm_execution_provider", "")
+        )
+        llm_vbox.addWidget(self._role_provider_combos["llm_execution_provider"])
 
         llm_vbox.addWidget(QLabel("실행/수정 모델 (선택):"))
         self.llm_execution_model_input = QLineEdit(self.settings.get("llm_execution_model", ""))
         self.llm_execution_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
         llm_vbox.addWidget(self.llm_execution_model_input)
 
-        # API Key 입력 필드들 (동적 표시)
-        for _label, data, key, placeholder in _LLM_PROVIDERS:
-            sub = QGroupBox(f"{_label} API Key")
-            sub_vbox = QVBoxLayout(sub)
-            inp = QLineEdit(self.settings.get(key, ""))
-            inp.setPlaceholderText(placeholder)
-            inp.setEchoMode(QLineEdit.EchoMode.Password)
-            sub_vbox.addWidget(inp)
-            llm_vbox.addWidget(sub)
-            self._llm_key_inputs[data] = inp
-            self._tts_groups[f"_llm_{data}"] = sub
-
         vbox.addWidget(llm_group)
+
+        # API Key 입력 그룹 (모든 제공자 항상 표시)
+        api_group = QGroupBox("제공자별 API Key")
+        api_vbox = QVBoxLayout(api_group)
+        api_vbox.addWidget(create_muted_label(
+            "사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요."
+        ))
+        for _label, data, key, placeholder in _LLM_PROVIDERS:
+            from agent.llm_provider import _PROVIDER_CONFIG
+            default_model = _PROVIDER_CONFIG.get(data, {}).get("default_model", "")
+
+            api_vbox.addWidget(QLabel(f"{_label}:"))
+
+            # API 키 행
+            key_row = QHBoxLayout()
+            key_inp = QLineEdit(self.settings.get(key, ""))
+            key_inp.setPlaceholderText(placeholder)
+            key_inp.setEchoMode(QLineEdit.EchoMode.Password)
+            key_row.addWidget(key_inp)
+            validate_btn = QPushButton("검증")
+            validate_btn.setFixedWidth(54)
+            validate_btn.setStyleSheet(secondary_btn_style())
+            key_row.addWidget(validate_btn)
+            api_vbox.addLayout(key_row)
+
+            # 모델 행 — 해당 제공자에 설정된 모델명을 초기값으로 채움
+            model_row = QHBoxLayout()
+            prefilled_model = self._get_model_for_provider(data)
+            model_inp = QLineEdit(prefilled_model)
+            model_inp.setPlaceholderText(f"모델명 (기본: {default_model})")
+            model_row.addWidget(model_inp)
+            status_lbl = QLabel("")
+            status_lbl.setWordWrap(True)
+            status_lbl.setFixedWidth(220)
+            model_row.addWidget(status_lbl)
+            api_vbox.addLayout(model_row)
+
+            self._llm_key_inputs[data] = key_inp
+            self._llm_model_inputs[data] = model_inp
+            self._validate_labels[data] = status_lbl
+
+            # 클로저 캡처용 기본값
+            validate_btn.clicked.connect(
+                lambda checked=False, d=data: self._run_validation(d)
+            )
+
+        vbox.addWidget(api_group)
 
         # 2. TTS 설정
         tts_group = QGroupBox("음성 합성 (TTS) 설정")
@@ -440,6 +539,15 @@ class SettingsDialog(QDialog):
 
     # ── 유틸리티 및 이벤트 ───────────────────────────────────────────────────────
 
+    def _make_role_provider_combo(self, current_value: str) -> QComboBox:
+        """역할별 제공자 선택 콤보박스 생성 (기본 + 7개 제공자)."""
+        combo = QComboBox()
+        combo.addItem("(기본 제공자와 동일)", "")
+        for label, data, _key, _ph in _LLM_PROVIDERS:
+            combo.addItem(label, data)
+        self._set_combo(combo, current_value)
+        return combo
+
     @staticmethod
     def _set_combo(combo: QComboBox, value: str):
         for i in range(combo.count()):
@@ -447,12 +555,53 @@ class SettingsDialog(QDialog):
                 combo.setCurrentIndex(i)
                 return
 
+    def _get_model_for_provider(self, provider_key: str) -> str:
+        """현재 설정에서 해당 제공자에 할당된 모델명을 반환 (우선순위: 기본 > 플래너 > 실행)."""
+        s = self.settings
+        if s.get("llm_provider") == provider_key:
+            return s.get("llm_model", "")
+        if s.get("llm_planner_provider") == provider_key:
+            return s.get("llm_planner_model", "")
+        if s.get("llm_execution_provider") == provider_key:
+            return s.get("llm_execution_model", "")
+        return ""
+
     def _on_llm_changed(self):
-        selected = self.llm_provider_combo.currentData()
-        for _label, data, _key, _ph in _LLM_PROVIDERS:
-            grp = self._tts_groups.get(f"_llm_{data}")
-            if grp:
-                grp.setVisible(data == selected)
+        pass  # API 키 그룹은 항상 모두 표시
+
+    def _run_validation(self, provider: str):
+        api_key = self._llm_key_inputs[provider].text().strip()
+        lbl = self._validate_labels[provider]
+        if not api_key:
+            lbl.setText("⚠ API Key를 입력하세요.")
+            lbl.setStyleSheet("color: #e67e22;")
+            return
+
+        model = self._llm_model_inputs[provider].text().strip()
+        if not model:
+            from agent.llm_provider import _PROVIDER_CONFIG
+            model = _PROVIDER_CONFIG.get(provider, {}).get("default_model", "")
+            lbl.setText(f"검증 중... (기본 모델: {model})")
+        else:
+            lbl.setText("검증 중...")
+        lbl.setStyleSheet("color: #888;")
+
+        # 이전 스레드 정리
+        old = self._validator_threads.get(provider)
+        if old and old.isRunning():
+            old.quit()
+
+        thread = _ValidatorThread(provider, api_key, model)
+        thread.done.connect(lambda ok, msg, p=provider: self._on_validation_done(p, ok, msg))
+        self._validator_threads[provider] = thread
+        thread.start()
+
+    def _on_validation_done(self, provider: str, success: bool, message: str):
+        lbl = self._validate_labels.get(provider)
+        if not lbl:
+            return
+        lbl.setText(message)
+        lbl.setStyleSheet(f"color: {'#27ae60' if success else '#e74c3c'}; font-weight: bold;")
 
     def _on_tts_changed(self):
         selected = self.tts_mode_combo.currentData()
@@ -532,7 +681,9 @@ class SettingsDialog(QDialog):
             # LLM
             "llm_provider": self.llm_provider_combo.currentData(),
             "llm_model": self.llm_model_input.text().strip(),
+            "llm_planner_provider": self._role_provider_combos["llm_planner_provider"].currentData(),
             "llm_planner_model": self.llm_planner_model_input.text().strip(),
+            "llm_execution_provider": self._role_provider_combos["llm_execution_provider"].currentData(),
             "llm_execution_model": self.llm_execution_model_input.text().strip(),
             **llm_keys,
             
@@ -588,6 +739,13 @@ class SettingsDialog(QDialog):
 
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)
+
+    def closeEvent(self, event):
+        for thread in self._validator_threads.values():
+            if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)
+        super().closeEvent(event)
 
     @staticmethod
     def _float(text: str, default: float) -> float:

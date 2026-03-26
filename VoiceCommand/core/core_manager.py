@@ -165,10 +165,10 @@ class AriCore(QObject):
 
         # Step 6: TTS 리소스 정리
         logging.info("Step 6/6: TTS 리소스 정리")
-        from core.VoiceCommand import fish_tts
+        from core.VoiceCommand import _state
         from audio.audio_manager import GlobalAudio
-        if fish_tts:
-            fish_tts.cleanup()
+        if _state.fish_tts:
+            _state.fish_tts.cleanup()
         GlobalAudio.terminate()
 
         logging.info("=== AriCore cleanup 완료 ===")

@@ -29,7 +29,11 @@
       "Bash(python -c \"import ast, sys; ast.parse\\(open\\(''build_exe.py''\\).read\\(\\)\\); print\\(''OK''\\)\")",
       "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''build_exe.py''\\).read\\(\\)\\); print\\(''build_exe.py OK''\\)\")",
       "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''commands/system_command.py''\\).read\\(\\)\\); print\\(''system_command.py OK''\\)\")",
-      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''agent/llm_provider.py''\\).read\\(\\)\\); print\\(''llm_provider.py OK''\\)\")"
+      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''agent/llm_provider.py''\\).read\\(\\)\\); print\\(''llm_provider.py OK''\\)\")",
+      "Bash(py -3.11 -c \":*)",
+      "Bash(timeout 6 py -3.11 Main.py)",
+      "Bash(timeout 8 py -3.11 Main.py)",
+      "Bash(py -3.11 -c \"import ast; ast.parse\\(open\\(''ui/settings_dialog.py''\\).read\\(\\)\\); print\\(''OK''\\)\")"
     ]
   }
 }

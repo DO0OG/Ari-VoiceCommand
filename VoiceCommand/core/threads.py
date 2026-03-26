@@ -129,15 +129,16 @@ class TTSThread(QThread):
                 
                 try:
                     self.is_processing = True
-                    from VoiceCommand import text_to_speech, character_widget
+                    from VoiceCommand import text_to_speech
+                    from core.VoiceCommand import _state
                     text_to_speech(text)
                 finally:
                     self.queue.task_done()
                     self.is_processing = False
 
                 # 큐가 완전히 비었을 때만 말풍선을 숨김 (연속된 문장 처리)
-                if self.queue.empty() and character_widget:
-                    character_widget.hide_speech_bubble()
+                if self.queue.empty() and _state.character_widget:
+                    _state.character_widget.hide_speech_bubble()
                     
             except queue.Empty:
                 continue
