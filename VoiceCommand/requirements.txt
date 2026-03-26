@@ -1,14 +1,7 @@
-# 패키지 구조 고도화 (2026-03-26):
-#   - NVIDIA NIM LLM 제공자 추가 (OpenAI-호환 API, nvapi- 키)
-#   - 시스템 명령 시간 파싱 개선 (N분 뒤/HH시에 컴퓨터 꺼줘 → shutdown /s /t <초>)
-#   - AI 자율성 강화 (복합 키워드 확장, escalation 조건 보강)
-#   - CosyVoice3 로컬 TTS 추가 최적화 (cudnn.benchmark, 동적 ODE steps 3/5)
-#   - AppState 패턴으로 전역 변수 통합, ConfigManager RLock 교착 해결
-#   - 루트 wrapper 파일 제거 및 패키지 경로 일괄 정리
-#   - 로그 파일 자동 순환 (최대 10개 보관)
-#   - CommandRegistry 우선순위 기반 정렬
-# 이전 업데이트 (2026-03-25): 자율 실행 고도화, 파일 작업군 확대,
-#   GUI/브라우저 자동화 강화, 플러그인 로더, 테마 시스템, TTS 안정화
+# AI-Assistant (Ari) 의존성
+# 업데이트: 2026-03-26
+#   신규 선택 의존성: easyocr, pytesseract, sentence-transformers (OCR / 임베딩 기능)
+# 이전 업데이트: NVIDIA NIM 추가, CosyVoice3 최적화, 역할별 LLM 분리
 # 개발 검증: validate_repo.py + unittest discover
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
@@ -57,3 +50,12 @@ nuitka>=2.1.0
 python-dotenv>=1.0.0
 reportlab>=4.1.0  # auto/pdf 문서 저장
 watchdog>=4.0.0
+
+# ── 선택 의존성 (없어도 앱 실행 가능, 기능 저하만 발생) ─────────────────────────
+# OCR 기반 화면 텍스트 검증 (비전 검증 기능)
+# easyocr>=1.7.0          # GPU/CPU 한국어 OCR (권장)
+# pytesseract>=0.3.10     # 경량 OCR (Tesseract 별도 설치 필요)
+
+# 의미 기반 전략 기억 검색 (없으면 해시 기반 폴백 사용)
+# sentence-transformers>=2.7.0  # 한국어 임베딩 (paraphrase-multilingual-MiniLM-L12-v2)
+# torch>=2.0.0                  # sentence-transformers 의존

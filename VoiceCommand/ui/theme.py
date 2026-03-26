@@ -97,6 +97,8 @@ def _safe_read_json(path: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             return json.load(handle)
+    except FileNotFoundError:
+        return {}
     except Exception as exc:
         logging.warning(f"[Theme] JSON 로드 실패: {path} ({exc})")
         return {}

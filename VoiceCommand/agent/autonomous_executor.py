@@ -129,6 +129,7 @@ class AutonomousExecutor:
             self.execution_globals['web_search'] = web_search
             self.execution_globals['web_fetch'] = web_fetch
             self.execution_globals['get_browser'] = get_smart_browser
+            self.execution_globals['get_browser_state_detailed'] = lambda: get_smart_browser().get_state(include_dom_analysis=True)
         except ImportError:
             pass
 

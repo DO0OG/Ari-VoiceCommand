@@ -60,3 +60,8 @@ class CommandRegistry:
                 
                 command.execute(text)
                 return
+
+    def register_command(self, command: BaseCommand) -> None:
+        """런타임에 명령을 추가하고 priority 순서를 유지한다."""
+        self.commands.append(command)
+        self.commands.sort(key=lambda c: c.priority)

@@ -13,6 +13,8 @@ import urllib.request
 import warnings
 from typing import Optional, List, Dict, Any
 
+from services.dom_analyser import analyse_dom, suggest_next_actions
+
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -259,31 +261,97 @@ class SmartBrowser:
             time.sleep(0.3)
         return ""
 
-    def login_and_run(self, url: str, login_action: Dict[str, Any], followup_actions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """로그인 후 반복 작업을 이어서 수행합니다."""
-        actions = [login_action]
-        if followup_actions:
-            actions.extend(followup_actions)
-        summary = self.navigate_and_action(url, actions)
-        state = self.get_state()
-        return {"summary": summary, "state": state}
+    def login_and_run(
+        self,
+        url: str,
+        login_action: Dict[str, Any],
+        followup_actions: Optional[List[Dict[str, Any]]] = None,
+        goal_hint: str = "",
+        replan_callback=None,
+        max_replan_rounds: int = 2,
+    ) -> Dict[str, Any]:
+        """로그인 후 DOM 상태를 분석하고 후속 액션을 동적으로 실행합니다."""
+        self._ensure_driver()
+        self.driver.get(url)
+        action_results: List[Dict[str, Any]] = []
+        suggested_followups: List[Dict[str, Any]] = []
+        replan_count = 0
 
-    def get_state(self) -> Dict[str, Any]:
+        current_domain = urllib.parse.urlparse(url).netloc or "global"
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        wait = WebDriverWait(self.driver, 15)
+
+        login_result = self._execute_browser_action(login_action, current_domain, wait, By, EC)
+        action_results.append({"action": login_action, "result": login_result})
+
+        dom_state = analyse_dom(self.driver)
+        if not dom_state.logged_in and not dom_state.login_detected:
+            logging.warning("[SmartBrowser] 로그인 상태 확인이 불확실합니다.")
+        elif not dom_state.logged_in and dom_state.login_detected:
+            return {
+                "success": False,
+                "dom_state": dom_state.__dict__,
+                "action_results": action_results,
+                "suggested_followups": [],
+                "replan_count": replan_count,
+                "error": "로그인 완료를 감지하지 못했습니다.",
+            }
+
+        suggested_followups = suggest_next_actions(dom_state, goal_hint)
+        actions = list(followup_actions or []) or list(suggested_followups)
+
+        for action in actions:
+            result = self._execute_browser_action(action, current_domain, wait, By, EC)
+            action_results.append({"action": action, "result": result})
+            dom_state = analyse_dom(self.driver)
+            if dom_state.alerts and any(token in " ".join(dom_state.alerts).lower() for token in ("error", "오류", "실패")):
+                if replan_callback is None or replan_count >= max_replan_rounds:
+                    return {
+                        "success": False,
+                        "dom_state": dom_state.__dict__,
+                        "action_results": action_results,
+                        "suggested_followups": suggested_followups,
+                        "replan_count": replan_count,
+                        "error": "DOM 에러 상태 감지",
+                    }
+                replanned = replan_callback(dom_state, goal_hint) or []
+                replan_count += 1
+                for extra_action in replanned:
+                    extra_result = self._execute_browser_action(extra_action, current_domain, wait, By, EC)
+                    action_results.append({"action": extra_action, "result": extra_result})
+                    dom_state = analyse_dom(self.driver)
+
+        self._last_action_summary = " | ".join(item["result"] for item in action_results if item.get("result"))
+        return {
+            "success": True,
+            "dom_state": dom_state.__dict__,
+            "action_results": action_results,
+            "suggested_followups": suggested_followups,
+            "replan_count": replan_count,
+        }
+
+    def get_state(self, include_dom_analysis: bool = False) -> Dict[str, Any]:
         """현재 브라우저 상태를 요약합니다."""
         if not self.driver:
-            return {
+            state = {
                 "ready": False,
                 "current_url": "",
                 "title": "",
-            "download_dir": self.download_dir,
-            "page_fingerprint": "",
-            "selector_strategies": self._selector_history,
-            "action_plan_strategies": self._action_plan_history,
-            "last_action_summary": self._last_action_summary,
-        }
+                "download_dir": self.download_dir,
+                "page_fingerprint": "",
+                "selector_strategies": self._selector_history,
+                "action_plan_strategies": self._action_plan_history,
+                "last_action_summary": self._last_action_summary,
+            }
+            if include_dom_analysis:
+                state["dom_analysis"] = {}
+                state["dom_suggestions"] = []
+            return state
 
         current_url = getattr(self.driver, "current_url", "")
-        return {
+        state = {
             "ready": True,
             "current_url": current_url,
             "title": getattr(self.driver, "title", ""),
@@ -293,6 +361,14 @@ class SmartBrowser:
             "action_plan_strategies": self._action_plan_history,
             "last_action_summary": self._last_action_summary,
         }
+        if include_dom_analysis:
+            try:
+                dom_state = analyse_dom(self.driver)
+                state["dom_analysis"] = dom_state.__dict__
+                state["dom_suggestions"] = suggest_next_actions(dom_state)
+            except Exception as exc:
+                logging.debug(f"[SmartBrowser] DOM 분석 생략: {exc}")
+        return state
 
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """다운로드 완료 파일을 감지해 경로를 반환합니다."""

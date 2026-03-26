@@ -36,11 +36,14 @@ from core.VoiceCommand import (
     set_ai_assistant,
     set_character_widget,
     start_tts_background,
+    _state,
 )
 
 from core.core_manager import AriCore
 from ui.tray_icon import SystemTrayIcon
 from core.plugin_loader import PluginContext, get_plugin_manager
+from commands.ai_command import AICommand
+from agent.llm_provider import get_llm_provider
 
 # 전역 변수 선언
 ai_assistant = None
@@ -209,6 +212,19 @@ def main():
             tray_icon.set_character_widget(character)
             tray_icon.set_text_interface(text_interface)
 
+        cmd_registry = _state.command_registry
+        ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)
+
+        def _register_tool_for_plugin(schema: dict, handler) -> None:
+            tool_name = str(schema.get("function", {}).get("name", "") or "")
+            if not tool_name or ai_command is None:
+                return
+            if tool_name in ai_command._dispatch:
+                logging.warning(f"[PluginLoader] 중복 도구 등록 거부: {tool_name}")
+                return
+            get_llm_provider().register_plugin_tool(schema)
+            ai_command.register_plugin_tool_handler(tool_name, handler)
+
         plugin_manager = get_plugin_manager()
         plugin_manager.load_plugins(
             PluginContext(
@@ -216,6 +232,9 @@ def main():
                 tray_icon=tray_icon,
                 character_widget=character,
                 text_interface=text_interface,
+                register_menu_action=tray_icon.add_plugin_menu_action if tray_icon else None,
+                register_command=cmd_registry.register_command if cmd_registry else None,
+                register_tool=_register_tool_for_plugin,
             )
         )
         logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))

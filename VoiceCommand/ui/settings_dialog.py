@@ -18,6 +18,7 @@ from ui.theme import (
     TAB_STYLE, SCROLLBAR_STYLE, INPUT_STYLE,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
+from ui.theme_editor import ThemeEditorDialog
 from ui.common import create_muted_label
 
 # ── API 검증 스레드 ────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ class SettingsDialog(QDialog):
         self._role_provider_combos = {}   # role 키 → QComboBox
         self._validator_threads = {}      # data 키 → _ValidatorThread
         self._validate_labels = {}        # data 키 → QLabel
+        self._editor_dialog: ThemeEditorDialog | None = None
         self._init_ui()
 
     # ── UI 구성 ────────────────────────────────────────────────────────────────
@@ -514,7 +516,11 @@ class SettingsDialog(QDialog):
         preview_btn.clicked.connect(self._show_theme_hint)
         tvbox.addWidget(preview_btn)
 
-        self.theme_preset_combo.currentIndexChanged.connect(self._refresh_theme_preview)
+        self.editor_toggle_btn = QPushButton("🎨 팔레트 직접 편집")
+        self.editor_toggle_btn.clicked.connect(self._toggle_theme_editor)
+        tvbox.addWidget(self.editor_toggle_btn)
+
+        self.theme_preset_combo.currentIndexChanged.connect(self._on_theme_preset_changed)
         self._refresh_theme_preview()
 
         vbox.addWidget(theme_group)
@@ -653,6 +659,47 @@ class SettingsDialog(QDialog):
         self.theme_preview_colors.setText(
             f"Primary {primary} | Accent {accent} | Font {palette.font_family}"
         )
+
+    def _toggle_theme_editor(self):
+        if self._editor_dialog is None:
+            initial_palette = load_theme_palette(self.settings.get("ui_theme_preset", ""))
+            self._editor_dialog = ThemeEditorDialog(initial_palette.colors, self)
+            self._editor_dialog.palette_changed.connect(self._on_palette_changed)
+            self._editor_dialog.theme_saved.connect(self._on_theme_saved)
+        self._editor_dialog.show()
+        self._editor_dialog.raise_()
+        self._editor_dialog.activateWindow()
+
+    def _on_palette_changed(self):
+        if self._editor_dialog is None:
+            return
+        colors = self._editor_dialog.get_current_colors()
+        primary = colors.get("primary", "#4a90e2")
+        accent = colors.get("accent", "#ff7b54")
+        self.theme_preview_colors.setText(f"Primary {primary} | Accent {accent} | Custom editing")
+
+    def _on_theme_saved(self, theme_key: str):
+        from ui.theme_runtime import apply_live_theme
+        self.theme_preset_combo.blockSignals(True)
+        self.theme_preset_combo.clear()
+        for key, name in available_theme_presets():
+            self.theme_preset_combo.addItem(name, key)
+        idx = self.theme_preset_combo.findData(theme_key)
+        if idx >= 0:
+            self.theme_preset_combo.setCurrentIndex(idx)
+        self.theme_preset_combo.blockSignals(False)
+        try:
+            apply_live_theme(character_widget=self.parent())
+        except Exception:
+            pass
+        self._refresh_theme_preview()
+
+    def _on_theme_preset_changed(self, index: int):
+        key = self.theme_preset_combo.currentData()
+        palette = load_theme_palette(key)
+        self._refresh_theme_preview()
+        if self._editor_dialog is not None:
+            self._editor_dialog.load_preset(palette.colors)
 
     def _refresh_plugin_list(self):
         self.plugin_list.clear()

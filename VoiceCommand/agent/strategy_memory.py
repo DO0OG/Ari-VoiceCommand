@@ -7,7 +7,8 @@ import logging
 import os
 import re
 import hashlib
-from dataclasses import dataclass, asdict
+import threading
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from typing import List, Optional, Dict
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
@@ -46,6 +47,7 @@ class StrategyRecord:
     lesson: str = ""           # Phase 3.2: 실패로부터 배운 교훈 (Self-Reflection)
     duration_ms: int = 0
     timestamp: str = ""
+    embedding: List[float] = field(default_factory=list)
 
 
 class StrategyMemory:
@@ -78,7 +80,13 @@ class StrategyMemory:
             lesson=lesson[:400],
             duration_ms=duration_ms,
             timestamp=datetime.now().isoformat(),
+            embedding=[],
         )
+        try:
+            from agent.embedder import get_embedder
+            rec.embedding = get_embedder().embed(rec.goal_summary).tolist()
+        except Exception:
+            rec.embedding = []
         self._records.append(rec)
         self._prune()
         self._save()
@@ -138,18 +146,41 @@ class StrategyMemory:
         goal_tags = set(self._extract_tags(goal))
         goal_tokens = self._extract_tokens(goal)
         goal_ngrams = self._extract_ngrams(goal)
-        goal_embedding = self._build_embedding(goal)
+        goal_embedding = None
+        try:
+            from agent.embedder import get_embedder
+            goal_embedding = get_embedder().embed(goal)
+        except Exception:
+            goal_embedding = None
         scored = []
         for rec in self._records:
             tag_overlap = len(goal_tags & set(rec.tags))
             token_score = self._token_similarity(goal_tokens, set(rec.goal_tokens))
             ngram_score = self._ngram_similarity(goal_ngrams, self._extract_ngrams(rec.goal_summary))
-            embedding_score = self._embedding_similarity(goal_embedding, self._build_embedding(rec.goal_summary))
-            score = tag_overlap * 12 + token_score * 40 + ngram_score * 25 + embedding_score * 35
+            manual_score = tag_overlap * 12 + token_score * 40 + ngram_score * 25
+            if manual_score <= 0:
+                continue
+            scored.append((manual_score, rec))
+        top_candidates = sorted(scored, key=lambda item: item[0], reverse=True)[:20]
+        rescored = []
+        for manual_score, rec in top_candidates:
+            embedding_score = 0.0
+            if goal_embedding is not None and rec.embedding:
+                try:
+                    from agent.embedder import get_embedder
+                    embedding_score = get_embedder().cosine_similarity(goal_embedding, __import__("numpy").array(rec.embedding, dtype=float))
+                except Exception:
+                    embedding_score = 0.0
+            score = manual_score * 0.4 + embedding_score * 100 * 0.6
             if score <= 0:
                 continue
-            scored.append((score, rec))
-        return [rec for _, rec in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]]
+            rescored.append((score, rec))
+        try:
+            from agent.embedder import get_reranker
+            rescored = get_reranker().rerank(goal, rescored)
+        except Exception:
+            pass
+        return [rec for _, rec in sorted(rescored, key=lambda item: item[0], reverse=True)[:limit]]
 
     def recent_failures(self, goal: str, limit: int = 3) -> List[str]:
         """현재 목표와 유사한 최근 실패 사례를 짧게 반환."""
@@ -240,6 +271,7 @@ class StrategyMemory:
                 with open(self.filepath, encoding="utf-8") as f:
                     data = json.load(f)
                 self._records = [self._normalize_record(r) for r in data]
+                self._backfill_missing_embeddings()
             except Exception as e:
                 logging.warning(f"[StrategyMemory] 로드 오류: {e}")
 
@@ -267,11 +299,32 @@ class StrategyMemory:
             workflow_hints=list(raw.get("workflow_hints", [])),
             lesson=str(raw.get("lesson", "")),
             duration_ms=int(raw.get("duration_ms", 0)),
-            timestamp=str(raw.get("timestamp", datetime.now().isoformat()))
+            timestamp=str(raw.get("timestamp", datetime.now().isoformat())),
+            embedding=list(raw.get("embedding", []) or []),
         )
 
     def _classify_failure(self, error: str) -> str:
         return classify_failure_message(error)
+
+    def _backfill_missing_embeddings(self) -> None:
+        pending = [rec for rec in self._records if not rec.embedding]
+        if not pending:
+            return
+
+        def _worker():
+            try:
+                from agent.embedder import get_embedder
+                embedder = get_embedder()
+                for rec in pending:
+                    try:
+                        rec.embedding = embedder.embed(rec.goal_summary).tolist()
+                    except Exception:
+                        rec.embedding = []
+                self._save()
+            except Exception:
+                return
+
+        threading.Thread(target=_worker, daemon=True).start()
 
 
 _instance: Optional[StrategyMemory] = None
