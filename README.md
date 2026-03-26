@@ -3,7 +3,7 @@
 > 한국어 음성 인식 기반 데스크탑 AI 어시스턴트.
 > Shimeji 스타일 캐릭터 위젯 + 다중 LLM / TTS 제공자 선택 지원.
 
-- 캐릭터 모델 제작 : [자라탕](https://github.com/yongmen20)
+- 캐릭터 모델 제작 : [자라탕](https://www.pixiv.net/users/78194943)
 
 ![preview](https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd)
 
