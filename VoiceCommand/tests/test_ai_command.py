@@ -81,15 +81,21 @@ class AICommandTests(unittest.TestCase):
         self.assertTrue(command._should_emit_preface_response("알겠습니다. 바로 확인해볼게요."))
 
     def test_delayed_shutdown_is_scheduled_not_executed_immediately(self):
+        # P2-5 이후: 지연 종료는 SystemCommand 경로(execute_command)로 라우팅됨
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
-        command.scheduler = _FakeScheduler()
         command._current_goal = "5분 뒤에 컴퓨터 꺼줘"
 
-        result = command._handle_shutdown_computer({})
+        executed_cmds = []
+        with patch("VoiceCommand.execute_command", side_effect=lambda cmd: executed_cmds.append(cmd)):
+            result = command._handle_shutdown_computer({})
 
-        self.assertIn("작업 예약 완료", result)
-        self.assertEqual(command.scheduler.calls[0]["goal"], "컴퓨터 종료")
-        self.assertEqual(command.scheduler.calls[0]["desc"], "5분 뒤")
+        # 즉시 종료 대신 지연 명령이 전달돼야 함
+        self.assertIsNone(result)
+        self.assertTrue(executed_cmds, "execute_command가 호출되지 않음")
+        self.assertTrue(
+            any("5분" in cmd for cmd in executed_cmds),
+            f"5분이 포함된 명령 없음: {executed_cmds}",
+        )
 
     def test_shutdown_recovery_prefers_schedule_tool_when_goal_is_delayed(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

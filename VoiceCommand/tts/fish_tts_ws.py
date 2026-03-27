@@ -71,11 +71,7 @@ class FishTTSWebSocket(QObject):
                 format="mp3",
             )
 
-            def _iter_websocket_chunks():
-                with self.session.websocket() as ws:
-                    yield from ws.tts(req)
-
-            audio_stream = _iter_websocket_chunks()
+            audio_stream = self.session.tts(req)
 
             # 재생용 큐와 이벤트
             # self.stop_event를 공유해야 cleanup()이 play_worker도 중단시킬 수 있음
