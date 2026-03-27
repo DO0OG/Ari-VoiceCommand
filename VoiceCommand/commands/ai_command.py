@@ -106,6 +106,12 @@ class AICommand(BaseCommand):
         return None
 
     def _handle_set_timer(self, args: dict) -> Optional[str]:
+        # LLM이 종료 요청에 set_timer를 잘못 호출한 경우 → SystemCommand로 리다이렉트
+        if self._is_shutdown_request(self._current_goal) and self._extract_schedule_phrase(self._current_goal):
+            from VoiceCommand import execute_command
+            execute_command(self._current_goal)
+            return None
+
         from VoiceCommand import execute_command
         minutes = int(args.get("minutes", 0))
         seconds = int(args.get("seconds", 0))

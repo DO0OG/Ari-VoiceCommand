@@ -149,7 +149,7 @@ class LLMProvider:
                 "type": "function",
                 "function": {
                     "name": "set_timer",
-                    "description": "타이머를 설정합니다.",
+                    "description": "알림용 카운트다운 타이머를 설정합니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -280,7 +280,7 @@ class LLMProvider:
                 "type": "function",
                 "function": {
                     "name": "schedule_task",
-                    "description": "작업을 자동 실행 예약합니다.",
+                    "description": "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다.",
                     "parameters": {
                         "type": "object",
                         "properties": {
