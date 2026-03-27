@@ -48,7 +48,7 @@ class FishTTSWebSocket(QObject):
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
         from audio.audio_manager import GlobalAudio
-        self.session = Session(api_key) if api_key else Session()
+        self.session = Session(api_key)
         self.reference_id = reference_id
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False
