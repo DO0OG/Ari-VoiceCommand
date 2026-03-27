@@ -1,5 +1,5 @@
 # AI-Assistant (Ari) 의존성
-# 업데이트: 2026-03-26
+# 업데이트: 2026-03-27
 #   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs

@@ -292,6 +292,48 @@ class LLMProvider:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "shutdown_computer",
+                    "description": "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "confirmed": {
+                                "type": "boolean",
+                                "description": "종료 확인 여부 (항상 true)",
+                            }
+                        },
+                        "required": ["confirmed"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_scheduled_tasks",
+                    "description": "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "cancel_scheduled_task",
+                    "description": "예약된 작업을 ID로 취소합니다.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task_id": {
+                                "type": "string",
+                                "description": "취소할 작업 ID (list_scheduled_tasks로 확인)",
+                            }
+                        },
+                        "required": ["task_id"],
+                    },
+                },
+            },
         ]
         tools.extend(self._plugin_tools)
         return tools
@@ -323,13 +365,13 @@ class LLMProvider:
 
             if self.provider == "anthropic":
                 resp = self.client.messages.create(
-                    model=model, max_tokens=300, system=messages[0]["content"],
+                    model=model, max_tokens=400, system=messages[0]["content"],
                     messages=messages[1:]
                 )
                 raw_msg = resp.content[0].text
             else:
                 resp = self.client.chat.completions.create(
-                    model=model, messages=messages, temperature=0.7, max_tokens=200
+                    model=model, messages=messages, temperature=0.7, max_tokens=400
                 )
                 raw_msg = resp.choices[0].message.content or ""
             
@@ -423,7 +465,7 @@ class LLMProvider:
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
-            response = self.client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=150)
+            response = self.client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=300)
             msg = self._filter_korean(response.choices[0].message.content or "")
             if msg: self.add_to_history("assistant", msg)
             return msg
@@ -460,7 +502,7 @@ class LLMProvider:
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
             messages = list(self.conversation_history)
             messages.append({"role": "user", "content": results_content})
-            resp = self.client.messages.create(model=model, max_tokens=200, system=self._build_system(), messages=messages)
+            resp = self.client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
             msg = self._filter_korean(" ".join([b.text for b in resp.content if b.type == "text"]))
             if msg: self.add_to_history("assistant", msg)
             return msg
@@ -470,7 +512,13 @@ class LLMProvider:
 
     def _analyze_request(self, user_message: str) -> dict:
         text = (user_message or "").strip()
-        force_tool = any(token in text for token in ("화면", "예약", "스케줄", "정리", "검색", "찾아", "수집", "보고", "저장", "만들"))
+        force_tool = any(token in text for token in (
+            "화면 상태", "화면 확인",
+            "예약해줘", "스케줄 잡아",
+            "검색해줘", "찾아줘",
+            "수집해줘", "보고서 만들",
+            "저장해줘", "만들어줘",
+        ))
         multi_step = any(token in text for token in ("그리고", "해서", "한 뒤", "다음"))
         preferred = "run_agent_task" if multi_step else None
         return {"force_tool": force_tool, "has_action": "해줘" in text or "실행" in text, "preferred_tool": preferred}

@@ -10,7 +10,7 @@ import queue
 import subprocess
 from contextlib import contextmanager
 import pyaudio
-from fishaudio import FishAudio
+from fish_audio_sdk import Session, TTSRequest
 from PySide6.QtCore import QObject, Signal
 
 
@@ -48,7 +48,7 @@ class FishTTSWebSocket(QObject):
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
         from audio.audio_manager import GlobalAudio
-        self.client = FishAudio(api_key=api_key) if api_key else FishAudio()
+        self.session = Session(api_key) if api_key else Session()
         self.reference_id = reference_id
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False
@@ -62,17 +62,20 @@ class FishTTSWebSocket(QObject):
             return False
 
         try:
-            def text_gen():
-                yield text
-
             logging.info(f"TTS 요청: {text[:30]}...")
 
-            audio_stream = self.client.tts.stream_websocket(
-                text_gen(),
-                reference_id=self.reference_id,
+            req = TTSRequest(
+                text=text,
+                reference_id=self.reference_id or None,
                 latency="balanced",
-                format="mp3"
+                format="mp3",
             )
+
+            def _iter_websocket_chunks():
+                with self.session.websocket() as ws:
+                    yield from ws.tts(req)
+
+            audio_stream = _iter_websocket_chunks()
 
             # 재생용 큐와 이벤트
             # self.stop_event를 공유해야 cleanup()이 play_worker도 중단시킬 수 있음

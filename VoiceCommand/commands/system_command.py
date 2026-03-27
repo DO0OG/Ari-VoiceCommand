@@ -36,14 +36,20 @@ class SystemCommand(BaseCommand):
             "pc 종료",
             "전원 꺼",
             "shutdown",
+            "컴퓨터 재시작",
+            "재부팅",
+            "restart",
+            "종료 취소",
+            "종료 안 해",
+            "shutdown cancel",
         )
         if any(keyword in normalized for keyword in direct_keywords):
             return True
 
         has_target = any(token in normalized for token in ("컴퓨터", "pc", "시스템", "전원"))
-        has_shutdown_verb = any(token in normalized for token in ("종료", "꺼", "끄"))
+        has_system_action = any(token in normalized for token in ("종료", "꺼", "끄", "재시작", "재부팅", "restart"))
         has_request = any(token in normalized for token in ("줘", "주라", "주세요", "해", "해줘", "해 달라", "해달라"))
-        return has_target and has_shutdown_verb and has_request
+        return has_target and has_system_action and has_request
 
     def _parse_scheduled_time(self, text: str) -> Tuple[Optional[int], str]:
         """
@@ -53,19 +59,20 @@ class SystemCommand(BaseCommand):
         now = datetime.now()
         normalized = re.sub(r"\s+", " ", text or "").strip()
 
-        # 상대 시간: N초/분/시간 후|뒤
+        # 상대 시간: N초/분/시간 후|뒤 (복합 표현 지원: "1시간 30분 뒤" 등)
         relative_patterns = [
-            (r'(\d+)\s*초\s*(?:후|뒤)', 1),
-            (r'(\d+)\s*분\s*(?:후|뒤)', 60),
             (r'(\d+)\s*시간\s*(?:후|뒤)', 3600),
+            (r'(\d+)\s*분\s*(?:후|뒤)', 60),
+            (r'(\d+)\s*초\s*(?:후|뒤)', 1),
         ]
+        total_delay = 0
         for pattern, sec_per_unit in relative_patterns:
             m = re.search(pattern, normalized)
             if m:
-                amount = int(m.group(1))
-                delay = amount * sec_per_unit
-                target = now + timedelta(seconds=delay)
-                return delay, _format_time_kr(target)
+                total_delay += int(m.group(1)) * sec_per_unit
+        if total_delay > 0:
+            target = now + timedelta(seconds=total_delay)
+            return total_delay, _format_time_kr(target)
 
         # 절대 시간: [오전|오후] N시 [M분] 에
         m = re.search(r'(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
@@ -89,8 +96,22 @@ class SystemCommand(BaseCommand):
         return None, ""
 
     def execute(self, text: str) -> None:
-        delay_seconds, time_str = self._parse_scheduled_time(text)
+        normalized = (text or "").lower()
 
+        if any(k in normalized for k in ("취소", "cancel", "안 해", "안해")):
+            if any(k in normalized for k in ("종료", "shutdown", "꺼")):
+                self._cancel_shutdown()
+                return
+
+        if any(k in normalized for k in ("재시작", "재부팅", "restart")):
+            delay_seconds, time_str = self._parse_scheduled_time(text)
+            if delay_seconds is not None and delay_seconds > 0:
+                self._schedule_restart(delay_seconds, time_str)
+            else:
+                self._restart_immediate()
+            return
+
+        delay_seconds, time_str = self._parse_scheduled_time(text)
         if delay_seconds is not None and delay_seconds > 0:
             self._schedule_shutdown(delay_seconds, time_str)
         else:
@@ -131,6 +152,53 @@ class SystemCommand(BaseCommand):
             logging.error(f"시스템 종료 명령 실패: {e}")
             self.tts_wrapper("시스템 종료 명령 실행에 실패했습니다.")
 
+    def _cancel_shutdown(self) -> None:
+        logging.info("시스템 종료 취소 명령 실행")
+        try:
+            if sys.platform == "win32":
+                result = subprocess.run(["shutdown", "/a"], check=False, capture_output=True)  # nosec B603
+                if result.returncode != 0:
+                    logging.warning(f"종료 취소 실패 (returncode={result.returncode}): {result.stderr.decode(errors='ignore').strip()}")
+                    self.tts_wrapper("현재 예약된 종료가 없거나 취소에 실패했습니다.")
+                    return
+            else:
+                result = subprocess.run(["shutdown", "-c"], check=False, capture_output=True)  # nosec B603
+                if result.returncode != 0:
+                    logging.warning(f"종료 취소 실패 (returncode={result.returncode})")
+                    self.tts_wrapper("현재 예약된 종료가 없거나 취소에 실패했습니다.")
+                    return
+        except Exception as e:
+            logging.error(f"종료 취소 실패: {e}")
+            self.tts_wrapper("종료 취소 명령 실행에 실패했습니다.")
+            return
+        self.tts_wrapper("종료 예약을 취소했습니다.")
+
+    def _restart_immediate(self) -> None:
+        self.tts_wrapper("컴퓨터를 재시작합니다. 잠시만 기다려 주세요.")
+        logging.info("시스템 재시작 명령 실행")
+        try:
+            if sys.platform == "win32":
+                subprocess.run(["shutdown", "/r", "/t", "10"], check=False)  # nosec B603
+            else:
+                subprocess.run(["reboot"], check=False)  # nosec B603
+        except Exception as e:
+            logging.error(f"시스템 재시작 명령 실패: {e}")
+            self.tts_wrapper("시스템 재시작 명령 실행에 실패했습니다.")
+
+    def _schedule_restart(self, delay_seconds: int, time_str: str) -> None:
+        logging.info(f"시스템 재시작 예약: {delay_seconds}초 후 ({time_str})")
+        self.tts_wrapper(f"{time_str}에 컴퓨터를 재시작할게요.")
+        try:
+            if sys.platform == "win32":
+                win_delay = min(delay_seconds, _WIN_MAX_SHUTDOWN_DELAY)
+                subprocess.run(["shutdown", "/r", "/t", str(win_delay)], check=False)  # nosec B603
+            else:
+                minutes = max(1, delay_seconds // 60)
+                subprocess.run(["shutdown", "-r", f"+{minutes}"], check=False)  # nosec B603
+        except Exception as e:
+            logging.error(f"시스템 재시작 예약 실패: {e}")
+            self.tts_wrapper("시스템 재시작 예약에 실패했습니다.")
+
 
 def _format_time_kr(dt: datetime) -> str:
     ampm = "오전" if dt.hour < 12 else "오후"
@@ -138,5 +206,5 @@ def _format_time_kr(dt: datetime) -> str:
     if hour == 0:
         hour = 12
     if dt.minute:
-        return f"{ampm} {hour}시 {dt.minute:02d}분"
+        return f"{ampm} {hour}시 {dt.minute}분"
     return f"{ampm} {hour}시"

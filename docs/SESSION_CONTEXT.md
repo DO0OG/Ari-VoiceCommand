@@ -1,10 +1,10 @@
 # Session Context: Ari Voice Assistant Project
 
-이 파일은 AI 세션(Gemini, Claude 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
+이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-03-23 (Session: Agent Package Refactor, Verification Fixes & Bubble Consistency)
-## Autonomy Level: 자율 실행 범위 확장 + 열기 작업/검증/TTS 말풍선 동기화 보강 완료
+## Last Updated: 2026-03-27
+## 상태: 전체 코드 리뷰 3차 완료 · 주요 버그 수정 완료
 
 ---
 
@@ -12,285 +12,163 @@
 
 "아리(Ari)"는 Windows 전용 한국어 음성 AI 어시스턴트입니다.
 - 웨이크워드 "아리야" 감지 → 음성 인식 → 명령 실행 → TTS 응답
-- LLM: Groq (기본, llama-3.3-70b-versatile) / OpenAI / Anthropic / Mistral / Gemini / OpenRouter
-- TTS: Fish Audio (Cloud, Game Mode) / CosyVoice (Local, 고품질)
+- LLM: Groq (기본, llama-3.3-70b-versatile) / OpenAI / Anthropic / Mistral / Gemini / OpenRouter / NVIDIA NIM
+- TTS: Fish Audio (Cloud) / CosyVoice3 (Local, 고품질) / OpenAI TTS / ElevenLabs / Edge TTS
 - UI: PySide6 시스템 트레이 + 캐릭터 애니메이션 (Shimeji 스타일)
 - 진입점: `Main.py` → `VoiceCommand.py` → `CommandRegistry` → 각 Command 클래스
-- 현재 구조 정리:
-  - 핵심 자율 실행 구현: `VoiceCommand/agent/`
-  - 웹 연동 구현: `VoiceCommand/services/`
-  - UI 모듈: `VoiceCommand/ui/`
-  - TTS 제공자/팩토리: `VoiceCommand/tts/`
-  - 기억/대화 이력: `VoiceCommand/memory/`
-  - 앱 런타임 핵심: `VoiceCommand/core/`
-  - AI 어시스턴트 레이어: `VoiceCommand/assistant/`
-  - 오디오/웨이크워드: `VoiceCommand/audio/`
-  - 내부 구현 import는 패키지 경로(`core.*`, `agent.*`, `ui.*`, `tts.*`, `memory.*`, `services.*`) 우선으로 정리됨
-  - 루트의 `llm_provider.py`, `text_interface.py`, `tts_factory.py`, `memory_manager.py` 등은 하위 패키지로 연결하는 호환 wrapper
+
+### 디렉터리 구조
+
+| 디렉터리 | 내용 |
+|----------|------|
+| `VoiceCommand/agent/` | 자율 실행 엔진 (Plan→Execute+Self-Fix→Verify) |
+| `VoiceCommand/commands/` | BaseCommand 구현체 (priority 기반 디스패치) |
+| `VoiceCommand/core/` | 앱 런타임 핵심 (AppState, ConfigManager, threads) |
+| `VoiceCommand/services/` | 웹 도구, 타이머, DOM 분석 |
+| `VoiceCommand/memory/` | FACT/BIO/PREF 기억, 신뢰도 엔진 |
+| `VoiceCommand/tts/` | TTS 제공자 팩토리 |
+| `VoiceCommand/ui/` | PySide6 위젯 (캐릭터, 설정, 테마) |
+| `VoiceCommand/audio/` | PyAudio 싱글톤, 웨이크워드 |
 
 ---
 
-## 2. 자율 실행 아키텍처
+## 2. 커맨드 우선순위 (priority 낮을수록 먼저 매칭)
 
-### 2.1 계층 구조
+| 클래스 | priority | 트리거 |
+|--------|----------|--------|
+| SystemCommand | 10 | 컴퓨터 종료·재시작·종료취소 |
+| LearningCommand | 20 | 학습 모드 |
+| TimerCommand | 30 | 타이머, 알람 |
+| WeatherCommand | 50 | 날씨 |
+| VolumeCommand | 50 | 볼륨 |
+| TimeCommand | 50 | 몇 시야 |
+| YoutubeCommand | 50 | 유튜브 |
+| CalculatorCommand | 50 | 계산 |
+| AICommand | 100 | 모든 입력 (fallback) |
+
+---
+
+## 3. LLM 도구 목록 (get_available_tools 기준, 2026-03-27)
 
 ```
-사용자 음성/텍스트
-    ↓
-[llm_provider] _build_system() 시 실시간 '감각 데이터' 주입
-    ├── 위치(X, Y), 화면 상태(전체화면/일반), 현재 동작 상태 포함
-    └── AI가 도구 호출 없이도 자신의 물리적 처지를 인지 가능
-    ↓
-[AICommand] execute(text)
-    ↓ chat_with_tools()
-[LLMProvider] tool call 결정
-    ├── 단순 도구 (play_youtube, set_timer, 날씨 등)
-    │       ↓ dispatch table
-    │   각 핸들러 직접 실행
-    │
-    ├── execute_python_code / execute_shell_command
-    │       ↓
-    │   [AgentOrchestrator] execute_with_self_fix()
-    │       ↓ 실패 시 [AgentPlanner] fix_step()
-    │   [AutonomousExecutor] run_python / run_shell
-    │
-    └── run_agent_task (복잡한 다단계 목표)
-            ↓
-        [AgentOrchestrator] run(goal)
-        ├── Layer 1: [AgentPlanner] decompose() — 단계 분해
-        │       └── [StrategyMemory] 과거 유사 전략 주입
-        ├── Layer 2: _execute_plan() — 순차 실행
-        │       ├── on_failure 정책 (abort/skip/continue)
-        │       └── _execute_step_with_retry() → fix_step()
-        └── Layer 3: [RealVerifier] verify()
-                ├── LLM이 생성한 검증 코드 실행 → True/False
-                └── 실패 시 [AgentPlanner] verify() (LLM 텍스트 폴백)
+get_screen_status, play_youtube, set_timer, cancel_timer,
+get_weather, adjust_volume, get_current_time,
+execute_python_code, execute_shell_command, run_agent_task,
+web_search, web_fetch, schedule_task,
+shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ```
+총 16개. 플러그인 도구는 `_plugin_tools`로 동적 추가.
 
 ---
 
-## 3. 오늘 세션에서 수정한 것들 (2026-03-23)
+## 4. 2026-03-27 세션에서 수정한 것들
 
-### 3.1 수정된 파일 목록
+### 4.0 3차 검토 추가 수정
 
-| 파일 | 수정 내용 | 상태 |
-|------|----------|------|
-| `user_context.json` | 오염된 FACT (귀가 시간, 요청내용) 2회 삭제 | ✅ |
-| `llm_provider.py` | FACT 저장 기준 강화 (일시적 상태 금지) | ✅ |
-| `llm_provider.py` | get_screen_status 도구 사용 지침 추가 | ✅ |
-| `llm_provider.py` | max_tokens 300→1000, temperature 0.7→0.3 | ✅ |
-| `llm_provider.py` | web_search query 한국어 강제 지침 | ✅ |
-| `llm_provider.py` | run_agent_task description 강화 | ✅ |
-| `llm_provider.py` | 지침 7번 신규: 텍스트 가짜 명령 금지 | ✅ |
-| `llm_provider.py` | _filter_korean: 가짜 명령 블록·파일 경로 사전 제거 | ✅ |
-| `llm_provider.py` | **시스템 프롬프트 길이 최적화 (토큰 압박 완화)** | ✅ |
-| `llm_provider.py` | **raw_msg에서 가짜 도구 호출 사전 감지(폴백) 로직 추가** | ✅ |
-| `ari_settings.json` | system_prompt 규칙 3: 명시적 질문 시 도구 우선 | ✅ |
-| `agent_orchestrator.py` | _group_by_dependency: 병렬→순차 실행으로 전환 | ✅ |
-| `agent_orchestrator.py` | _verify: 폴백 보수화, 실패 단계 있으면 즉시 False | ✅ |
-| `agent_planner.py` | _DECOMPOSE_PROMPT: Windows 경로, makedirs, condition 강화 | ✅ |
-| `agent_planner.py` | _FIX_PROMPT: Windows 경로 경고 추가 | ✅ |
-| `agent_planner.py` | _VERIFY_PROMPT: 불확실 시 false 반환 지침 | ✅ |
-| `real_verifier.py` | _VERIFY_CODE_PROMPT: Windows 경로 예시 추가 | ✅ |
-| `memory_manager.py` | _EPHEMERAL_FACT_KEYS: 22개 일시적 키 차단 | ✅ |
-| `memory_manager.py` | _is_persistent_fact(): FACT 저장 전 검증 | ✅ |
-| `memory_manager.py` | clean_response(): 일본어·CJK 한자 제거 | ✅ |
-| `commands/ai_command.py` | **사용 중단된 _parse_pseudo_tool_calls 로직 삭제** | ✅ |
-| `autonomous_executor.py` | **execution_globals에 desktop_path 변수 주입** | ✅ |
-| `llm_provider.py` | **요청 의도 분석 기반 tool_choice 강화 (screen / schedule / multi-step)** | ✅ |
-| `llm_provider.py` | **tool call 실패 시 실행형 요청을 run_agent_task 등으로 자동 승격** | ✅ |
-| `llm_provider.py` | **tool trace 로그(`logs/tool_trace_YYYYMMDD.log`) 추가** | ✅ |
-| `agent_planner.py` | **planner raw trace 로그(`logs/planner_trace_YYYYMMDD.log`) 추가** | ✅ |
-| `agent_planner.py` | **균형 괄호 기반 JSON 추출로 파싱 복원력 강화** | ✅ |
-| `real_verifier.py` | **verification code trace 로그(`logs/verifier_trace_YYYYMMDD.log`) 추가** | ✅ |
-| `text_interface.py` | **텍스트 UI도 AICommand 자율 실행 경로 재사용** | ✅ |
-| `web_tools.py` | **ddgs 우선 사용 + DuckDuckGo HTML 폴백 검색 추가** | ✅ |
-| `VoiceCommand.py` | **[진지]/(진지) 감정 태그 통합 파싱 및 UI 이모지 정리** | ✅ |
-| `autonomous_executor.py` | **save_document / choose_document_format / PDF 저장 지원 추가** | ✅ |
-| `agent_planner.py` | **템플릿 작업군 확장: 폴더 생성 / 뉴스 검색·요약·저장 / 파일 요약 / 시스템 정보 / 디렉터리 목록** | ✅ |
-| `agent_planner.py` | **LLM fix_step 실패 시 규칙 기반 heuristic 복구 추가** | ✅ |
-| `requirements.txt` | **ddgs, reportlab 의존성 반영** | ✅ |
-| `build_exe.py` | **ddgs/reportlab/psutil 패키지 포함 갱신** | ✅ |
-| `automation_helpers.py` | **GUI / 브라우저 / 앱 자동화 공통 헬퍼 신설** | ✅ |
-| `autonomous_executor.py` | **GUI/브라우저 자동화 헬퍼 주입(open_url, launch_app, click/type, screenshot, clipboard, browser_login 등)** | ✅ |
-| `agent_planner.py` | **앱 실행 / URL 열기 / 디렉터리 목록 / 시스템 보고 / 파일 요약 등 템플릿 확장** | ✅ |
-| `requirements.txt` | **pyautogui, pyperclip, pygetwindow, selenium, webdriver-manager 추가** | ✅ |
-| `README.md` | **최신 자율 실행 범위 및 GUI 자동화 설명 반영** | ✅ |
-| `CLAUDE.md` | **개발용 아키텍처 문서 최신화** | ✅ |
+| 파일 | 수정 내용 |
+|------|----------|
+| `commands/ai_command.py` | `_SCHEDULE_PATTERN_STRINGS` 복합 시간 패턴(시간+분+초 등) 단일 패턴보다 앞에 배치 — "1시간 30분 뒤" 정확 추출 |
+| `commands/ai_command.py` | `_handle_list_scheduled_tasks` 날짜 형식: `strftime("%m/%d %H:%M")` → `_format_datetime_kr(dt)` |
+| `agent/llm_provider.py` | `feed_tool_result` max_tokens 150 → 300 (비-Anthropic 경로) |
+
+### 4.1 버그 수정
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `agent/llm_provider.py` | `shutdown_computer` · `list_scheduled_tasks` · `cancel_scheduled_task` 스키마 누락 → 추가 |
+| `agent/llm_provider.py` | `set_timer` description 구체화 (알림용 타이머임을 명시, 지연 실행은 `schedule_task` 사용 유도) |
+| `agent/llm_provider.py` | `schedule_task` description 구체화 (컴퓨터 종료 예시 포함) |
+| `agent/llm_provider.py` | `_analyze_request` force_tool 키워드를 단독 토큰 → 2어절 구절로 좁힘 (오발동 방지) |
+| `agent/llm_provider.py` | `chat()` max_tokens 200→400 (OpenAI), 300→400 (Anthropic) |
+| `agent/llm_provider.py` | `_anthropic_feed_tool_result` max_tokens 200→500 |
+| `commands/ai_command.py` | `_handle_set_timer`: shutdown 요청에 set_timer 잘못 호출 시 SystemCommand 리다이렉트 |
+| `commands/ai_command.py` | `_handle_get_current_time`: 자정(0시) → "오전 0시" 대신 "오전 12시" |
+| `commands/ai_command.py` | `_parse_relative_schedule`: 첫 매칭 즉시 return → 전체 단위 누산 방식 ("1시간 30분 뒤" 정확 파싱) |
+| `commands/ai_command.py` | `_format_datetime_kr`: 제로패딩 제거 + 오전/오후 포함 자연어 형식 |
+| `commands/ai_command.py` | `_handle_schedule_task`: 종료/재시작 goal 감지 시 SystemCommand 직접 라우팅 |
+| `commands/system_command.py` | 재시작(`shutdown /r`) / 종료취소(`shutdown /a`) 구현 |
+| `commands/system_command.py` | `_parse_scheduled_time`: 복합 상대시간 누산 파싱 ("1시간 30분 뒤" 정확 처리) |
+| `commands/system_command.py` | `_cancel_shutdown`: subprocess 실행 후 returncode 검증하여 TTS 출력 |
+| `commands/system_command.py` | `_format_time_kr`: 분 제로패딩 `:02d` 제거 |
+| `commands/timer_command.py` | 잔여시간 조회 ("타이머 얼마 남았어?", "타이머 확인") 추가 |
+| `commands/timer_command.py` | `matches()` "알람" 키워드 추가 (LLM 경유 없이 직접 처리) |
+| `commands/timer_command.py` | `if minutes:` → `if minutes is not None:` (0.0 처리 정확화) |
+| `services/timer_manager.py` | `parse_timer_command`: 숫자 연결 버그(130분) → 정규식 개별 파싱 (시간·분·초 각각 처리) |
+| `services/timer_manager.py` | `set_timer`: 1초 폴링 루프 → 단일 `threading.Timer` (15분 타이머 객체 생성 900→1회) |
+| `services/timer_manager.py` | `set_timer`: 초(seconds) 단위 지원, `timer.daemon = True` 추가 |
+
+### 4.2 빌드 수정 (이전 세션)
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `build_exe.py` | `--nofollow-import-to=pygments` 추가 (clcache preprocessor 실패 방지) |
+| `build_exe.py` | `--nofollow-import-to=reportlab` 추가 (C 확장 충돌 방지) |
+| `.github/workflows/build-release.yml` | `timeout-minutes: 30` → `50` |
 
 ---
 
-## 4. 핵심 미해결 문제 (다음 세션에서 반드시 확인)
+## 5. 현재 파일별 상태
 
-### 🔴 문제 1: Groq Llama-3.3-70b의 지독한 Tool Call 거부 (심각)
+### `commands/system_command.py`
+- 종료(`/s`), 재시작(`/r`), 종료취소(`/a`) 모두 구현
+- 상대시간: 시간·분·초 단위 누산 파싱 (복합 표현 지원)
+- 절대시간: 오전/오후 N시 M분 파싱 → 당일/익일 자동 선택
+- `_cancel_shutdown`: 실행 후 returncode 검증 → 성공 시에만 "취소했습니다" TTS
 
-**증상:**
-가짜 도구 호출 폴백(`LLMProvider`)을 추가했음에도 불구하고, 모델이 JSON을 생성하다가 중간에 끊어버리거나(`"path": "바"` 등), 실제 도구 호출을 수행하지 않고 텍스트로만 실행 계획을 나열함. 
-특히 `run_agent_task` 같은 복합 작업에서 지시를 무시하고 자신의 내부 지식으로 대충 대답하려는 경향이 강함.
+### `services/timer_manager.py`
+- `parse_timer_command`: 정규식 기반 시간·분·초 개별 파싱, float 반환
+- `set_timer`: `threading.Timer(total_seconds, callback)` 단일 예약, daemon=True
+- `get_remaining_time`: 잔여 초 반환 (TimerCommand에서 TTS로 출력)
 
-**현재 상태:**
-- `llm_provider.py`에 요청 의도 분석이 추가되어, 화면 조회/예약/복합 작업은 `tool_choice="required"` 또는 특정 function 강제로 요청함.
-- 모델이 여전히 tool call을 거부해도, 실행형 요청이면 `run_agent_task` 등으로 자동 승격하는 폴백이 추가됨.
-- 그래도 `AgentPlanner`가 생성하는 단계별 코드(`decompose`) 자체는 Llama-3.3-70b 기반이라 신뢰도가 낮을 수 있음.
-- 이를 완화하기 위해 `AgentPlanner`에 자주 쓰는 작업군 템플릿을 추가하여 LLM 자유 계획 의존도를 낮춤.
+### `agent/llm_provider.py`
+- 도구 16개 정의 (shutdown_computer 등 3개 스키마 추가 완료)
+- `chat()` max_tokens: Anthropic 400, OpenAI 400
+- `chat_with_tools()` max_tokens: 1000 (기존 유지)
+- `_anthropic_feed_tool_result` max_tokens: 500
+- `force_tool` 키워드: 단독 토큰 → 2어절 구절 (오발동 방지)
 
-**대응 방안:**
-1. **모델 교체**: `ari_settings.json`에서 `llm_provider`를 `openai`(gpt-4o-mini 이상) 또는 `anthropic`으로 변경하여 테스트 권장.
-2. **프롬프트 극단적 단순화**: 플래너와 시스템 프롬프트의 불필요한 수식어를 모두 제거.
-3. **직접 명령 유도**: 사용자에게 "도구 호출 모드로 실행해" 같은 명시적 힌트를 주도록 유도.
-
----
-
-### 🔴 문제 2: 바탕화면 작업 실행 실패
-
-**증상:**
-`desktop_path` 변수를 주입했으나, 실제 실행 단계(`AgentOrchestrator`)에서 폴더 생성이나 파일 저장이 이루어지지 않음.
-
-**원인 추정:**
-- `AgentPlanner`가 생성한 파이썬 코드에서 `os.makedirs`를 누락하거나, 잘못된 변수명을 사용함.
-- `web_search` 결과가 비어있어 저장할 내용이 없는 경우 예외 처리 미흡.
+### `commands/ai_command.py`
+- `_handle_set_timer`: shutdown 리다이렉트 fallback 포함
+- `_handle_shutdown_computer`: 시간 표현 있으면 schedule_task, 없으면 SystemCommand 직접
+- `_handle_schedule_task`: 종료/재시작 goal → SystemCommand 직접 라우팅
+- `_parse_relative_schedule`: 전체 누산 방식 (일·시간·분·초 복합 지원)
+- `_format_datetime_kr`: 오전/오후 포함, 제로패딩 없는 자연어 형식
 
 ---
 
-### 🟡 문제 3: FACT 오염 및 컨텍스트 압박 (주시 필요)
+## 6. 알려진 미해결 문제
 
-Llama 모델은 컨텍스트가 길어질수록 성능이 급격히 저하됨. 주기적인 `conversation_history.json` 초기화 또는 FACT 정리 필요.
+### 🟡 Groq Llama-3.3-70b tool call 신뢰도
 
----
+Llama 계열 모델은 복잡한 tool calling 상황에서 텍스트 응답으로 대체하는 경향 있음.
+`_recover_tool_calls_from_response` fallback 파서로 일부 복구 중이나 근본 해결은 모델 교체 권장.
 
-## 5. 파일별 현재 상태 요약
+**대응:**
+- 설정 → AI&TTS → 제공자: `openai` (gpt-4o-mini 이상) 또는 `anthropic` 으로 변경 시 tool call 신뢰도 대폭 향상
+- `ari_settings.json`의 `llm_model` 비워두면 각 제공자 기본 모델 자동 사용
 
-### `llm_provider.py`
-- 요청 문장을 `질문/관찰/예약/복합 실행` 관점으로 분석해 도구 사용을 강제.
-- 가짜 도구 호출 감지 및 실행형 요청 자동 승격 폴백 탑재.
-- `logs/tool_trace_YYYYMMDD.log`에 raw 응답과 tool routing 기록.
-- 파일/폴더/문서/시스템 정보 관련 요청도 더 적극적으로 `run_agent_task`로 라우팅.
+### 🟡 FACT 오염 가능성
 
-### `agent_planner.py`
-- `desktop_path` 변수 사용 지침 추가됨.
-- 균형 괄호 기반 JSON 추출 추가로 잘린 JSON에 대한 복원력이 조금 개선됨.
-- `logs/planner_trace_YYYYMMDD.log`에 decompose/fix/verify raw 출력 기록.
-- 템플릿 작업군:
-  - 폴더 생성
-  - 웹 검색→요약→저장
-  - 오늘 뉴스 검색→기사 fetch→구조화 요약 저장
-  - 로컬 파일 요약 저장
-  - 시스템 정보 보고서 저장
-  - 디렉터리 목록 저장
-  - URL 열기 / 앱 실행
-- `fix_step` JSON 파싱 실패 시 heuristic 규칙 기반 복구 적용.
-
-### `autonomous_executor.py`
-- `desktop_path` 전역 주입 완료.
-- `save_document()` / `choose_document_format()` 추가.
-- `txt`, `md`, `pdf` 저장 지원 (`pdf`는 reportlab 사용).
-- GUI/브라우저 자동화 함수 주입:
-  - `open_url`, `open_path`, `launch_app`
-  - `click_screen`, `move_mouse`, `type_text`, `press_keys`, `hotkey`
-  - `take_screenshot`, `read_clipboard`, `write_clipboard`
-  - `wait_for_window`, `get_active_window_title`, `browser_login`
-
-### `real_verifier.py`
-- 생성된 검증 코드를 `logs/verifier_trace_YYYYMMDD.log`에 남김.
-
-### `text_interface.py`
-- 텍스트 대화창도 AICommand 자율 실행 경로를 그대로 사용하여 실제 tool call / agent task 수행 가능.
-
-### `web_tools.py`
-- `ddgs` 우선 사용.
-- 미설치/실패 시 DuckDuckGo HTML 결과 페이지 파싱 폴백 지원.
-
-### `VoiceCommand.py`
-- `(감정)`과 `[감정]` 모두 처리.
-- 말풍선/텍스트 UI에서 태그를 제거하고 이모지 기반으로 표시.
-
-### `automation_helpers.py`
-- GUI / 브라우저 / 앱 자동화 공통 헬퍼 모듈.
-- optional dependency 기반:
-  - pyautogui / pyperclip / pygetwindow
-  - selenium / webdriver-manager
-- MFA, CAPTCHA, 동적 selector가 심한 사이트는 여전히 불안정.
+LLM이 일시적 상태를 FACT로 저장할 수 있음.
+`memory_manager.py`의 `_EPHEMERAL_FACT_KEYS` (22개)로 차단 중이나 완전 차단은 아님.
+주기적으로 `conversation_history.json` 초기화 권장.
 
 ---
 
-## 6. 다음 세션(또는 지금) 할 일
-
-1. **[최우선] 모델 성능 검증**: Groq의 한계인지 확인하기 위해 OpenAI API 키가 있다면 모델을 `gpt-4o` 계열로 바꿔서 테스트.
-2. **[중요] 플래너 로그 강화**: `agent_planner.py`에서 LLM이 실제로 어떤 JSON을 뱉었는지 로그를 파일로 남겨서 분석.
-3. **[선택] 수동 도구 호출 강제**: `tool_choice="required"` 옵션을 일시적으로 켜서 강제로 도구를 호출하게 함.
-
-
-`_EPHEMERAL_FACT_KEYS`로 22개 키워드 차단 중이지만, LLM이 다른 키로 일시적 상태를 저장할 수 있음.
-근본 해결: `memory_manager.py`의 `_is_persistent_fact()`에 키워드 계속 추가하거나, FACT 저장을 화이트리스트 방식으로 전환.
-
----
-
-## 5. 파일별 현재 상태 요약
-
-### `llm_provider.py` (핵심 파일)
-- `chat_with_tools()`: temperature=0.3, max_tokens=1000, tool_choice="auto"
-- `_build_system()`: 감각 데이터 주입 + 7개 중요 지침 + 기억/학습 지침
-- `_filter_korean()`: 가짜 명령 블록 제거 → 파일 경로 제거 → 비한국어 제거
-- `get_available_tools()`: 14개 도구 정의 (get_screen_status, play_youtube, set_timer, cancel_timer, get_weather, adjust_volume, get_current_time, execute_python_code, execute_shell_command, run_agent_task, web_search, web_fetch, schedule_task, cancel_scheduled_task, list_scheduled_tasks)
-
-### `commands/ai_command.py` (실행 진입점)
-- `execute()`: chat_with_tools → 폴백 파서 → tool 실행 → agentic followup
-- `_parse_pseudo_tool_calls()`: 텍스트 기반 가짜 명령 감지 → 실제 tool call 변환
-- `_handle_get_screen_status()`: 화면 상태 수집 및 반환
-- `_handle_agent_task()`: orchestrator.run(goal) 호출
-
-### `agent_orchestrator.py`
-- `_group_by_dependency()`: 모든 단계 순차 실행 (병렬 실행 제거)
-- `_verify()`: 실패 단계 있으면 즉시 False, RealVerifier 실패 시 TTS 경고
-
-### `agent_planner.py`
-- `_DECOMPOSE_PROMPT`: Windows 경로 공식, makedirs 필수, condition 의존성 지침
-- `_FIX_PROMPT`: Windows 경로 경고
-- `_VERIFY_PROMPT`: 불확실 시 false 반환
-
-### `memory_manager.py`
-- `_EPHEMERAL_FACT_KEYS`: 22개 일시적 키 블랙리스트
-- `_is_persistent_fact()`: FACT 저장 전 검증
-- `clean_response()`: 일본어·CJK 한자 제거
-
-### `user_context.json`
-- 현재 오염 없음 (facts: {})
-
----
-
-## 6. 다음 세션에서 할 일 (우선순위 순)
-
-1. **[최우선] tool call 실제 동작 여부 확인**
-   - 앱 실행 → "바탕화면에 폴더 만들고 오늘 뉴스 저장해줘" 입력
-   - 로그에서 `AI tool 실행: run_agent_task` 또는 `logs/tool_trace_YYYYMMDD.log`의 routing 확인
-   - 만약 여전히 안 되면 → planner trace와 verifier trace를 함께 보고 모델 교체 판단
-
-2. **[중요] 템플릿 범위 바깥 작업군 계속 확대**
-   - 파일 이름 변경 / 파일 병합 / CSV 요약 / 로그 분석 / 앱 실행/종료 / 브라우저 반복 작업 등
-   - 자주 실패하는 목표는 템플릿으로 우선 처리하여 LLM 계획 의존도 축소
-
-3. **[중요] planner 품질 확인**
-   - `logs/planner_trace_YYYYMMDD.log`에서 `decompose` raw 응답 확인
-   - JSON이 깨져 있거나 내용이 부실하면 Groq 플래너 한계로 판단
-
-4. **[중요] 시스템 프롬프트 길이 최적화**
-   - `_build_system()` 출력이 너무 길면 Llama가 tool call 포기
-   - 불필요한 지침 통합·축소 검토
-
-5. **[선택] Groq 모델 변경 테스트**
-   - `ari_settings.json`의 `llm_model` 값을 빈 문자열로 두면 기본값 `llama-3.3-70b-versatile` 사용
-   - tool call 신뢰도 비교: llama-3.3-70b vs mixtral-8x7b-32768
-
----
-
-## 7. 실행 방법
+## 7. 개발 검증 명령
 
 ```bash
-pip install -r requirements.txt
-# 필요 시 추가 패키지:
-# pip install ddgs pyautogui pyperclip pygetwindow selenium webdriver-manager reportlab
+# 실행
+py -3.11 VoiceCommand/Main.py
 
-python Main.py
+# 전체 검증
+py -3.11 VoiceCommand/validate_repo.py
+
+# 단위 테스트
+py -3.11 -m unittest discover -s VoiceCommand/tests -p "test_*.py"
+
+# EXE 빌드
+py -3.11 VoiceCommand/build_exe.py [--clean] [--onefile]
 ```
 
 ---
@@ -300,5 +178,5 @@ python Main.py
 새 AI 세션 시작 시:
 1. 이 파일(`SESSION_CONTEXT.md`)을 먼저 제공
 2. 작업하려는 파일을 추가로 제공
-3. 섹션 4(미해결 문제)부터 읽고 시작
-4. 작업 완료 후 이 파일 업데이트
+3. 섹션 6(미해결 문제)부터 읽고 시작
+4. 작업 완료 후 섹션 4(수정 내역)와 섹션 5(파일별 상태) 업데이트

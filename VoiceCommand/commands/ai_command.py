@@ -27,10 +27,16 @@ class AICommand(BaseCommand):
     )
     _SHUTDOWN_KEYWORDS = ("컴퓨터", "pc", "시스템", "윈도우")
     _SCHEDULE_PATTERN_STRINGS = (
-        r'(\d+\s*초\s*(?:후|뒤))',
-        r'(\d+\s*분\s*(?:후|뒤))',
-        r'(\d+\s*시간\s*(?:후|뒤))',
+        # 복합 상대 시간 (순서 중요: 긴 표현을 먼저 매칭)
+        r'(\d+\s*시간\s*\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
+        r'(\d+\s*시간\s*\d+\s*분\s*(?:후|뒤))',
+        r'(\d+\s*시간\s*\d+\s*초\s*(?:후|뒤))',
+        r'(\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
+        # 단일 상대 시간
         r'(\d+\s*일\s*(?:후|뒤))',
+        r'(\d+\s*시간\s*(?:후|뒤))',
+        r'(\d+\s*분\s*(?:후|뒤))',
+        r'(\d+\s*초\s*(?:후|뒤))',
         r'(매시간)',
         r'(매일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
         r'(내일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
@@ -145,8 +151,12 @@ class AICommand(BaseCommand):
     def _handle_get_current_time(self, args: dict) -> Optional[str]:
         now = datetime.now()
         am_pm = "오전" if now.hour < 12 else "오후"
-        hour = now.hour if now.hour < 12 else (now.hour - 12 if now.hour > 12 else 12)
-        return f"현재 시간은 {am_pm} {hour}시 {now.minute}분입니다."
+        hour = now.hour if now.hour <= 12 else now.hour - 12
+        if hour == 0:
+            hour = 12
+        if now.minute:
+            return f"현재 시간은 {am_pm} {hour}시 {now.minute}분입니다."
+        return f"현재 시간은 {am_pm} {hour}시입니다."
 
     def _handle_shutdown_computer(self, args: dict) -> Optional[str]:
         scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
@@ -250,6 +260,19 @@ class AICommand(BaseCommand):
         if not goal or not when:
             return "예약할 작업과 시간을 알려주세요."
 
+        # 종료/재시작 goal → 에이전트 루프 대신 SystemCommand 직접 라우팅
+        _SHUTDOWN_GOALS = ("컴퓨터 종료", "pc 종료", "시스템 종료", "전원 끄기", "shutdown")
+        _RESTART_GOALS  = ("컴퓨터 재시작", "재부팅", "restart")
+        goal_lower = goal.lower()
+        if any(k in goal_lower for k in _SHUTDOWN_GOALS):
+            from VoiceCommand import execute_command
+            execute_command(f"{when}에 컴퓨터 꺼줘")
+            return None
+        if any(k in goal_lower for k in _RESTART_GOALS):
+            from VoiceCommand import execute_command
+            execute_command(f"{when}에 컴퓨터 재시작해줘")
+            return None
+
         if self.scheduler is None:
             return "스케줄러를 사용할 수 없습니다."
 
@@ -289,7 +312,7 @@ class AICommand(BaseCommand):
         for t in tasks:
             try:
                 dt = datetime.fromisoformat(t.next_run)
-                time_str = dt.strftime("%m/%d %H:%M")
+                time_str = self._format_datetime_kr(dt)
             except Exception:
                 time_str = t.next_run
             repeat_str = " [반복]" if t.repeat else ""
@@ -356,18 +379,19 @@ class AICommand(BaseCommand):
 
     def _parse_relative_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
         patterns = (
-            (r'(\d+)\s*초\s*(?:후|뒤)', "seconds"),
-            (r'(\d+)\s*분\s*(?:후|뒤)', "minutes"),
-            (r'(\d+)\s*시간\s*(?:후|뒤)', "hours"),
             (r'(\d+)\s*일\s*(?:후|뒤)', "days"),
+            (r'(\d+)\s*시간\s*(?:후|뒤)', "hours"),
+            (r'(\d+)\s*분\s*(?:후|뒤)', "minutes"),
+            (r'(\d+)\s*초\s*(?:후|뒤)', "seconds"),
         )
+        total = timedelta()
+        found = False
         for pattern, unit in patterns:
             match = re.search(pattern, when_kr)
-            if not match:
-                continue
-            amount = int(match.group(1))
-            return now + timedelta(**{unit: amount})
-        return None
+            if match:
+                total += timedelta(**{unit: int(match.group(1))})
+                found = True
+        return now + total if found else None
 
     def _parse_minute_of_hour_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
         if "시" in when_kr:
@@ -395,7 +419,13 @@ class AICommand(BaseCommand):
         return hour
 
     def _format_datetime_kr(self, dt: datetime) -> str:
-        return f"{dt.month:02d}월 {dt.day:02d}일 {dt.hour:02d}시 {dt.minute:02d}분"
+        ampm = "오전" if dt.hour < 12 else "오후"
+        hour = dt.hour if dt.hour <= 12 else dt.hour - 12
+        if hour == 0:
+            hour = 12
+        if dt.minute:
+            return f"{dt.month}월 {dt.day}일 {ampm} {hour}시 {dt.minute}분"
+        return f"{dt.month}월 {dt.day}일 {ampm} {hour}시"
 
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
 

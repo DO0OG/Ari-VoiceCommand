@@ -3,6 +3,7 @@
 일반 타이머와 종료 타이머 지원
 """
 import logging
+import re
 import threading
 from datetime import datetime, timedelta
 
@@ -25,26 +26,39 @@ class TimerManager:
         Args:
             minutes: 타이머 시간 (분)
         """
-        def timer_thread():
-            if self.active_timer and datetime.now() >= self.active_timer["end_time"]:
-                self.tts_callback(f"{minutes}분 타이머가 완료되었습니다.")
-                self.active_timer = None
-            elif self.active_timer:
-                # 새 타이머를 active_timer에 갱신해야 cancel()이 계속 유효함
-                new_timer = threading.Timer(1, timer_thread)
-                self.active_timer["timer"] = new_timer
-                new_timer.start()
-
         if self.active_timer:
             self.active_timer["timer"].cancel()
 
-        end_time = datetime.now() + timedelta(minutes=minutes)
+        total_seconds = minutes * 60
+        end_time = datetime.now() + timedelta(seconds=total_seconds)
+
+        def format_duration_label(total_minutes):
+            mins = int(total_minutes)
+            secs = round((total_minutes - mins) * 60)
+            if secs == 60:
+                mins += 1
+                secs = 0
+            if mins > 0 and secs > 0:
+                return f"{mins}분 {secs}초"
+            if mins > 0:
+                return f"{mins}분"
+            return f"{secs}초"
+
+        label = format_duration_label(minutes)
+
+        def on_timer_expired():
+            self.active_timer = None
+            self.tts_callback(f"{label} 타이머가 완료되었습니다.")
+            logging.info(f"타이머 완료: {label}")
+
+        timer = threading.Timer(total_seconds, on_timer_expired)
+        timer.daemon = True
         self.active_timer = {
-            "timer": threading.Timer(1, timer_thread),
+            "timer": timer,
             "end_time": end_time
         }
-        self.active_timer["timer"].start()
-        self.tts_callback(f"{minutes}분 타이머를 설정했습니다.")
+        timer.start()
+        self.tts_callback(f"{label} 타이머를 설정했습니다.")
         logging.info(f"타이머 설정: {minutes}분 ({end_time.strftime('%H:%M:%S')}까지)")
 
     def cancel(self):
@@ -70,16 +84,31 @@ class TimerManager:
 
     def parse_timer_command(self, command):
         """
-        명령어에서 타이머 시간 추출
+        명령어에서 타이머 시간을 분 단위로 추출.
+        '1분 30초', '2시간 30분', '90초' 등 복합 표현 지원.
 
         Args:
             command: 명령어 문자열 (예: "10분 타이머")
 
         Returns:
-            int: 추출된 시간 (분), 실패 시 None
+            float: 추출된 시간 (분), 실패 시 None
         """
-        try:
-            minutes = int("".join(filter(str.isdigit, command)))
-            return minutes
-        except ValueError:
-            return None
+        normalized = re.sub(r"\s+", " ", command or "").strip()
+        total_minutes = 0.0
+        found = False
+
+        hours_match = re.search(r'(\d+)\s*시간', normalized)
+        minutes_match = re.search(r'(\d+)\s*분', normalized)
+        seconds_match = re.search(r'(\d+)\s*초', normalized)
+
+        if hours_match:
+            total_minutes += int(hours_match.group(1)) * 60
+            found = True
+        if minutes_match:
+            total_minutes += int(minutes_match.group(1))
+            found = True
+        if seconds_match:
+            total_minutes += int(seconds_match.group(1)) / 60
+            found = True
+
+        return total_minutes if found else None
