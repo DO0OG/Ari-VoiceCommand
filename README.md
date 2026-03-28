@@ -122,7 +122,7 @@
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/DO0OG/AI-Assistant.git
+git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd AI-Assistant
 
 # 2. 가상환경 생성 (권장)
