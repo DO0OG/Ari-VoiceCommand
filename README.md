@@ -231,6 +231,19 @@ py -3.11 VoiceCommand/install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 ---
 
+## 캐릭터 커스터마이징
+
+`VoiceCommand/images/` 폴더의 PNG 파일을 교체하여 커스터마이징할 수 있습니다.
+
+- **형식**: 배경이 투명한 PNG
+- **파일명**: `동작이름번호.png` (예: `idle1.png`, `walk1.png`)
+- **동작 종류**: `idle`, `walk`, `drag`, `fall`, `sit`, `surprised`, `sleep`, `climb` 등
+
+> 상세 제작 가이드: [캐릭터 이미지 가이드](docs/CHARACTER_IMAGES.md)
+
+
+---
+
 ## 아키텍처
 
 ```
@@ -314,15 +327,3 @@ py -3.11 VoiceCommand/validate_repo.py
 py -3.11 VoiceCommand/validate_repo.py --compile-only
 py -3 -m unittest discover -s VoiceCommand/tests -p "test_*.py"
 ```
-
----
-
-## 캐릭터 커스터마이징
-
-`VoiceCommand/images/` 폴더의 PNG 파일을 교체하여 커스터마이징할 수 있습니다.
-
-- **형식**: 배경이 투명한 PNG
-- **파일명**: `동작이름번호.png` (예: `idle1.png`, `walk1.png`)
-- **동작 종류**: `idle`, `walk`, `drag`, `fall`, `sit`, `surprised`, `sleep`, `climb` 등
-
-> 상세 제작 가이드: [캐릭터 이미지 가이드](docs/CHARACTER_IMAGES.md)
