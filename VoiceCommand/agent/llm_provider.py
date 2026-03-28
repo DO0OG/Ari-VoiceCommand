@@ -149,12 +149,13 @@ class LLMProvider:
                 "type": "function",
                 "function": {
                     "name": "set_timer",
-                    "description": "알림용 카운트다운 타이머를 설정합니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요.",
+                    "description": "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "minutes": {"type": "integer", "description": "분"},
                             "seconds": {"type": "integer", "description": "초"},
+                            "name": {"type": "string", "description": "타이머 이름 (선택)"},
                         },
                         "required": ["minutes"],
                     },
@@ -164,8 +165,8 @@ class LLMProvider:
                 "type": "function",
                 "function": {
                     "name": "cancel_timer",
-                    "description": "진행 중인 타이머를 취소합니다.",
-                    "parameters": {"type": "object", "properties": {}},
+                    "description": "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다.",
+                    "parameters": {"type": "object", "properties": {"name": {"type": "string", "description": "취소할 타이머 이름 (선택)"}}},
                 },
             },
             {
@@ -343,7 +344,18 @@ class LLMProvider:
 
     def register_plugin_tool(self, schema: dict) -> None:
         """플러그인 도구 스키마를 등록한다."""
+        tool_name = str(schema.get("function", {}).get("name", "") or "")
+        self._plugin_tools = [
+            tool for tool in self._plugin_tools
+            if tool.get("function", {}).get("name", "") != tool_name
+        ]
         self._plugin_tools.append(schema)
+
+    def unregister_plugin_tool(self, tool_name: str) -> None:
+        self._plugin_tools = [
+            tool for tool in self._plugin_tools
+            if tool.get("function", {}).get("name", "") != tool_name
+        ]
 
     # ── 대화 ───────────────────────────────────────────────────────────────────
 

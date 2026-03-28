@@ -1,98 +1,110 @@
-"""
-타이머 관리 모듈
-일반 타이머와 종료 타이머 지원
-"""
+"""타이머 관리 모듈."""
+from __future__ import annotations
+
 import logging
 import re
 import threading
-from datetime import datetime, timedelta
+import time
+from dataclasses import dataclass, field
+
+
+@dataclass
+class TimerEntry:
+    name: str
+    minutes: float
+    callback: callable
+    created_at: float = field(default_factory=time.time)
+    order: int = 0
+
+    def __post_init__(self):
+        delay_seconds = max(0.0, self.minutes * 60)
+        self.deadline = self.created_at + delay_seconds
+        self._timer = threading.Timer(delay_seconds, self.callback)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def cancel(self):
+        self._timer.cancel()
+
+    def remaining_seconds(self) -> float:
+        return max(0.0, self.deadline - time.time())
 
 
 class TimerManager:
-    """타이머 관리 클래스"""
+    """복수 타이머 관리 클래스."""
+
+    _MAX_TIMERS = 10
 
     def __init__(self, tts_callback=None):
-        """
-        Args:
-            tts_callback: TTS 출력을 위한 콜백 함수
-        """
-        self.active_timer = None
-        self.tts_callback = tts_callback or (lambda x: print(x))
+        self._timers: dict[str, TimerEntry] = {}
+        self._lock = threading.Lock()
+        self.tts_callback = tts_callback or (lambda x: logging.info(x))
+        self._order_counter = 0
 
-    def set_timer(self, minutes):
-        """
-        일반 타이머 설정
+    def set_timer(self, minutes: float, name: str = "") -> str:
+        with self._lock:
+            normalized_name = (name or "").strip() or self._auto_name()
+            replacing = normalized_name in self._timers
+            if not replacing and len(self._timers) >= self._MAX_TIMERS:
+                raise ValueError(f"타이머는 최대 {self._MAX_TIMERS}개까지 설정할 수 있습니다.")
+            if replacing:
+                self._timers[normalized_name].cancel()
 
-        Args:
-            minutes: 타이머 시간 (분)
-        """
-        if self.active_timer:
-            self.active_timer["timer"].cancel()
+            label = self.format_duration_label(minutes)
+            self._order_counter += 1
+            entry = TimerEntry(
+                name=normalized_name,
+                minutes=minutes,
+                callback=lambda timer_name=normalized_name, timer_label=label: self._on_alarm(timer_name, timer_label),
+                order=self._order_counter,
+            )
+            self._timers[normalized_name] = entry
 
-        total_seconds = minutes * 60
-        end_time = datetime.now() + timedelta(seconds=total_seconds)
-
-        def format_duration_label(total_minutes):
-            mins = int(total_minutes)
-            secs = round((total_minutes - mins) * 60)
-            if secs == 60:
-                mins += 1
-                secs = 0
-            if mins > 0 and secs > 0:
-                return f"{mins}분 {secs}초"
-            if mins > 0:
-                return f"{mins}분"
-            return f"{secs}초"
-
-        label = format_duration_label(minutes)
-
-        def on_timer_expired():
-            self.active_timer = None
-            self.tts_callback(f"{label} 타이머가 완료되었습니다.")
-            logging.info(f"타이머 완료: {label}")
-
-        timer = threading.Timer(total_seconds, on_timer_expired)
-        timer.daemon = True
-        self.active_timer = {
-            "timer": timer,
-            "end_time": end_time
-        }
-        timer.start()
-        self.tts_callback(f"{label} 타이머를 설정했습니다.")
-        logging.info(f"타이머 설정: {minutes}분 ({end_time.strftime('%H:%M:%S')}까지)")
+        if normalized_name.startswith("타이머 "):
+            self.tts_callback(f"{label} 타이머를 설정했습니다.")
+        else:
+            self.tts_callback(f"'{normalized_name}' 타이머를 설정했습니다. ({label})")
+        logging.info("타이머 설정: %s (%s)", normalized_name, label)
+        return normalized_name
 
     def cancel(self):
-        """활성 타이머 취소"""
-        if self.active_timer:
-            self.active_timer["timer"].cancel()
-            self.active_timer = None
+        self.cancel_timer()
+
+    def cancel_timer(self, name: str = "") -> bool:
+        with self._lock:
+            target_name = (name or "").strip()
+            if not target_name:
+                if not self._timers:
+                    self.tts_callback("현재 실행 중인 타이머가 없습니다.")
+                    return False
+                target_name = max(self._timers, key=lambda key: self._timers[key].order)
+            entry = self._timers.pop(target_name, None)
+            if entry is None:
+                self.tts_callback(f"'{target_name}' 타이머를 찾지 못했습니다.")
+                return False
+            entry.cancel()
+
+        if target_name.startswith("타이머 "):
             self.tts_callback("타이머가 취소되었습니다.")
         else:
-            self.tts_callback("현재 실행 중인 타이머가 없습니다.")
+            self.tts_callback(f"'{target_name}' 타이머를 취소했습니다.")
+        return True
 
     def get_remaining_time(self):
-        """
-        남은 시간 조회
+        with self._lock:
+            if not self._timers:
+                return None
+            latest = max(self._timers.values(), key=lambda item: item.order)
+            return latest.remaining_seconds()
 
-        Returns:
-            float: 남은 시간 (초), 타이머 없으면 None
-        """
-        if self.active_timer:
-            remaining = (self.active_timer["end_time"] - datetime.now()).total_seconds()
-            return max(0, remaining)
-        return None
+    def list_timers(self) -> list[dict]:
+        with self._lock:
+            return [
+                {"name": name, "remaining_seconds": entry.remaining_seconds()}
+                for name, entry in sorted(self._timers.items(), key=lambda item: item[1].order)
+            ]
 
     def parse_timer_command(self, command):
-        """
-        명령어에서 타이머 시간을 분 단위로 추출.
-        '1분 30초', '2시간 30분', '90초' 등 복합 표현 지원.
-
-        Args:
-            command: 명령어 문자열 (예: "10분 타이머")
-
-        Returns:
-            float: 추출된 시간 (분), 실패 시 None
-        """
         normalized = re.sub(r"\s+", " ", command or "").strip()
         total_minutes = 0.0
         found = False
@@ -112,3 +124,33 @@ class TimerManager:
             found = True
 
         return total_minutes if found else None
+
+    @staticmethod
+    def format_duration_label(total_minutes: float) -> str:
+        mins = int(total_minutes)
+        secs = round((total_minutes - mins) * 60)
+        if secs == 60:
+            mins += 1
+            secs = 0
+        if mins > 0 and secs > 0:
+            return f"{mins}분 {secs}초"
+        if mins > 0:
+            return f"{mins}분"
+        return f"{secs}초"
+
+    def _on_alarm(self, name: str, label: str):
+        with self._lock:
+            self._timers.pop(name, None)
+        if name.startswith("타이머 "):
+            message = f"{label} 타이머가 완료되었습니다."
+        else:
+            message = f"'{name}' 타이머가 완료되었습니다."
+        self.tts_callback(message)
+        logging.info("타이머 완료: %s", name)
+
+    def _auto_name(self) -> str:
+        existing = set(self._timers.keys())
+        index = 1
+        while f"타이머 {index}" in existing:
+            index += 1
+        return f"타이머 {index}"

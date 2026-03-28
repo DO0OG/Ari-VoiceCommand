@@ -104,6 +104,10 @@ class SettingsDialog(QDialog):
         "scenario", "history_instruction",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
+    STT_KEYS = {
+        "stt_provider", "whisper_model", "whisper_device", "whisper_compute_type",
+        "wake_words", "stt_energy_threshold", "stt_dynamic_energy",
+    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -478,6 +482,15 @@ class SettingsDialog(QDialog):
         info = create_muted_label("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다.")
         gvbox.addWidget(info)
 
+        stt_group = QGroupBox("음성 인식")
+        stt_vbox = QVBoxLayout(stt_group)
+        stt_vbox.addWidget(create_muted_label("STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."))
+        stt_btn = QPushButton("음성 인식 설정...")
+        stt_btn.clicked.connect(self._open_stt_settings)
+        stt_vbox.addWidget(stt_btn)
+
+        vbox.addWidget(stt_group)
+
         vbox.addWidget(group)
 
         theme_group = QGroupBox("UI 테마 설정")
@@ -636,6 +649,11 @@ class SettingsDialog(QDialog):
             grp = self._tts_groups.get(key)
             if grp:
                 grp.setVisible(key == selected)
+
+    def _open_stt_settings(self):
+        from ui.stt_settings_dialog import STTSettingsDialog
+        dlg = STTSettingsDialog(self)
+        dlg.exec()
 
     def _show_theme_hint(self):
         QMessageBox.information(

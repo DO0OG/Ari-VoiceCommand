@@ -10,6 +10,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.should_exit = False
         self.character_widget = None
         self.text_interface = None
+        self._scheduled_tasks_dialog = None
 
         self.menu = QMenu(parent)
         self._apply_menu_theme()
@@ -41,6 +42,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.settings_action = self.menu.addAction("설정")
         self.settings_action.triggered.connect(self.open_settings)
 
+        self.scheduled_tasks_action = self.menu.addAction("예약 작업 관리")
+        self.scheduled_tasks_action.triggered.connect(self.open_scheduled_tasks)
+
         self.menu.addSeparator()
 
         self.exit_action = self.menu.addAction("종료")
@@ -58,6 +62,13 @@ class SystemTrayIcon(QSystemTrayIcon):
         action.triggered.connect(callback)
         self.menu.insertAction(self.settings_action, action)
         self._plugin_actions.append(action)
+        return action
+
+    def remove_plugin_menu_action(self, action) -> None:
+        if action in self._plugin_actions:
+            self._plugin_actions.remove(action)
+        self.menu.removeAction(action)
+        action.deleteLater()
 
     def _apply_menu_theme(self):
         from ui import theme as theme_module
@@ -123,38 +134,19 @@ class SystemTrayIcon(QSystemTrayIcon):
                 except Exception as e:
                     logging.error(f"실시간 테마 반영 실패: {e}")
 
-            try:
-                from core.plugin_loader import PluginContext, get_plugin_manager
-                from core.VoiceCommand import _state
-                from commands.ai_command import AICommand
-                from agent.llm_provider import get_llm_provider
 
-                cmd_registry = _state.command_registry
-                ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)
+    def open_scheduled_tasks(self):
+        try:
+            from agent.proactive_scheduler import get_scheduler
+            from ui.scheduled_tasks_dialog import ScheduledTasksDialog
 
-                def _register_tool_for_plugin(schema: dict, handler) -> None:
-                    tool_name = str(schema.get("function", {}).get("name", "") or "")
-                    if not tool_name or ai_command is None:
-                        return
-                    if tool_name in ai_command._dispatch:
-                        logging.warning(f"[PluginLoader] 중복 도구 등록 거부: {tool_name}")
-                        return
-                    get_llm_provider().register_plugin_tool(schema)
-                    ai_command.register_plugin_tool_handler(tool_name, handler)
-
-                get_plugin_manager().load_plugins(
-                    PluginContext(
-                        app=QApplication.instance(),
-                        tray_icon=self,
-                        character_widget=self.character_widget,
-                        text_interface=self.text_interface,
-                        register_menu_action=self.add_plugin_menu_action,
-                        register_command=cmd_registry.register_command if cmd_registry else None,
-                        register_tool=_register_tool_for_plugin,
-                    )
-                )
-            except Exception as e:
-                logging.error(f"플러그인 재로드 실패: {e}")
+            if self._scheduled_tasks_dialog is None:
+                self._scheduled_tasks_dialog = ScheduledTasksDialog(get_scheduler())
+            self._scheduled_tasks_dialog.show()
+            self._scheduled_tasks_dialog.raise_()
+            self._scheduled_tasks_dialog.activateWindow()
+        except Exception as e:
+            logging.error(f"예약 작업 창 열기 실패: {e}")
 
     def exit(self):
         self.should_exit = True

@@ -6,6 +6,11 @@ import faulthandler
 from datetime import datetime
 import warnings
 
+# torch + faster-whisper(CTranslate2/MKL)가 libiomp5md.dll을 중복 초기화하는
+# OMP Error #15를 억제한다. 두 라이브러리가 같은 프로세스에 공존하는 경우
+# 발생하는 알려진 Windows 환경 충돌이며, 이 플래그로 안전하게 계속 실행된다.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 # Qt의 비활성 포커스 요청 경고(qt.qpa.window)를 숨긴다.
 # 캐릭터 위젯은 WindowDoesNotAcceptFocus 플래그를 의도적으로 사용하므로,
 # 드래그 시 발생하는 requestActivate 경고는 기능상 무해한 노이즈다.
@@ -26,7 +31,7 @@ if sys.stderr is not None:
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 from assistant.ai_assistant import get_ai_assistant
 from ui.character_widget import CharacterWidget
@@ -160,6 +165,8 @@ def main():
     tray_icon = None
     text_interface = None
     plugin_manager = None
+    plugin_watcher = None
+    plugin_flush_timer = None
     try:
         setup_logging()
         logging.info("프로그램 시작")
@@ -211,6 +218,8 @@ def main():
         if use_system_tray and tray_icon:
             tray_icon.set_character_widget(character)
             tray_icon.set_text_interface(text_interface)
+            # 캐릭터 우클릭 메뉴를 트레이 메뉴와 공유 (플러그인 액션 포함)
+            character.set_tray_menu(tray_icon.menu)
 
         cmd_registry = _state.command_registry
         ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)
@@ -235,9 +244,21 @@ def main():
                 register_menu_action=tray_icon.add_plugin_menu_action if tray_icon else None,
                 register_command=cmd_registry.register_command if cmd_registry else None,
                 register_tool=_register_tool_for_plugin,
+                set_character_menu_enabled=character.set_context_menu_enabled if character else None,
             )
         )
         logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))
+
+        try:
+            from core.plugin_watcher import PluginWatcher
+
+            plugin_watcher = PluginWatcher(plugin_manager.plugin_dir(), plugin_manager)
+            plugin_watcher.start()
+            plugin_flush_timer = QTimer()
+            plugin_flush_timer.timeout.connect(plugin_watcher.flush)
+            plugin_flush_timer.start(1000)
+        except Exception as exc:
+            logging.error(f"플러그인 감시 시작 실패: {exc}")
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용
@@ -256,6 +277,10 @@ def main():
             character.close()
         if ari_core:
             ari_core.cleanup()
+        if plugin_flush_timer:
+            plugin_flush_timer.stop()
+        if plugin_watcher:
+            plugin_watcher.stop()
         logging.info("=== 앱 종료 완료 ===")
 
 if __name__ == "__main__":

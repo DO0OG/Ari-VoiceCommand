@@ -73,6 +73,9 @@ class ProactiveScheduler:
                 del self._tasks[task_id]; self._save(); return True
         return False
 
+    def cancel_task(self, task_id: str) -> bool:
+        return self.cancel(task_id)
+
     def list_tasks(self) -> List[ScheduledTask]:
         with self._lock:
             return [t for t in self._tasks.values() if t.enabled]
