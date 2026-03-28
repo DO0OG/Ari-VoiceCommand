@@ -55,8 +55,10 @@ class WhisperSTTProvider(STTProvider):
         logging.info(f"[WhisperSTT] 워커 시작: {model_size} / {actual_device} / {compute_type}")
 
         env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
-        self._proc = subprocess.Popen(
-            [sys.executable, self._WORKER, model_size, actual_device, compute_type],
+        # _WORKER는 패키지 내부 스크립트 고정 경로; 사용자 입력 아님 — nosec
+        cmd = [sys.executable, self._WORKER, model_size, actual_device, compute_type]
+        self._proc = subprocess.Popen(  # nosec B603 B607
+            cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -96,8 +98,8 @@ class WhisperSTTProvider(STTProvider):
                 self._proc.stdin.write(b"QUIT\n")
                 self._proc.stdin.flush()
                 self._proc.wait(timeout=3)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug("[WhisperSTT] 워커 종료 중 오류 (무시): %s", exc)
 
 
 def _resolve_device(device: str) -> str:

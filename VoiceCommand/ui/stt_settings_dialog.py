@@ -5,7 +5,7 @@ import logging
 import threading
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QComboBox, QGroupBox, QWidget,
+    QPushButton, QComboBox, QGroupBox,
     QListWidget, QListWidgetItem, QCheckBox,
     QInputDialog, QSlider, QMessageBox, QDialogButtonBox,
 )
