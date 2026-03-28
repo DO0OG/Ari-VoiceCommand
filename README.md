@@ -13,14 +13,16 @@
 
 | 기능 | 설명 |
 |------|------|
-| **웨이크워드** | "아리야" 호출 → 음성 입력 대기 |
-| **음성 인식** | Google STT (기본) |
+| **웨이크워드** | 호출어 음성 입력 대기 — 설정에서 키워드 자유 변경 가능 |
+| **음성 인식** | Google STT (온라인) · faster-whisper (오프라인, 설정에서 전환) |
 | **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter · NVIDIA NIM |
 | **역할별 LLM** | 기본 대화 / 플래너 / 실행·수정 모델을 제공자별로 분리 설정 |
 | **감정 표현** | `(기쁨)` 등 AI 태그 기반 캐릭터 애니메이션 |
-| **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS |
-| **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 |
+| **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS · 초기화 실패 시 자동 폴백 |
+| **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 · 우클릭 시 트레이와 동일 메뉴 표시 |
 | **스마트 모드** | LLM tool calling으로 타이머·알람·날씨·유튜브·시스템 제어 자동 실행 |
+| **복수 타이머** | 이름 붙은 타이머 최대 10개 동시 관리 ("30분 타이머", "파스타 타이머" 등) |
+| **예약 작업 UI** | 트레이 메뉴 → 예약 작업 관리 창에서 목록 확인·취소 |
 | **자율 실행** | Python/Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) + DAG 병렬 실행 |
 | **에이전트 루프** | Plan → Execute → Verify 3레이어 (최대 4회 재계획) |
 | **작업 템플릿** | 폴더 생성, 검색·요약·저장, 시스템 보고서, 파일 이름 변경, 배치 작업 등 |
@@ -30,26 +32,45 @@
 | **전략 검색** | 임베딩(sentence-transformers)/재랭킹 + 해시 폴백 유사 전략 검색 |
 | **테마 편집** | 설정창 내 팔레트 피커 + JSON 직접 편집 + 저장 |
 | **안전 검사** | 위험 수준 3단계 분류 + 확인 다이얼로그 (15초 카운트다운) |
-| **플러그인 확장** | API 버전 협상·메뉴/명령/도구 동적 등록·서브프로세스 샌드박스 |
+| **플러그인 확장** | API 버전 협상·메뉴/명령/도구 동적 등록·핫 리로드·우클릭 메뉴 표시 제어·샌드박스 |
 | **빌드 시스템** | Nuitka 기반 EXE (단일 파일 · 폴더 선택) |
 
 ---
 
 ## 개선 예정
 
-- [ ] **음성 인식 오프라인화** — Google STT 의존 제거, Whisper 등 로컬 STT 옵션 추가
-- [ ] **웨이크워드 커스터마이징** — "아리야" 고정 → 사용자 정의 키워드 설정
-- [ ] **타이머 복수 지원** — 단일 타이머 → 이름 붙은 복수 타이머 관리
-- [ ] **예약 작업 UI** — 트레이/설정창에서 예약 작업 목록 확인·취소 GUI
-- [ ] **플러그인 핫 리로드** — 앱 재시작 없이 플러그인 변경사항 적용
+- [x] **음성 인식 오프라인화** — faster-whisper 기반 로컬 STT 옵션 추가 (설정에서 `google` ↔ `whisper` 전환)
+- [x] **웨이크워드 커스터마이징** — `wake_words` 설정으로 호출어 자유 변경
+- [x] **타이머 복수 지원** — 이름 붙은 타이머 최대 10개 동시 관리
+- [x] **예약 작업 UI** — 트레이 메뉴 → "예약 작업 관리" 창 (5초 자동 갱신·취소)
+- [x] **플러그인 핫 리로드** — `plugins/` 폴더 변경 감지 시 재시작 없이 자동 적용
+- [x] **`_extract_schedule_phrase` 개선** — "반 시간 뒤", "두 시간 뒤" 등 한국어 수사 패턴 추가
+- [x] **음성 인식 오류율 개선** — 최소 길이 필터 + 반복 오인식 자동 무시
+- [x] **게임 모드 안정화** — Fish Audio 초기화 실패 시 `tts_fallback_provider`로 자동 복원
 - [ ] **플러그인 마켓플레이스** — 파일 수동 복사 방식 → 설치·업데이트 시스템
-- [ ] **`_extract_schedule_phrase` 개선** — 복합 시간 표현 추출 완전성 보강
-- [ ] **음성 인식 오류율 개선** — 짧은 발화·소음 환경에서의 오인식 처리
-- [ ] **게임 모드 안정화** — Fish Audio 초기화 실패 시 기존 TTS 자동 복원
 
 ---
 
 ## 개발 현황
+
+### 최근 업데이트 (2026-03-29)
+
+- **음성 인식 설정 분리**: 장치 탭에서 STT 관련 설정(엔진, Whisper 옵션, 마이크 감도, 웨이크워드)을 별도 창(`STTSettingsDialog`)으로 분리. Whisper 선택 시 해당 섹션 즉시 표시 + `adjustSize()` 자동 호출.
+- **Whisper STT 서브프로세스 격리**: CTranslate2(MKL)와 torch/numpy(MKL)의 DLL 충돌 문제를 `_whisper_worker.py` 별도 프로세스 + stdin/stdout base64 IPC로 해결. `KMP_DUPLICATE_LIB_OK=TRUE` 시작 시 자동 설정.
+- **Whisper 워커 중복 생성 방지**: 웨이크워드 감지(`SimpleWakeWord`)와 명령 인식(`VoiceRecognitionThread`) 간 STT 인스턴스 공유로 설정 변경 시 워커가 두 번 생성되는 문제 수정.
+- **설정 저장 시 플러그인 중복 로드 제거**: 설정 저장마다 발생하던 플러그인 재로드 및 "중복 도구 등록 거부" 경고 제거.
+
+### 최근 업데이트 (2026-03-28)
+
+- **캐릭터 우클릭 메뉴 통합**: 캐릭터 위젯 우클릭 시 트레이 메뉴와 동일한 메뉴 표시 (플러그인 등록 항목 포함).
+- **플러그인 API 확장 — 우클릭 메뉴 제어**: `context.set_character_menu_enabled(False)`로 캐릭터 우클릭 메뉴 억제 가능. 플러그인 언로드 시 자동 복원.
+- **오프라인 STT (faster-whisper)**: 설정에서 `stt_provider: "whisper"` 선택 시 로컬 faster-whisper 모델 사용. `tiny` / `small` / `medium` 모델 선택 가능.
+- **웨이크워드 커스터마이징**: `wake_words` 설정 키로 호출어 변경 가능 (기본값 `["아리야", "시작"]`).
+- **복수 타이머**: 이름 붙은 타이머 최대 10개 동시 관리. "파스타 타이머 10분", "알람 30분" 등 이름 지정 지원.
+- **예약 작업 관리 UI**: 트레이 메뉴 → "예약 작업 관리" 창으로 예약된 작업 목록 확인·취소.
+- **플러그인 핫 리로드**: `plugins/` 폴더 파일 변경 시 앱 재시작 없이 자동 반영.
+- **TTS 초기화 폴백**: 기본 TTS 초기화 실패 시 `tts_fallback_provider` 설정으로 자동 전환.
+- **코드 품질 개선**: 스케줄 패턴 정규식 사전 컴파일, STT 반복 오인식 필터 버그 수정, 8비트 오디오 변환 처리 추가.
 
 ### 최근 업데이트 (2026-03-27)
 
@@ -142,9 +163,10 @@ py -3.11 validate_repo.py
 
 ### 선택 의존성
 
-OCR 기반 화면 검증이나 임베딩 기반 전략 검색을 사용하려면 별도 설치합니다.
-
 ```bash
+# 오프라인 STT (설정에서 stt_provider: "whisper" 선택 시 필요)
+pip install faster-whisper
+
 # OCR (화면 텍스트 인식)
 pip install easyocr          # 권장, 한국어 지원
 # pip install pytesseract    # 경량, Tesseract 별도 설치 필요
@@ -171,11 +193,11 @@ py -3.11 VoiceCommand/install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 ## 설정
 
-트레이 아이콘 우클릭 → **설정** 에서 4개의 탭으로 관리합니다.
+트레이 아이콘 우클릭(또는 캐릭터 우클릭) → **설정** 에서 4개의 탭으로 관리합니다.
 
 1. **RP 설정**: 캐릭터 성격·시나리오·시스템 프롬프트·기억 지침
 2. **AI & TTS 설정**: 기본/플래너/실행 모델 및 제공자, API 키 검증, TTS 엔진
-3. **장치/UI 설정**: 마이크, 테마 프리셋, 글꼴 배율, **팔레트 직접 편집**
+3. **장치/UI 설정**: 마이크 선택, **음성 인식 설정** (별도 창 — STT 엔진 전환, Whisper 모델, 마이크 감도, 웨이크워드), 테마 프리셋, 글꼴 배율, **팔레트 직접 편집**
 4. **확장 설정**: 플러그인 목록 확인 (api_version·로드 상태·오류 표시)
 
 ### 주요 사용 패턴
@@ -198,12 +220,14 @@ py -3.11 VoiceCommand/install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 | 훅 | 설명 |
 |----|------|
-| `context.register_menu_action(label, callback)` | 트레이 메뉴에 항목 추가 |
+| `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴에 항목 추가 |
 | `context.register_command(BaseCommand)` | 음성 명령 동적 등록 |
 | `context.register_tool(schema, handler)` | LLM tool calling 확장 |
 | `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+| `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 |
+| `context.character_widget` | 캐릭터 위젯 직접 접근 (`.say()`, `.set_emotion()`) |
 
-`PLUGIN_INFO["api_version"] = "1.0"` 선언 필수. 자세한 내용은 [플러그인 가이드](docs/PLUGIN_GUIDE.md)를 확인하세요.
+`PLUGIN_INFO["api_version"] = "1.0"` 선언 필수. 플러그인 변경 사항은 앱 재시작 없이 자동 반영됩니다. 자세한 내용은 [플러그인 가이드](docs/PLUGIN_GUIDE.md)를 확인하세요.
 
 ---
 
@@ -218,7 +242,9 @@ Main.py                     ← Qt 앱 진입점
 ├── core/                   ← 앱 런타임 핵심 로직
 │   ├── VoiceCommand.py     ← 음성 인식-판단-실행 오케스트레이션
 │   ├── config_manager.py   ← 설정 로드/저장
-│   ├── plugin_loader.py    ← 플러그인 로더 (API 버전·훅 등록)
+│   ├── stt_provider.py     ← STT 백엔드 추상화 (Google / faster-whisper)
+│   ├── plugin_loader.py    ← 플러그인 로더 (API 버전·훅 등록·핫 리로드)
+│   ├── plugin_watcher.py   ← plugins/ 폴더 감시 → 자동 핫 리로드
 │   ├── plugin_sandbox.py   ← 서브프로세스 샌드박스 실행기
 │   └── resource_manager.py ← 리소스 경로 관리
 │
@@ -237,7 +263,8 @@ Main.py                     ← Qt 앱 진입점
 │
 ├── services/               ← 외부 서비스 연동
 │   ├── web_tools.py        ← 웹 검색 · fetch · SmartBrowser (DOM 재계획 포함)
-│   └── dom_analyser.py     ← Selenium DOM 상태 분석 · 다음 액션 제안
+│   ├── dom_analyser.py     ← Selenium DOM 상태 분석 · 다음 액션 제안
+│   └── timer_manager.py    ← 복수 타이머 관리 (이름 지정·최대 10개)
 │
 ├── memory/                 ← 대화 이력 및 사용자 기억
 │   ├── user_context.py     ← FACT/BIO/PREF 저장 (출처별 신뢰도 decay)
@@ -245,10 +272,12 @@ Main.py                     ← Qt 앱 진입점
 │   └── memory_manager.py   ← 기억 추출 · 태그 파싱
 │
 ├── ui/                     ← PySide6 UI
-│   ├── settings_dialog.py  ← 4탭 설정창
-│   ├── theme_editor.py     ← 팔레트 색상 피커 · JSON 편집 위젯
-│   ├── theme.py            ← 테마 프리셋 로더
-│   └── character_widget.py ← 캐릭터 위젯/애니메이션
+│   ├── settings_dialog.py       ← 4탭 설정창
+│   ├── stt_settings_dialog.py   ← 음성 인식 설정 별도 창 (STT 엔진·Whisper·감도·웨이크워드)
+│   ├── theme_editor.py          ← 팔레트 색상 피커 · JSON 편집 위젯
+│   ├── theme.py                 ← 테마 프리셋 로더
+│   ├── character_widget.py      ← 캐릭터 위젯/애니메이션 (우클릭 = 트레이 메뉴 공유)
+│   └── scheduled_tasks_dialog.py ← 예약 작업 목록·취소 UI
 │
 └── tts/                    ← TTS 제공자
     ├── cosyvoice_tts.py    ← CosyVoice3 로컬 TTS

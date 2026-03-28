@@ -1,8 +1,9 @@
 import logging
 import time
 import random
-import threading
 import queue
+import threading
+from collections import deque
 import speech_recognition as sr
 from queue import Queue
 from PySide6.QtCore import QThread, Signal
@@ -11,6 +12,8 @@ from core.constants import (
     WAKE_WORDS, WAKE_RESPONSES, SPEECH_LANGUAGE,
     SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT
 )
+from core.config_manager import ConfigManager
+from core.stt_provider import create_stt_provider
 
 # ───────────────────────────────────────────────────────────────────────────
 # VoiceRecognitionThread
@@ -26,12 +29,17 @@ class VoiceRecognitionThread(QThread):
         self.running = True
         self.selected_microphone = None
         self.microphone_index = None
+        self._stt_signature = None
+        self._stt = None
+        self._last_texts = deque(maxlen=3)
 
         from audio.simple_wake import SimpleWakeWord
-        self.wake_detector = SimpleWakeWord(wake_words=WAKE_WORDS)
+        self.wake_detector = SimpleWakeWord(wake_words=ConfigManager.get("wake_words", WAKE_WORDS))
 
         from VoiceCommand import SharedMicrophone
         self.speech_recognizer = sr.Recognizer()
+        self._apply_recognizer_settings()
+        self._refresh_stt_provider()
         self.microphone = SharedMicrophone(device_index=self.microphone_index)
 
     def set_microphone(self, microphone):
@@ -42,10 +50,33 @@ class VoiceRecognitionThread(QThread):
             self.microphone_index = get_microphone_index_helper(microphone)
             self.microphone = SharedMicrophone(device_index=self.microphone_index)
 
+    def _apply_recognizer_settings(self):
+        self.speech_recognizer.energy_threshold = int(ConfigManager.get("stt_energy_threshold", 300))
+        self.speech_recognizer.dynamic_energy_threshold = bool(ConfigManager.get("stt_dynamic_energy", True))
+
+    def _refresh_stt_provider(self):
+        settings = ConfigManager.load_settings()
+        signature = (
+            settings.get("stt_provider", "google"),
+            settings.get("whisper_model", "small"),
+            settings.get("whisper_device", "auto"),
+            settings.get("whisper_compute_type", "int8"),
+        )
+        if signature != self._stt_signature:
+            self._stt_signature = signature
+            self._stt = create_stt_provider(settings)
+            logging.info("[VoiceRecognitionThread] STT 프로바이더 갱신: %s", signature[0])
+            # wake_detector와 STT 프로바이더 인스턴스 공유 — 중복 워커 생성 방지
+            if hasattr(self, "wake_detector") and self.wake_detector is not None:
+                self.wake_detector._stt = self._stt
+                self.wake_detector._provider_signature = signature
+
     def run(self):
         try:
             logging.info("음성 감지 루프 시작")
             while self.running:
+                self._apply_recognizer_settings()
+                self._refresh_stt_provider()
                 # 오디오 장치 점유를 위해 락 획득
                 with _audio_lock:
                     with self.microphone as source:
@@ -62,7 +93,11 @@ class VoiceRecognitionThread(QThread):
 
     def handle_wake_word(self):
         logging.info("웨이크 워드 감지됨!")
-        from VoiceCommand import tts_wrapper, recognize_speech_helper, wake_detector_recalibrate_helper
+        from VoiceCommand import (
+            tts_wrapper,
+            recognize_speech_helper,
+            wake_detector_recalibrate_helper,
+        )
         
         response = random.choice(WAKE_RESPONSES)
         tts_wrapper(response)
@@ -86,7 +121,13 @@ class VoiceRecognitionThread(QThread):
         self.listening_state_changed.emit(True)
         with _audio_lock:
             with self.microphone as source:
-                recognize_speech_helper(self.speech_recognizer, source, self.result)
+                recognize_speech_helper(
+                    self.speech_recognizer,
+                    source,
+                    self.result,
+                    stt_provider=self._stt,
+                    previous_texts=self._last_texts,
+                )
         self.listening_state_changed.emit(False)
         
         # 대화 후 재캘리브레이션

@@ -98,6 +98,11 @@ class CharacterWidget(QWidget):
         self.bubble_hide_timer.setSingleShot(True)
         self.bubble_hide_timer.timeout.connect(self._hide_speech_bubble_slot)
 
+        # 트레이 공유 메뉴 (set_tray_menu로 주입)
+        self._tray_menu = None
+        # 플러그인이 우클릭 컨텍스트 메뉴를 억제할 수 있는 플래그
+        self._context_menu_enabled = True
+
         # 시그널 연결
         self.show_speech_bubble_signal.connect(self._show_speech_bubble_slot)
         self.hide_speech_bubble_signal.connect(self._hide_speech_bubble_slot)
@@ -648,29 +653,43 @@ class CharacterWidget(QWidget):
         if hasattr(self, 'text_interface') and self.text_interface:
             self.text_interface.show_near(self.x(), self.y(), self.width(), self.height())
 
+    def set_tray_menu(self, menu) -> None:
+        """트레이 아이콘 메뉴를 공유한다. 이후 우클릭 시 해당 메뉴를 표시한다."""
+        self._tray_menu = menu
+
+    def set_context_menu_enabled(self, enabled: bool) -> None:
+        """캐릭터 우클릭 컨텍스트 메뉴 표시 여부를 설정한다.
+        플러그인에서 context.set_character_menu_enabled(False)로 억제할 수 있다."""
+        self._context_menu_enabled = bool(enabled)
+
     def contextMenuEvent(self, event):
-        """우클릭 메뉴"""
-        from VoiceCommand import learning_mode
+        """우클릭 메뉴 — 트레이 메뉴가 주입된 경우 그것을 공유하여 표시한다."""
+        if not self._context_menu_enabled:
+            return
+
+        if self._tray_menu is not None:
+            # aboutToShow 시그널로 체크박스 상태·테마가 자동 갱신됨
+            self._tray_menu.exec(event.globalPos())
+            return
+
+        # 트레이 없이 단독 실행 시 폴백 메뉴
+        from VoiceCommand import learning_mode, is_game_mode, enable_game_mode, disable_game_mode
         from ui import theme as theme_module
         menu = QMenu(self)
         menu.setStyleSheet(theme_module.MENU_STYLE)
 
-        # 텍스트 대화
         chat_action = QAction("💬 텍스트 대화", self)
         chat_action.triggered.connect(self.open_text_interface)
         menu.addAction(chat_action)
 
         menu.addSeparator()
 
-        # 설정
         settings_action = QAction("설정", self)
         settings_action.triggered.connect(self.open_settings)
         menu.addAction(settings_action)
 
         menu.addSeparator()
 
-        # 게임 모드
-        from VoiceCommand import is_game_mode, enable_game_mode, disable_game_mode
         game_action = QAction("🎮 게임 모드 (GPU 절약)", self)
         game_action.setCheckable(True)
         game_action.setChecked(is_game_mode())
@@ -684,34 +703,28 @@ class CharacterWidget(QWidget):
         game_action.triggered.connect(toggle_game_mode)
         menu.addAction(game_action)
 
-        # 스마트 어시스턴트 모드
         smart_action = QAction("스마트 어시스턴트 모드", self)
         smart_action.setCheckable(True)
         smart_action.setChecked(learning_mode['enabled'])
         def toggle_smart_mode(checked):
             learning_mode['enabled'] = checked
-            if checked:
-                self.say("스마트 어시스턴트 모드가 활성화되었습니다.", duration=3000)
-            else:
-                self.say("스마트 어시스턴트 모드가 비활성화되었습니다.", duration=3000)
+            msg = "활성화" if checked else "비활성화"
+            self.say(f"스마트 어시스턴트 모드가 {msg}되었습니다.", duration=3000)
         smart_action.triggered.connect(toggle_smart_mode)
         menu.addAction(smart_action)
 
-        # 마우스 반응
         mouse_action = QAction("마우스 반응", self)
         mouse_action.setCheckable(True)
         mouse_action.setChecked(self.mouse_tracking_enabled)
         mouse_action.triggered.connect(self.toggle_mouse_tracking)
         menu.addAction(mouse_action)
 
-        # 숨기기
         hide_action = QAction("숨기기", self)
         hide_action.triggered.connect(self.hide)
         menu.addAction(hide_action)
 
         menu.addSeparator()
 
-        # 종료
         exit_action = QAction("종료", self)
         exit_action.triggered.connect(self.exit_program)
         menu.addAction(exit_action)

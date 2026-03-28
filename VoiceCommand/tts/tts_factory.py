@@ -25,9 +25,9 @@ def build_tts_signature(settings=None):
     return tuple(settings.get(key) for key in _TTS_SIGNATURE_KEYS)
 
 
-def create_tts_provider():
+def create_tts_provider(settings=None):
     """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성"""
-    settings = ConfigManager.load_settings()
+    settings = settings or ConfigManager.load_settings()
     tts_mode = settings.get("tts_mode", "fish")
 
     if tts_mode == "local":

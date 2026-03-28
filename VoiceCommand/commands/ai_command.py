@@ -11,6 +11,19 @@ from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 class AICommand(BaseCommand):
     """AI 어시스턴트 대화 명령 (기본/fallback)"""
     priority = 100
+    _KR_NUM = {
+        "한": 1,
+        "두": 2,
+        "세": 3,
+        "네": 4,
+        "다섯": 5,
+        "여섯": 6,
+        "일곱": 7,
+        "여덟": 8,
+        "아홉": 9,
+        "열": 10,
+        "반": 0.5,
+    }
     _COMPLEX_TASK_KEYWORDS = (
         "저장", "정리", "요약", "보고서", "리포트", "분석", "검색", "찾아",
         "만들", "생성", "열어", "실행", "복사", "이동", "삭제", "로그인",
@@ -34,6 +47,8 @@ class AICommand(BaseCommand):
         r'(\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
         # 단일 상대 시간
         r'(\d+\s*일\s*(?:후|뒤))',
+        r'(반\s*시간\s*(?:후|뒤))',
+        r'([한두세네다섯여섯일곱여덟아홉열]\s*시간\s*(?:후|뒤))',
         r'(\d+\s*시간\s*(?:후|뒤))',
         r'(\d+\s*분\s*(?:후|뒤))',
         r'(\d+\s*초\s*(?:후|뒤))',
@@ -44,6 +59,8 @@ class AICommand(BaseCommand):
         r'((?:오늘\s*)?\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
         r'(\d{1,2}\s*분에)',
     )
+    # 매 호출마다 재컴파일을 방지하기 위해 클래스 로드 시 한 번만 컴파일
+    _SCHEDULE_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in _SCHEDULE_PATTERN_STRINGS)
 
     def __init__(self, ai_assistant, tts_func, learning_mode_ref):
         self.ai_assistant = ai_assistant
@@ -100,10 +117,14 @@ class AICommand(BaseCommand):
         self._plugin_handlers[tool_name] = handler
         self._dispatch = self._build_dispatch_table()
 
+    def unregister_plugin_tool_handler(self, tool_name: str) -> None:
+        self._plugin_handlers.pop(tool_name, None)
+        self._dispatch = self._build_dispatch_table()
+
     # ── 핸들러들 ────────────────────────────────────────────────────────────────
 
     def _handle_play_youtube(self, args: dict) -> Optional[str]:
-        from VoiceCommand import execute_command
+        from core.VoiceCommand import execute_command
         query = args.get("query", "").strip()
         if not query:
             self.tts_wrapper("어떤 음악이나 영상을 재생할까요?")
@@ -114,35 +135,38 @@ class AICommand(BaseCommand):
     def _handle_set_timer(self, args: dict) -> Optional[str]:
         # LLM이 종료 요청에 set_timer를 잘못 호출한 경우 → SystemCommand로 리다이렉트
         if self._is_shutdown_request(self._current_goal) and self._extract_schedule_phrase(self._current_goal):
-            from VoiceCommand import execute_command
+            from core.VoiceCommand import execute_command
             execute_command(self._current_goal)
             return None
 
-        from VoiceCommand import execute_command
-        minutes = int(args.get("minutes", 0))
-        seconds = int(args.get("seconds", 0))
-        if minutes > 0 and seconds > 0:
-            execute_command(f"{minutes}분 {seconds}초 타이머")
-        elif minutes > 0:
-            execute_command(f"{minutes}분 타이머")
-        elif seconds > 0:
-            execute_command(f"{seconds}초 타이머")
-        else:
+        from core.VoiceCommand import timer_manager
+
+        minutes = float(args.get("minutes", 0) or 0)
+        seconds = float(args.get("seconds", 0) or 0)
+        name = str(args.get("name", "") or "").strip()
+        total_minutes = minutes + (seconds / 60.0)
+        if total_minutes <= 0:
             self.tts_wrapper("타이머 시간을 말씀해 주세요.")
+            return None
+        try:
+            timer_manager.set_timer(total_minutes, name=name)
+        except ValueError as exc:
+            return str(exc)
         return None
 
     def _handle_cancel_timer(self, args: dict) -> Optional[str]:
-        from VoiceCommand import execute_command
-        execute_command("타이머 취소")
+        from core.VoiceCommand import timer_manager
+
+        timer_manager.cancel_timer(name=str(args.get("name", "") or ""))
         return None
 
     def _handle_get_weather(self, args: dict) -> Optional[str]:
-        from VoiceCommand import execute_command
+        from core.VoiceCommand import execute_command
         execute_command("날씨 알려줘")
         return None
 
     def _handle_adjust_volume(self, args: dict) -> Optional[str]:
-        from VoiceCommand import execute_command
+        from core.VoiceCommand import execute_command
         direction = args.get("direction", "up")
         cmd_map = {"up": "볼륨 올려", "down": "볼륨 내려", "mute": "볼륨 음소거"}
         execute_command(cmd_map.get(direction, "볼륨 올려"))
@@ -162,7 +186,7 @@ class AICommand(BaseCommand):
         scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
         if scheduled:
             return scheduled
-        from VoiceCommand import execute_command
+        from core.VoiceCommand import execute_command
         execute_command("컴퓨터 종료")
         return None
 
@@ -265,11 +289,11 @@ class AICommand(BaseCommand):
         _RESTART_GOALS  = ("컴퓨터 재시작", "재부팅", "restart")
         goal_lower = goal.lower()
         if any(k in goal_lower for k in _SHUTDOWN_GOALS):
-            from VoiceCommand import execute_command
+            from core.VoiceCommand import execute_command
             execute_command(f"{when}에 컴퓨터 꺼줘")
             return None
         if any(k in goal_lower for k in _RESTART_GOALS):
-            from VoiceCommand import execute_command
+            from core.VoiceCommand import execute_command
             execute_command(f"{when}에 컴퓨터 재시작해줘")
             return None
 
@@ -378,6 +402,9 @@ class AICommand(BaseCommand):
         return None, False, 0
 
     def _parse_relative_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
+        if re.search(r'반\s*시간\s*(?:후|뒤)', when_kr):
+            return now + timedelta(minutes=30)
+
         patterns = (
             (r'(\d+)\s*일\s*(?:후|뒤)', "days"),
             (r'(\d+)\s*시간\s*(?:후|뒤)', "hours"),
@@ -391,6 +418,10 @@ class AICommand(BaseCommand):
             if match:
                 total += timedelta(**{unit: int(match.group(1))})
                 found = True
+        kr_hour = re.search(r'([한두세네다섯여섯일곱여덟아홉열])\s*시간\s*(?:후|뒤)', when_kr)
+        if kr_hour:
+            total += timedelta(hours=self._KR_NUM.get(kr_hour.group(1), 0))
+            found = True
         return now + total if found else None
 
     def _parse_minute_of_hour_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
@@ -538,8 +569,8 @@ class AICommand(BaseCommand):
         normalized = (text or "").strip()
         if not normalized:
             return ""
-        for pattern in self._SCHEDULE_PATTERN_STRINGS:
-            match = re.search(pattern, normalized, flags=re.IGNORECASE)
+        for pattern in self._SCHEDULE_PATTERNS:
+            match = pattern.search(normalized)
             if match:
                 return match.group(1).strip()
         return ""
@@ -553,7 +584,7 @@ class AICommand(BaseCommand):
 
     def _extract_timer_args_from_response(self, response: str) -> Optional[dict]:
         match = re.search(
-            r'set_timer[^>]*>\s*\{\s*"minutes"\s*:\s*(\d+)\s*,\s*"seconds"\s*:\s*(\d+)\s*\}',
+            r'set_timer[^>]*>\s*\{\s*"minutes"\s*:\s*(\d+)\s*,\s*"seconds"\s*:\s*(\d+)(?:\s*,\s*"name"\s*:\s*"([^"]*)")?\s*\}',
             response,
             flags=re.IGNORECASE,
         )
@@ -562,6 +593,7 @@ class AICommand(BaseCommand):
         return {
             "minutes": int(match.group(1)),
             "seconds": int(match.group(2)),
+            "name": (match.group(3) or "").strip(),
         }
 
     def _maybe_schedule_shutdown_from_goal(self, goal_text: str) -> Optional[str]:

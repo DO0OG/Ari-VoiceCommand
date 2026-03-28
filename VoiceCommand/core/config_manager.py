@@ -52,8 +52,16 @@ class ConfigManager:
         "history_instruction": "",
         # ── 기타 ────────────────────────────────────────────────────────────
         "microphone": "",
+        "stt_provider": "google",
+        "whisper_model": "small",
+        "whisper_device": "auto",
+        "whisper_compute_type": "int8",
+        "wake_words": ["아리야", "시작"],
+        "stt_energy_threshold": 300,
+        "stt_dynamic_energy": True,
         "tts_speed": 1.0,
         "tts_volume": 1.0,
+        "tts_fallback_provider": "edge",
         "ui_theme_preset": "default",
         "ui_theme_scale": 1.0,
         "ui_font_family": "",
@@ -122,6 +130,10 @@ class ConfigManager:
     @classmethod
     def get_value(cls, key: str, default: Any = None) -> Any:
         return cls.load_settings().get(key, default)
+
+    @classmethod
+    def get(cls, key: str, default: Any = None) -> Any:
+        return cls.get_value(key, default)
 
     @classmethod
     def set_value(cls, key: str, value: Any) -> bool:

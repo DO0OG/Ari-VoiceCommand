@@ -86,7 +86,7 @@ class AICommandTests(unittest.TestCase):
         command._current_goal = "5분 뒤에 컴퓨터 꺼줘"
 
         executed_cmds = []
-        with patch("VoiceCommand.execute_command", side_effect=lambda cmd: executed_cmds.append(cmd)):
+        with patch("core.VoiceCommand.execute_command", side_effect=lambda cmd: executed_cmds.append(cmd)):
             result = command._handle_shutdown_computer({})
 
         # 즉시 종료 대신 지연 명령이 전달돼야 함
@@ -206,6 +206,27 @@ class AICommandTests(unittest.TestCase):
             next_run, repeat, repeat_seconds = command._parse_schedule("11시 30분에")
 
         self.assertEqual(next_run, datetime(2026, 3, 26, 11, 30, 0))
+        self.assertFalse(repeat)
+        self.assertEqual(repeat_seconds, 0)
+
+    def test_extract_schedule_phrase_supports_half_hour_expression(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        self.assertEqual(command._extract_schedule_phrase("반 시간 뒤에 알려줘"), "반 시간 뒤")
+
+    def test_parse_schedule_supports_korean_hour_expression(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return cls(2026, 3, 25, 3, 31, 51)
+
+        with patch("commands.ai_command.datetime", _FixedDateTime):
+            next_run, repeat, repeat_seconds = command._parse_schedule("두 시간 뒤")
+
+        self.assertEqual(next_run, datetime(2026, 3, 25, 5, 31, 51))
         self.assertFalse(repeat)
         self.assertEqual(repeat_seconds, 0)
 

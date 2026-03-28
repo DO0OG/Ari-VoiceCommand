@@ -65,3 +65,7 @@ class CommandRegistry:
         """런타임에 명령을 추가하고 priority 순서를 유지한다."""
         self.commands.append(command)
         self.commands.sort(key=lambda c: c.priority)
+
+    def unregister_command(self, command: BaseCommand) -> None:
+        """런타임에 추가된 명령을 제거한다."""
+        self.commands = [item for item in self.commands if item is not command]

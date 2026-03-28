@@ -1,10 +1,11 @@
+import logging
 import os
 import sys
 import time
-import logging
 import warnings
 import random
 import threading
+from collections import deque
 from typing import Any, Optional, Tuple
 import speech_recognition as sr
 
@@ -127,7 +128,15 @@ def initialize_tts():
                 _state.fish_tts.cleanup()
             except Exception as e:
                 logging.debug(f"기존 TTS 정리 중 무시된 오류: {e}")
-        _state.fish_tts, _ = create_tts_provider()
+        try:
+            _state.fish_tts, _ = create_tts_provider()
+        except Exception as exc:
+            logging.error(f"[TTS] 기본 프로바이더 초기화 실패: {exc}")
+            fallback = settings.get("tts_fallback_provider", "edge")
+            fallback_settings = dict(settings)
+            fallback_settings["tts_mode"] = fallback
+            logging.warning(f"[TTS] 폴백으로 전환: {fallback}")
+            _state.fish_tts, _ = create_tts_provider(fallback_settings)
         _state.tts_signature = next_signature
 
     if _state.character_widget and hasattr(_state.fish_tts, 'playback_finished'):
@@ -278,11 +287,29 @@ def get_microphone_index_helper(microphone_name):
     return None
 
 
-def recognize_speech_helper(recognizer, source, signal):
+def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previous_texts=None):
     try:
         logging.info("말씀해 주세요...")
         audio = recognizer.listen(source, timeout=SPEECH_TIMEOUT, phrase_time_limit=SPEECH_PHRASE_LIMIT)
-        text = recognizer.recognize_google(audio, language=SPEECH_LANGUAGE)
+        provider = stt_provider
+        if provider is None:
+            from core.config_manager import ConfigManager
+            from core.stt_provider import create_stt_provider
+
+            provider = create_stt_provider(ConfigManager.load_settings())
+        text = provider.transcribe(audio)
+        if not text:
+            logging.warning("음성 인식 불가")
+            return
+        text = text.strip()
+        if len(text) < 2:
+            logging.debug(f"[STT] 너무 짧은 인식 결과 무시: '{text}'")
+            return
+        history = previous_texts if previous_texts is not None else deque(maxlen=3)
+        if history.count(text) >= 2:
+            logging.debug(f"[STT] 반복 오인식 무시: '{text}'")
+            return
+        history.append(text)
         logging.info(f"인식된 텍스트: {text}")
         signal.emit(text)
     except sr.UnknownValueError: logging.warning("음성 인식 불가")
@@ -354,6 +381,10 @@ def enable_game_mode():
         logging.info("게임 모드 활성화: Fish Audio TTS로 전환, GPU 메모리 해제됨")
     except Exception as e:
         logging.error(f"게임 모드 전환 실패: {e}")
+        try:
+            initialize_tts()
+        except Exception as fallback_exc:
+            logging.error(f"게임 모드 실패 후 TTS 복원 실패: {fallback_exc}")
 
 
 def disable_game_mode():

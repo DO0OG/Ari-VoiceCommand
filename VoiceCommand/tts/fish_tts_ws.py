@@ -48,7 +48,10 @@ class FishTTSWebSocket(QObject):
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
         from audio.audio_manager import GlobalAudio
-        self.session = Session(api_key)
+        try:
+            self.session = Session(api_key)
+        except Exception as exc:
+            raise RuntimeError(f"Fish Audio 세션 초기화 실패: {exc}") from exc
         self.reference_id = reference_id
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False

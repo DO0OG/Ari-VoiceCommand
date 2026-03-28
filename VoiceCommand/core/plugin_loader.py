@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import sys
 from dataclasses import dataclass, field
 from types import FunctionType
 from types import ModuleType
@@ -30,6 +31,7 @@ class PluginContext:
     register_command: Any = None
     register_tool: Any = None
     run_sandboxed: Any = None
+    set_character_menu_enabled: Any = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
 
 
 @dataclass
@@ -43,12 +45,17 @@ class PluginInfo:
     error: str = ""
     exports: Dict[str, Any] = field(default_factory=dict)
     api_version: str = "1.0"
+    registered_menu_actions: List[Any] = field(default_factory=list)
+    registered_commands: List[Any] = field(default_factory=list)
+    registered_tools: List[str] = field(default_factory=list)
+    character_menu_disabled: bool = False  # 이 플러그인이 캐릭터 우클릭 메뉴를 비활성화했는지
 
 
 class PluginManager:
     def __init__(self):
         self._plugins: List[PluginInfo] = []
         self._modules: Dict[str, ModuleType] = {}
+        self._context: Optional[PluginContext] = None
 
     def plugin_dir(self) -> str:
         try:
@@ -81,6 +88,7 @@ class PluginManager:
         if context.run_sandboxed is None:
             from core.plugin_sandbox import run_sandboxed as _sandbox_fn
             context.run_sandboxed = _sandbox_fn
+        self._context = context
         loaded_plugins: List[PluginInfo] = []
         for plugin in self.discover_plugins():
             try:
@@ -96,6 +104,61 @@ class PluginManager:
 
     def list_plugins(self) -> List[PluginInfo]:
         return list(self._plugins)
+
+    def load_plugin(self, path: str, context: Optional[PluginContext] = None) -> PluginInfo:
+        active_context = context or self._context or PluginContext()
+        if active_context.run_sandboxed is None:
+            from core.plugin_sandbox import run_sandboxed as _sandbox_fn
+            active_context.run_sandboxed = _sandbox_fn
+        plugin = PluginInfo(
+            name=os.path.splitext(os.path.basename(path))[0],
+            version="0.1.0",
+            description="",
+            path=path,
+        )
+        info = self._load_single_plugin(plugin, active_context)
+        self._plugins = [item for item in self._plugins if item.name != info.name]
+        self._plugins.append(info)
+        self._plugins.sort(key=lambda item: item.name)
+        return info
+
+    def reload_plugin(self, plugin_name: str) -> Optional[PluginInfo]:
+        path = self._find_plugin_path(plugin_name)
+        if not path:
+            return None
+        self.unload_plugin(plugin_name)
+        return self.load_plugin(path)
+
+    def unload_plugin(self, plugin_name: str) -> bool:
+        plugin = next((item for item in self._plugins if item.name == plugin_name), None)
+        if plugin is None:
+            return False
+
+        for action in plugin.registered_menu_actions:
+            if self._context and getattr(self._context, "tray_icon", None) and hasattr(self._context.tray_icon, "remove_plugin_menu_action"):
+                self._context.tray_icon.remove_plugin_menu_action(action)
+        if self._context and getattr(self._context, "register_command", None):
+            registry_owner = getattr(self._context.register_command, "__self__", None)
+            if registry_owner and hasattr(registry_owner, "unregister_command"):
+                for command in plugin.registered_commands:
+                    registry_owner.unregister_command(command)
+        for tool_name in plugin.registered_tools:
+            self._unregister_tool(tool_name)
+
+        # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
+        if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:
+            try:
+                self._context.set_character_menu_enabled(True)
+            except Exception as exc:
+                logger.debug("[PluginLoader] 캐릭터 메뉴 복원 실패 (%s): %s", plugin_name, exc)
+
+        module = self._modules.pop(plugin_name, None)
+        if module is not None:
+            sys.modules.pop(module.__name__, None)
+
+        self._plugins = [item for item in self._plugins if item.name != plugin_name]
+        logger.info("[PluginLoader] 플러그인 언로드: %s", plugin_name)
+        return True
 
     def summary(self) -> List[Dict[str, str]]:
         return [
@@ -139,7 +202,8 @@ class PluginManager:
             return plugin
         if not isinstance(register, FunctionType):
             raise TypeError("register는 callable이어야 합니다.")
-        exports = self._invoke_register(register, context) or {}
+        tracked_context = self._wrap_context(context, plugin)
+        exports = self._invoke_register(register, tracked_context) or {}
         if isinstance(exports, dict):
             plugin.exports = exports
         plugin.loaded = True
@@ -148,6 +212,78 @@ class PluginManager:
 
     def _invoke_register(self, register: FunctionType, context: PluginContext) -> Any:
         return register(context)
+
+    def _wrap_context(self, context: PluginContext, plugin: PluginInfo) -> PluginContext:
+        def _register_menu_action(label, callback):
+            if not context.register_menu_action:
+                return None
+            action = context.register_menu_action(label, callback)
+            if action is not None:
+                plugin.registered_menu_actions.append(action)
+            return action
+
+        def _register_command(command):
+            if not context.register_command:
+                return None
+            result = context.register_command(command)
+            plugin.registered_commands.append(command)
+            return result
+
+        def _register_tool(schema, handler):
+            if not context.register_tool:
+                return None
+            result = context.register_tool(schema, handler)
+            tool_name = str(schema.get("function", {}).get("name", "") or "")
+            if tool_name:
+                plugin.registered_tools.append(tool_name)
+            return result
+
+        def _set_character_menu_enabled(enabled: bool):
+            if not context.set_character_menu_enabled:
+                return
+            context.set_character_menu_enabled(enabled)
+            # 비활성화 시 추적 (언로드 시 자동 복원에 사용)
+            plugin.character_menu_disabled = not enabled
+
+        return PluginContext(
+            app=context.app,
+            tray_icon=context.tray_icon,
+            character_widget=context.character_widget,
+            text_interface=context.text_interface,
+            register_menu_action=_register_menu_action,
+            register_command=_register_command,
+            register_tool=_register_tool,
+            run_sandboxed=context.run_sandboxed,
+            set_character_menu_enabled=_set_character_menu_enabled,
+        )
+
+    def _find_plugin_path(self, plugin_name: str) -> str:
+        for plugin in self.discover_plugins():
+            if plugin.name == plugin_name:
+                return plugin.path
+        direct = os.path.join(self.plugin_dir(), f"{plugin_name}.py")
+        return direct if os.path.exists(direct) else ""
+
+    def _unregister_tool(self, tool_name: str) -> None:
+        try:
+            from agent.llm_provider import get_llm_provider
+            get_llm_provider().unregister_plugin_tool(tool_name)
+        except Exception as exc:
+            logger.debug("[PluginLoader] LLM 도구 제거 생략 (%s): %s", tool_name, exc)
+
+        try:
+            from core.VoiceCommand import _state
+            from commands.ai_command import AICommand
+
+            cmd_registry = _state.command_registry
+            ai_command = next(
+                (cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)),
+                None,
+            )
+            if ai_command:
+                ai_command.unregister_plugin_tool_handler(tool_name)
+        except Exception as exc:
+            logger.debug("[PluginLoader] AICommand 도구 제거 생략 (%s): %s", tool_name, exc)
 
 
 _plugin_manager: Optional[PluginManager] = None
