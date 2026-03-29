@@ -32,7 +32,7 @@ class FishTTSWebSocket(QObject):
         self.stop_event = threading.Event()
         logging.info("🌊 Fish Audio Streaming TTS Initialized")
 
-    def speak(self, text):
+    def speak(self, text, emotion: str = "평온"):
         """텍스트를 음성으로 변환하여 재생"""
         if not text:
             return False

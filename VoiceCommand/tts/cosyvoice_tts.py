@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
-from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached
+from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -244,9 +244,10 @@ class CosyVoiceTTS(QObject):
 
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, emotion: str = "평온") -> bool:
         from audio.audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text_cached(text or "")
+        text = apply_emotion_prosody(text, emotion)
         if not text or self._proc is None or self._proc.poll() is not None:
             return False
 

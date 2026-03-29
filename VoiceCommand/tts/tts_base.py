@@ -20,7 +20,7 @@ class BaseTTS(QObject, ABC):
     playback_finished = Signal()
 
     @abstractmethod
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, emotion: str = "평온") -> bool:
         """텍스트를 음성으로 합성·재생한다.
 
         Args:

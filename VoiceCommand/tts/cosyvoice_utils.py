@@ -9,6 +9,8 @@ import re
 from collections import deque
 from functools import lru_cache
 
+_SENT_PERIOD = re.compile(r'(?<!\.)[.。](?=[ \t\n]|$)')
+
 
 _NATIVE_HOURS = [
     "",
@@ -73,6 +75,21 @@ def _normalize_text(text: str) -> str:
 @lru_cache(maxsize=256)
 def _normalize_text_cached(text: str) -> str:
     return _normalize_text(text)
+
+
+def apply_emotion_prosody(text: str, emotion: str) -> str:
+    """zero_shot TTS에서 감정에 맞는 prosody를 구두점 변환으로 유도."""
+    if not text or emotion in ("평온", "진지"):
+        return text
+    if emotion in ("기쁨", "기대", "화남"):
+        return _SENT_PERIOD.sub("!", text)
+    if emotion in ("슬픔", "걱정"):
+        return _SENT_PERIOD.sub("...", text)
+    if emotion == "수줍":
+        return _SENT_PERIOD.sub("~", text)
+    if emotion == "놀람":
+        return _SENT_PERIOD.sub("?!", text)
+    return text
 
 
 class _PCMChunkBuffer:

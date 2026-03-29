@@ -33,7 +33,7 @@ class EdgeTTS(QObject):
         self.pa = pyaudio.PyAudio()
         logging.info(f"Edge TTS 초기화 완료 (voice={voice})")
 
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text:
             return False
 

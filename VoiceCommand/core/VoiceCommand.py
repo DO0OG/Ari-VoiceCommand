@@ -239,7 +239,7 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
 
     try:
         if _state.rp_gen: text = _state.rp_gen.generate(text)
-        ok = _state.fish_tts.speak(text)
+        ok = _state.fish_tts.speak(text, emotion=emotion)
         if not ok and show_bubble and _state.character_widget:
             _state.character_widget.hide_speech_bubble()
         return ok

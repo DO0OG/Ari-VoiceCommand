@@ -33,7 +33,7 @@ class ElevenLabsTTS(QObject):
         else:
             logging.warning("ElevenLabs API 키가 설정되지 않았습니다.")
 
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or not self.api_key:
             return False
 

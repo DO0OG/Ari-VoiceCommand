@@ -7,7 +7,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached
+from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody
 
 
 class PCMChunkBufferTests(unittest.TestCase):
@@ -28,6 +28,57 @@ class PCMChunkBufferTests(unittest.TestCase):
         second = _normalize_text_cached("12시 30분")
         self.assertEqual(first, second)
         self.assertIn("열두시", first)
+
+
+class ApplyEmotionProsodyTests(unittest.TestCase):
+    def test_neutral_emotion_unchanged(self):
+        text = "안녕하세요. 반갑습니다."
+        self.assertEqual(apply_emotion_prosody(text, "평온"), text)
+
+    def test_serious_emotion_unchanged(self):
+        text = "오류가 발생했습니다."
+        self.assertEqual(apply_emotion_prosody(text, "진지"), text)
+
+    def test_joy_replaces_period_with_exclamation(self):
+        result = apply_emotion_prosody("좋아요. 정말 기쁩니다.", "기쁨")
+        self.assertEqual(result, "좋아요! 정말 기쁩니다!")
+
+    def test_anticipation_replaces_period_with_exclamation(self):
+        result = apply_emotion_prosody("기대돼요.", "기대")
+        self.assertEqual(result, "기대돼요!")
+
+    def test_anger_replaces_period_with_exclamation(self):
+        result = apply_emotion_prosody("화가 납니다.", "화남")
+        self.assertEqual(result, "화가 납니다!")
+
+    def test_sadness_replaces_period_with_ellipsis(self):
+        result = apply_emotion_prosody("슬퍼요.", "슬픔")
+        self.assertEqual(result, "슬퍼요...")
+
+    def test_worry_replaces_period_with_ellipsis(self):
+        result = apply_emotion_prosody("걱정돼요.", "걱정")
+        self.assertEqual(result, "걱정돼요...")
+
+    def test_shy_replaces_period_with_tilde(self):
+        result = apply_emotion_prosody("별말씀을요.", "수줍")
+        self.assertEqual(result, "별말씀을요~")
+
+    def test_surprise_replaces_period_with_interrobang(self):
+        result = apply_emotion_prosody("정말요.", "놀람")
+        self.assertEqual(result, "정말요?!")
+
+    def test_existing_punctuation_preserved(self):
+        # 이미 구두점이 있는 문장은 영향받지 않아야 함
+        result = apply_emotion_prosody("맞아요! 진짜요?", "기쁨")
+        self.assertEqual(result, "맞아요! 진짜요?")
+
+    def test_ellipsis_not_double_transformed(self):
+        # 마침표가 연속으로 있는 경우(줄임표 ...) 는 변환하지 않음
+        result = apply_emotion_prosody("글쎄요...", "기쁨")
+        self.assertEqual(result, "글쎄요...")
+
+    def test_empty_text_unchanged(self):
+        self.assertEqual(apply_emotion_prosody("", "기쁨"), "")
 
 
 if __name__ == "__main__":

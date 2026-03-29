@@ -34,7 +34,7 @@ class OpenAITTS(QObject):
             except Exception as e:
                 logging.error(f"OpenAI TTS 초기화 실패: {e}")
 
-    def speak(self, text: str) -> bool:
+    def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or self._client is None:
             return False
 
