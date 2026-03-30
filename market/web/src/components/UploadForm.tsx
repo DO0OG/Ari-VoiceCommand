@@ -49,28 +49,32 @@ export function UploadForm() {
 
   async function upload(file: File) {
     setStatus("uploading");
-    // getUser()를 먼저 호출해 만료된 토큰을 자동 갱신시킴
-    await supabase.auth.getUser();
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) throw new Error("로그인이 필요합니다.");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다.");
 
     const body = new FormData();
     body.append("plugin", file);
 
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL}/upload-plugin`,
-      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body },
-    );
-    const rawText = await response.text();
-    let payload: Record<string, string> = {};
-    try { payload = JSON.parse(rawText); } catch { /* non-JSON */ }
-    if (!response.ok) {
-      throw new Error(payload.error ?? payload.message ?? `HTTP ${response.status}: ${rawText.slice(0, 200)}`);
+    // functions.invoke()는 NEXT_PUBLIC_SUPABASE_URL 기반으로 URL 구성 + JWT 자동 첨부
+    const { data: payload, error } = await supabase.functions.invoke("upload-plugin", { body });
+    if (error) {
+      const msg = (error as { message?: string; context?: { json?: () => Promise<Record<string, string>> } }).message ?? "업로드 실패";
+      // FunctionsHttpError의 경우 실제 서버 응답 추출
+      if (typeof (error as { context?: unknown }).context === "object") {
+        try {
+          const ctx = error as { context: { json: () => Promise<Record<string, string>> } };
+          const json = await ctx.context.json();
+          throw new Error(json.error ?? json.message ?? msg);
+        } catch (e) {
+          if (e instanceof Error && e.message !== msg) throw e;
+        }
+      }
+      throw new Error(msg);
     }
 
     setStatus("pending");
-    setMessage(`검증이 시작되었습니다. plugin_id: ${payload.plugin_id}`);
+    setMessage(`검증이 시작되었습니다. plugin_id: ${(payload as { plugin_id: string }).plugin_id}`);
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
