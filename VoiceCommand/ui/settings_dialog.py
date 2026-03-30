@@ -49,7 +49,9 @@ class _ValidatorThread(QThread):
             else:
                 from openai import OpenAI
                 kwargs: dict = {"api_key": self.api_key}
-                if cfg["base_url"]:
+                if self.provider == "ollama":
+                    kwargs["base_url"] = ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
+                elif cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
                 client = OpenAI(**kwargs)
                 client.chat.completions.create(
@@ -58,6 +60,9 @@ class _ValidatorThread(QThread):
                 )
             self.done.emit(True, f"✓ {model} 연결 성공")
         except Exception as e:
+            if self.provider == "ollama":
+                self.done.emit(False, "✗ Ollama 서버에 연결할 수 없어요. Ollama 실행 여부를 확인하세요.")
+                return
             msg = str(e)
             # 핵심 오류 메시지만 표시
             for marker in ("Error code:", "status code", "error_code"):
@@ -78,6 +83,7 @@ _LLM_PROVIDERS = [
     ("Google Gemini",          "gemini",     "gemini_api_key",     "https://aistudio.google.com/app/apikey"),
     ("OpenRouter (멀티모델)",   "openrouter",   "openrouter_api_key",  "https://openrouter.ai/keys"),
     ("NVIDIA NIM",             "nvidia_nim",   "nvidia_nim_api_key",  "https://build.nvidia.com 에서 nvapi- 키 발급"),
+    ("Ollama (로컬 LLM)",      "ollama",       "",                    "Ollama 설치 후 사용 가능 — API 키 불필요"),
 ]
 
 _TTS_MODES = [
@@ -99,6 +105,7 @@ class SettingsDialog(QDialog):
         "llm_provider", "llm_model",
         "llm_planner_provider", "llm_planner_model",
         "llm_execution_provider", "llm_execution_model",
+        "ollama_base_url",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction",
@@ -256,6 +263,15 @@ class SettingsDialog(QDialog):
         self.llm_model_input = QLineEdit(self.settings.get("llm_model", ""))
         self.llm_model_input.setPlaceholderText("예: gpt-4o, llama-3.3-70b-versatile...")
         llm_vbox.addWidget(self.llm_model_input)
+        self.ollama_hint_label = create_muted_label(
+            "Ollama 사용 시 API 키는 필요 없습니다. 서버 주소는 기본적으로 "
+            "http://localhost:11434/v1 를 사용합니다."
+        )
+        llm_vbox.addWidget(self.ollama_hint_label)
+        llm_vbox.addWidget(QLabel("Ollama 서버 주소:"))
+        self.ollama_url_input = QLineEdit(self.settings.get("ollama_base_url", "http://localhost:11434/v1"))
+        self.ollama_url_input.setPlaceholderText("http://localhost:11434/v1")
+        llm_vbox.addWidget(self.ollama_url_input)
 
         llm_vbox.addWidget(QLabel("플래너 제공자 (선택):"))
         self._role_provider_combos["llm_planner_provider"] = self._make_role_provider_combo(
@@ -295,7 +311,7 @@ class SettingsDialog(QDialog):
 
             # API 키 행
             key_row = QHBoxLayout()
-            key_inp = QLineEdit(self.settings.get(key, ""))
+            key_inp = QLineEdit(self.settings.get(key, "") if key else "")
             key_inp.setPlaceholderText(placeholder)
             key_inp.setEchoMode(QLineEdit.EchoMode.Password)
             key_row.addWidget(key_inp)
@@ -614,15 +630,20 @@ class SettingsDialog(QDialog):
         return ""
 
     def _on_llm_changed(self):
-        pass  # API 키 그룹은 항상 모두 표시
+        provider = self.llm_provider_combo.currentData()
+        is_ollama = provider == "ollama"
+        self.ollama_hint_label.setVisible(is_ollama)
+        self.ollama_url_input.setVisible(is_ollama)
 
     def _run_validation(self, provider: str):
         api_key = self._llm_key_inputs[provider].text().strip()
         lbl = self._validate_labels[provider]
-        if not api_key:
+        if provider != "ollama" and not api_key:
             lbl.setText("⚠ API Key를 입력하세요.")
             lbl.setStyleSheet("color: #e67e22;")
             return
+        if provider == "ollama":
+            api_key = "ollama"
 
         model = self._llm_model_inputs[provider].text().strip()
         if not model:
@@ -761,7 +782,7 @@ class SettingsDialog(QDialog):
         llm_keys = {}
         for _label, data, settings_key, _ph in _LLM_PROVIDERS:
             inp = self._llm_key_inputs.get(data)
-            if inp:
+            if inp and settings_key:
                 llm_keys[settings_key] = inp.text().strip()
 
         new_settings = {
@@ -778,6 +799,7 @@ class SettingsDialog(QDialog):
             "llm_planner_model": self.llm_planner_model_input.text().strip(),
             "llm_execution_provider": self._role_provider_combos["llm_execution_provider"].currentData(),
             "llm_execution_model": self.llm_execution_model_input.text().strip(),
+            "ollama_base_url": self.ollama_url_input.text().strip() or "http://localhost:11434/v1",
             **llm_keys,
             
             # TTS

@@ -1,8 +1,10 @@
 # AI-Assistant (Ari) 의존성
-# 업데이트: 2026-03-27
+# 업데이트: 2026-03-30
 #   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
-#   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs
+#   Phase 1-5: conversation_history 슬라이딩 요약, UserProfileEngine, MemoryIndex(SQLite FTS5),
+#              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator
+#   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
 # 개발 검증: validate_repo.py + unittest discover
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
@@ -73,6 +75,10 @@ watchdog>=4.0.0
 # easyocr>=1.7.0          # GPU/CPU 한국어 OCR (권장)
 # pytesseract>=0.3.10     # 경량 OCR (Tesseract 별도 설치 필요)
 
-# 의미 기반 전략 기억 검색 (없으면 해시 기반 폴백 사용)
+# 의미 기반 전략 기억 검색 + FewShotInjector (없으면 해시 기반 폴백 자동 사용)
 # sentence-transformers>=2.7.0  # 한국어 임베딩 (paraphrase-multilingual-MiniLM-L12-v2)
 # torch>=2.0.0                  # sentence-transformers 의존
+
+# Ollama 로컬 LLM (설정에서 "Ollama (로컬 LLM)" 선택 시 별도 설치 필요)
+# Ollama 설치: https://ollama.com  →  ollama pull llama3.2
+# openai SDK(이미 포함)로 http://localhost:11434/v1 에 연결 — 별도 패키지 불필요

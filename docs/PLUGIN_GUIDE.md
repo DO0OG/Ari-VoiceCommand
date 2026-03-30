@@ -20,10 +20,11 @@ VoiceCommand/plugins
 
 | 훅 | 설명 |
 |----|------|
-| `context.register_menu_action(label, callback)` | 트레이 메뉴에 항목 추가 |
+| `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴에 항목 추가 (공유 QMenu) |
 | `context.register_command(BaseCommand 인스턴스)` | 음성 명령 동적 등록 |
 | `context.register_tool(schema, handler)` | LLM tool calling 스키마·핸들러 확장 |
 | `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+| `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 (플러그인 언로드 시 자동 복원) |
 | `context.app` | Qt 애플리케이션 인스턴스 참조 |
 | `context.tray_icon` | 트레이 아이콘 객체 참조 |
 | `context.character_widget` | 캐릭터 위젯 참조 |
@@ -275,7 +276,7 @@ if callable(getattr(context, "register_command", None)):
 
 ## 10. 현재 한계
 
-- **마켓플레이스 미지원**: 플러그인 배포·설치 시스템은 미구현. 파일을 수동으로 폴더에 복사해야 합니다.
+- **마켓플레이스**: 웹 마켓플레이스에서 업로드·심사·다운로드 가능. 단, 다운로드 후 폴더 배치는 수동으로 수행합니다.
 - **샌드박스 격리 수준**: 서브프로세스 기반 타임아웃·예외 격리이며, OS-레벨 보안 격리는 아닙니다.
 
 ## 11. 주의사항

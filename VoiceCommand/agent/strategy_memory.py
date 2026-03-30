@@ -45,6 +45,9 @@ class StrategyRecord:
     failure_kind: str
     workflow_hints: List[str]
     lesson: str = ""           # Phase 3.2: 실패로부터 배운 교훈 (Self-Reflection)
+    skill_id: str = ""
+    user_feedback: str = ""
+    few_shot_eligible: bool = False
     duration_ms: int = 0
     timestamp: str = ""
     embedding: List[float] = field(default_factory=list)
@@ -59,7 +62,8 @@ class StrategyMemory:
         self._load()
 
     def record(self, goal: str, steps: list, success: bool, error: str = "", 
-               duration_ms: int = 0, failure_kind: str = "", lesson: str = ""):
+               duration_ms: int = 0, failure_kind: str = "", lesson: str = "",
+               skill_id: str = "", user_feedback: str = "", few_shot_eligible: bool = False):
         rec = StrategyRecord(
             goal_summary=goal[:200],
             tags=self._extract_tags(goal),
@@ -78,6 +82,9 @@ class StrategyMemory:
                 ]
             )[:5],
             lesson=lesson[:400],
+            skill_id=skill_id[:80],
+            user_feedback=user_feedback[:40],
+            few_shot_eligible=bool(few_shot_eligible or (success and len(steps or []) <= 5 and bool(getattr(steps[0], "description_kr", "") if steps else True))),
             duration_ms=duration_ms,
             timestamp=datetime.now().isoformat(),
             embedding=[],
@@ -262,8 +269,36 @@ class StrategyMemory:
         return len(left & right) / len(left | right)
 
     def _prune(self):
-        if len(self._records) > _MAX_RECORDS:
-            self._records = self._records[-_MAX_RECORDS:]
+        if len(self._records) <= _MAX_RECORDS:
+            return
+        now = datetime.now()
+        scored = []
+        for idx, record in enumerate(self._records):
+            try:
+                age_days = max((now - datetime.fromisoformat(record.timestamp)).days, 0)
+            except Exception:
+                age_days = 365
+            score = 0.0
+            if record.success:
+                score += 6.0
+            else:
+                score -= 2.0
+            if record.user_feedback == "positive":
+                score += 4.0
+            elif record.user_feedback == "negative":
+                score -= 3.0
+            if record.few_shot_eligible:
+                score += 4.0
+            if record.skill_id:
+                score += 2.0
+            if record.lesson:
+                score += 1.5
+            elif not record.success:
+                score -= 1.5
+            score -= min(age_days / 45.0, 8.0)
+            scored.append((score, idx, record))
+        kept = sorted(scored, key=lambda item: item[0], reverse=True)[:_MAX_RECORDS]
+        self._records = [record for _, _, record in sorted(kept, key=lambda item: item[1])]
 
     def _load(self):
         if os.path.exists(self.filepath):
@@ -298,6 +333,9 @@ class StrategyMemory:
             failure_kind=str(raw.get("failure_kind", "")),
             workflow_hints=list(raw.get("workflow_hints", [])),
             lesson=str(raw.get("lesson", "")),
+            skill_id=str(raw.get("skill_id", "")),
+            user_feedback=str(raw.get("user_feedback", "")),
+            few_shot_eligible=bool(raw.get("few_shot_eligible", False)),
             duration_ms=int(raw.get("duration_ms", 0)),
             timestamp=str(raw.get("timestamp", datetime.now().isoformat())),
             embedding=list(raw.get("embedding", []) or []),

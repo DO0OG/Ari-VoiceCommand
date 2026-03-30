@@ -52,7 +52,8 @@ class TaskRow(QFrame):
 
         # 이름 + 액션 버튼 행
         top = QHBoxLayout()
-        name_lbl = QLabel(f"📋 {task.name}")
+        display_name = task.name if getattr(task, "name", "") else task.goal[:30]
+        name_lbl = QLabel(f"📋 {display_name}")
         name_lbl.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL, QFont.Bold))
         top.addWidget(name_lbl)
         top.addStretch()
@@ -172,16 +173,11 @@ class SchedulerPanel(FloatingPanel):
     def _connect_signals(self) -> None:
         if not self._scheduler:
             return
-        self._scheduler.tasks_changed.connect(self._refresh_list)
-        self._scheduler.task_triggered.connect(
-            lambda _, goal: show_temp_status(self._status_lbl, f"▶ 실행 중: {goal[:30]}…")
-        )
-        self._scheduler.task_completed.connect(
-            lambda _, result, ok: show_temp_status(
-                self._status_lbl,
-                f"{'✅' if ok else '⚠️'} 완료: {result[:40]}"
-            )
-        )
+        # ProactiveScheduler는 Qt 시그널 대신 QTimer 폴링 방식 사용
+        from PySide6.QtCore import QTimer
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.timeout.connect(self._refresh_list)
+        self._refresh_timer.start(5000)  # 5초마다 자동 갱신
 
     # ── 이벤트 핸들러 ────────────────────────────────────────────────────────
 

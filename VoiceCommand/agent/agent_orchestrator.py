@@ -159,6 +159,7 @@ class AgentOrchestrator:
         try:
             run_result = self._run_loop(goal)
             duration = int((time.time() - start_time) * 1000)
+            self._post_run_update(goal, run_result, duration)
             
             # 실패 시 L4 반성 및 교훈 도출
             lesson = ""
@@ -178,6 +179,10 @@ class AgentOrchestrator:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {"goal": goal}
+
+        skill_result = self._run_with_skill_if_available(goal, context)
+        if skill_result is not None:
+            return skill_result
 
         for iteration in range(self.MAX_PLAN_ITERATIONS):
             run_result.total_iterations = iteration + 1
@@ -223,6 +228,40 @@ class AgentOrchestrator:
                 self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
         
         return run_result
+
+    def _run_with_skill_if_available(self, goal: str, context: Dict[str, str]) -> Optional[AgentRunResult]:
+        try:
+            from agent.skill_library import get_skill_library
+            from agent.agent_planner import ActionStep
+            skill = get_skill_library().get_applicable_skill(goal)
+            if not skill:
+                return None
+            steps = [
+                ActionStep(
+                    step_id=item.get("step_id", idx),
+                    step_type=item.get("step_type", "python"),
+                    content=item.get("content", ""),
+                    description_kr=item.get("description_kr", f"스킬 단계 {idx+1}"),
+                    expected_output=item.get("expected_output", ""),
+                    condition=item.get("condition", ""),
+                    on_failure=item.get("on_failure", "abort"),
+                )
+                for idx, item in enumerate(skill.steps)
+            ]
+            all_success, step_results = self._execute_plan(steps, context, goal)
+            result = AgentRunResult(goal=goal, step_results=step_results, total_iterations=1)
+            if all_success:
+                achieved, summary = self._verify(goal, step_results)
+                result.achieved = achieved
+                result.summary_kr = summary
+                if achieved:
+                    context["skill_id"] = skill.skill_id
+                    get_skill_library().record_feedback(skill.skill_id, positive=True)
+                    return result
+            get_skill_library().deprecate_if_failing(skill.skill_id)
+        except Exception as e:
+            logger.debug(f"[Orchestrator] skill 실행 생략: {e}")
+        return None
 
     def _reflect_on_failure(self, goal: str, run_result: AgentRunResult) -> Dict[str, str]:
         """실패한 시나리오에 대해 L4 반성(Post-mortem) 수행"""
@@ -335,8 +374,55 @@ class AgentOrchestrator:
             from agent.strategy_memory import get_strategy_memory
             failed = [sr for sr in run_result.step_results if not sr.exec_result.success]
             fk = failed[-1].failure_kind if failed else ""
-            get_strategy_memory().record(goal=goal, steps=[sr.step for sr in run_result.step_results], success=run_result.achieved, error="" if run_result.achieved else run_result.summary_kr, duration_ms=duration, failure_kind=fk, lesson=lesson)
+            skill_id = ""
+            try:
+                from agent.skill_library import get_skill_library
+                matched = get_skill_library().get_applicable_skill(goal)
+                skill_id = matched.skill_id if matched and matched.confidence >= 0.45 else ""
+            except Exception:
+                skill_id = ""
+            get_strategy_memory().record(
+                goal=goal,
+                steps=[sr.step for sr in run_result.step_results],
+                success=run_result.achieved,
+                error="" if run_result.achieved else run_result.summary_kr,
+                duration_ms=duration,
+                failure_kind=fk,
+                lesson=lesson,
+                skill_id=skill_id,
+                user_feedback="positive" if run_result.achieved else "",
+                few_shot_eligible=run_result.achieved and len(run_result.step_results) <= 5,
+            )
         except Exception as e: logger.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
+
+    def _post_run_update(self, goal: str, run_result: AgentRunResult, duration_ms: int):
+        try:
+            from agent.planner_feedback import get_planner_feedback_loop
+            get_planner_feedback_loop().record(
+                [sr.step for sr in run_result.step_results],
+                run_result.achieved,
+                duration_ms,
+            )
+        except Exception as e:
+            logger.debug(f"[Orchestrator] planner feedback 업데이트 실패: {e}")
+        try:
+            from agent.skill_library import get_skill_library
+            get_skill_library().try_extract_skill(
+                goal,
+                [sr.step for sr in run_result.step_results],
+                run_result.achieved,
+                duration_ms,
+            )
+        except Exception as e:
+            logger.debug(f"[Orchestrator] skill 추출 실패: {e}")
+        if not run_result.achieved:
+            try:
+                from agent.reflection_engine import get_reflection_engine
+                reflection = get_reflection_engine().reflect(goal, run_result)
+                if reflection.lesson and reflection.lesson not in run_result.summary_kr:
+                    run_result.summary_kr = f"{run_result.summary_kr}\n(교훈: {reflection.lesson})".strip()
+            except Exception as e:
+                logger.debug(f"[Orchestrator] reflection 생성 실패: {e}")
 
     def _build_adaptive_context(self, failed: List[StepResult]) -> Dict[str, str]:
         kinds = [sr.failure_kind for sr in failed if sr.failure_kind]

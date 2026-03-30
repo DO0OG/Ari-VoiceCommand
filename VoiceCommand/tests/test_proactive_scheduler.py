@@ -17,7 +17,7 @@ class ProactiveSchedulerTests(unittest.TestCase):
         task = ScheduledTask(
             task_id="a",
             goal="알람",
-            schedule_desc="매일 오전 9시",
+            schedule_expr="매일 오전 9시",
             next_run="2026-03-25T09:00:00",
             repeat=True,
             repeat_rule="daily",
@@ -39,7 +39,7 @@ class ProactiveSchedulerTests(unittest.TestCase):
             {
                 "task_id": "a",
                 "goal": "알람",
-                "schedule_desc": "11시",
+                "schedule_expr": "11시",
                 "next_run": "2026-03-25T11:00:00",
             }
         )

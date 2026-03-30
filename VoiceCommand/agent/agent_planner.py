@@ -242,6 +242,8 @@ class AgentPlanner:
     def decompose(self, goal: str, context: Dict[str, str] = None) -> List[ActionStep]:
         """목표를 실행 단계 목록으로 분해 (planner_model 사용)"""
         from agent.dag_builder import extract_resources, build_dag, assign_parallel_groups, annotate_steps
+        from agent.few_shot_injector import get_few_shot_injector
+        from agent.planner_feedback import get_planner_feedback_loop
 
         def _annotate(steps: List[ActionStep]) -> List[ActionStep]:
             for step in steps:
@@ -260,6 +262,12 @@ class AgentPlanner:
         ctx_block = self._fmt_context(context)
         if strategy_ctx:
             ctx_block = strategy_ctx + "\n" + ctx_block
+        few_shot = get_few_shot_injector().get_examples(goal)
+        if few_shot:
+            ctx_block = few_shot + "\n" + ctx_block
+        feedback_hints = get_planner_feedback_loop().get_hints(goal, [])
+        if feedback_hints:
+            ctx_block = feedback_hints + "\n" + ctx_block
 
         prompt = _DECOMPOSE_PROMPT.format(goal=goal, context_block=ctx_block)
         raw = self._call_llm(prompt, model=self.llm.planner_model,

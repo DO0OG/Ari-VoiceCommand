@@ -106,7 +106,25 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 설치 후 설정창 → **AI & TTS → TTS 모드 → 로컬 (CosyVoice3)** 선택,
 **CosyVoice 경로**란에 설치 경로를 입력하거나 자동 감지 버튼을 클릭합니다.
 
-## 8. NVIDIA NIM 사용 시
+## 8. Ollama 로컬 LLM 사용 시
+
+인터넷 없이, API 비용 없이 로컬에서 LLM을 실행합니다.
+
+1. [https://ollama.com](https://ollama.com) 에서 Ollama를 설치하고 실행합니다.
+2. 터미널에서 모델을 다운로드합니다.
+
+   ```bash
+   ollama pull llama3.2      # 4GB, 범용
+   ollama pull qwen2.5       # 5GB, 한국어 강함 (권장)
+   ```
+
+3. 설정창 → **AI & TTS → LLM 제공자 → "Ollama (로컬 LLM)"** 선택합니다.
+4. 모델명을 입력하고 저장합니다 (예: `qwen2.5`).
+5. Ollama 서버 주소는 기본값 `http://localhost:11434/v1` 을 유지하거나 변경합니다.
+
+권장 사양: RAM 8GB+, GPU VRAM 4GB+(선택).
+
+## 9. NVIDIA NIM 사용 시
 
 1. `https://build.nvidia.com` 에서 `nvapi-...` 형식의 API 키를 발급받으세요.
 2. 설정창 → AI&TTS 탭 → 제공자를 **NVIDIA NIM** 으로 변경합니다.
@@ -114,7 +132,20 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 4. 모델 이름은 비워두면 `meta/llama-3.3-70b-instruct` 가 기본값입니다.
    다른 모델을 사용하려면 NIM 카탈로그에서 모델 ID를 복사해 직접 입력하세요.
 
-## 9. 플러그인 확장
+## 10. 음성 메모리 명령
+
+학습된 패턴·기억을 음성으로 조회하거나 관리합니다.
+
+| 예시 | 동작 |
+|------|------|
+| `내가 자주 하는 작업 뭐야?` | 자주 요청하는 작업 유형 TTS 출력 |
+| `저번에 내가 뭐라고 했어?` | 대화 기록 FTS 검색 결과 TTS |
+| `내 스킬 목록 보여줘` | 자동 추출된 스킬 목록 TTS |
+| `이 스킬 삭제해줘` | 첫 번째 스킬 비활성화 |
+| `메모리 정리해줘` | 저신뢰 FACT 제거·대화 압축·전략 정리 즉시 실행 |
+| `나에 대해 뭐 알아?` | 사용자 프로파일 + 주요 사실 요약 TTS |
+
+## 11. 플러그인 확장
 
 사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 Python 파일로 추가합니다.
 앱 시작 시 자동 로드되며, 설정창 `확장` 탭에서 목록과 로드 상태를 확인할 수 있습니다.
@@ -123,10 +154,11 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 | 훅 | 설명 |
 |----|------|
-| `context.register_menu_action(label, callback)` | 트레이 메뉴 항목 추가 |
+| `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴 항목 추가 |
 | `context.register_command(BaseCommand)` | 음성 명령 동적 등록 |
 | `context.register_tool(schema, handler)` | LLM tool calling 확장 |
 | `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+| `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 |
 
 `PLUGIN_INFO`에 `"api_version": "1.0"` 선언이 필수입니다.
 자세한 작성 방법은 [플러그인 가이드](./PLUGIN_GUIDE.md)를 참고하세요.

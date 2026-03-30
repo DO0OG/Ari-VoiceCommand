@@ -49,6 +49,7 @@ from ui.tray_icon import SystemTrayIcon
 from core.plugin_loader import PluginContext, get_plugin_manager
 from commands.ai_command import AICommand
 from agent.llm_provider import get_llm_provider
+from agent.proactive_scheduler import get_scheduler
 
 # 전역 변수 선언
 ai_assistant = None
@@ -203,6 +204,12 @@ def main():
 
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
         start_tts_background()
+
+        # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
+        try:
+            get_scheduler(tts_wrapper).check_missed_tasks_on_startup()
+        except Exception as exc:
+            logging.debug(f"놓친 작업 확인 생략: {exc}")
 
         # 캐릭터 위젯 생성
         logging.info("캐릭터 위젯 생성 시작")

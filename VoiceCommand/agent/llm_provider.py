@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import re
+import time
+from collections import OrderedDict
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple, Any
 
@@ -46,7 +48,46 @@ _PROVIDER_CONFIG = {
         "default_model": "meta/llama-3.3-70b-instruct",
         "label": "NVIDIA NIM",
     },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "default_model": "llama3.2",
+        "label": "Ollama (로컬)",
+        "requires_api_key": False,
+    },
 }
+
+_TOOL_INSTRUCTION = (
+    "[도구 사용 지침]\n"
+    "- 사용자의 PC 동작 요청은 적절한 도구를 우선 호출하세요.\n"
+    "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
+    "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
+)
+
+
+class ResponseCache:
+    """최근 응답 캐시."""
+
+    def __init__(self, max_items: int = 50, ttl_seconds: int = 600):
+        self.max_items = max_items
+        self.ttl_seconds = ttl_seconds
+        self._store: OrderedDict[str, tuple[float, str]] = OrderedDict()
+
+    def get(self, message: str) -> Optional[str]:
+        item = self._store.get(message)
+        if not item:
+            return None
+        saved_at, response = item
+        if time.time() - saved_at > self.ttl_seconds:
+            self._store.pop(message, None)
+            return None
+        self._store.move_to_end(message)
+        return response
+
+    def set(self, message: str, response: str):
+        self._store[message] = (time.time(), response)
+        self._store.move_to_end(message)
+        while len(self._store) > self.max_items:
+            self._store.popitem(last=False)
 
 
 class LLMProvider:
@@ -56,7 +97,7 @@ class LLMProvider:
                  planner_model="", execution_model="",
                  planner_provider="", execution_provider="",
                  planner_api_key="", execution_api_key="",
-                 system_prompt="", personality="", scenario=""):
+                 system_prompt="", personality="", scenario="", history_instruction=""):
         cfg = _PROVIDER_CONFIG.get(provider, _PROVIDER_CONFIG["groq"])
         self.provider = provider
         self.api_key = api_key
@@ -75,8 +116,17 @@ class LLMProvider:
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
         self._plugin_tools: list = []
+        self._response_cache = ResponseCache()
+        from core.rp_generator import RPGenerator
+        self.rp_generator = RPGenerator()
+        self.rp_generator.set_config(
+            personality=personality,
+            scenario=scenario,
+            system_prompt=system_prompt,
+            history_instruction=history_instruction,
+        )
 
-        if api_key:
+        if api_key or provider == "ollama":
             self._init_client()
         # 별도 제공자가 지정된 경우 추가 클라이언트 초기화
         if planner_provider and planner_provider != provider and planner_api_key:
@@ -100,7 +150,10 @@ class LLMProvider:
             else:
                 from openai import OpenAI
                 kwargs = {"api_key": api_key}
-                if cfg["base_url"]:
+                if provider == "ollama":
+                    kwargs["api_key"] = api_key or "ollama"
+                    kwargs["base_url"] = self._get_ollama_url()
+                elif cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
                 if provider == "openrouter":
                     kwargs["default_headers"] = {
@@ -111,6 +164,13 @@ class LLMProvider:
         except Exception as e:
             logging.error(f"LLM 클라이언트 초기화 실패 ({provider}): {e}")
             return None
+
+    def _get_ollama_url(self) -> str:
+        try:
+            from core.config_manager import ConfigManager
+            return ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
+        except Exception:
+            return "http://localhost:11434/v1"
 
     def _init_client(self):
         self.client = self._make_client(self.provider, self.api_key)
@@ -364,47 +424,112 @@ class LLMProvider:
         if len(self.conversation_history) > self.max_history * 2:
             self.conversation_history = self.conversation_history[-self.max_history * 2:]
 
-    def chat(self, user_message, include_context=False, model_override="", system_override=""):
+    def _estimate_max_tokens(self, message: str) -> int:
+        length = len(message or "")
+        if length < 20:
+            return 200
+        if length < 60:
+            return 400
+        if length < 150:
+            return 600
+        return 800
+
+    def _should_cache(self, message: str) -> bool:
+        text = (message or "").lower()
+        cache_keywords = ("날씨", "시간", "몇 시", "temperature", "weather")
+        skip_keywords = ("예약", "저장", "실행", "삭제", "이동", "복사", "tool", "명령")
+        return any(keyword in text for keyword in cache_keywords) and not any(keyword in text for keyword in skip_keywords)
+
+    def _offline_response(self, message: str) -> str:
+        return "(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요. 기본 명령은 그대로 쓸 수 있어요."
+
+    def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:
+        provider = self.provider
+        model = model_override or self.model
+        client = self.client
+        if model_override:
+            return client, provider, model
+        try:
+            from agent.llm_router import LLMRouter
+            route = LLMRouter().route(user_message, {})
+            candidate_provider = route.provider
+            candidate_model = route.model
+            candidate_client = self._get_client_for_provider(candidate_provider)
+            if candidate_client:
+                provider = candidate_provider
+                model = candidate_model
+                client = candidate_client
+        except Exception as e:
+            logging.debug(f"[LLMRouter] 라우팅 생략: {e}")
+        return client, provider, model
+
+    def _get_client_for_provider(self, provider: str):
+        if provider == self.provider:
+            return self.client
+        try:
+            from core.config_manager import ConfigManager
+            settings = ConfigManager.load_settings()
+            if provider == "ollama":
+                return self._make_client("ollama", "ollama")
+            api_key = settings.get(_KEY_MAP.get(provider, ""), "")
+            if not api_key:
+                return None
+            return self._make_client(provider, api_key)
+        except Exception:
+            return None
+
+    def chat(self, user_message, include_context=True, model_override="", system_override=""):
         """단순 대화"""
         if not self.client:
             return "AI 기능이 비활성화되어 있습니다."
 
-        model = model_override or self.model
+        cached = self._response_cache.get(user_message) if self._should_cache(user_message) else None
+        if cached:
+            return cached
         try:
+            client, provider, model = self._resolve_route(user_message, model_override)
+            if not client:
+                return self._offline_response(user_message)
             self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context)}]
             messages.extend(self.conversation_history)
 
-            if self.provider == "anthropic":
-                resp = self.client.messages.create(
+            if provider == "anthropic":
+                resp = client.messages.create(
                     model=model, max_tokens=400, system=messages[0]["content"],
                     messages=messages[1:]
                 )
                 raw_msg = resp.content[0].text
             else:
-                resp = self.client.chat.completions.create(
-                    model=model, messages=messages, temperature=0.7, max_tokens=400
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=self._estimate_max_tokens(user_message),
                 )
                 raw_msg = resp.choices[0].message.content or ""
             
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
-            msg = memory_manager.clean_response(raw_msg)
-            msg = self._filter_korean(msg)
+            msg = self._clean_response(memory_manager.clean_response(raw_msg))
             self.add_to_history("assistant", msg)
+            if msg and self._should_cache(user_message):
+                self._response_cache.set(user_message, msg)
             return msg
         except Exception as e:
             logging.error(f"LLM chat 오류 ({model}): {e}")
-            return f"오류 발생: {e}"
+            return self._offline_response(user_message)
 
-    def chat_with_tools(self, user_message, include_context=False, model_override=""):
+    def chat_with_tools(self, user_message, include_context=True, model_override=""):
         """도구 포함 대화"""
         if not self.client:
             return "AI 기능 비활성화 상태입니다.", []
 
-        model = model_override or self.model
         try:
+            client, provider, model = self._resolve_route(user_message, model_override)
+            if not client:
+                return self._offline_response(user_message), []
             self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": self._build_system(include_context)}]
             messages.extend(self.conversation_history)
@@ -412,13 +537,14 @@ class LLMProvider:
             request_ctx = self._analyze_request(user_message)
             tools, tool_choice = self._select_tools_for_request(request_ctx)
 
-            if self.provider == "anthropic":
+            if provider == "anthropic":
                 # Anthropic tool use is more complex, using simple fallback for now
                 return self._anthropic_chat(user_message, include_context, use_tools=True, model_override=model)
 
-            response = self.client.chat.completions.create(
+            response = client.chat.completions.create(
                 model=model, messages=messages, tools=tools, tool_choice=tool_choice,
-                temperature=0.1 if request_ctx["force_tool"] else 0.3, max_tokens=1000
+                temperature=0.1 if request_ctx["force_tool"] else 0.3,
+                max_tokens=self._estimate_max_tokens(user_message) + 200,
             )
             choice = response.choices[0]
             tool_calls = []
@@ -442,13 +568,12 @@ class LLMProvider:
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
-            msg = memory_manager.clean_response(raw_msg)
-            msg = self._filter_korean(msg)
+            msg = self._clean_response(memory_manager.clean_response(raw_msg))
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
             logging.error(f"LLM chat_with_tools 오류 ({model}): {e}")
-            return f"오류 발생: {e}", []
+            return self._offline_response(user_message), []
 
     def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="") -> str:
         """도구 결과 피드백"""
@@ -478,7 +603,7 @@ class LLMProvider:
             messages.extend(tool_result_messages)
 
             response = self.client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=300)
-            msg = self._filter_korean(response.choices[0].message.content or "")
+            msg = self._clean_response(response.choices[0].message.content or "")
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
@@ -501,7 +626,7 @@ class LLMProvider:
                 elif b.type == "text": text_parts.append(b.text)
             
             raw_msg = " ".join(text_parts)
-            msg = self._filter_korean(raw_msg)
+            msg = self._clean_response(raw_msg)
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
@@ -515,7 +640,7 @@ class LLMProvider:
             messages = list(self.conversation_history)
             messages.append({"role": "user", "content": results_content})
             resp = self.client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
-            msg = self._filter_korean(" ".join([b.text for b in resp.content if b.type == "text"]))
+            msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
@@ -553,23 +678,47 @@ class LLMProvider:
         return []
 
     def _build_system(self, include_context=False):
-        sys = self.system_prompt or "당신은 한국어 AI 어시스턴트 아리입니다."
-        if self.personality: sys += f"\n성격: {self.personality}"
+        parts: List[str] = []
+        base_prompt = self.system_prompt or "당신은 한국어 AI 어시스턴트 아리입니다."
+        if include_context:
+            try:
+                from memory.user_profile_engine import get_user_profile_engine
+                profile_prompt = get_user_profile_engine().get_prompt_injection()
+                if profile_prompt:
+                    parts.append(profile_prompt)
+            except Exception as e:
+                logging.debug(f"[LLM] 사용자 프로파일 주입 실패: {e}")
+            try:
+                from memory.memory_manager import get_memory_manager
+                memory_manager = get_memory_manager()
+                facts_prompt = memory_manager.get_top_facts_prompt(n=5)
+                if facts_prompt:
+                    parts.append(facts_prompt)
+            except Exception as e:
+                logging.debug(f"[LLM] 사실 주입 실패: {e}")
+        parts.append(self.rp_generator.build_system_prompt(base_prompt))
         if include_context:
             try:
                 from memory.memory_manager import get_memory_manager
-                sys += f"\n\n컨텍스트:\n{get_memory_manager().get_full_context_prompt()}"
+                context_prompt = get_memory_manager().get_full_context_prompt()
+                if context_prompt:
+                    parts.append(f"[대화 컨텍스트]\n{context_prompt}")
             except Exception as e:
                 logging.debug(f"[LLM] 메모리 컨텍스트 주입 실패: {e}")
-        sys += "\n한국어 응답 필수. 감정 태그 (기쁨), (진지) 등 필수 사용."
-        return sys
+        parts.append(_TOOL_INSTRUCTION)
+        parts.append("한국어 응답 필수. 감정 태그 (기쁨), (진지) 등을 자연스럽게 사용하세요.")
+        return "\n\n".join(part for part in parts if part)
+
+    def _clean_response(self, text):
+        if not text:
+            return ""
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        text = re.sub(r'\[(FACT|BIO|PREF|CMD):[^\]]*\]', '', text)
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
 
     def _filter_korean(self, text):
-        if not text: return ""
-        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
-        text = re.sub(r'\[[a-zA-Z_]+:[^\]]*\]', '', text)
-        text = re.sub(r'[^가-힣0-9\s.,!?~\-()%]', '', text)
-        return re.sub(r'\s+', ' ', text).strip()
+        return self._clean_response(text)
 
 
 # ── 싱글톤 팩토리 ──────────────────────────────────────────────────────────────
@@ -580,6 +729,7 @@ _KEY_MAP = {
     "groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key",
     "mistral": "mistral_api_key", "gemini": "gemini_api_key",
     "openrouter": "openrouter_api_key", "nvidia_nim": "nvidia_nim_api_key",
+    "ollama": "",
 }
 
 def get_llm_provider() -> LLMProvider:
@@ -590,11 +740,17 @@ def get_llm_provider() -> LLMProvider:
             s = ConfigManager.load_settings()
         except Exception: s = {}
         provider = s.get("llm_provider", "groq")
-        api_key = s.get(_KEY_MAP.get(provider, ""), "")
+        api_key = "ollama" if provider == "ollama" else s.get(_KEY_MAP.get(provider, ""), "")
         planner_provider = s.get("llm_planner_provider", "") or provider
         execution_provider = s.get("llm_execution_provider", "") or provider
-        planner_api_key = s.get(_KEY_MAP.get(planner_provider, ""), "") if planner_provider != provider else ""
-        execution_api_key = s.get(_KEY_MAP.get(execution_provider, ""), "") if execution_provider != provider else ""
+        planner_api_key = (
+            "ollama" if planner_provider == "ollama"
+            else s.get(_KEY_MAP.get(planner_provider, ""), "")
+        ) if planner_provider != provider else ""
+        execution_api_key = (
+            "ollama" if execution_provider == "ollama"
+            else s.get(_KEY_MAP.get(execution_provider, ""), "")
+        ) if execution_provider != provider else ""
         _instance = LLMProvider(
             provider=provider, api_key=api_key,
             model=s.get("llm_model", ""),
@@ -606,7 +762,8 @@ def get_llm_provider() -> LLMProvider:
             execution_api_key=execution_api_key,
             system_prompt=s.get("system_prompt", ""),
             personality=s.get("personality", ""),
-            scenario=s.get("scenario", "")
+            scenario=s.get("scenario", ""),
+            history_instruction=s.get("history_instruction", ""),
         )
     return _instance
 

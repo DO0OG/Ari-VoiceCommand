@@ -338,19 +338,13 @@ class UserContextManager:
         
         # 1. 사실 신뢰도 감쇄 및 만료 정리
         facts = self.context.get("facts", {})
-        from memory.trust_engine import compute_decay, should_remove
+        from memory.trust_engine import batch_decay
+        facts = batch_decay(facts, now)
         for key in list(facts.keys()):
             f = facts[key]
             if f.get("expires_at") and datetime.fromisoformat(f["expires_at"]) < now:
                 del facts[key]
-                continue
-            if f.get("updated_at"):
-                days = (now - datetime.fromisoformat(f["updated_at"])).days
-                result = compute_decay(float(f.get("confidence", 0.7)), days, int(f.get("access_count", 0)))
-                if should_remove(result.new_confidence, int(f.get("conflict_count", 0)), days):
-                    del facts[key]
-                    continue
-                f["confidence"] = round(result.new_confidence, 2)
+        self.context["facts"] = facts
 
         # 2. 주제(Topic) 점수 감쇄 (오래된 관심사 제거)
         topics = self.context.get("conversation_topics", {})

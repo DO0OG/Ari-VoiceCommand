@@ -12,6 +12,7 @@ from commands.calculator_command import CalculatorCommand
 from commands.ai_command import AICommand
 from commands.youtube_command import YoutubeCommand
 from commands.system_command import SystemCommand
+from commands.memory_command import MemoryCommand
 
 
 class CommandRegistry:
@@ -39,6 +40,7 @@ class CommandRegistry:
             SystemCommand(tts_func),
             TimeCommand(tts_func),
             CalculatorCommand(tts_func),
+            MemoryCommand(tts_func),
             AICommand(ai_assistant, tts_func, learning_mode_ref),
         ]
         # priority 기준 정렬: 낮을수록 먼저 매칭

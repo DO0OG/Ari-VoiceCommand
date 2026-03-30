@@ -30,6 +30,7 @@ class ConfigManager:
         "gemini_api_key": "",
         "openrouter_api_key": "",
         "nvidia_nim_api_key": "",
+        "ollama_base_url": "http://localhost:11434/v1",
         # ── TTS 제공자 ──────────────────────────────────────────────────────
         "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge
         "fish_api_key": "",
@@ -65,6 +66,13 @@ class ConfigManager:
         "ui_theme_preset": "default",
         "ui_theme_scale": 1.0,
         "ui_font_family": "",
+        # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────
+        "llm_router_enabled": False,         # LLMRouter 작업 유형별 자동 라우팅
+        "few_shot_max_examples": 3,          # FewShotInjector 최대 예시 수
+        "skill_library_enabled": True,       # SkillLibrary 성공 패턴 자동 추출
+        "reflection_engine_enabled": True,   # ReflectionEngine 실패 자동 반성
+        "memory_consolidation_days": 14,     # MemoryConsolidator 압축 기준 (일)
+        "weekly_report_enabled": False,      # 주간 자기개선 리포트 (ProactiveScheduler 등록)
     }
     _cached_settings: Optional[Dict[str, Any]] = None
     # RLock: set_value → load_settings → save_settings 재진입 허용

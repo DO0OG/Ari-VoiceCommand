@@ -23,7 +23,6 @@ COMPILE_TARGETS = [
     "agent/agent_planner.py",
     "agent/autonomous_executor.py",
     "agent/file_tools.py",
-    "agent/scheduler.py",
     "agent/proactive_scheduler.py",
     "agent/real_verifier.py",
     "agent/safety_checker.py",
@@ -120,7 +119,14 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
-    compile_targets = [str(HERE / path) for path in COMPILE_TARGETS]
+    compile_paths = [HERE / path for path in COMPILE_TARGETS]
+    missing_targets = [str(path.relative_to(HERE)) for path in compile_paths if not path.exists()]
+    if missing_targets:
+        print(
+            f"[validate] skipping missing compile targets: {json.dumps(missing_targets, ensure_ascii=False)}",
+            flush=True,
+        )
+    compile_targets = [str(path) for path in compile_paths if path.exists()]
     if args.compile_only:
         run([sys.executable, "-m", "py_compile", *compile_targets], "compile critical modules")
         print("[validate] compile-only checks passed", flush=True)

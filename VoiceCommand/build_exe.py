@@ -11,7 +11,7 @@ nofollow 정책:
 
 출력: dist/Ari/
 
-포함 모듈 (2026-03-26 최신):
+포함 모듈 (2026-03-30 최신):
   ui/character_widget.py     — 벽/천장 타기 도중 드래그 시 중력 미적용 버그 수정
   ui/theme_editor.py         — ThemeEditorDialog 추가 (팔레트 편집 별도 창)
   ui/settings_dialog.py      — 인라인 팔레트 에디터 → ThemeEditorDialog 분리
@@ -155,12 +155,21 @@ nuitka_args = [
     "--include-module=agent.execution_analysis",
     "--include-module=agent.file_tools",
     "--include-module=agent.llm_provider",
+    "--include-module=agent.llm_router",
     "--include-module=agent.real_verifier",
     "--include-module=agent.safety_checker",
-    "--include-module=agent.scheduler",
     "--include-module=agent.proactive_scheduler",
     "--include-module=agent.strategy_memory",
     "--include-module=agent.automation_helpers",
+    "--include-module=agent.few_shot_injector",
+    "--include-module=agent.skill_library",
+    "--include-module=agent.reflection_engine",
+    "--include-module=agent.planner_feedback",
+    "--include-module=agent.weekly_report",
+    "--include-module=memory.user_profile_engine",
+    "--include-module=memory.memory_index",
+    "--include-module=memory.memory_consolidator",
+    "--include-module=commands.memory_command",
     "--include-module=core.plugin_loader",
     "--include-module=core.plugin_sandbox",
     "--include-module=core.resource_manager",

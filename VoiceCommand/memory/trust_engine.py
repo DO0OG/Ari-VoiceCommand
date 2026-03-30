@@ -15,6 +15,8 @@ SOURCE_WEIGHTS: dict[str, float] = {
     "external": 0.6,
 }
 DEFAULT_SOURCE_WEIGHT = 0.6
+_MIN_SOURCE_WEIGHT = 0.2
+_MAX_SOURCE_WEIGHT = 1.2
 
 REINFORCE_BASE = 0.08
 REINFORCE_DECAY = 0.015
@@ -70,6 +72,37 @@ def compute_decay(prior: float, days_since_update: int, access_count: int = 0) -
 
 def should_remove(confidence: float, conflict_count: int, last_updated_days: int) -> bool:
     return confidence < 0.12 or (conflict_count >= 5 and confidence < 0.25) or (last_updated_days > 365 and confidence < 0.30)
+
+
+def batch_decay(facts: dict, current_time) -> dict:
+    updated = {}
+    for key, payload in (facts or {}).items():
+        try:
+            updated_at = payload.get("updated_at")
+            if not updated_at:
+                updated[key] = payload
+                continue
+            days = max((current_time - __import__("datetime").datetime.fromisoformat(updated_at)).days, 0)
+            result = compute_decay(
+                float(payload.get("confidence", 0.7)),
+                days,
+                int(payload.get("access_count", 0)),
+            )
+            if should_remove(result.new_confidence, int(payload.get("conflict_count", 0)), days):
+                continue
+            new_payload = dict(payload)
+            new_payload["confidence"] = round(result.new_confidence, 2)
+            updated[key] = new_payload
+        except Exception:
+            updated[key] = payload
+    return updated
+
+
+def update_source_weight(source: str, was_correct: bool) -> float:
+    current = SOURCE_WEIGHTS.get(source, DEFAULT_SOURCE_WEIGHT)
+    delta = 0.03 if was_correct else -0.05
+    SOURCE_WEIGHTS[source] = max(_MIN_SOURCE_WEIGHT, min(_MAX_SOURCE_WEIGHT, round(current + delta, 2)))
+    return SOURCE_WEIGHTS[source]
 
 
 if __name__ == "__main__":

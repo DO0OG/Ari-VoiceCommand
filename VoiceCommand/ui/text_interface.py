@@ -693,7 +693,7 @@ class TextInterface(QMainWindow):
         if self._scheduler_panel is None:
             try:
                 from ui.scheduler_panel import SchedulerPanel
-                from agent.scheduler import get_scheduler
+                from agent.proactive_scheduler import get_scheduler
                 self._scheduler_panel = SchedulerPanel(scheduler=get_scheduler())
             except Exception as e:
                 logger.error(f"스케줄러 패널 생성 실패: {e}")
