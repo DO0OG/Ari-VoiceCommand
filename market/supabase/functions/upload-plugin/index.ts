@@ -61,18 +61,23 @@ Deno.serve(async (req) => {
 
     const { data: plugin, error } = await supabase
       .from("plugins")
-      .insert({
-        developer_id: developer.id,
-        name: meta.name,
-        version: meta.version,
-        api_version: meta.api_version,
-        description: meta.description,
-        commands: meta.commands ?? [],
-        permissions: meta.permissions ?? [],
-        entry: meta.entry,
-        zip_url: uploadRes.data.path,
-        status: "pending",
-      })
+      .upsert(
+        {
+          developer_id: developer.id,
+          name: meta.name,
+          version: meta.version,
+          api_version: meta.api_version,
+          description: meta.description,
+          commands: meta.commands ?? [],
+          permissions: meta.permissions ?? [],
+          entry: meta.entry,
+          zip_url: uploadRes.data.path,
+          status: "pending",
+          review_report: {},
+          reviewed_at: null,
+        },
+        { onConflict: "developer_id,name,version" },
+      )
       .select("*")
       .single();
 

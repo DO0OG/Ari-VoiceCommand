@@ -16,22 +16,22 @@ export default function DashboardPage() {
   const { session, loading } = useAuth();
   const [plugins, setPlugins] = useState<Plugin[]>([]);
 
-  useEffect(() => {
-    if (!session) {
-      return;
-    }
-    supabase.auth.getSession().then(async ({ data }) => {
-      const token = data.session?.access_token;
-      if (!token) {
-        return;
-      }
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL}/my-plugins`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const payload = await response.json();
-      setPlugins(payload.items ?? []);
+  async function loadPlugins() {
+    const { data } = await supabase.functions.invoke("my-plugins");
+    setPlugins((data as { items: Plugin[] })?.items ?? []);
+  }
+
+  async function deletePlugin(pluginId: string) {
+    await supabase.functions.invoke("my-plugins", {
+      method: "DELETE",
+      body: { plugin_id: pluginId },
     });
+    await loadPlugins();
+  }
+
+  useEffect(() => {
+    if (session) loadPlugins();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   if (loading) {
@@ -76,9 +76,19 @@ export default function DashboardPage() {
                 <p className="font-display text-2xl text-ink">{plugin.name}</p>
                 <p className="text-sm text-ink/60">v{plugin.version}</p>
               </div>
-              <span className="rounded-full bg-fog px-3 py-1 text-sm text-ink/70">
-                {statusLabel[plugin.status ?? "pending"]}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-fog px-3 py-1 text-sm text-ink/70">
+                  {statusLabel[plugin.status ?? "pending"]}
+                </span>
+                {(plugin.status === "rejected" || plugin.status === "pending") && (
+                  <button
+                    onClick={() => deletePlugin(plugin.id)}
+                    className="rounded-full bg-red-100 px-3 py-1 text-sm text-red-600 hover:bg-red-200"
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
             </div>
             {plugin.review_report?.summary ? (
               <p className="mt-3 text-sm text-ink/70">{plugin.review_report.summary}</p>
