@@ -178,14 +178,18 @@ export default function DashboardPage() {
                       </button>
                     )}
                     {plugin.status === "approved" && plugin.release_url && (
-                      <a
-                        href={plugin.release_url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        onClick={async () => {
+                          await supabase.functions.invoke("install-plugin", {
+                            body: { plugin_id: plugin.id },
+                          });
+                          window.open(plugin.release_url!, "_blank");
+                          await loadPlugins();
+                        }}
                         className="rounded-lg border border-[rgba(74,222,128,0.3)] px-3 py-1.5 text-xs text-[#4ade80] hover:bg-[rgba(74,222,128,0.1)]"
                       >
                         다운로드
-                      </a>
+                      </button>
                     )}
                     <Link
                       href={`/dashboard/upload?update=${encodeURIComponent(plugin.name)}`}
