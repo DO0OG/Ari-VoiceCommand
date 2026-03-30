@@ -16,14 +16,15 @@ nofollow 정책:
   market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
   core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + timeout 상한 적용
   validate_repo.py          — subprocess 없는 표준 라이브러리 검증 루프
-  requirements.txt          — certifi / requests / Pillow 보안 업데이트
+  services/web_tools.py     — ddgs 우선 검색 클라이언트 + legacy fallback
+  requirements.txt          — certifi / requests / Pillow 보안 업데이트, ddgs 기본 채택
 
 포함 모듈 (2026-03-30):
   ui/character_widget.py     — 벽/천장 타기 도중 드래그 시 중력 미적용 버그 수정
   ui/theme_editor.py         — ThemeEditorDialog 추가 (팔레트 편집 별도 창)
   ui/settings_dialog.py      — 인라인 팔레트 에디터 → ThemeEditorDialog 분리
   core/plugin_loader.py      — PluginContext 등록 훅(메뉴/명령/도구/샌드박스) + API 버전 협상
-  core/plugin_sandbox.py     — 서브프로세스 기반 플러그인 샌드박스 실행기
+  core/plugin_sandbox.py     — 플러그인 샌드박스 실행기 (현재는 multiprocessing 격리 방식으로 유지)
   commands/command_registry.py — register_command() 런타임 동적 등록
   commands/ai_command.py     — register_plugin_tool_handler() LLM 도구 동적 디스패치
   agent/llm_provider.py      — register_plugin_tool() 동적 스키마 확장
@@ -144,7 +145,7 @@ nuitka_args = [
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
-    "--include-data-files=reference.wav=reference.wav",
+    *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
     "--include-data-files=ari_settings.json=ari_settings.json",
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",

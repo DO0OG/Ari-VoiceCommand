@@ -29,6 +29,17 @@
 - 기본 검증 명령:
   - `py -3.11 VoiceCommand/validate_repo.py`
   - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
+- 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
+
+## 로컬 전용 파일
+
+- 아래 파일/폴더는 로컬 개발 산출물이라 기본적으로 Git 추적 대상이 아닙니다.
+  - `VoiceCommand/ari_settings.json`
+  - `VoiceCommand/reference.wav`
+  - `market/web/.env.local`
+  - `market/supabase/.temp/`
+  - `supabase/`
+- 문서나 빌드 스크립트를 수정할 때는 이런 로컬 파일이 없어도 동작하도록 유지해 주세요.
 
 ## 커밋 메시지 가이드라인
 

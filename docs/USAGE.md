@@ -157,7 +157,7 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 | `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴 항목 추가 |
 | `context.register_command(BaseCommand)` | 음성 명령 동적 등록 |
 | `context.register_tool(schema, handler)` | LLM tool calling 확장 |
-| `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
+| `context.run_sandboxed(code, timeout=15)` | 별도 Python 프로세스 격리 실행 |
 | `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 |
 
 `PLUGIN_INFO`에 `"api_version": "1.0"` 선언이 필수입니다.

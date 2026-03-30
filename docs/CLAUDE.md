@@ -26,7 +26,7 @@ Korean voice-controlled AI assistant for Windows. Features: Wake word ("아리�
 - **Plugin System**:
   - `PluginManager` (`core/plugin_loader.py`): Scans `plugins/*.py`, checks `api_version` against `_COMPATIBLE_API_VERSIONS`, calls `register(context)`. Auto-injects `run_sandboxed` if not set by caller. Supports `load_plugin(path)`, `unload_plugin(name)`, `reload_plugin(name)` for hot-reload.
   - `PluginContext`: Carries `register_menu_action`, `register_command`, `register_tool`, `run_sandboxed` hooks injected from `Main.py`.
-  - `plugin_sandbox` (`core/plugin_sandbox.py`): Runs arbitrary code string in a subprocess with configurable timeout. Returns `{"ok", "output", "error"}`.
+  - `plugin_sandbox` (`core/plugin_sandbox.py`): Runs arbitrary code string in an isolated Python worker process with configurable timeout. Returns `{"ok", "output", "error"}`.
   - `PluginWatcher` (`core/plugin_watcher.py`): watchdog-based `plugins/` directory watcher. Debounced (1 s). Flushed every 1 s via `QTimer` in `Main.py`. Triggers `load_plugin` / `reload_plugin` / `unload_plugin` automatically.
   - Current API version: `"1.0"`. Bump `_COMPATIBLE_API_VERSIONS` when making breaking changes.
 - **Agent System**:
@@ -68,7 +68,7 @@ Korean voice-controlled AI assistant for Windows. Features: Wake word ("아리�
 - **Plugin tool registration**: Call `context.register_tool(schema, handler)` from `register()`. Tool name must not collide with built-in dispatch keys. Handler signature: `(args: dict) -> Optional[str]`. Return str is spoken via TTS.
 - **Plugin menu registration**: Call `context.register_menu_action(label, callback)` — inserts before "설정" in tray menu (and automatically appears in character right-click menu via shared `QMenu`). Must be called from Qt main thread (safe inside `register()`).
 - **Character menu visibility control**: Call `context.set_character_menu_enabled(False)` to suppress the character widget's right-click context menu entirely (e.g., for fullscreen/game modes). Automatically restored to `True` when the plugin is unloaded.
-- **Plugin sandbox**: `result = context.run_sandboxed(code_str, timeout=15)` — subprocess isolation. Check `result["ok"]` before using `result["output"]`.
+- **Plugin sandbox**: `result = context.run_sandboxed(code_str, timeout=15)` — isolated worker-process execution. Check `result["ok"]` before using `result["output"]`.
 - **DAG parallel execution**: Steps with same `parallel_group` run concurrently via `ThreadPoolExecutor`. Groups are assigned by `dag_builder.assign_parallel_groups()` (Kahn's algorithm). Step ordering is preserved per step_id in `_group_by_dependency()`.
 - **Trust engine**: Call `compute_reinforcement` / `compute_conflict_update` from `memory/trust_engine.py` when updating facts. Never manually update confidence values.
 

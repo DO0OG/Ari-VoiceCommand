@@ -8,6 +8,8 @@ import argparse
 import json
 import os
 import py_compile
+import runpy
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -90,14 +92,16 @@ def _run_tests() -> None:
 
 
 def _run_smoke() -> None:
-    namespace = {
-        "__name__": "__main__",
-        "__file__": str(HERE / "_template_smoke.py"),
-    }
     previous_cwd = os.getcwd()
     try:
         os.chdir(HERE)
-        exec(compile(TEMPLATE_SMOKE, namespace["__file__"], "exec"), namespace)
+        with tempfile.NamedTemporaryFile("w", suffix="_template_smoke.py", encoding="utf-8", delete=False) as temp_file:
+            temp_file.write(TEMPLATE_SMOKE)
+            temp_path = temp_file.name
+        try:
+            runpy.run_path(temp_path, run_name="__main__")
+        finally:
+            os.remove(temp_path)
     finally:
         os.chdir(previous_cwd)
 

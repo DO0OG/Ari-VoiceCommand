@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing as mp
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,9 @@ DEFAULT_TIMEOUT = 15
 
 def _sandbox_worker(code: str, queue) -> None:
     import io
+    import runpy
     import sys
+    import tempfile
     import traceback
 
     stdout_buffer = io.StringIO()
@@ -19,8 +22,14 @@ def _sandbox_worker(code: str, queue) -> None:
     try:
         original_stdout = sys.stdout
         sys.stdout = stdout_buffer
-        exec(code, {})
-        sys.stdout = original_stdout
+        with tempfile.NamedTemporaryFile("w", suffix="_sandbox_exec.py", encoding="utf-8", delete=False) as temp_file:
+            temp_file.write(code)
+            temp_path = temp_file.name
+        try:
+            runpy.run_path(temp_path, run_name="__main__")
+            sys.stdout = original_stdout
+        finally:
+            os.remove(temp_path)
     except Exception:
         sys.stdout = sys.__stdout__
         error_text = traceback.format_exc()

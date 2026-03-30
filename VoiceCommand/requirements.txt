@@ -3,6 +3,7 @@
 #   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
 #   보안 업데이트: certifi / requests / Pillow 상향
+#   웹 검색 패키지: ddgs 우선 사용, legacy duckduckgo-search 는 코드 fallback 전용
 #   Phase 1-5: conversation_history 슬라이딩 요약, UserProfileEngine, MemoryIndex(SQLite FTS5),
 #              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
@@ -38,7 +39,7 @@ websockets==12.0
 
 # ── 네트워크 / 브라우저 자동화 ─────────────────────────────────────────────────
 certifi>=2024.7.4
-duckduckgo-search>=6.1.0
+ddgs>=8.0.0
 httpx>=0.27.0
 requests>=2.32.4
 selenium>=4.18.0

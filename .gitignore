@@ -171,6 +171,7 @@ VoiceCommand/logs/
 VoiceCommand/saved_model/
 VoiceCommand/settings.json
 VoiceCommand/ari_settings.json
+VoiceCommand/reference.wav
 VoiceCommand/conversation_history.json
 VoiceCommand/user_context.json
 VoiceCommand/strategy_memory.json
@@ -178,3 +179,6 @@ VoiceCommand/desktop_workflow_plans.json
 VoiceCommand/vosk-model-*/
 VoiceCommand/*.ppn
 VoiceCommand/porcupine_params_ko.pv
+market/web/.env.local
+market/supabase/.temp/
+supabase/
