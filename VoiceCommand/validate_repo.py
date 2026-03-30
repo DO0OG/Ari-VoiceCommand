@@ -14,6 +14,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+
+def _run_subprocess(command: list[str]) -> None:
+    if not command or any(not isinstance(part, str) or not part for part in command):
+        raise ValueError(f"유효하지 않은 명령입니다: {command!r}")
+    subprocess.run(command, cwd=HERE, check=True)  # nosec B603
+
 COMPILE_TARGETS = [
     "Main.py",
     "build_exe.py",
@@ -79,9 +85,7 @@ print("template routing ok")
 def run(command: list[str], description: str) -> float:
     print(f"[validate] {description}", flush=True)
     start = time.perf_counter()
-    if not command or any(not isinstance(part, str) or not part for part in command):
-        raise ValueError(f"유효하지 않은 명령입니다: {command!r}")
-    subprocess.run(command, cwd=HERE, check=True)
+    _run_subprocess(command)
     elapsed = time.perf_counter() - start
     print(f"[validate] {description} completed in {elapsed:.2f}s", flush=True)
     return elapsed

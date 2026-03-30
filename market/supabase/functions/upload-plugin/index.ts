@@ -109,8 +109,15 @@ async function extractPluginJson(file: File): Promise<PluginMeta> {
 }
 
 function validateMeta(meta: PluginMeta): string | null {
-  for (const field of REQUIRED_FIELDS) {
-    if (!meta[field] || String(meta[field]).trim() === "") {
+  const requiredValues: Array<[typeof REQUIRED_FIELDS[number], string]> = [
+    ["name", meta.name],
+    ["version", meta.version],
+    ["api_version", meta.api_version],
+    ["description", meta.description],
+    ["entry", meta.entry],
+  ];
+  for (const [field, value] of requiredValues) {
+    if (String(value ?? "").trim() === "") {
       return `Missing required field: ${field}`;
     }
   }

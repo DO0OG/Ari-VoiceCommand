@@ -3,6 +3,7 @@ OpenAI TTS 제공자 — tts-1 / tts-1-hd
 response_format="pcm" → 24kHz mono int16 raw PCM (변환 없이 즉시 재생)
 Fish Audio / CosyVoice3와 동일한 인터페이스: speak() / playback_finished / cleanup()
 """
+import importlib
 import logging
 import time
 
@@ -28,8 +29,8 @@ class OpenAITTS(QObject):
 
         if api_key:
             try:
-                from openai import OpenAI
-                self._client = OpenAI(api_key=api_key)
+                openai_module = importlib.import_module("openai")
+                self._client = openai_module.OpenAI(api_key=api_key)
                 logging.info(f"OpenAI TTS 초기화 완료 (voice={voice}, model={model})")
             except Exception as e:
                 logging.error(f"OpenAI TTS 초기화 실패: {e}")
@@ -78,11 +79,11 @@ class OpenAITTS(QObject):
     def cleanup(self):
         try:
             self.pa.terminate()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"OpenAI TTS 정리 중 무시된 오류: {exc}")
 
     def __del__(self):
         try:
             self.cleanup()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"OpenAI TTS 소멸자 정리 실패: {exc}")

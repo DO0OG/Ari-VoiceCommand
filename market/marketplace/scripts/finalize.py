@@ -77,8 +77,8 @@ def main() -> None:
             json={"plugin_id": plugin_id, "status": status, "report": report},
             timeout=15,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"notify-developer 호출 생략: {exc}")
 
     print(f"final status: {status}")
 

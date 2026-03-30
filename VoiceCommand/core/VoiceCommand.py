@@ -140,11 +140,11 @@ def initialize_tts():
         try:
             try:
                 _state.fish_tts.playback_finished.disconnect(_state.character_widget.hide_speech_bubble)
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.debug(f"기존 TTS 시그널 분리 생략: {exc}")
             _state.fish_tts.playback_finished.connect(_state.character_widget.hide_speech_bubble)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"TTS 시그널 연결 실패: {exc}")
 
     _state.rp_gen = RPGenerator()
     _state.rp_gen.set_config(
@@ -162,8 +162,8 @@ def reconnect_tts_signals():
     try:
         try:
             _state.fish_tts.playback_finished.disconnect(_state.character_widget.hide_speech_bubble)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"기존 재생 완료 시그널 해제 생략: {exc}")
         _state.fish_tts.playback_finished.connect(_state.character_widget.hide_speech_bubble)
     except Exception as e:
         logging.debug(f"TTS 시그널 재연결 실패: {e}")

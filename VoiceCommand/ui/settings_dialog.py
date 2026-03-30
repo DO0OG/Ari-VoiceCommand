@@ -1,6 +1,7 @@
 """
 설정 창 GUI — 탭 기반 구성 (RP, AI & TTS, 장치)
 """
+import importlib
 import logging
 import os
 from PySide6.QtWidgets import (
@@ -9,7 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox, QGroupBox, QScrollArea, QWidget,
     QTabWidget, QMessageBox, QListWidget, QListWidgetItem, QFrame,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
@@ -40,20 +41,20 @@ class _ValidatorThread(QThread):
             model = self.model.strip() or cfg["default_model"]
 
             if self.provider == "anthropic":
-                import anthropic
-                client = anthropic.Anthropic(api_key=self.api_key)
+                anthropic_module = importlib.import_module("anthropic")
+                client = anthropic_module.Anthropic(api_key=self.api_key)
                 client.messages.create(
                     model=model, max_tokens=1,
                     messages=[{"role": "user", "content": "hi"}],
                 )
             else:
-                from openai import OpenAI
+                openai_module = importlib.import_module("openai")
                 kwargs: dict = {"api_key": self.api_key}
                 if self.provider == "ollama":
                     kwargs["base_url"] = ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
                 elif cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
-                client = OpenAI(**kwargs)
+                client = openai_module.OpenAI(**kwargs)
                 client.chat.completions.create(
                     model=model, max_tokens=1,
                     messages=[{"role": "user", "content": "hi"}],
@@ -736,8 +737,8 @@ class SettingsDialog(QDialog):
         self.theme_preset_combo.blockSignals(False)
         try:
             apply_live_theme(character_widget=self.parent())
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"실시간 테마 적용 실패: {exc}")
         self._refresh_theme_preview()
 
     def _on_theme_preset_changed(self, index: int):

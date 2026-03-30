@@ -1,26 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plugin } from "@/lib/types";
 import { signInWithGitHub, supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 
-const statusMeta: Record<string, { label: string; color: string; dot: string }> = {
-  pending:  { label: "검증 중",  color: "text-[#60a5fa] bg-[rgba(96,165,250,0.1)]",  dot: "bg-[#60a5fa] animate-pulse" },
-  approved: { label: "승인됨",   color: "text-[#4ade80] bg-[rgba(74,222,128,0.1)]",  dot: "bg-[#4ade80]" },
-  rejected: { label: "반려됨",   color: "text-red-400   bg-[rgba(248,113,113,0.1)]", dot: "bg-red-400" },
-};
+function getStatusMeta(status: string): { label: string; color: string; dot: string } {
+  switch (status) {
+    case "approved":
+      return { label: "승인됨", color: "text-[#4ade80] bg-[rgba(74,222,128,0.1)]", dot: "bg-[#4ade80]" };
+    case "rejected":
+      return { label: "반려됨", color: "text-red-400 bg-[rgba(248,113,113,0.1)]", dot: "bg-red-400" };
+    case "pending":
+    default:
+      return { label: "검증 중", color: "text-[#60a5fa] bg-[rgba(96,165,250,0.1)]", dot: "bg-[#60a5fa] animate-pulse" };
+  }
+}
+
+function getStageLabel(key: string): string {
+  switch (key) {
+    case "clamav":
+      return "바이러스 스캔";
+    case "bandit":
+      return "Bandit 보안";
+    case "pylint":
+      return "Pylint 품질";
+    case "semgrep":
+      return "Semgrep 스캔";
+    default:
+      return key;
+  }
+}
 
 function ReviewReport({ report }: { report: Plugin["review_report"] }) {
   if (!report?.stages && !report?.summary) return null;
   const stages = report.stages ?? {};
-  const stageLabels: Record<string, string> = {
-    clamav: "바이러스 스캔",
-    bandit: "Bandit 보안",
-    pylint: "Pylint 품질",
-    semgrep: "Semgrep 스캔",
-  };
   return (
     <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
       {report.summary && (
@@ -30,7 +45,7 @@ function ReviewReport({ report }: { report: Plugin["review_report"] }) {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Object.entries(stages).map(([key, val]) => (
             <div key={key} className="rounded-lg bg-white/[0.03] px-3 py-2 text-center">
-              <p className="text-xs text-muted">{stageLabels[key] ?? key}</p>
+              <p className="text-xs text-muted">{getStageLabel(key)}</p>
               <p className={`mt-1 text-sm font-semibold ${val.passed ? "text-[#4ade80]" : "text-red-400"}`}>
                 {val.passed ? "통과" : "실패"}
               </p>
@@ -48,10 +63,10 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  async function loadPlugins() {
+  const loadPlugins = useCallback(async () => {
     const { data } = await supabase.functions.invoke("my-plugins");
     setPlugins((data as { items?: Plugin[] }).items ?? []);
-  }
+  }, []);
 
   async function handleDelete(pluginId: string) {
     if (!confirm("이 플러그인을 삭제하시겠습니까?")) return;
@@ -66,8 +81,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (session) void loadPlugins();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [loadPlugins, session]);
 
   if (loading) {
     return (
@@ -115,7 +129,7 @@ export default function DashboardPage() {
           {(["approved", "pending", "rejected"] as const).map((s) => (
             <div key={s} className="glass rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-bright">{plugins.filter((p) => p.status === s).length}</p>
-              <p className="mt-1 text-xs text-muted">{statusMeta[s].label}</p>
+              <p className="mt-1 text-xs text-muted">{getStatusMeta(s).label}</p>
             </div>
           ))}
         </div>
@@ -133,7 +147,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           plugins.map((plugin) => {
-            const sm = statusMeta[plugin.status ?? "pending"];
+            const sm = getStatusMeta(plugin.status ?? "pending");
             const isExpanded = expanded === plugin.id;
 
             return (

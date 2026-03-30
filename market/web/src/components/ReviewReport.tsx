@@ -6,6 +6,10 @@ const LABELS: Record<string, string> = {
   semgrep_review: "semgrep 보안 스캔",
 };
 
+function getStageLabel(key: string): string {
+  return LABELS[key] ?? key;
+}
+
 export function ReviewReport({ report }: { report?: PluginReviewReport }) {
   const stages = report?.stages ?? {};
 
@@ -16,7 +20,7 @@ export function ReviewReport({ report }: { report?: PluginReviewReport }) {
         {Object.entries(stages).map(([key, value], index) => (
           <div key={key} className="rounded-2xl border border-ink/10 p-4">
             <p className="font-medium text-ink">
-              {index + 1}. {LABELS[key] ?? key}
+              {index + 1}. {getStageLabel(key)}
             </p>
             <p className={`mt-2 text-sm ${value.passed ? "text-pine" : "text-red-600"}`}>
               {value.passed ? "통과" : "실패"}

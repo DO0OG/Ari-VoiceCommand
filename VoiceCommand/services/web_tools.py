@@ -232,7 +232,8 @@ class SmartBrowser:
                 try:
                     if element.is_displayed():
                         return element
-                except Exception:
+                except Exception as exc:
+                    logging.debug(f"[SmartBrowser] 요소 표시 상태 확인 실패: {exc}")
                     continue
         return None
 

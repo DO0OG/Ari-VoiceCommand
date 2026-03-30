@@ -44,7 +44,7 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
                 text=True,
                 timeout=safe_timeout,
                 creationflags=0x08000000 if sys.platform == "win32" else 0,
-            )
+            )  # nosec B603
         finally:
             try:
                 os.remove(temp_path)

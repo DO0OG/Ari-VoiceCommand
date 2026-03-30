@@ -18,23 +18,22 @@ def load_json(path: str, default):
     except Exception:
         return default
 
+def _run_semgrep() -> None:
+    command = [
+        "semgrep",
+        "--config",
+        ",".join(RULESETS),
+        "./plugin",
+        "--json",
+        "--quiet",
+        "--output",
+        "semgrep_result.json",
+    ]
+    subprocess.run(command, check=False, capture_output=True, text=True)  # nosec B603
+
 
 def main() -> None:
-    subprocess.run(
-        [
-            "semgrep",
-            "--config",
-            ",".join(RULESETS),
-            "./plugin",
-            "--json",
-            "--quiet",
-            "--output",
-            "semgrep_result.json",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    _run_semgrep()
 
     data = load_json("semgrep_result.json", {"results": []})
     findings = data.get("results", [])

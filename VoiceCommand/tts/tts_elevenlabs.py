@@ -97,11 +97,11 @@ class ElevenLabsTTS(QObject):
     def cleanup(self):
         try:
             self.pa.terminate()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"ElevenLabs TTS 정리 중 무시된 오류: {exc}")
 
     def __del__(self):
         try:
             self.cleanup()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"ElevenLabs TTS 소멸자 정리 실패: {exc}")

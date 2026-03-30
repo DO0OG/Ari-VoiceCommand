@@ -5,6 +5,7 @@ from __future__ import annotations
 """
 
 import hashlib
+import importlib
 import logging
 import os
 from typing import Any, Optional
@@ -54,8 +55,8 @@ class Embedder:
         if not api_key:
             return False
         try:
-            from openai import OpenAI
-            self._client = OpenAI(api_key=api_key)
+            openai_module = importlib.import_module("openai")
+            self._client = openai_module.OpenAI(api_key=api_key)
             self.backend = "openai"
             self.dim = 1536
             return True
@@ -91,7 +92,7 @@ class Embedder:
                 return np.array(resp.data[0].embedding, dtype=float)
             if self.backend == "gemini":
                 try:
-                    import google.generativeai as genai
+                    genai = importlib.import_module("google.generativeai")
                     genai.configure(api_key=self._client)
                     resp = genai.embed_content(model="models/embedding-001", content=text)
                     return np.array(resp["embedding"], dtype=float)

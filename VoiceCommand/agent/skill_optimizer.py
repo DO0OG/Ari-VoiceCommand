@@ -161,7 +161,7 @@ class SkillOptimizer:
             run_fn = getattr(module, "run_skill", None)
             if not callable(run_fn):
                 return False, "run_skill 함수 없음"
-            result = run_fn(goal)
+            result = run_fn(str(goal))
             return True, str(result)
         except Exception as exc:
             return False, str(exc)
@@ -208,8 +208,8 @@ class SkillOptimizer:
             if report.level == DangerLevel.DANGEROUS:
                 logger.warning(f"[SkillOptimizer] 안전 검사 실패: {report.summary_kr}")
                 return False
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[SkillOptimizer] 안전 검사기 사용 불가: {exc}")
         try:
             tree = ast.parse(code)
             if not self._is_safe_module(tree):

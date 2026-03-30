@@ -281,8 +281,8 @@ class CharacterWidget(QWidget):
                         self._screen_geom_cache = full_geom
                         self._screen_geom_cache_time = time.time()
                         return self._screen_geom_cache
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logging.debug(f"화면 상태 감지 폴백 사용: {exc}")
             
             # 3. 일반적인 가용 높이 체크 (시스템 설정상 작업표시줄이 없을 때)
             if avail_geom.height() >= full_geom.height() - 10:

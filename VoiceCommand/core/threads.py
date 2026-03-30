@@ -8,8 +8,7 @@ from queue import Queue
 from PySide6.QtCore import QThread, Signal
 from audio.audio_manager import _audio_lock
 from core.constants import (
-    WAKE_WORDS, WAKE_RESPONSES,
-    SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT
+    WAKE_WORDS, WAKE_RESPONSES
 )
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider

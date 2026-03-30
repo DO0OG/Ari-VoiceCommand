@@ -16,6 +16,22 @@ type PluginMeta = {
 
 type UploadState = "idle" | "uploading" | "pending" | "done" | "error";
 
+function getStatusConfig(status: UploadState): { color: string; text: string } {
+  switch (status) {
+    case "uploading":
+      return { color: "text-[#a78bfa]", text: "⏫ 업로드 중..." };
+    case "pending":
+      return { color: "text-[#60a5fa]", text: "🔍 검증 중... (자동으로 결과가 표시됩니다)" };
+    case "done":
+      return { color: "text-[#4ade80]", text: "✅ 승인 완료" };
+    case "error":
+      return { color: "text-red-400", text: "❌ 오류" };
+    case "idle":
+    default:
+      return { color: "", text: "" };
+  }
+}
+
 async function extractPluginJson(file: File): Promise<PluginMeta> {
   const zip = await JSZip.loadAsync(file);
   const entry = zip.file("plugin.json");
@@ -111,7 +127,7 @@ export function UploadForm() {
     e.preventDefault();
     setDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) void handleFile(file);
+    void handleFile(file);
   }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -121,13 +137,7 @@ export function UploadForm() {
 
   const onDragLeave = useCallback(() => { setDragging(false); }, []);
 
-  const statusConfig = {
-    idle:      { color: "", text: "" },
-    uploading: { color: "text-[#a78bfa]", text: "⏫ 업로드 중..." },
-    pending:   { color: "text-[#60a5fa]", text: "🔍 검증 중... (자동으로 결과가 표시됩니다)" },
-    done:      { color: "text-[#4ade80]", text: "✅ 승인 완료" },
-    error:     { color: "text-red-400",   text: "❌ 오류" },
-  };
+  const statusView = getStatusConfig(status);
 
   return (
     <div className="glass rounded-2xl p-6 shadow-card">
@@ -195,8 +205,8 @@ export function UploadForm() {
 
       {/* 상태 */}
       {status !== "idle" && (
-        <div className={`mt-4 text-sm ${statusConfig[status].color}`}>
-          <p>{statusConfig[status].text}</p>
+        <div className={`mt-4 text-sm ${statusView.color}`}>
+          <p>{statusView.text}</p>
           {message && <p className="mt-1 text-xs text-muted">{message}</p>}
         </div>
       )}

@@ -730,8 +730,8 @@ class AICommand(BaseCommand):
                 try:
                     from memory.conversation_history import add_conversation
                     add_conversation(text, response)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logging.debug(f"대화 기록 저장 생략: {exc}")
 
         except AttributeError as e:
             logging.error(f"AI 어시스턴트가 초기화되지 않았습니다: {e}")

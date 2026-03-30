@@ -192,8 +192,8 @@ class StrategyMemory:
         try:
             from agent.embedder import get_reranker
             rescored = get_reranker().rerank(goal, rescored)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"[StrategyMemory] rerank 생략: {exc}")
         return [rec for _, rec in sorted(rescored, key=lambda item: item[0], reverse=True)[:limit]]
 
     def recent_failures(self, goal: str, limit: int = 3) -> List[str]:

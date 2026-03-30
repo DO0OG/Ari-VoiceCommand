@@ -271,7 +271,8 @@ class ProactiveScheduler:
                     continue
                 try:
                     last = datetime.fromisoformat(task.last_run)
-                except Exception:
+                except Exception as exc:
+                    logging.debug(f"[Scheduler] last_run 해석 실패: {task.task_id} ({exc})")
                     continue
                 elapsed = (now - last).total_seconds()
                 threshold = {
