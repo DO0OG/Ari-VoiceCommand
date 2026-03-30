@@ -24,17 +24,17 @@ export function SearchBar() {
   }, [router, search, sort, searchParams]);
 
   return (
-    <div className="grid gap-3 rounded-3xl bg-white/75 p-4 shadow-card md:grid-cols-[1fr_180px]">
+    <div className="glass grid gap-2 rounded-2xl p-2 md:grid-cols-[1fr_160px]">
       <input
         value={search}
-        onChange={(event) => setSearch(event.target.value)}
+        onChange={(e) => setSearch(e.target.value)}
         placeholder="플러그인 이름 또는 설명 검색"
-        className="rounded-2xl border border-ink/10 bg-fog px-4 py-3 outline-none"
+        className="rounded-xl bg-transparent px-4 py-2.5 text-sm text-bright placeholder:text-muted outline-none"
       />
       <select
         value={sort}
-        onChange={(event) => setSort(event.target.value)}
-        className="rounded-2xl border border-ink/10 bg-fog px-4 py-3 outline-none"
+        onChange={(e) => setSort(e.target.value)}
+        className="rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm text-subtle outline-none"
       >
         <option value="created_at">최신순</option>
         <option value="install_count">인기순</option>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
+import { Navbar } from "@/components/Navbar";
 
 export const metadata: Metadata = {
   title: "Ari Marketplace",
@@ -11,7 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

@@ -12,6 +12,7 @@ export default async function MarketplacePage({
   const params = await searchParams;
   const search = typeof params.search === "string" ? params.search : "";
   const sort = typeof params.sort === "string" ? params.sort : "created_at";
+
   let items: Plugin[] = [];
   try {
     const result = await fetchPlugins({ search, sort });
@@ -21,20 +22,31 @@ export default async function MarketplacePage({
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <section className="rounded-[2rem] bg-white/50 p-8 shadow-card">
-        <p className="text-sm uppercase tracking-[0.2em] text-ember">Ari Marketplace</p>
-        <h1 className="mt-3 font-display text-5xl text-ink">검증된 Ari 플러그인을 한곳에서</h1>
-        <p className="mt-4 max-w-2xl text-lg leading-8 text-ink/70">
-          ClamAV, bandit, pylint, semgrep 기반 자동 심사를 통과한 플러그인만 노출합니다.
+    <main className="mx-auto max-w-6xl px-6 pb-20">
+      {/* 히어로 */}
+      <section className="py-16 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#a78bfa]">
+          Ari Plugin Marketplace
+        </p>
+        <h1 className="mt-4 text-5xl font-bold leading-tight tracking-tight text-bright">
+          검증된 플러그인을
+          <br />
+          <span className="gradient-text">한 곳에서</span>
+        </h1>
+        <p className="mx-auto mt-5 max-w-lg text-base leading-7 text-subtle">
+          ClamAV · bandit · pylint · semgrep 4단계 자동 심사를 통과한 플러그인만 게시됩니다.
         </p>
       </section>
-      <section className="mt-8">
+
+      {/* 검색 */}
+      <section className="mb-8">
         <Suspense>
           <SearchBar />
         </Suspense>
       </section>
-      <section className="mt-8">
+
+      {/* 그리드 */}
+      <section>
         <PluginGrid plugins={items} />
       </section>
     </main>

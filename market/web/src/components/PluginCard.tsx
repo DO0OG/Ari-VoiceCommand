@@ -5,28 +5,39 @@ export function PluginCard({ plugin }: { plugin: Plugin }) {
   return (
     <Link
       href={`/marketplace/${plugin.id}`}
-      className="group rounded-3xl border border-black/5 bg-white/85 p-5 shadow-card transition hover:-translate-y-1 hover:shadow-2xl"
+      className="glass group flex flex-col rounded-2xl p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.14] hover:shadow-glow"
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-display text-xl text-ink">{plugin.name}</p>
-          <p className="text-sm text-ink/55">v{plugin.version}</p>
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-bright">{plugin.name}</p>
+          <p className="mt-0.5 text-xs text-muted">v{plugin.version}</p>
         </div>
-        <span className="rounded-full bg-pine/10 px-3 py-1 text-xs font-semibold text-pine">
+        <span className="shrink-0 rounded-full bg-[rgba(34,197,94,0.12)] px-2.5 py-1 text-[11px] font-medium text-[#4ade80]">
           검증 완료
         </span>
       </div>
-      <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink/75">{plugin.description}</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(plugin.commands ?? []).slice(0, 4).map((command) => (
-          <span key={command} className="rounded-full bg-fog px-3 py-1 text-xs text-ink/70">
-            {command}
+
+      <p className="mt-3 line-clamp-2 grow text-sm leading-6 text-subtle">
+        {plugin.description}
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {(plugin.commands ?? []).slice(0, 4).map((cmd) => (
+          <span
+            key={cmd}
+            className="rounded-full bg-[rgba(124,58,237,0.15)] px-2.5 py-0.5 text-[11px] text-[#a78bfa]"
+          >
+            {cmd}
           </span>
         ))}
       </div>
-      <div className="mt-5 flex items-center justify-between text-sm text-ink/50">
-        <span>@{plugin.developers?.github_login ?? "unknown"}</span>
-        <span>설치 {plugin.install_count.toLocaleString()}</span>
+
+      <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-4 w-4 rounded-full bg-white/10 text-center leading-4">@</span>
+          {plugin.developers?.github_login ?? "unknown"}
+        </span>
+        <span>↓ {plugin.install_count.toLocaleString()}</span>
       </div>
     </Link>
   );
