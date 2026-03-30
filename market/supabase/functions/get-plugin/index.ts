@@ -1,6 +1,7 @@
-import { createAdminClient, json } from "../_shared.ts";
+import { corsOptions, createAdminClient, json } from "../_shared.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return corsOptions();
   const supabase = createAdminClient();
   const url = new URL(req.url);
   const pluginId = url.searchParams.get("plugin_id");

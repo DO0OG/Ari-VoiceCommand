@@ -1,6 +1,7 @@
-import { createAdminClient, json } from "../_shared.ts";
+import { corsOptions, createAdminClient, json } from "../_shared.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return corsOptions();
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
   }

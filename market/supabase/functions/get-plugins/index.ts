@@ -1,6 +1,7 @@
-import { createAdminClient, json, sanitizeSort } from "../_shared.ts";
+import { corsOptions, createAdminClient, json, sanitizeSort } from "../_shared.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return corsOptions();
   const supabase = createAdminClient();
   const url = new URL(req.url);
   const search = (url.searchParams.get("search") ?? "").trim();

@@ -1,4 +1,5 @@
 import {
+  corsOptions,
   createAdminClient,
   getOrCreateDeveloper,
   json,
@@ -6,6 +7,7 @@ import {
 } from "../_shared.ts";
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return corsOptions();
   try {
     const supabase = createAdminClient();
     const user = await requireUser(supabase, req);

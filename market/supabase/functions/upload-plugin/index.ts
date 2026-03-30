@@ -1,5 +1,6 @@
 import * as zip from "https://deno.land/x/zipjs/index.js";
 import {
+  corsOptions,
   createAdminClient,
   getOrCreateDeveloper,
   json,
@@ -20,6 +21,7 @@ type PluginMeta = {
 };
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return corsOptions();
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
   }
