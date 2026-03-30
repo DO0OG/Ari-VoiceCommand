@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { fetchPlugins } from "@/lib/api";
 import { PluginGrid } from "@/components/PluginGrid";
 import { SearchBar } from "@/components/SearchBar";
+import { Plugin } from "@/lib/types";
 
 export default async function MarketplacePage({
   searchParams,
@@ -11,7 +12,13 @@ export default async function MarketplacePage({
   const params = await searchParams;
   const search = typeof params.search === "string" ? params.search : "";
   const sort = typeof params.sort === "string" ? params.sort : "created_at";
-  const { items } = await fetchPlugins({ search, sort });
+  let items: Plugin[] = [];
+  try {
+    const result = await fetchPlugins({ search, sort });
+    items = result.items;
+  } catch {
+    // Edge Functions 미배포 또는 네트워크 오류 시 빈 목록으로 표시
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-12">
