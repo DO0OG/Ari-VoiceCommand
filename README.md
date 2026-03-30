@@ -29,6 +29,7 @@
 | **자율 실행** | Python/Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) + DAG 병렬 실행 |
 | **에이전트 루프** | Plan → Execute → Verify 3레이어 (최대 4회 재계획) |
 | **스킬 라이브러리** | 동일 유형 3회 성공 → 스킬 자동 추출 · 재사용 (LLM 계획 없이 즉시 실행) |
+| **스킬 자기수정** | 실패 시 LLM이 스텝 재작성(D1) · 5회 성공 시 Python 함수로 컴파일(D2) · 컴파일 코드 실패 시 LLM 자동 수정 |
 | **자기반성** | 실패 시 근본 원인·회피 패턴·수정 제안 4레이어 자동 분석 |
 | **Few-shot 주입** | 성공 사례를 플래너 프롬프트에 자동 삽입 → 정확도 향상 |
 | **비전 검증** | OCR 화면 텍스트 인식 + 휴리스틱/코드/LLM 4단계 검증 |
@@ -51,6 +52,15 @@
 ---
 
 ## 개발 현황
+
+### 최근 업데이트 (2026-03-31) — 스킬 코드 자기수정
+
+- **스킬 Step 재작성 (Direction 1)**: `SkillOptimizer.optimize_steps()` — 스킬 실패 2회 시 LLM이 실패 에러를 분석해 JSON 스텝 시퀀스를 자동 수정. `condense_steps()` — 8회 성공 후 불필요 스텝 제거·압축.
+- **Python 코드 컴파일 (Direction 2)**: `SkillOptimizer.compile_to_python()` — 5회 성공한 검증된 스킬을 단일 `run_skill()` Python 함수로 컴파일, `compiled_skills/` 저장. 이후 실행 시 LLM 계획 없이 Python 직접 호출.
+- **컴파일 코드 자동 수정**: 컴파일 스킬 실패 시 `repair_python()` — LLM이 코드를 읽고 수정해 덮어씀.
+- **실행 우선순위**: 컴파일 스킬 → JSON 스텝 스킬 → 전체 에이전트 루프 순으로 폴백.
+- **안전 검사**: `safety_checker.check_python()` 통과한 코드만 저장·실행. AST 파싱 검증 포함.
+- **비동기 처리**: 모든 자기수정은 daemon 스레드 백그라운드 실행 (메인 루프 블로킹 없음).
 
 ### 최근 업데이트 (2026-03-30) — AI 자기개선 루프 완성
 
@@ -260,7 +270,8 @@ Main.py                     ← Qt 앱 진입점
 │   ├── agent_planner.py       ← 목표 분해 · 템플릿 · DAG · FewShot/Feedback 주입
 │   ├── few_shot_injector.py   ← 성공 사례 → 플래너 프롬프트 자동 삽입
 │   ├── planner_feedback.py    ← step_type 성공률 통계 → 플래너 힌트
-│   ├── skill_library.py       ← 성공 패턴 자동 추출·스킬 재사용·자동 비활성화
+│   ├── skill_library.py       ← 성공 패턴 자동 추출·스킬 재사용·자동 비활성화·자기수정 트리거
+│   ├── skill_optimizer.py     ← 스킬 자기수정 엔진 (D1: 스텝 재작성, D2: Python 컴파일·수정)
 │   ├── reflection_engine.py   ← 4레이어 실패 자기반성 (분류→원인→교훈→반복감지)
 │   ├── strategy_memory.py     ← 전략 기억 (중요도 기반 prune, few_shot_eligible)
 │   ├── proactive_scheduler.py ← 예약 작업 · 선제 제안 · 놓친 작업 보충
@@ -314,7 +325,9 @@ Main.py                     ← Qt 앱 진입점
          AgentOrchestrator.run()
               │
               ├── [0] SkillLibrary.get_applicable_skill()
-              │       └── 검증된 스킬 있으면 즉시 실행 (LLM 계획 생략)
+              │       ├── compiled=True → SkillOptimizer.run_compiled() (Python 직접 실행)
+              │       │       └── 실패 시 repair_python() 예약 → JSON 스텝 폴백
+              │       └── compiled=False → JSON 스텝 실행 (LLM 계획 생략)
               │
               ├── [1] AgentPlanner.decompose()
               │       ├── FewShotInjector — 유사 성공 사례 프롬프트 주입
@@ -329,7 +342,10 @@ Main.py                     ← Qt 앱 진입점
               │
               └── [4] _post_run_update()
                       ├── 성공: SkillLibrary.try_extract_skill()
+                      │       ├── success_count==5 → SkillOptimizer.compile_to_python() [백그라운드]
+                      │       └── success_count==8 → SkillOptimizer.condense_steps() [백그라운드]
                       ├── 실패: ReflectionEngine.reflect() → 다음 플래너에 반영
+                      │       └── fail_count>=2 → SkillOptimizer.optimize_steps() [백그라운드]
                       └── PlannerFeedbackLoop.record()
 ```
 

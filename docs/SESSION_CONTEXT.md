@@ -70,7 +70,8 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 |------|------------|------|
 | `llm_router.py` | `LLMRouter`, `get_llm_router()` | 작업 유형(코드/계획/분석/채팅)별 최적 모델 자동 라우팅 |
 | `few_shot_injector.py` | `FewShotInjector`, `get_few_shot_injector()` | 성공 전략 → 플래너 프롬프트 자동 삽입 (MAX_EXAMPLES=3) |
-| `skill_library.py` | `SkillLibrary`, `Skill`, `get_skill_library()` | 반복 성공 패턴 자동 추출·재사용·신뢰도 관리 |
+| `skill_library.py` | `SkillLibrary`, `Skill`, `get_skill_library()` | 반복 성공 패턴 자동 추출·재사용·신뢰도 관리·자기수정 트리거 |
+| `skill_optimizer.py` | `SkillOptimizer`, `get_skill_optimizer()` | D1: 스텝 재작성, D2: Python 컴파일·수정 |
 | `reflection_engine.py` | `ReflectionEngine`, `ReflectionResult`, `get_reflection_engine()` | 실패 4레이어 자기반성 |
 | `planner_feedback.py` | `PlannerFeedbackLoop`, `get_planner_feedback_loop()` | step_type별 성공률 통계 → 플래너 힌트 |
 | `weekly_report.py` | `WeeklyReport`, `get_weekly_report()` | 주간 자기개선 리포트 생성 |
@@ -111,6 +112,15 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### `agent/agent_orchestrator.py`
 - `_post_run_update()`: 성공 시 SkillLibrary 스킬 추출, 실패 시 ReflectionEngine 반성 → StrategyMemory 저장
 - PlannerFeedback, UserProfile, MemoryIndex 자동 업데이트
+- `_run_with_skill_if_available()`: `skill.compiled=True`면 `_run_compiled_skill()` 우선 실행, 실패 시 JSON 스텝 폴백
+- `_run_compiled_skill()`: `SkillOptimizer.run_compiled()` 호출, 실패 에러를 `record_feedback(error=...)` 전달
+
+### `agent/skill_optimizer.py` (신규 2026-03-31)
+- Direction 1: `optimize_steps(skill, error)` — 실패 에러 기반 스텝 재작성
+- Direction 1: `condense_steps(skill)` — 반복 성공 후 스텝 압축
+- Direction 2: `compile_to_python(skill)` — Python 함수로 컴파일 (`compiled_skills/<id>.py`)
+- Direction 2: `repair_python(skill, code, error)` — 컴파일 코드 LLM 수정
+- 안전: `safety_checker.check_python()` + `ast.parse()` 통과한 코드만 저장
 
 ### `agent/agent_planner.py`
 - FewShotInjector, PlannerFeedbackLoop 힌트를 시스템 프롬프트에 자동 주입
