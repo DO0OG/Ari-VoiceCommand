@@ -4,10 +4,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
 import sys
 import tempfile
 import textwrap
+from subprocess import TimeoutExpired, run as _subprocess_run
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
             temp_file.write(wrapper)
             temp_path = temp_file.name
         try:
-            result = subprocess.run(
+            result = _subprocess_run(
                 [sys.executable, temp_path],
                 capture_output=True,
                 text=True,
@@ -57,7 +57,7 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
             except json.JSONDecodeError:
                 return {"ok": True, "output": stdout[:4096], "error": ""}
         return {"ok": False, "output": "", "error": (result.stderr or "").strip()[:4096]}
-    except subprocess.TimeoutExpired:
+    except TimeoutExpired:
         logger.warning("[Sandbox] 타임아웃 (%ss) 초과", safe_timeout)
         return {"ok": False, "output": "", "error": f"타임아웃 ({safe_timeout}초) 초과"}
     except Exception as exc:

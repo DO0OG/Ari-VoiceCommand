@@ -12,4 +12,5 @@
 
 - [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 - [Claude 메모](./CLAUDE.md) — 개발자용 아키텍처·패턴·상수 레퍼런스
-- [코드 리뷰 작업 목록](./CODE_REVIEW_TASKS.md) — 버그·설계 결함·기능 보강 이력 (AI 세션 간 인계용)
+- [마켓플레이스 설정 가이드](./MARKETPLACE_SETUP_GUIDE.md) — Supabase, GitHub OAuth, Edge Functions, Vercel 배포
+- [기여 가이드](./CONTRIBUTING.md) — 브랜치, 검증, 커밋/PR 규칙

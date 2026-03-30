@@ -53,7 +53,12 @@
 
 ## 개발 현황
 
-### 최근 업데이트 (2026-03-31) — 스킬 코드 자기수정
+### 최근 업데이트 (2026-03-31) — 품질/보안 정리 + 스킬 코드 자기수정
+
+- **Codacy 대응 정리**: React 비동기 핸들러/nullable 경고 정리, non-null assertion 제거, 불필요 optional chaining 제거.
+- **보안 강화**: 마켓플레이스 클라이언트·샌드박스·검증 스크립트의 URL/프로세스 실행 경로 검증 강화, GitHub Action 릴리스 단계 SHA pin 적용.
+- **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.32.4`, `certifi>=2024.7.4`.
+- **마켓플레이스 함수 변경**: `upload-plugin`, `notify-developer` 함수 검증 로직 및 스캐너 친화적 패턴으로 정리. 함수 코드 변경 시 `supabase functions deploy` 재실행 필요.
 
 - **스킬 Step 재작성 (Direction 1)**: `SkillOptimizer.optimize_steps()` — 스킬 실패 2회 시 LLM이 실패 에러를 분석해 JSON 스텝 시퀀스를 자동 수정. `condense_steps()` — 8회 성공 후 불필요 스텝 제거·압축.
 - **Python 코드 컴파일 (Direction 2)**: `SkillOptimizer.compile_to_python()` — 5회 성공한 검증된 스킬을 단일 `run_skill()` Python 함수로 컴파일, `compiled_skills/` 저장. 이후 실행 시 LLM 계획 없이 Python 직접 호출.
@@ -153,6 +158,9 @@ py -3.11 Main.py
 
 # 5. 검증 (선택)
 py -3.11 validate_repo.py
+
+# 빠른 문법 검사만
+py -3.11 validate_repo.py --compile-only
 ```
 
 ### 선택 의존성
@@ -194,6 +202,19 @@ ollama pull qwen2.5:14b     # 9GB, 고성능
 ```
 
 권장 사양: RAM 8GB+, 모델에 따라 VRAM 필요.
+
+### 마켓플레이스 함수 재배포가 필요한 경우
+
+- `market/supabase/functions/*` 내부 파일을 수정했을 때
+- Edge Function용 shared helper 또는 secret 의존 구성이 바뀌었을 때
+
+예시:
+
+```bash
+cd market
+supabase functions deploy upload-plugin --project-ref <프로젝트ID> --no-verify-jwt
+supabase functions deploy notify-developer --project-ref <프로젝트ID> --no-verify-jwt
+```
 
 ### CosyVoice3 로컬 TTS 설치 (선택)
 

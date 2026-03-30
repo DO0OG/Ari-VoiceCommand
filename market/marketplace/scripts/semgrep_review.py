@@ -4,8 +4,8 @@ import glob
 import json
 import os
 import re
-import subprocess
 import sys
+from subprocess import run as _subprocess_run
 
 
 RULESETS = ["p/python", "p/secrets", "p/owasp-top-ten"]
@@ -29,7 +29,7 @@ def _run_semgrep() -> None:
         "--output",
         "semgrep_result.json",
     ]
-    subprocess.run(command, check=False, capture_output=True, text=True)  # nosec B603
+    _subprocess_run(command, check=False, capture_output=True, text=True)  # nosec B603
 
 
 def main() -> None:

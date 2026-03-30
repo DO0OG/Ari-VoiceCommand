@@ -26,6 +26,9 @@
 
 - 새로운 기능을 추가하거나 버그를 수정할 때는 관련 테스트도 함께 작성해 주세요.
 - 모든 테스트가 통과하는지 확인 후 풀 리퀘스트를 제출해 주세요.
+- 기본 검증 명령:
+  - `py -3.11 VoiceCommand/validate_repo.py`
+  - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
 
 ## 커밋 메시지 가이드라인
 

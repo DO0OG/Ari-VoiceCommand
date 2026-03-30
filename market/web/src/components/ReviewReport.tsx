@@ -1,13 +1,16 @@
 import { PluginReviewReport } from "@/lib/types";
 
-const LABELS: Record<string, string> = {
-  virus_scan: "바이러스 스캔 (ClamAV)",
-  static_analysis: "정적 분석 (bandit + pylint)",
-  semgrep_review: "semgrep 보안 스캔",
-};
-
 function getStageLabel(key: string): string {
-  return LABELS[key] ?? key;
+  switch (key) {
+    case "virus_scan":
+      return "바이러스 스캔 (ClamAV)";
+    case "static_analysis":
+      return "정적 분석 (bandit + pylint)";
+    case "semgrep_review":
+      return "semgrep 보안 스캔";
+    default:
+      return key;
+  }
 }
 
 export function ReviewReport({ report }: { report?: PluginReviewReport }) {

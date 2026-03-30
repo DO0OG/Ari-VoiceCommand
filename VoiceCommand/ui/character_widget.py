@@ -530,8 +530,8 @@ class CharacterWidget(QWidget):
                 hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"최상위 윈도우 강제 적용 실패: {exc}")
 
     def showEvent(self, event):
         super().showEvent(event)

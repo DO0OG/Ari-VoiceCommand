@@ -117,7 +117,7 @@ function validateMeta(meta: PluginMeta): string | null {
     ["entry", meta.entry],
   ];
   for (const [field, value] of requiredValues) {
-    if (String(value ?? "").trim() === "") {
+    if (value.trim() === "") {
       return `Missing required field: ${field}`;
     }
   }

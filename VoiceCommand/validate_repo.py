@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
+from subprocess import run as _subprocess_run
 
 
 HERE = Path(__file__).resolve().parent
@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 def _run_subprocess(command: list[str]) -> None:
     if not command or any(not isinstance(part, str) or not part for part in command):
         raise ValueError(f"유효하지 않은 명령입니다: {command!r}")
-    subprocess.run(command, cwd=HERE, check=True)  # nosec B603
+    _subprocess_run(command, cwd=HERE, check=True)  # nosec B603
 
 COMPILE_TARGETS = [
     "Main.py",

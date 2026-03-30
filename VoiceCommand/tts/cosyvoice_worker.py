@@ -81,8 +81,8 @@ def main():
             torch.set_float32_matmul_precision("high")
         except Exception as exc:
             ctrl(f"INFO:matmul precision 설정 생략 ({exc})")
-    except Exception:
-        pass
+    except Exception as exc:
+        ctrl(f"INFO:torch 최적화 설정 생략 ({exc})")
 
     model = ModelClass(args.model_dir, load_trt=False, fp16=True)
 

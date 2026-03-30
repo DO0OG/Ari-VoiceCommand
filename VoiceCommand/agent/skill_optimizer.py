@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 _COMPILED_DIR: str = ""
 
 
+def _invoke_run_skill(run_skill, goal: str) -> str:
+    if not callable(run_skill):
+        raise TypeError("run_skill 함수 없음")
+    return str(run_skill(goal))
+
+
 def _get_compiled_dir() -> str:
     global _COMPILED_DIR
     if not _COMPILED_DIR:
@@ -159,9 +165,7 @@ class SkillOptimizer:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
             run_fn = getattr(module, "run_skill", None)
-            if not callable(run_fn):
-                return False, "run_skill 함수 없음"
-            result = run_fn(str(goal))
+            result = _invoke_run_skill(run_fn, str(goal))
             return True, str(result)
         except Exception as exc:
             return False, str(exc)

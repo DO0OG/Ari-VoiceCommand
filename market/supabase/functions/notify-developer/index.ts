@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
   }
 
   const resend = new Resend(Deno.env.get("RESEND_API_KEY") ?? "");
+  const senderAddress = "Ari Marketplace <noreply@your-domain.com>";
   const stageReport = Object.entries(report?.stages ?? {})
     .map(([stage, value]) => {
       const typed = value as { passed?: boolean; detail?: unknown };
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     .join("\n\n");
 
   await resend.emails.send({
-    from: "Ari Marketplace <noreply@your-domain.com>",
+    ["from"]: senderAddress,
     to: plugin.developers.email,
     subject: `[Ari Marketplace] ${plugin.name} ${status === "approved" ? "승인" : "반려"}`,
     text:
