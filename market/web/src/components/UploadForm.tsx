@@ -60,8 +60,12 @@ export function UploadForm() {
       `${process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL}/upload-plugin`,
       { method: "POST", headers: { Authorization: `Bearer ${token}` }, body },
     );
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error ?? "업로드에 실패했습니다.");
+    const rawText = await response.text();
+    let payload: Record<string, string> = {};
+    try { payload = JSON.parse(rawText); } catch { /* non-JSON */ }
+    if (!response.ok) {
+      throw new Error(payload.error ?? payload.message ?? `HTTP ${response.status}: ${rawText.slice(0, 200)}`);
+    }
 
     setStatus("pending");
     setMessage(`검증이 시작되었습니다. plugin_id: ${payload.plugin_id}`);
