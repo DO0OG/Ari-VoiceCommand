@@ -25,20 +25,20 @@ export function createAdminClient(): SupabaseClient {
   );
 }
 
-// 유저 JWT를 anon key 클라이언트로 검증 (Supabase 권장 방식)
+// 유저 JWT를 명시적으로 getUser(token)으로 검증
 export async function requireUser(_adminClient: SupabaseClient, req: Request) {
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader) {
+  if (!authHeader.startsWith("Bearer ")) {
     throw new Response(JSON.stringify({ error: "Missing authorization header" }), { status: 401 });
   }
 
-  const userClient = createClient(
+  const token = authHeader.slice(7);
+  const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-    { global: { headers: { Authorization: authHeader } } },
   );
 
-  const { data, error } = await userClient.auth.getUser();
+  const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) {
     throw new Response(JSON.stringify({ error: error?.message ?? "Unauthorized" }), { status: 401 });
   }

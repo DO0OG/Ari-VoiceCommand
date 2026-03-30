@@ -49,6 +49,8 @@ export function UploadForm() {
 
   async function upload(file: File) {
     setStatus("uploading");
+    // getUser()를 먼저 호출해 만료된 토큰을 자동 갱신시킴
+    await supabase.auth.getUser();
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error("로그인이 필요합니다.");
