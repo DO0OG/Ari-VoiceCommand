@@ -572,6 +572,13 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(reload_btn)
         pvbox.addLayout(btn_row)
 
+        market_btn = QPushButton("🛍️ 마켓플레이스 열기")
+        market_btn.setStyleSheet(secondary_btn_style())
+        market_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://ari-marketplace.vercel.app"))
+        )
+        pvbox.addWidget(market_btn)
+
         vbox.addWidget(plugin_group)
         vbox.addStretch()
         self._refresh_plugin_list()

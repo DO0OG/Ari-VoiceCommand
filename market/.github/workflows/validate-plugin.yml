@@ -1,0 +1,65 @@
+name: Plugin Validation Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin_id:
+        required: true
+        description: Supabase plugins UUID
+      developer_id:
+        required: true
+        description: Supabase auth.users UUID
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_ID: ${{ inputs.plugin_id }}
+      DEVELOPER_ID: ${{ inputs.developer_id }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install supabase requests bandit pylint semgrep
+          sudo apt-get update
+          sudo apt-get install -y clamav
+          sudo freshclam
+
+      - name: Download plugin
+        run: python market/marketplace/scripts/download_plugin.py
+
+      - name: ClamAV scan
+        run: |
+          clamscan -r ./plugin --infected --no-summary --log=clamav_result.txt || true
+          python market/marketplace/scripts/check_clamav.py
+
+      - name: Bandit scan
+        if: success()
+        run: |
+          bandit -r ./plugin -f json -o bandit_result.json --severity-level medium || true
+
+      - name: Pylint scan
+        if: success()
+        run: |
+          pylint ./plugin --output-format=json --disable=C,R > pylint_result.json || true
+
+      - name: Static verdict
+        if: success()
+        run: python market/marketplace/scripts/check_static.py
+
+      - name: Semgrep review
+        if: success()
+        run: python market/marketplace/scripts/semgrep_review.py
+
+      - name: Finalize
+        if: always()
+        run: python market/marketplace/scripts/finalize.py

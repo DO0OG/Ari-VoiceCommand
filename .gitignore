@@ -170,6 +170,7 @@ config.json
 VoiceCommand/logs/
 VoiceCommand/saved_model/
 VoiceCommand/settings.json
+VoiceCommand/ari_settings.json
 VoiceCommand/conversation_history.json
 VoiceCommand/user_context.json
 VoiceCommand/strategy_memory.json
