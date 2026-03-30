@@ -10,10 +10,12 @@ Direction 2 — Python 코드 컴파일:
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import logging
 import os
 import re
+import tempfile
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -143,13 +145,19 @@ class SkillOptimizer:
         저장된 Python 스킬 실행.
         반환: (success, result_or_error)
         """
-        import types
         code = self.load_compiled(skill_id)
         if not code:
             return False, "컴파일된 스킬 없음"
         try:
-            module = types.ModuleType(f"skill_{skill_id}")
-            exec(compile(code, f"skill_{skill_id}.py", "exec"), module.__dict__)  # noqa: S102
+            with tempfile.TemporaryDirectory(prefix="ari_skill_") as temp_dir:
+                module_path = os.path.join(temp_dir, f"skill_{skill_id}.py")
+                with open(module_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+                spec = importlib.util.spec_from_file_location(f"skill_{skill_id}", module_path)
+                if spec is None or spec.loader is None:
+                    return False, "컴파일된 스킬 로더 생성 실패"
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
             run_fn = getattr(module, "run_skill", None)
             if not callable(run_fn):
                 return False, "run_skill 함수 없음"
@@ -203,11 +211,31 @@ class SkillOptimizer:
         except Exception:
             pass
         try:
-            ast.parse(code)
+            tree = ast.parse(code)
+            if not self._is_safe_module(tree):
+                logger.warning("[SkillOptimizer] 허용되지 않은 최상위 실행문이 포함되어 있습니다.")
+                return False
             return True
         except SyntaxError as exc:
             logger.debug(f"[SkillOptimizer] 문법 오류: {exc}")
             return False
+
+    def _is_safe_module(self, tree: ast.Module) -> bool:
+        allowed_top_level = (
+            ast.FunctionDef,
+            ast.AsyncFunctionDef,
+            ast.Import,
+            ast.ImportFrom,
+            ast.Assign,
+            ast.AnnAssign,
+            ast.Expr,
+        )
+        for node in tree.body:
+            if not isinstance(node, allowed_top_level):
+                return False
+            if isinstance(node, ast.Expr) and not isinstance(getattr(node, "value", None), ast.Constant):
+                return False
+        return True
 
 
 _optimizer: SkillOptimizer | None = None

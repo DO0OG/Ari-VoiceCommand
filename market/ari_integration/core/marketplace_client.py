@@ -19,16 +19,23 @@ MARKETPLACE_API = os.environ.get(
 )
 
 
+def _require_web_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"허용되지 않는 URL입니다: {url}")
+    return url
+
+
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
     query = urllib.parse.urlencode({"search": search, "sort": sort})
-    with urllib.request.urlopen(f"{MARKETPLACE_API}/get-plugins?{query}") as response:
+    with urllib.request.urlopen(_require_web_url(f"{MARKETPLACE_API}/get-plugins?{query}")) as response:
         payload = json.loads(response.read().decode("utf-8"))
     return payload.get("items", [])
 
 
 def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
     request = urllib.request.Request(
-        f"{MARKETPLACE_API}/install-plugin",
+        _require_web_url(f"{MARKETPLACE_API}/install-plugin"),
         data=json.dumps({"plugin_id": plugin_id}).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -41,7 +48,7 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
         logger.error("release_url missing for plugin %s", plugin_id)
         return False
 
-    with urllib.request.urlopen(release_url) as response:
+    with urllib.request.urlopen(_require_web_url(release_url)) as response:
         content = response.read()
 
     os.makedirs(plugin_dir, exist_ok=True)

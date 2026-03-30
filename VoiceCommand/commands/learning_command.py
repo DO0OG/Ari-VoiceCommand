@@ -1,6 +1,5 @@
 """학습 모드 명령"""
 from commands.base_command import BaseCommand
-import logging
 
 
 class LearningCommand(BaseCommand):

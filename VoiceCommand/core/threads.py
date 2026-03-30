@@ -1,19 +1,20 @@
 import logging
 import time
-import random
+import secrets
 import queue
-import threading
 from collections import deque
 import speech_recognition as sr
 from queue import Queue
 from PySide6.QtCore import QThread, Signal
 from audio.audio_manager import _audio_lock
 from core.constants import (
-    WAKE_WORDS, WAKE_RESPONSES, SPEECH_LANGUAGE,
+    WAKE_WORDS, WAKE_RESPONSES,
     SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT
 )
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
+
+_RNG = secrets.SystemRandom()
 
 # ───────────────────────────────────────────────────────────────────────────
 # VoiceRecognitionThread
@@ -99,7 +100,7 @@ class VoiceRecognitionThread(QThread):
             wake_detector_recalibrate_helper,
         )
         
-        response = random.choice(WAKE_RESPONSES)
+        response = _RNG.choice(WAKE_RESPONSES)
         tts_wrapper(response)
         
         # TTS 재생 완료 대기 (유동적 대기)

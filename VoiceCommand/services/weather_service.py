@@ -5,7 +5,6 @@ Open-Meteo API 사용 (무료, API 키 불필요)
 import logging
 import re
 import requests
-from datetime import datetime
 
 
 # WMO 날씨 코드 → 한국어
@@ -185,7 +184,7 @@ class WeatherService:
                 info += f", 습도는 {humidity}%"
             if rain > 0:
                 info += f", 강수량은 {rain:.1f}밀리미터"
-            info += f"입니다. "
+            info += "입니다. "
             info += f"{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도"
             if pop is not None:
                 info += f", 강수 확률은 {pop}%"

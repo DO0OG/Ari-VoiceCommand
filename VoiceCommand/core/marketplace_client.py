@@ -16,10 +16,7 @@ MARKETPLACE_API = os.environ.get(
     "ARI_MARKETPLACE_API",
     "https://zuaxkndycqrgswcygtnl.supabase.co/functions/v1",
 )
-SUPABASE_ANON_KEY = os.environ.get(
-    "ARI_SUPABASE_ANON_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1YXhrbmR5Y3FyZ3N3Y3lndG5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMzMDM3MTQsImV4cCI6MjA1ODg3OTcxNH0.o-nIYgLdFkq9nfMqgBHyXMnJLmJCFhYrPZyv6p2jTfY",
-)
+SUPABASE_ANON_KEY = os.environ.get("ARI_SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_ANON_KEY", "")
 
 _BASE_HEADERS = {
     "Content-Type": "application/json",

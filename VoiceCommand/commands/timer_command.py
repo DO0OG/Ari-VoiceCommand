@@ -1,6 +1,5 @@
 """타이머 명령"""
 from commands.base_command import BaseCommand
-import logging
 import re
 
 

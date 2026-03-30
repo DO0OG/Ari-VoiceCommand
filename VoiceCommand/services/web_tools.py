@@ -10,7 +10,6 @@ import re
 import time
 import urllib.parse
 import urllib.request
-import warnings
 from typing import Optional, List, Dict, Any
 
 from services.dom_analyser import analyse_dom, suggest_next_actions

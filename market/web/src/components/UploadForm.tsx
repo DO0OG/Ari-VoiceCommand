@@ -37,22 +37,28 @@ export function UploadForm() {
 
   function startPolling(pluginId: string) {
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const { data } = await supabase.functions.invoke("my-plugins");
-        const items = (data as { items: Array<{ id: string; status: string; review_report?: { summary?: string } }> })?.items ?? [];
-        const plugin = items.find((p) => p.id === pluginId);
-        if (!plugin || plugin.status === "pending") return;
-        clearInterval(pollRef.current!);
-        pollRef.current = null;
-        if (plugin.status === "approved") {
-          setStatus("done");
-          setMessage("플러그인이 승인되었습니다! 마켓플레이스에 게시됩니다.");
-        } else {
-          setStatus("error");
-          setMessage(plugin.review_report?.summary ?? "검증에서 반려되었습니다.");
+    pollRef.current = setInterval(() => {
+      void (async () => {
+        try {
+          const { data } = await supabase.functions.invoke("my-plugins");
+          const items = (data as { items?: Array<{ id: string; status: string; review_report?: { summary?: string } }> }).items ?? [];
+          const plugin = items.find((p) => p.id === pluginId);
+          if (!plugin || plugin.status === "pending") return;
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          if (plugin.status === "approved") {
+            setStatus("done");
+            setMessage("플러그인이 승인되었습니다! 마켓플레이스에 게시됩니다.");
+          } else {
+            setStatus("error");
+            setMessage(plugin.review_report?.summary ?? "검증에서 반려되었습니다.");
+          }
+        } catch {
+          // 폴링 실패는 다음 주기에 재시도한다.
         }
-      } catch { /* 폴링 실패 무시 */ }
+      })();
     }, 4000);
   }
 
@@ -104,8 +110,8 @@ export function UploadForm() {
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+    const file = e.dataTransfer.files[0];
+    if (file) void handleFile(file);
   }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -113,7 +119,7 @@ export function UploadForm() {
     setDragging(true);
   }, []);
 
-  const onDragLeave = useCallback(() => setDragging(false), []);
+  const onDragLeave = useCallback(() => { setDragging(false); }, []);
 
   const statusConfig = {
     idle:      { color: "", text: "" },
@@ -154,7 +160,7 @@ export function UploadForm() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFile(file);
+            if (file) void handleFile(file);
           }}
         />
       </div>
@@ -175,7 +181,7 @@ export function UploadForm() {
               <>
                 <span className="text-muted">명령어</span>
                 <span className="flex flex-wrap gap-1">
-                  {meta.commands!.map((c) => (
+                  {meta.commands?.map((c) => (
                     <span key={c} className="rounded-full bg-[rgba(124,58,237,0.15)] px-2 py-0.5 text-[11px] text-[#a78bfa]">
                       {c}
                     </span>

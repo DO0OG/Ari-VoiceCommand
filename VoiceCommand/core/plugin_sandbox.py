@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
+import tempfile
 import textwrap
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,7 @@ DEFAULT_TIMEOUT = 15
 
 def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     """코드 문자열을 별도 Python 프로세스에서 실행한다."""
+    safe_timeout = max(1, min(int(timeout), 60))
     wrapper = textwrap.dedent(
         f"""
         import io, json, sys, traceback
@@ -31,13 +34,22 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
         """
     )
     try:
-        result = subprocess.run(
-            [sys.executable, "-c", wrapper],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            creationflags=0x08000000 if sys.platform == "win32" else 0,
-        )
+        with tempfile.NamedTemporaryFile("w", suffix="_sandbox.py", encoding="utf-8", delete=False) as temp_file:
+            temp_file.write(wrapper)
+            temp_path = temp_file.name
+        try:
+            result = subprocess.run(
+                [sys.executable, temp_path],
+                capture_output=True,
+                text=True,
+                timeout=safe_timeout,
+                creationflags=0x08000000 if sys.platform == "win32" else 0,
+            )
+        finally:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
         stdout = (result.stdout or "").strip()
         if stdout:
             try:
@@ -46,8 +58,8 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
                 return {"ok": True, "output": stdout[:4096], "error": ""}
         return {"ok": False, "output": "", "error": (result.stderr or "").strip()[:4096]}
     except subprocess.TimeoutExpired:
-        logger.warning("[Sandbox] 타임아웃 (%ss) 초과", timeout)
-        return {"ok": False, "output": "", "error": f"타임아웃 ({timeout}초) 초과"}
+        logger.warning("[Sandbox] 타임아웃 (%ss) 초과", safe_timeout)
+        return {"ok": False, "output": "", "error": f"타임아웃 ({safe_timeout}초) 초과"}
     except Exception as exc:
         logger.error("[Sandbox] 실행 오류: %s", exc)
         return {"ok": False, "output": "", "error": str(exc)}

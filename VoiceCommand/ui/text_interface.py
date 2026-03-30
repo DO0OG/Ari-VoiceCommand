@@ -54,7 +54,6 @@ from ui.theme import (
     SUGGESTION_REFRESH, STATUS_REFRESH, DASHBOARD_AUTO_HIDE,
     WINDOW_W_CHAT, WINDOW_H_CHAT,
     SCROLLBAR_STYLE, CHAT_INPUT_STYLE,
-    close_btn_style,
 )
 from ui import theme as theme_module
 

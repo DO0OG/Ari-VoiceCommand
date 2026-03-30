@@ -160,7 +160,7 @@ def check_cosyvoice_first_run(app):
             "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요.")
 
 def main():
-    global ai_assistant, icon_path
+    global ai_assistant
     ari_core = None
     character = None
     tray_icon = None

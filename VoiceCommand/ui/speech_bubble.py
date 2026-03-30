@@ -4,7 +4,7 @@
 import os
 import logging
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Qt, QRect, QTimer, QPoint
+from PySide6.QtCore import Qt, QRect, QPoint
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase, QPolygon
 
 from ui import theme as theme_module

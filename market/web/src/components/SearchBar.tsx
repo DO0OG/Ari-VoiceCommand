@@ -20,20 +20,20 @@ export function SearchBar() {
       params.set("sort", sort);
       router.replace(`/marketplace?${params.toString()}`);
     }, 300);
-    return () => window.clearTimeout(handle);
+    return () => { window.clearTimeout(handle); };
   }, [router, search, sort, searchParams]);
 
   return (
     <div className="glass grid gap-2 rounded-2xl p-2 md:grid-cols-[1fr_160px]">
       <input
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); }}
         placeholder="플러그인 이름 또는 설명 검색"
         className="rounded-xl bg-transparent px-4 py-2.5 text-sm text-bright placeholder:text-muted outline-none"
       />
       <select
         value={sort}
-        onChange={(e) => setSort(e.target.value)}
+        onChange={(e) => { setSort(e.target.value); }}
         className="rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm text-subtle outline-none"
       >
         <option value="created_at">최신순</option>

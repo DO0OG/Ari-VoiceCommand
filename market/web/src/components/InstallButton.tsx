@@ -25,7 +25,7 @@ export function InstallButton({
 
   return (
     <button
-      onClick={handleInstall}
+      onClick={() => { void handleInstall(); }}
       disabled={state === "loading"}
       className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
     >

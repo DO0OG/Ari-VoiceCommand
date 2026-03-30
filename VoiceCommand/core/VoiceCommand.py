@@ -2,11 +2,9 @@ import logging
 import os
 import sys
 import time
-import warnings
-import random
 import threading
 from collections import deque
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 import speech_recognition as sr
 
 # SSL 인증서 경로 설정 (PyInstaller 환경)
@@ -14,14 +12,13 @@ if getattr(sys, 'frozen', False):
     import certifi
     os.environ['SSL_CERT_FILE'] = certifi.where()
 
-from PySide6.QtCore import Signal
 from core.rp_generator import RPGenerator
 from core.constants import (
-    SPEECH_LANGUAGE, SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT, AMBIENT_NOISE_DURATION
+    SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT
 )
 
 # 모듈 및 오디오 관리
-from audio.audio_manager import GlobalAudio, _audio_lock
+from audio.audio_manager import GlobalAudio
 from services.weather_service import WeatherService
 from services.timer_manager import TimerManager
 
@@ -48,7 +45,7 @@ _state = AppState()
 class SharedMicrophone(sr.Microphone):
     """전역 PyAudio 인스턴스를 공유하는 마이크 클래스"""
     def __enter__(self):
-        if self.audio is None:
+        if getattr(self, "audio", None) is None:
             self.audio = GlobalAudio.get_instance()
         return super().__enter__()
 

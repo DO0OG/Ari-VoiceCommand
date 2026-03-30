@@ -9,7 +9,6 @@ import threading
 import time
 import wave
 
-import pyaudio
 from fish_audio_sdk import Session, TTSRequest
 from PySide6.QtCore import QObject, Signal
 

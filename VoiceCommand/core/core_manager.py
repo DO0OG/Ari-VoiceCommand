@@ -6,7 +6,7 @@ import gc
 import psutil
 from collections import deque
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QProcess
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -74,9 +74,12 @@ class FileChangeHandler(FileSystemEventHandler):
             # 현재 실행 환경을 유지하며 프로세스 재시작
             executable = sys.executable
             script_path = os.path.abspath(sys.argv[0])
-            # 안전하게 인자 리스트 구성 (명시적 경로 사용)
-            args = [executable, script_path] + sys.argv[1:]
-            os.execv(executable, args)  # nosec B606 B607 B404 & nosemgrep: python.lang.security.audit.dangerous-os-exec.dangerous-os-exec-v
+            args = [script_path, *sys.argv[1:]]
+            started = QProcess.startDetached(executable, args, os.getcwd())
+            if started:
+                logging.info("새 프로세스를 시작했습니다. 현재 프로세스를 종료합니다.")
+                raise SystemExit(0)
+            logging.error("프로세스 재시작에 실패했습니다.")
 
 def start_file_watcher():
     # 배포(frozen) 환경에서는 파일 감시 불필요

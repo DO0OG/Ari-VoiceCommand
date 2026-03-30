@@ -2,7 +2,6 @@
 Shimeji 스타일 캐릭터 위젯 (최적화 버전)
 """
 import os
-import random
 import secrets
 import time
 import sys
@@ -10,13 +9,15 @@ import logging
 import ctypes
 from collections import OrderedDict
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
-from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, QElapsedTimer, Signal, Slot, Property
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
 from ui.speech_bubble import SpeechBubble, register_fonts
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL, IMAGE_CACHE_CAPACITY
 )
+
+_RNG = secrets.SystemRandom()
 
 
 class LRUCache:
@@ -169,7 +170,7 @@ class CharacterWidget(QWidget):
             self.set_animation("idle")
             # 생각 중일 때는 애니메이션 속도를 늦추거나 시각적 효과 부여 가능
             self.animation_timer.setInterval(120) 
-            if random.random() < 0.5:  # nosec B311 - UI 애니메이션용 비보안 난수
+            if _RNG.random() < 0.5:
                 self.say("생각 중...", duration=0)
         else:
             self.animation_timer.setInterval(70)
@@ -369,7 +370,7 @@ class CharacterWidget(QWidget):
 
     def start_behavior_timer(self):
         """랜덤 간격으로 행동 타이머 시작"""
-        interval = random.randint(3000, 10000)  # 3~10초
+        interval = _RNG.randint(3000, 10000)  # 3~10초
         self.behavior_timer.start(interval)
 
     def random_behavior(self):
@@ -386,13 +387,13 @@ class CharacterWidget(QWidget):
         at_right_edge = self.x() >= screen.x() + screen.width() - self.width() + margin - 10
 
         # 벽 타기 시도 (화면 끝에서 30% 확률)
-        if (at_left_edge or at_right_edge) and random.random() < 0.3:
+        if (at_left_edge or at_right_edge) and _RNG.random() < 0.3:
             self.climbing_direction = -1 if at_left_edge else 1
             self.smooth_climb()
             return
 
         # 행동 선택 (확률 기반)
-        rand = random.random()
+        rand = _RNG.random()
         if rand < 0.4:
             behavior = "idle"
         elif rand < 0.6:
@@ -449,7 +450,7 @@ class CharacterWidget(QWidget):
         self.set_animation("climb")
         
         # 화면 높이의 20~50% 정도 위로 이동
-        climb_height = random.randint(200, 500)
+        climb_height = _RNG.randint(200, 500)
         new_y = max(50, self.y() - climb_height)
 
         if self.move_animation:
@@ -481,10 +482,10 @@ class CharacterWidget(QWidget):
         elif at_right_edge:
             direction = -1
         else:
-            direction = random.choice([-1, 1])
+            direction = _RNG.choice([-1, 1])
 
         # 이동 거리 (150~400px)
-        distance = random.randint(150, 400)
+        distance = _RNG.randint(150, 400)
         new_x = self.x() + (distance * direction)
 
         # 화면 경계 체크
@@ -540,7 +541,7 @@ class CharacterWidget(QWidget):
     def move_to_bottom(self):
         """화면 하단으로 이동"""
         screen = self.get_screen_geometry()
-        x = random.randint(0, max(0, screen.width() - 200))
+        x = _RNG.randint(0, max(0, screen.width() - 200))
         # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
         y = screen.height() - 200  # 하단에서 200px 위
         self.move(x, y)
@@ -554,7 +555,7 @@ class CharacterWidget(QWidget):
             now = time.time()
             if now - self._last_click < 0.3:
                 reactions = ["왜요?", "뭐예요?", "네?", "간지러워요!", "헤헤"]
-                self.say(random.choice(reactions), duration=2000)
+                self.say(_RNG.choice(reactions), duration=2000)
                 self.set_animation("surprised")
                 QTimer.singleShot(1000, lambda: self.set_animation("idle"))
                 self._last_click = 0
@@ -926,7 +927,7 @@ class CharacterWidget(QWidget):
         }
         
         if emotion in emotion_map:
-            anim = random.choice(emotion_map[emotion])
+            anim = _RNG.choice(emotion_map[emotion])
             self.set_animation(anim)
             
             # 기쁨/기대일 경우 가볍게 점프 효과
@@ -994,7 +995,7 @@ class CharacterWidget(QWidget):
 
         for (start, end), messages in greetings.items():
             if start <= hour <= end:
-                message = random.choice(messages)
+                message = _RNG.choice(messages)
                 self.say(message, duration=4000)
                 break
 

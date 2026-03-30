@@ -1,6 +1,5 @@
 """볼륨 제어 명령"""
 from commands.base_command import BaseCommand
-import logging
 
 
 class VolumeCommand(BaseCommand):

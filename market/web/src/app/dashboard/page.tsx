@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
   async function loadPlugins() {
     const { data } = await supabase.functions.invoke("my-plugins");
-    setPlugins((data as { items: Plugin[] })?.items ?? []);
+    setPlugins((data as { items?: Plugin[] }).items ?? []);
   }
 
   async function handleDelete(pluginId: string) {
@@ -65,7 +65,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    if (session) loadPlugins();
+    if (session) void loadPlugins();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
@@ -171,7 +171,7 @@ export default function DashboardPage() {
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {plugin.review_report && (
                       <button
-                        onClick={() => setExpanded(isExpanded ? null : plugin.id)}
+                        onClick={() => { setExpanded(isExpanded ? null : plugin.id); }}
                         className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-subtle hover:border-white/20 hover:text-bright"
                       >
                         {isExpanded ? "접기" : "심사 결과"}
@@ -179,12 +179,14 @@ export default function DashboardPage() {
                     )}
                     {plugin.status === "approved" && plugin.release_url && (
                       <button
-                        onClick={async () => {
-                          await supabase.functions.invoke("install-plugin", {
-                            body: { plugin_id: plugin.id },
-                          });
-                          window.open(plugin.release_url!, "_blank");
-                          await loadPlugins();
+                        onClick={() => {
+                          void (async () => {
+                            await supabase.functions.invoke("install-plugin", {
+                              body: { plugin_id: plugin.id },
+                            });
+                            window.open(plugin.release_url, "_blank");
+                            await loadPlugins();
+                          })();
                         }}
                         className="rounded-lg border border-[rgba(74,222,128,0.3)] px-3 py-1.5 text-xs text-[#4ade80] hover:bg-[rgba(74,222,128,0.1)]"
                       >
@@ -198,7 +200,7 @@ export default function DashboardPage() {
                       업데이트
                     </Link>
                     <button
-                      onClick={() => handleDelete(plugin.id)}
+                      onClick={() => { void handleDelete(plugin.id); }}
                       disabled={deleting === plugin.id}
                       className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
                     >
@@ -210,7 +212,7 @@ export default function DashboardPage() {
                 {/* 명령어 태그 */}
                 {(plugin.commands?.length ?? 0) > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {plugin.commands!.map((cmd) => (
+                    {plugin.commands?.map((cmd) => (
                       <span key={cmd} className="rounded-full bg-[rgba(124,58,237,0.15)] px-2 py-0.5 text-[11px] text-[#a78bfa]">
                         {cmd}
                       </span>
