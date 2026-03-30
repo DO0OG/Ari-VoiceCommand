@@ -58,20 +58,7 @@ export function UploadForm() {
 
     // functions.invoke()는 NEXT_PUBLIC_SUPABASE_URL 기반으로 URL 구성 + JWT 자동 첨부
     const { data: payload, error } = await supabase.functions.invoke("upload-plugin", { body });
-    if (error) {
-      const msg = (error as { message?: string; context?: { json?: () => Promise<Record<string, string>> } }).message ?? "업로드 실패";
-      // FunctionsHttpError의 경우 실제 서버 응답 추출
-      if (typeof (error as { context?: unknown }).context === "object") {
-        try {
-          const ctx = error as { context: { json: () => Promise<Record<string, string>> } };
-          const json = await ctx.context.json();
-          throw new Error(json.error ?? json.message ?? msg);
-        } catch (e) {
-          if (e instanceof Error && e.message !== msg) throw e;
-        }
-      }
-      throw new Error(msg);
-    }
+    if (error) throw new Error(error.message ?? "업로드 실패");
 
     setStatus("pending");
     setMessage(`검증이 시작되었습니다. plugin_id: ${(payload as { plugin_id: string }).plugin_id}`);
