@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchPlugin } from "@/lib/api";
 import { ReviewReport } from "@/components/ReviewReport";
+import { InstallButton } from "@/components/InstallButton";
 
 export default async function PluginDetailPage({
   params,
@@ -24,12 +25,7 @@ export default async function PluginDetailPage({
             </p>
           </div>
           {plugin.release_url ? (
-            <a
-              href={plugin.release_url}
-              className="rounded-full bg-pine px-5 py-3 text-sm font-semibold text-white"
-            >
-              다운로드
-            </a>
+            <InstallButton pluginId={plugin.id} releaseUrl={plugin.release_url} />
           ) : null}
         </div>
         <p className="mt-5 text-lg leading-8 text-ink/75">{plugin.description}</p>
