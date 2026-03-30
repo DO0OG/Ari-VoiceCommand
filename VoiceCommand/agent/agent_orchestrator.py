@@ -603,7 +603,7 @@ class AgentOrchestrator:
             return True
         if isinstance(node, ast.Subscript):
             target = self._evaluate_condition_node(node.value, scope)
-            key_node = node.slice.value if isinstance(node.slice, ast.Index) else node.slice
+            key_node = node.slice  # Python 3.9+: ast.Index 제거됨, slice가 직접 노드
             key = self._evaluate_condition_node(key_node, scope)
             return target[key]
         if isinstance(node, ast.Call):

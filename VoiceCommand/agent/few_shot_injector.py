@@ -9,7 +9,9 @@ class FewShotInjector:
         try:
             from agent.strategy_memory import get_strategy_memory
             records = get_strategy_memory().search_similar_records(goal, limit=self.MAX_EXAMPLES)
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.debug(f"[FewShotInjector] 전략 검색 실패: {exc}")
             return ""
 
         successful = [record for record in records if record.success and record.steps_desc]

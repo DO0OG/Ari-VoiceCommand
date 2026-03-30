@@ -13,7 +13,14 @@ from datetime import datetime
 from typing import List, Optional, Dict
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
 
-_MEMORY_FILE = os.path.join(os.path.dirname(__file__), "strategy_memory.json")
+def _get_memory_file() -> str:
+    try:
+        from core.resource_manager import ResourceManager
+        return ResourceManager.get_writable_path("strategy_memory.json")
+    except Exception:
+        return os.path.join(os.path.dirname(__file__), "strategy_memory.json")
+
+_MEMORY_FILE = _get_memory_file()
 _MAX_RECORDS = 500
 
 _TAG_KEYWORDS: Dict[str, List[str]] = {

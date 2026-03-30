@@ -10,7 +10,11 @@ from typing import List
 
 class PlannerFeedbackLoop:
     def __init__(self):
-        self.file_path = os.path.join(os.path.dirname(__file__), "planner_stats.json")
+        try:
+            from core.resource_manager import ResourceManager
+            self.file_path = ResourceManager.get_writable_path("planner_stats.json")
+        except Exception:
+            self.file_path = os.path.join(os.path.dirname(__file__), "planner_stats.json")
         self.stats = self._load()
 
     def _load(self):
@@ -38,7 +42,7 @@ class PlannerFeedbackLoop:
                 bucket["success"] += 1
             else:
                 bucket["fail"] += 1
-            bucket["durations"] = (bucket.get("durations", []) + [int(duration_ms)])[-20:]
+            bucket["durations"] = (bucket["durations"] + [int(duration_ms)])[-20:]
         self._save()
 
     def get_hints(self, goal: str, tags: List[str]) -> str:

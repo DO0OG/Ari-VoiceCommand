@@ -24,7 +24,11 @@ class Skill:
 
 class SkillLibrary:
     def __init__(self):
-        self.file_path = os.path.join(os.path.dirname(__file__), "skill_library.json")
+        try:
+            from core.resource_manager import ResourceManager
+            self.file_path = ResourceManager.get_writable_path("skill_library.json")
+        except Exception:
+            self.file_path = os.path.join(os.path.dirname(__file__), "skill_library.json")
         self.skills: List[Skill] = []
         self._load()
 
