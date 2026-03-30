@@ -135,7 +135,6 @@ export default function DashboardPage() {
           plugins.map((plugin) => {
             const sm = statusMeta[plugin.status ?? "pending"];
             const isExpanded = expanded === plugin.id;
-            const canDelete = plugin.status === "rejected" || plugin.status === "pending";
 
             return (
               <div key={plugin.id} className="glass rounded-2xl p-5">
@@ -169,7 +168,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* 액션 버튼 */}
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {plugin.review_report && (
                       <button
                         onClick={() => setExpanded(isExpanded ? null : plugin.id)}
@@ -188,15 +187,19 @@ export default function DashboardPage() {
                         다운로드
                       </a>
                     )}
-                    {canDelete && (
-                      <button
-                        onClick={() => handleDelete(plugin.id)}
-                        disabled={deleting === plugin.id}
-                        className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-                      >
-                        {deleting === plugin.id ? "삭제 중..." : "삭제"}
-                      </button>
-                    )}
+                    <Link
+                      href={`/dashboard/upload?update=${encodeURIComponent(plugin.name)}`}
+                      className="rounded-lg border border-[rgba(167,139,250,0.3)] px-3 py-1.5 text-xs text-[#a78bfa] hover:bg-[rgba(167,139,250,0.1)]"
+                    >
+                      업데이트
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(plugin.id)}
+                      disabled={deleting === plugin.id}
+                      className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                    >
+                      {deleting === plugin.id ? "삭제 중..." : "삭제"}
+                    </button>
                   </div>
                 </div>
 

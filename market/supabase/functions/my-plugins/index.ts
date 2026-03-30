@@ -22,8 +22,7 @@ Deno.serve(async (req) => {
         .from("plugins")
         .delete()
         .eq("id", plugin_id)
-        .eq("developer_id", developer.id)
-        .in("status", ["pending", "rejected"]);
+        .eq("developer_id", developer.id);
 
       if (error) return json({ error: error.message }, 500);
       return json({ success: true });
