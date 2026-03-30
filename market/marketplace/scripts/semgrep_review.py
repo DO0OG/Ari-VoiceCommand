@@ -4,8 +4,8 @@ import glob
 import json
 import os
 import re
-import runpy
-import sys
+import shutil
+import subprocess
 
 
 RULESETS = ["p/python", "p/secrets", "p/owasp-top-ten"]
@@ -20,21 +20,21 @@ def load_json(path: str, default):
 
 
 def _run_semgrep() -> None:
-    original_argv = sys.argv[:]
-    try:
-        sys.argv = [
-            "semgrep",
-            "--config",
-            ",".join(RULESETS),
-            "./plugin",
-            "--json",
-            "--quiet",
-            "--output",
-            "semgrep_result.json",
-        ]
-        runpy.run_module("semgrep", run_name="__main__")
-    finally:
-        sys.argv = original_argv
+    semgrep_bin = os.environ.get("SEMGREP_BIN") or shutil.which("semgrep") or "semgrep"
+    command = [
+        semgrep_bin,
+        "--config",
+        ",".join(RULESETS),
+        "./plugin",
+        "--json",
+        "--quiet",
+        "--output",
+        "semgrep_result.json",
+    ]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)  # nosec B603
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "").strip()
+        raise SystemExit(message or f"semgrep failed with exit code {result.returncode}")
 
 
 def main() -> None:
