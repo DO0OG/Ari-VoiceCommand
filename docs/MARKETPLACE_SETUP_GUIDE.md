@@ -117,6 +117,7 @@ supabase functions deploy notify-developer --project-ref <프로젝트ID> --no-v
 ```
 
 > 함수 코드(`market/supabase/functions/*`)를 수정한 경우에만 다시 배포하면 됩니다. 웹 프론트나 데스크톱 앱 코드만 바뀐 경우에는 재배포가 필요하지 않습니다.
+> 예를 들어 `upload-plugin`, `notify-developer`만 수정했다면 그 함수들만 개별 배포하면 됩니다.
 
 ---
 

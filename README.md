@@ -56,7 +56,7 @@
 ### 최근 업데이트 (2026-03-31) — 품질/보안 정리 + 스킬 코드 자기수정
 
 - **Codacy 대응 정리**: React 비동기 핸들러/nullable 경고 정리, non-null assertion 제거, 불필요 optional chaining 제거.
-- **보안 강화**: 마켓플레이스 클라이언트·샌드박스·검증 스크립트의 URL/프로세스 실행 경로 검증 강화, GitHub Action 릴리스 단계 SHA pin 적용.
+- **보안 강화**: 마켓플레이스 클라이언트 URL 검증 강화, 플러그인 샌드박스 `multiprocessing` 격리 전환, 검증 스크립트의 subprocess 제거, GitHub Action 릴리스 단계 SHA pin 적용.
 - **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.32.4`, `certifi>=2024.7.4`.
 - **마켓플레이스 함수 변경**: `upload-plugin`, `notify-developer` 함수 검증 로직 및 스캐너 친화적 패턴으로 정리. 함수 코드 변경 시 `supabase functions deploy` 재실행 필요.
 

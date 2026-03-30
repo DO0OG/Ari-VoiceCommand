@@ -6,19 +6,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
+import os
+import py_compile
 import time
+import unittest
 from pathlib import Path
-from subprocess import run as _subprocess_run
 
 
 HERE = Path(__file__).resolve().parent
-
-
-def _run_subprocess(command: list[str]) -> None:
-    if not command or any(not isinstance(part, str) or not part for part in command):
-        raise ValueError(f"유효하지 않은 명령입니다: {command!r}")
-    _subprocess_run(command, cwd=HERE, check=True)  # nosec B603
 
 COMPILE_TARGETS = [
     "Main.py",
@@ -82,10 +77,35 @@ print("template routing ok")
 """
 
 
-def run(command: list[str], description: str) -> float:
+def _run_compile(paths: list[str]) -> None:
+    for path in paths:
+        py_compile.compile(path, doraise=True)
+
+
+def _run_tests() -> None:
+    suite = unittest.defaultTestLoader.discover(str(HERE / "tests"), pattern="test_*.py")
+    result = unittest.TextTestRunner(verbosity=1).run(suite)
+    if not result.wasSuccessful():
+        raise SystemExit(1)
+
+
+def _run_smoke() -> None:
+    namespace = {
+        "__name__": "__main__",
+        "__file__": str(HERE / "_template_smoke.py"),
+    }
+    previous_cwd = os.getcwd()
+    try:
+        os.chdir(HERE)
+        exec(compile(TEMPLATE_SMOKE, namespace["__file__"], "exec"), namespace)
+    finally:
+        os.chdir(previous_cwd)
+
+
+def run(action, description: str) -> float:
     print(f"[validate] {description}", flush=True)
     start = time.perf_counter()
-    _run_subprocess(command)
+    action()
     elapsed = time.perf_counter() - start
     print(f"[validate] {description} completed in {elapsed:.2f}s", flush=True)
     return elapsed
@@ -109,9 +129,10 @@ def main() -> int:
         raise SystemExit("compile/tests/smoke 전용 옵션은 하나만 사용할 수 있습니다.")
     if args.list and args.json:
         raise SystemExit("--list 와 --json 은 함께 사용할 수 없습니다.")
+
     payload = {
         "compile_targets": COMPILE_TARGETS,
-        "unit_tests": 'tests/test_*.py',
+        "unit_tests": "tests/test_*.py",
         "smoke_tests": "template planner routing",
     }
     if args.list:
@@ -133,26 +154,27 @@ def main() -> int:
             flush=True,
         )
     compile_targets = [str(path) for path in compile_paths if path.exists()]
+
     if args.compile_only:
-        run([sys.executable, "-m", "py_compile", *compile_targets], "compile critical modules")
+        run(lambda: _run_compile(compile_targets), "compile critical modules")
         print("[validate] compile-only checks passed", flush=True)
         return 0
 
     if args.tests_only:
-        run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], "unit tests")
+        run(_run_tests, "unit tests")
         print("[validate] tests-only checks passed", flush=True)
         return 0
 
     if args.smoke_only:
-        run([sys.executable, "-c", TEMPLATE_SMOKE], "template planner smoke test")
+        run(_run_smoke, "template planner smoke test")
         print("[validate] smoke-only checks passed", flush=True)
         return 0
 
     timings = {}
-    timings["compile"] = run([sys.executable, "-m", "py_compile", *compile_targets], "compile critical modules")
-    timings["tests"] = run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], "unit tests")
+    timings["compile"] = run(lambda: _run_compile(compile_targets), "compile critical modules")
+    timings["tests"] = run(_run_tests, "unit tests")
     if not args.no_smoke:
-        timings["smoke"] = run([sys.executable, "-c", TEMPLATE_SMOKE], "template planner smoke test")
+        timings["smoke"] = run(_run_smoke, "template planner smoke test")
     total = sum(timings.values())
     print(f"[validate] summary: {json.dumps({k: round(v, 2) for k, v in timings.items()}, ensure_ascii=False)}", flush=True)
     print(f"[validate] total: {total:.2f}s", flush=True)

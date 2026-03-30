@@ -14,8 +14,8 @@ nofollow 정책:
 포함 모듈 (2026-03-31 최신):
   market/web/src/*          — Codacy 대응용 비동기 핸들러/nullable 정리 (웹 배포 산출물과 동작 일치)
   market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
-  core/plugin_sandbox.py    — 임시 파일 기반 실행 + timeout 상한 적용
-  validate_repo.py          — subprocess 래퍼/입력 검증 강화
+  core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + timeout 상한 적용
+  validate_repo.py          — subprocess 없는 표준 라이브러리 검증 루프
   requirements.txt          — certifi / requests / Pillow 보안 업데이트
 
 포함 모듈 (2026-03-30):

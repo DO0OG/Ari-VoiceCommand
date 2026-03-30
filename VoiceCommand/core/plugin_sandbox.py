@@ -1,68 +1,57 @@
 """플러그인 샌드박스 실행기."""
 from __future__ import annotations
 
-import json
 import logging
-import os
-import sys
-import tempfile
-import textwrap
-from subprocess import TimeoutExpired, run as _subprocess_run
+import multiprocessing as mp
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 15
 
 
+def _sandbox_worker(code: str, queue) -> None:
+    import io
+    import sys
+    import traceback
+
+    stdout_buffer = io.StringIO()
+    error_text = ""
+    try:
+        original_stdout = sys.stdout
+        sys.stdout = stdout_buffer
+        exec(code, {})
+        sys.stdout = original_stdout
+    except Exception:
+        sys.stdout = sys.__stdout__
+        error_text = traceback.format_exc()
+    queue.put({
+        "ok": not error_text,
+        "output": stdout_buffer.getvalue()[:4096],
+        "error": error_text[:4096],
+    })
+
+
 def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     """코드 문자열을 별도 Python 프로세스에서 실행한다."""
     safe_timeout = max(1, min(int(timeout), 60))
-    wrapper = textwrap.dedent(
-        f"""
-        import io, json, sys, traceback
-        _out = io.StringIO()
-        _err = ""
-        try:
-            import sys as _sys
-            _sys.stdout = _out
-            exec({code!r}, {{}})
-            _sys.stdout = sys.__stdout__
-        except Exception:
-            _sys.stdout = sys.__stdout__
-            _err = traceback.format_exc()
-        print(json.dumps({{"ok": not _err, "output": _out.getvalue()[:4096], "error": _err}}))
-        """
-    )
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix="_sandbox.py", encoding="utf-8", delete=False) as temp_file:
-            temp_file.write(wrapper)
-            temp_path = temp_file.name
-        try:
-            result = _subprocess_run(
-                [sys.executable, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=safe_timeout,
-                creationflags=0x08000000 if sys.platform == "win32" else 0,
-            )  # nosec B603
-        finally:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
-        stdout = (result.stdout or "").strip()
-        if stdout:
-            try:
-                return json.loads(stdout)
-            except json.JSONDecodeError:
-                return {"ok": True, "output": stdout[:4096], "error": ""}
-        return {"ok": False, "output": "", "error": (result.stderr or "").strip()[:4096]}
-    except TimeoutExpired:
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue()
+    process = ctx.Process(target=_sandbox_worker, args=(code, queue))
+    process.start()
+    process.join(timeout=safe_timeout)
+
+    if process.is_alive():
+        process.terminate()
+        process.join()
         logger.warning("[Sandbox] 타임아웃 (%ss) 초과", safe_timeout)
         return {"ok": False, "output": "", "error": f"타임아웃 ({safe_timeout}초) 초과"}
-    except Exception as exc:
-        logger.error("[Sandbox] 실행 오류: %s", exc)
-        return {"ok": False, "output": "", "error": str(exc)}
+
+    if queue.empty():
+        error_message = f"프로세스 종료 코드: {process.exitcode}"
+        logger.error("[Sandbox] 실행 오류: %s", error_message)
+        return {"ok": False, "output": "", "error": error_message}
+
+    return queue.get()
 
 
 if __name__ == "__main__":
