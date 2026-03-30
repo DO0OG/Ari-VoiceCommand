@@ -32,6 +32,7 @@ jobs:
           pip install supabase requests bandit pylint semgrep
           sudo apt-get update -qq
           sudo apt-get install -y clamav clamav-daemon
+          sudo systemctl stop clamav-freshclam || true
           sudo freshclam --quiet
 
       - name: 플러그인 다운로드
