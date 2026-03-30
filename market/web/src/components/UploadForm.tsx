@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import JSZip from "jszip";
 import { supabase } from "@/lib/supabase";
 
@@ -29,6 +29,32 @@ export function UploadForm() {
   const [message, setMessage] = useState("");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  function startPolling(pluginId: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const { data } = await supabase.functions.invoke("my-plugins");
+        const items = (data as { items: Array<{ id: string; status: string; review_report?: { summary?: string } }> })?.items ?? [];
+        const plugin = items.find((p) => p.id === pluginId);
+        if (!plugin || plugin.status === "pending") return;
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        if (plugin.status === "approved") {
+          setStatus("done");
+          setMessage("플러그인이 승인되었습니다! 마켓플레이스에 게시됩니다.");
+        } else {
+          setStatus("error");
+          setMessage(plugin.review_report?.summary ?? "검증에서 반려되었습니다.");
+        }
+      } catch { /* 폴링 실패 무시 */ }
+    }, 4000);
+  }
 
   async function handleFile(file: File) {
     setStatus("idle");
@@ -56,7 +82,6 @@ export function UploadForm() {
     const body = new FormData();
     body.append("plugin", file);
 
-    // functions.invoke()는 NEXT_PUBLIC_SUPABASE_URL 기반으로 URL 구성 + JWT 자동 첨부
     const { data: payload, error } = await supabase.functions.invoke("upload-plugin", { body });
     if (error) {
       let msg = error.message ?? "업로드 실패";
@@ -70,8 +95,10 @@ export function UploadForm() {
       throw new Error(msg);
     }
 
+    const pluginId = (payload as { plugin_id: string }).plugin_id;
     setStatus("pending");
-    setMessage(`검증이 시작되었습니다. plugin_id: ${(payload as { plugin_id: string }).plugin_id}`);
+    setMessage("GitHub Actions 검증 파이프라인이 실행 중입니다...");
+    startPolling(pluginId);
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -91,8 +118,8 @@ export function UploadForm() {
   const statusConfig = {
     idle:      { color: "", text: "" },
     uploading: { color: "text-[#a78bfa]", text: "⏫ 업로드 중..." },
-    pending:   { color: "text-[#60a5fa]", text: "🔍 검증 중..." },
-    done:      { color: "text-[#4ade80]", text: "✅ 완료" },
+    pending:   { color: "text-[#60a5fa]", text: "🔍 검증 중... (자동으로 결과가 표시됩니다)" },
+    done:      { color: "text-[#4ade80]", text: "✅ 승인 완료" },
     error:     { color: "text-red-400",   text: "❌ 오류" },
   };
 
@@ -162,10 +189,10 @@ export function UploadForm() {
 
       {/* 상태 */}
       {status !== "idle" && (
-        <p className={`mt-4 text-sm ${statusConfig[status].color}`}>
-          {statusConfig[status].text}
-          {message && <span className="ml-1 text-muted text-xs">{message}</span>}
-        </p>
+        <div className={`mt-4 text-sm ${statusConfig[status].color}`}>
+          <p>{statusConfig[status].text}</p>
+          {message && <p className="mt-1 text-xs text-muted">{message}</p>}
+        </div>
       )}
     </div>
   );

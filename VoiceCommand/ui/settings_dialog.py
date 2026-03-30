@@ -575,7 +575,7 @@ class SettingsDialog(QDialog):
         market_btn = QPushButton("🛍️ 마켓플레이스 열기")
         market_btn.setStyleSheet(secondary_btn_style())
         market_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl("https://ari-marketplace.vercel.app"))
+            lambda: QDesktopServices.openUrl(QUrl("https://ari-voice-command.vercel.app/marketplace"))
         )
         pvbox.addWidget(market_btn)
 
