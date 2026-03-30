@@ -163,6 +163,7 @@ nuitka_args = [
     "--include-module=agent.automation_helpers",
     "--include-module=agent.few_shot_injector",
     "--include-module=agent.skill_library",
+    "--include-module=agent.skill_optimizer",
     "--include-module=agent.reflection_engine",
     "--include-module=agent.planner_feedback",
     "--include-module=agent.weekly_report",

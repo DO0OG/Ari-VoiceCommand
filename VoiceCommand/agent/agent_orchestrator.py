@@ -236,6 +236,15 @@ class AgentOrchestrator:
             skill = get_skill_library().get_applicable_skill(goal)
             if not skill:
                 return None
+
+            # Direction 2: 컴파일된 Python 스킬 우선 실행
+            if skill.compiled:
+                result = self._run_compiled_skill(skill, goal)
+                if result is not None:
+                    context["skill_id"] = skill.skill_id
+                    return result
+                # 컴파일 스킬 실패 → 일반 스텝 실행으로 폴백
+
             steps = [
                 ActionStep(
                     step_id=item.get("step_id", idx),
@@ -258,10 +267,37 @@ class AgentOrchestrator:
                     context["skill_id"] = skill.skill_id
                     get_skill_library().record_feedback(skill.skill_id, positive=True)
                     return result
-            get_skill_library().deprecate_if_failing(skill.skill_id)
+            # 실패 시 에러 수집 후 자기수정 트리거
+            error = " | ".join(
+                (sr.exec_result.error or sr.exec_result.output or "")[:120]
+                for sr in step_results if not sr.exec_result.success
+            )
+            get_skill_library().deprecate_if_failing(skill.skill_id, error=error)
         except Exception as e:
             logger.debug(f"[Orchestrator] skill 실행 생략: {e}")
         return None
+
+    def _run_compiled_skill(self, skill, goal: str) -> Optional[AgentRunResult]:
+        """Direction 2: 컴파일된 Python 스킬 실행. 성공 시 AgentRunResult 반환."""
+        try:
+            from agent.skill_library import get_skill_library
+            from agent.skill_optimizer import get_skill_optimizer
+            optimizer = get_skill_optimizer()
+            success, output = optimizer.run_compiled(skill.skill_id, goal)
+            result = AgentRunResult(goal=goal, total_iterations=1)
+            if success:
+                result.achieved = True
+                result.summary_kr = output
+                get_skill_library().record_feedback(skill.skill_id, positive=True)
+                logger.info(f"[Orchestrator] 컴파일 스킬 실행 성공: {skill.name}")
+                return result
+            # 실패 → 코드 수정 트리거 후 None 반환 (스텝 폴백)
+            logger.info(f"[Orchestrator] 컴파일 스킬 실패, 코드 수정 예약: {output[:100]}")
+            get_skill_library().record_feedback(skill.skill_id, positive=False, error=output)
+            return None
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] 컴파일 스킬 실행 오류: {exc}")
+            return None
 
     def _reflect_on_failure(self, goal: str, run_result: AgentRunResult) -> Dict[str, str]:
         """실패한 시나리오에 대해 L4 반성(Post-mortem) 수행"""
