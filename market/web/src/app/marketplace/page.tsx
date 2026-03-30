@@ -13,13 +13,8 @@ export default async function MarketplacePage({
   const search = typeof params.search === "string" ? params.search : "";
   const sort = typeof params.sort === "string" ? params.sort : "created_at";
 
-  let items: Plugin[] = [];
-  try {
-    const result = await fetchPlugins({ search, sort });
-    items = result.items;
-  } catch {
-    // Edge Functions 미배포 또는 네트워크 오류 시 빈 목록으로 표시
-  }
+  const result = await fetchPlugins({ search, sort });
+  const items: Plugin[] = result.items;
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-20">
