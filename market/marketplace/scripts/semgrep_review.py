@@ -23,14 +23,17 @@ def _run_semgrep() -> None:
     semgrep_bin = os.environ.get("SEMGREP_BIN") or shutil.which("semgrep") or "semgrep"
     command = [
         semgrep_bin,
-        "--config",
-        ",".join(RULESETS),
+        "scan",
+    ]
+    for ruleset in RULESETS:
+        command.extend(["--config", ruleset])
+    command.extend([
         "./plugin",
         "--json",
         "--quiet",
         "--output",
         "semgrep_result.json",
-    ]
+    ])
     result = subprocess.run(command, check=False, capture_output=True, text=True)  # nosec B603
     if result.returncode != 0:
         message = (result.stderr or result.stdout or "").strip()
