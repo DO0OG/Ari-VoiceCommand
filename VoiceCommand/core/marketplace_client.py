@@ -27,20 +27,28 @@ _BASE_HEADERS = {
 }
 
 
+def _require_web_url(url: str) -> str:
+    """Bandit B310 대응: http/https URL만 허용한다."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"허용되지 않는 URL입니다: {url}")
+    return url
+
+
 def _get(url: str) -> dict:
-    req = urllib.request.Request(url, headers=_BASE_HEADERS)
-    with urllib.request.urlopen(req) as resp:
+    req = urllib.request.Request(_require_web_url(url), headers=_BASE_HEADERS)
+    with urllib.request.urlopen(req) as resp:  # nosec B310 - _require_web_url enforces http/https only
         return json.loads(resp.read().decode("utf-8"))
 
 
 def _post(url: str, body: dict) -> dict:
     req = urllib.request.Request(
-        url,
+        _require_web_url(url),
         data=json.dumps(body).encode("utf-8"),
         headers=_BASE_HEADERS,
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req) as resp:  # nosec B310 - _require_web_url enforces http/https only
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -92,7 +100,7 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
 
     # 3. ZIP 다운로드 및 압축 해제 (루트 레벨 .py 파일만)
     try:
-        with urllib.request.urlopen(release_url) as resp:
+        with urllib.request.urlopen(_require_web_url(release_url)) as resp:  # nosec B310 - validated release_url
             content = resp.read()
     except Exception as e:
         logger.error("ZIP 다운로드 실패: %s", e)
