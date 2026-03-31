@@ -97,6 +97,7 @@ class VoiceRecognitionThread(QThread):
             tts_wrapper,
             recognize_speech_helper,
             wake_detector_recalibrate_helper,
+            set_listening_indicator,
         )
         
         response = _RNG.choice(WAKE_RESPONSES)
@@ -118,6 +119,7 @@ class VoiceRecognitionThread(QThread):
             logging.error(f"TTS 대기 중 오류: {e}")
             time.sleep(0.5)
         
+        set_listening_indicator(True)
         self.listening_state_changed.emit(True)
         with _audio_lock:
             with self.microphone as source:
@@ -128,6 +130,7 @@ class VoiceRecognitionThread(QThread):
                     stt_provider=self._stt,
                     previous_texts=self._last_texts,
                 )
+        set_listening_indicator(False)
         self.listening_state_changed.emit(False)
         
         # 대화 후 재캘리브레이션
@@ -171,15 +174,15 @@ class TTSThread(QThread):
                 try:
                     self.is_processing = True
                     from VoiceCommand import text_to_speech
-                    from core.VoiceCommand import _state
                     text_to_speech(text)
                 finally:
                     self.queue.task_done()
                     self.is_processing = False
 
-                # 큐가 완전히 비었을 때만 말풍선을 숨김 (연속된 문장 처리)
-                if self.queue.empty() and _state.character_widget:
-                    _state.character_widget.hide_speech_bubble()
+                # 큐가 완전히 비었을 때 현재 상태(STT 대기 포함)에 맞게 말풍선을 정리
+                if self.queue.empty():
+                    from VoiceCommand import _handle_tts_playback_finished
+                    _handle_tts_playback_finished()
                     
             except queue.Empty:
                 continue

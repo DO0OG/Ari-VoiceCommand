@@ -38,6 +38,8 @@ class AppState:
         self.game_mode = False
         self.saved_tts_mode = None
         self.last_bubble_signature = ("", 0.0)
+        self.listening_indicator_active = False
+        self.listening_indicator_text = "말씀해주세요"
 
 _state = AppState()
 
@@ -139,10 +141,10 @@ def initialize_tts():
     if _state.character_widget and hasattr(_state.fish_tts, 'playback_finished'):
         try:
             try:
-                _state.fish_tts.playback_finished.disconnect(_state.character_widget.hide_speech_bubble)
+                _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
             except Exception as exc:
                 logging.debug(f"기존 TTS 시그널 분리 생략: {exc}")
-            _state.fish_tts.playback_finished.connect(_state.character_widget.hide_speech_bubble)
+            _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
         except Exception as exc:
             logging.debug(f"TTS 시그널 연결 실패: {exc}")
 
@@ -161,10 +163,10 @@ def reconnect_tts_signals():
         return
     try:
         try:
-            _state.fish_tts.playback_finished.disconnect(_state.character_widget.hide_speech_bubble)
+            _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
         except Exception as exc:
             logging.debug(f"기존 재생 완료 시그널 해제 생략: {exc}")
-        _state.fish_tts.playback_finished.connect(_state.character_widget.hide_speech_bubble)
+        _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
     except Exception as e:
         logging.debug(f"TTS 시그널 재연결 실패: {e}")
 
@@ -209,6 +211,37 @@ def _show_tts_bubble(text):
         _state.character_widget.say(display_text, duration=0)
 
 
+def _show_listening_bubble() -> None:
+    if _state.character_widget:
+        _state.character_widget.say(_state.listening_indicator_text, duration=0)
+
+
+def set_listening_indicator(active: bool, text: str | None = None) -> None:
+    """음성 인식 대기 상태 말풍선을 제어한다."""
+    if text:
+        _state.listening_indicator_text = text
+    _state.listening_indicator_active = active
+
+    if not _state.character_widget:
+        return
+
+    if active:
+        _show_listening_bubble()
+    elif not is_tts_playing():
+        _state.character_widget.hide_speech_bubble()
+
+
+def _handle_tts_playback_finished() -> None:
+    """TTS 종료 후 현재 상태에 맞게 말풍선을 정리한다."""
+    if is_tts_playing():
+        return
+
+    if _state.listening_indicator_active:
+        _show_listening_bubble()
+    elif _state.character_widget:
+        _state.character_widget.hide_speech_bubble()
+
+
 def text_to_speech(text: str, show_bubble: bool = True) -> bool:
     """TTS로 음성 출력 (최종 최적화 버전)"""
     emotion, text = parse_emotion_text(text)
@@ -223,7 +256,7 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
             if not _state.tts_init_event.wait(timeout=10.0):
                 logging.warning("TTS 초기화 대기 타임아웃")
                 if show_bubble and _state.character_widget:
-                    _state.character_widget.hide_speech_bubble()
+                    _handle_tts_playback_finished()
                 return False
         else:
             initialize_tts()
@@ -231,19 +264,19 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
     if _state.fish_tts is None:
         logging.error("TTS 프로바이더가 없습니다.")
         if show_bubble and _state.character_widget:
-            _state.character_widget.hide_speech_bubble()
+            _handle_tts_playback_finished()
         return False
 
     try:
         if _state.rp_gen: text = _state.rp_gen.generate(text)
         ok = _state.fish_tts.speak(text, emotion=emotion)
         if not ok and show_bubble and _state.character_widget:
-            _state.character_widget.hide_speech_bubble()
+            _handle_tts_playback_finished()
         return ok
     except Exception as e:
         logging.error(f"TTS 오류: {e}")
         if show_bubble and _state.character_widget:
-            _state.character_widget.hide_speech_bubble()
+            _handle_tts_playback_finished()
         return False
 
 
@@ -254,7 +287,7 @@ def tts_wrapper(text: str, show_bubble: bool = True) -> None:
         if queued and show_bubble:
             _show_tts_bubble(text)
         elif not queued and _state.character_widget:
-            _state.character_widget.hide_speech_bubble()
+            _handle_tts_playback_finished()
     else:
         text_to_speech(text, show_bubble=show_bubble)
 
@@ -374,6 +407,7 @@ def enable_game_mode():
             api_key=settings.get("fish_api_key", ""),
             reference_id=settings.get("fish_reference_id", "")
         )
+        reconnect_tts_signals()
         _state.game_mode = True
         logging.info("게임 모드 활성화: Fish Audio TTS로 전환, GPU 메모리 해제됨")
     except Exception as e:
