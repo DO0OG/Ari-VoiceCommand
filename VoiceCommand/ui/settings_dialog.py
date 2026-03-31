@@ -42,6 +42,25 @@ class _ValidatorThread(QThread):
         self.api_key = api_key
         self.model = model
 
+    def _validate_anthropic_client(self, client, model: str) -> None:
+        messages_api = getattr(client, "messages")
+        create_fn = getattr(messages_api, "create")
+        create_fn(
+            model=model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+    def _validate_openai_client(self, client, model: str) -> None:
+        chat_api = getattr(client, "chat")
+        completions_api = getattr(chat_api, "completions")
+        create_fn = getattr(completions_api, "create")
+        create_fn(
+            model=model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
     def run(self):
         try:
             from agent.llm_provider import _PROVIDER_CONFIG
@@ -51,10 +70,7 @@ class _ValidatorThread(QThread):
             if self.provider == "anthropic":
                 anthropic_module = importlib.import_module("anthropic")
                 client = anthropic_module.Anthropic(api_key=self.api_key)
-                client.messages.create(
-                    model=model, max_tokens=1,
-                    messages=[{"role": "user", "content": "hi"}],
-                )
+                self._validate_anthropic_client(client, model)
             else:
                 openai_module = importlib.import_module("openai")
                 kwargs: dict = {"api_key": self.api_key}
@@ -63,10 +79,7 @@ class _ValidatorThread(QThread):
                 elif cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
                 client = openai_module.OpenAI(**kwargs)
-                client.chat.completions.create(
-                    model=model, max_tokens=1,
-                    messages=[{"role": "user", "content": "hi"}],
-                )
+                self._validate_openai_client(client, model)
             self.done.emit(True, f"✓ {model} 연결 성공")
         except Exception as e:
             if self.provider == "ollama":

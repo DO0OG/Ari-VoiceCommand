@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import json
+import logging
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -20,6 +21,7 @@ DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_OPENAI_URL = "http://localhost:11434/v1"
 _LOCAL_OLLAMA_HOSTS = {"localhost", "127.0.0.1"}
 _SAFE_MODEL_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -131,7 +133,11 @@ def _run_installer(installer_path: str, install_dir: str | None, log: Callable[[
     if install_dir:
         arguments = f'/DIR="{os.path.abspath(install_dir)}"'
     log("Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요.")
-    os.startfile(safe_installer, arguments=arguments)
+    import ctypes
+
+    result = ctypes.windll.shell32.ShellExecuteW(None, "open", safe_installer, arguments or None, None, 1)
+    if result <= 32:
+        raise RuntimeError(f"Ollama 설치 프로그램 실행 실패: {result}")
 
 
 def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
@@ -147,8 +153,8 @@ def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
             winreg.SetValueEx(key, "OLLAMA_MODELS", 0, winreg.REG_EXPAND_SZ, models_dir)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("OLLAMA_MODELS 레지스트리 설정 생략: %s", exc)
     os.environ["OLLAMA_MODELS"] = models_dir
 
 

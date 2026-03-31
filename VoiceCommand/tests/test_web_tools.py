@@ -49,10 +49,10 @@ class WebToolsTests(unittest.TestCase):
 
         real_import = __import__
 
-        def side_effect(name, globals=None, locals=None, fromlist=(), level=0):
+        def side_effect(name, global_ns=None, local_ns=None, fromlist=(), level=0):
             if name == "ddgs":
                 raise ImportError("missing ddgs")
-            return real_import(name, globals, locals, fromlist, level)
+            return real_import(name, global_ns, local_ns, fromlist, level)
 
         fake_modules = {"duckduckgo_search": type("Mod", (), {"DDGS": _Client})}
         with patch.dict("sys.modules", fake_modules, clear=False):
