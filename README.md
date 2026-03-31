@@ -28,6 +28,7 @@
 | **복수 타이머** | 이름 붙은 타이머 최대 10개 동시 관리 ("30분 타이머", "파스타 타이머" 등) |
 | **예약 작업** | 자연어 스케줄 표현으로 반복 작업 등록 · UI 패널에서 관리 · 놓친 작업 자동 보충 실행 |
 | **자율 실행** | Python/Shell 코드 생성·실행 + LLM 자동 수정(Self-Fix) + DAG 병렬 실행 |
+| **워크스페이스 감사** | 열린 창 제목을 브라우저/일반 앱으로 분류해 markdown 리포트 생성, 기존 보고서 자동 백업 덮어쓰기 |
 | **에이전트 루프** | Plan → Execute → Verify 3레이어 (최대 4회 재계획) |
 | **실행 정책 엔진** | 현재 상태·학습 전략·창/도메인 일치도를 점수화해 adaptive/learned/fallback 플랜 추천 |
 | **스킬 라이브러리** | 동일 유형 3회 성공 → 스킬 자동 추출 · 재사용 (LLM 계획 없이 즉시 실행) |
@@ -58,6 +59,7 @@
 ## 개발 현황
 
 - 현재 기준 핵심 변화: Codacy/보안 경고 정리, 플러그인 샌드박스 `multiprocessing` 격리, `validate_repo.py` 표준 라이브러리 검증 루프, `SkillOptimizer` 기반 스킬 자기수정/컴파일, `ddgs` 우선 검색 클라이언트 반영.
+- `workspace audit` 템플릿은 열린 창 제목을 브라우저 서비스/일반 앱 유형으로 분류하고, 브라우저 판별 규칙(브라우저명 경계 매칭)과 탭 추정 규칙(`외/및 N개 탭` + 프로세스 단서)을 함께 사용하도록 보강되었습니다.
 - 마켓플레이스 함수는 `market/supabase/functions/*`를 실제 수정했을 때만 `supabase functions deploy ...` 재배포가 필요합니다.
 
 <details>
@@ -70,7 +72,7 @@
 - **설정창 로컬 설치 UI**: `AI & TTS` 탭 상단에 `로컬 설치` 섹션 추가. Ollama 설치/모델 다운로드, CosyVoice3 설치를 설정창에서 바로 진행 가능.
 - **설정창 마켓플레이스 연동**: `확장` 탭에서 플러그인 검색·설치가 가능해졌고, 설치 후 로컬 플러그인 목록과 연동됩니다.
 - **ZIP 플러그인 설치/로드 전환**: 마켓플레이스 플러그인을 `.py` 추출 대신 ZIP 그대로 설치하고, 로더가 `plugin.json`의 `entry`를 읽어 `.py`/`.zip` 모두 핫리로드하도록 변경. 재로드 시 메뉴/도구 중복 등록도 정리.
-- **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.32.4`, `certifi>=2024.7.4`, `ddgs>=8.0.0`.
+- **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.33.0`, `certifi>=2024.7.4`, `ddgs>=8.0.0`.
 - **마켓플레이스 함수 변경**: `upload-plugin`, `notify-developer` 함수 검증 로직 및 스캐너 친화적 패턴으로 정리. 함수 코드 변경 시 `supabase functions deploy` 재실행 필요.
 - **스킬 Step 재작성 (Direction 1)**: `SkillOptimizer.optimize_steps()` — 스킬 실패 2회 시 LLM이 실패 에러를 분석해 JSON 스텝 시퀀스를 자동 수정. `condense_steps()` — 8회 성공 후 불필요 스텝 제거·압축.
 - **Python 코드 컴파일 (Direction 2)**: `SkillOptimizer.compile_to_python()` — 5회 성공한 검증된 스킬을 단일 `run_skill()` Python 함수로 컴파일, `compiled_skills/` 저장. 이후 실행 시 LLM 계획 없이 Python 직접 호출.

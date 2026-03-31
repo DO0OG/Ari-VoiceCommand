@@ -652,6 +652,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -670,6 +671,43 @@ if module_dir and module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 from agent.automation_helpers import AutomationHelpers
 _automation = AutomationHelpers()
+_backup_history = []
+
+def _backup_file_if_exists(path: str) -> str:
+    normalized = os.path.abspath(path)
+    if not os.path.isfile(normalized):
+        return ""
+    backup_dir = os.path.join(os.path.dirname(normalized), ".ari_backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    stem = os.path.basename(normalized)
+    timestamp = str(int(time.time() * 1000))
+    backup_path = os.path.join(backup_dir, f"{{timestamp}}_{{stem}}")
+    shutil.copy2(normalized, backup_path)
+    _backup_history.append({{
+        "target_path": normalized,
+        "backup_path": backup_path,
+    }})
+    if len(_backup_history) > 20:
+        del _backup_history[:-20]
+    return backup_path
+
+def _restore_last_backup(target_path=None):
+    normalized_target = os.path.abspath(target_path) if target_path else ""
+    selected = None
+    for item in reversed(_backup_history):
+        target = os.path.abspath(item.get("target_path", "") or "")
+        if not normalized_target or target == normalized_target:
+            selected = item
+            break
+    if not selected:
+        return ""
+    backup_path = selected.get("backup_path", "")
+    target = selected.get("target_path", "")
+    if not backup_path or not target or not os.path.exists(backup_path):
+        return ""
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    shutil.copy2(backup_path, target)
+    return target
 
 def _choose_document_format(content: str, preferred_format: str = "auto", title: str = "") -> str:
     preferred = (preferred_format or "auto").strip().lower()
@@ -730,6 +768,7 @@ def save_document(directory: str, base_name: str, content: str, preferred_format
     doc_format = _choose_document_format(content, preferred_format=preferred_format, title=title)
     safe_base = re.sub(r'[^A-Za-z0-9._-]+', '_', base_name).strip("._") or "document"
     path = os.path.join(directory, f"{{safe_base}}.{{doc_format}}")
+    _backup_file_if_exists(path)
     if doc_format == "pdf":
         _write_simple_pdf(path, content, title=title)
     elif doc_format == "md":
@@ -832,10 +871,10 @@ if web_fetch:
 execution_globals["get_execution_history"] = lambda: []
 execution_globals["get_last_execution"] = lambda: None
 execution_globals["get_state_transition_history"] = lambda: []
-execution_globals["get_backup_history"] = lambda: []
-execution_globals["restore_last_backup"] = lambda target_path=None: target_path or ""
-execution_globals["get_recovery_candidates"] = lambda target_paths=None: []
-execution_globals["get_recovery_guidance"] = lambda goal="", target_paths=None: ""
+execution_globals["get_backup_history"] = lambda: [dict(item) for item in _backup_history]
+execution_globals["restore_last_backup"] = _restore_last_backup
+execution_globals["get_recovery_candidates"] = lambda target_paths=None: [dict(item) for item in _backup_history[-5:]]
+execution_globals["get_recovery_guidance"] = lambda goal="", target_paths=None: "복구 히스토리 확인 가능" if _backup_history else ""
 execution_globals["get_recent_goal_episodes"] = lambda goal="", limit=3: ""
 execution_globals["get_runtime_state"] = lambda: {{
     "active_window_title": _automation.get_active_window_title(),
@@ -853,10 +892,10 @@ execution_globals["get_runtime_state"] = lambda: {{
     "last_execution_error": "",
     "last_state_delta_summary": "",
     "recent_state_transitions": [],
-    "backup_history": [],
-    "recovery_candidates": [],
+    "backup_history": [dict(item) for item in _backup_history[-5:]],
+    "recovery_candidates": [dict(item) for item in _backup_history[-5:]],
     "recent_goal_episodes": "",
-    "recovery_guidance": "",
+    "recovery_guidance": "복구 히스토리 확인 가능" if _backup_history else "",
 }}
 globals().update(execution_globals)
 

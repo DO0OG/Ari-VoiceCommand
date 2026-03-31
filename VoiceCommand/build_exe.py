@@ -14,10 +14,11 @@ nofollow 정책:
 포함 모듈 (2026-03-31 최신):
   market/web/src/*          — Codacy 대응용 비동기 핸들러/nullable 정리 (웹 배포 산출물과 동작 일치)
   market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
+  agent/agent_planner.py    — workspace audit 템플릿 강화 (창 분류/탭 추정/백업 보고)
   core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + timeout 상한 적용
   validate_repo.py          — subprocess 없는 표준 라이브러리 검증 루프
   services/web_tools.py     — ddgs 우선 검색 클라이언트 + legacy fallback
-  requirements.txt          — certifi / requests / Pillow 보안 업데이트, ddgs 기본 채택
+  requirements.txt          — certifi / requests(>=2.33.0) / Pillow 보안 업데이트, ddgs 기본 채택
 
 포함 모듈 (2026-03-30):
   ui/character_widget.py     — 벽/천장 타기 도중 드래그 시 중력 미적용 버그 수정

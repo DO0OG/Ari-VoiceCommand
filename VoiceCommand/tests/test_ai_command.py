@@ -21,6 +21,23 @@ class _FakeAssistant:
         return ""
 
 
+class _AgentTaskAssistant:
+    def chat_with_tools(self, text, include_context=True):
+        del include_context
+        return "(진지) 바로 처리할게요.", [{
+            "id": "tool_1",
+            "name": "run_agent_task",
+            "arguments": {
+                "goal": text,
+                "explanation": text,
+            },
+        }]
+
+    def feed_tool_result(self, original_text, tool_calls, results):
+        del original_text, tool_calls, results
+        return "tool_calls: [{\"name\":\"run_agent_task\"}] 이 문장은 읽히면 안 됩니다."
+
+
 class _FakeScheduler:
     def __init__(self):
         self.calls = []
@@ -79,6 +96,54 @@ class AICommandTests(unittest.TestCase):
         self.assertFalse(command._should_emit_preface_response("(평온)..."))
         self.assertFalse(command._should_emit_preface_response("get_current_time"))
         self.assertTrue(command._should_emit_preface_response("알겠습니다. 바로 확인해볼게요."))
+
+    def test_agent_task_prefers_detailed_explanation_over_short_label(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        goal = command._resolve_agent_task_goal({
+            "goal": "Ari autonomy test",
+            "explanation": "바탕화면에 Ari autonomy test 폴더를 만들고 열린 창 제목들을 markdown으로 정리해서 저장해줘.",
+        })
+
+        self.assertIn("바탕화면에 Ari autonomy test 폴더", goal)
+
+    def test_agent_task_prefers_detailed_explanation_over_generic_goal_summary(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        goal = command._resolve_agent_task_goal({
+            "goal": "바탕화면에 폴더 만들기, 창 제목 수집 및 분류, markdown 보고서 생성",
+            "explanation": "바탕화면에 'Ari autonomy final audit' 폴더를 만들고 창 제목을 분류한 markdown 보고서를 summary.md로 저장해줘.",
+        })
+
+        self.assertIn("Ari autonomy final audit", goal)
+
+    def test_agent_task_keeps_goal_when_explanation_is_generic_placeholder(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        goal = command._resolve_agent_task_goal({
+            "goal": "바탕화면에 Ari workspace audit 폴더를 만들고 summary.md 저장",
+            "explanation": "복합 작업을 실행할게요.",
+        })
+
+        self.assertIn("Ari workspace audit", goal)
+
+    def test_sanitize_user_facing_text_removes_tool_call_artifacts(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        cleaned = command._sanitize_user_facing_text(
+            '(진지) 알겠습니다. tool_calls: [{"name":"run_agent_task","arguments":{"goal":"Ari autonomy test"}}] 이제 진행할게요.'
+        )
+
+        self.assertEqual(cleaned, "(진지) 알겠습니다. 이제 진행할게요.")
+
+    def test_run_agent_task_skips_long_followup_response(self):
+        command = AICommand(_AgentTaskAssistant(), lambda msg: None, {"enabled": False})
+        command._dispatch["run_agent_task"] = lambda args: "작업 완료. Ari autonomy test 폴더에 summary.md를 저장했습니다."
+
+        combined = command.run_interaction('바탕화면에 "Ari autonomy test" 폴더를 만들고 보고서를 저장해줘')
+
+        self.assertIn("작업 완료.", combined)
+        self.assertNotIn("읽히면 안 됩니다", combined)
 
     def test_delayed_shutdown_is_scheduled_not_executed_immediately(self):
         # P2-5 이후: 지연 종료는 SystemCommand 경로(execute_command)로 라우팅됨

@@ -21,6 +21,11 @@ from core.constants import (
 _RNG = secrets.SystemRandom()
 
 
+def _is_thinking_bubble_text(text: str) -> bool:
+    normalized = (text or "").strip()
+    return normalized == "생각 중..."
+
+
 class LRUCache:
     """LRU 캐시 구현"""
     def __init__(self, capacity=IMAGE_CACHE_CAPACITY):
@@ -183,12 +188,15 @@ class CharacterWidget(QWidget):
         if thinking:
             self.set_animation("idle")
             # 생각 중일 때는 애니메이션 속도를 늦추거나 시각적 효과 부여 가능
-            self.animation_timer.setInterval(120) 
-            if _RNG.random() < 0.5:
+            self.animation_timer.setInterval(120)
+            current_text = self.speech_bubble.text if self.speech_bubble else ""
+            if not _is_thinking_bubble_text(current_text):
                 self.say("생각 중...", duration=0)
         else:
             self.animation_timer.setInterval(70)
-            self._hide_speech_bubble_slot()
+            current_text = self.speech_bubble.text if self.speech_bubble else ""
+            if _is_thinking_bubble_text(current_text):
+                self._hide_speech_bubble_slot()
 
     def load_and_cache_image(self, path, flip=False, rotation=0):
         """이미지 로드, 캐싱 및 변형 (반전, 회전)"""

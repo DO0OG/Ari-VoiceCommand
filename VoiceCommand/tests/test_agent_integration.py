@@ -1,7 +1,10 @@
+import json
 import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -51,6 +54,214 @@ class AgentIntegrationTests(unittest.TestCase):
             saved_path = context.get("step_1_output", "").strip()
             self.assertTrue(saved_path)
             self.assertTrue(os.path.exists(saved_path))
+
+    def test_window_summary_request_uses_window_summary_template(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = AgentPlanner(DummyLLMProvider())
+            executor = AutonomousExecutor()
+            executor.execution_globals["desktop_path"] = tmp
+            executor._automation.list_open_windows = lambda limit=20: ["Chrome", "메모장", "설정"]
+            executor._automation.get_active_window_title = lambda: "메모장"
+            goal = '바탕화면에 "Ari autonomy test" 폴더를 만들고, 오늘 열린 창 제목들을 요약해서 markdown 보고서로 저장해줘'
+
+            steps = planner.decompose(goal, {})
+            self.assertEqual(len(steps), 2)
+            self.assertIn("list_open_windows", steps[1].content)
+
+            context = {}
+            for step in steps:
+                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
+                self.assertTrue(result.success, msg=result.error or result.output)
+                context[f"step_{step.step_id}_output"] = result.output
+
+            report_payload = context["step_1_output"]
+            self.assertIn("summary.md", report_payload)
+            report_path = os.path.join(tmp, "Ari autonomy test", "summary.md")
+            self.assertTrue(os.path.exists(report_path))
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = handle.read()
+            self.assertIn("## 브라우저 관련 창 (서비스 기준)", report)
+            self.assertIn("## 일반 앱 창 (앱 종류 기준)", report)
+            self.assertIn("## 브라우저 탭 추정", report)
+            self.assertIn("## 원본 창 제목 목록", report)
+            self.assertIn("## 선택한 전략", report)
+            self.assertIn("## 백업 및 덮어쓰기", report)
+
+    def test_workspace_audit_request_prefers_window_summary_over_organize_template(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = AgentPlanner(DummyLLMProvider())
+            executor = AutonomousExecutor()
+            executor.execution_globals["desktop_path"] = tmp
+            executor._automation.list_open_windows = lambda limit=20: ["GitHub - Chrome", "메모장", "설정"]
+            executor._automation.get_active_window_title = lambda: "GitHub - Chrome"
+            goal = "바탕화면에 Ari workspace audit 폴더를 만들고, 현재 열린 창 제목들을 수집해서 브라우저 관련 창과 일반 앱 창으로 분류한 markdown 보고서를 저장합니다. 브라우저 창은 도메인이나 서비스 이름 기준으로 묶고, 일반 앱 창은 앱 종류별로 묶어서 정리합니다. 같은 이름 파일이 이미 있으면 자동으로 백업하고 안전하게 덮어써줍니다."
+
+            steps = planner.decompose(goal, {})
+            self.assertEqual(len(steps), 2)
+            combined_content = "\n".join(step.content for step in steps)
+            self.assertIn("list_open_windows", combined_content)
+            self.assertNotIn("organize_folder", combined_content)
+
+            context = {}
+            for step in steps:
+                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
+                self.assertTrue(result.success, msg=result.error or result.output)
+                context[f"step_{step.step_id}_output"] = result.output
+
+            report_path = os.path.join(tmp, "Ari workspace audit", "summary.md")
+            self.assertTrue(os.path.isdir(os.path.join(tmp, "Ari workspace audit")))
+            self.assertTrue(os.path.exists(report_path))
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = handle.read()
+            self.assertIn("## 브라우저 관련 창 (서비스 기준)", report)
+            self.assertIn("## 일반 앱 창 (앱 종류 기준)", report)
+            self.assertIn("## 브라우저 탭 추정", report)
+            self.assertIn("## 원본 창 제목 목록", report)
+            self.assertIn("### ", report)
+
+    def test_generic_workspace_goal_without_save_keyword_still_uses_window_summary_template(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        goal = "바탕화면에 폴더 만들기, 창 제목 수집 및 분류, markdown 보고서 생성"
+
+        steps = planner.decompose(goal, {})
+
+        self.assertEqual(len(steps), 2)
+        combined_content = "\n".join(step.content for step in steps)
+        self.assertIn("list_open_windows", combined_content)
+        self.assertIn("save_document", combined_content)
+        self.assertNotIn("organize_folder", combined_content)
+
+    def test_complex_window_audit_command_runs_without_organize_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = AgentPlanner(DummyLLMProvider())
+            executor = AutonomousExecutor()
+            executor.execution_globals["desktop_path"] = tmp
+            executor._automation.list_open_windows = lambda limit=20: [
+                "업무 대시보드 (3개 탭) - Whale",
+                "GitHub - Whale",
+                "Visual Studio Code",
+                "파일 탐색기",
+                "설정",
+            ]
+            executor._automation.get_active_window_title = lambda: "업무 대시보드 (3개 탭) - Whale"
+            goal = (
+                "바탕화면에 'Ari stress final audit' 폴더를 만들고, 현재 열린 창 제목들을 수집해서 "
+                "브라우저 관련 창은 서비스 기준으로, 일반 앱 창은 앱 종류 기준으로 분류한 markdown 보고서를 summary.md로 저장해줘. "
+                "같은 이름 파일이 이미 있으면 자동 백업하고 안전하게 덮어써줘. 마지막에 어떤 전략을 선택했고 무엇을 검증했는지도 짧게 적어줘."
+            )
+
+            steps = planner.decompose(goal, {})
+            self.assertEqual(len(steps), 2)
+            combined_content = "\n".join(step.content for step in steps)
+            self.assertIn("list_open_windows", combined_content)
+            self.assertIn("save_document", combined_content)
+            self.assertNotIn("organize_folder", combined_content)
+
+            context = {}
+            for step in steps:
+                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
+                self.assertTrue(result.success, msg=result.error or result.output)
+                context[f"step_{step.step_id}_output"] = result.output
+
+            report_path = os.path.join(tmp, "Ari stress final audit", "summary.md")
+            self.assertTrue(os.path.exists(report_path))
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = handle.read()
+            self.assertIn("## 브라우저 탭 추정", report)
+            self.assertIn("Whale:", report)
+
+    def test_window_summary_handles_extra_tab_notation_and_keeps_explorer_as_app(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        goal = (
+            "바탕화면에 'Ari tab audit' 폴더를 만들고, 열린 창 제목들을 브라우저/일반 앱으로 분류해 "
+            "markdown 보고서로 저장해줘."
+        )
+
+        steps = planner.decompose(goal, {})
+        self.assertEqual(len(steps), 2)
+        content = steps[1].content
+
+        self.assertIn("extra_match = re.search(r'(?:및|외)", content)
+        self.assertIn("is_browser = looks_like_browser_title(title)", content)
+        self.assertIn("'파일 탐색기': '파일 관리'", content)
+
+    def test_strict_autonomy_audit_command_runs_twice_and_creates_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            planner = AgentPlanner(DummyLLMProvider())
+            executor = AutonomousExecutor()
+            executor.execution_globals["desktop_path"] = tmp
+            executor._automation.list_open_windows = lambda limit=20: [
+                "업무 대시보드 외 2개 탭 - Whale",
+                "Ari Project - GitHub - Whale",
+                "logs 및 1개 탭 - 파일 탐색기",
+                "Visual Studio Code",
+                "설정",
+                "카카오톡",
+            ]
+            executor._automation.get_active_window_title = lambda: "업무 대시보드 외 2개 탭 - Whale"
+            goal = (
+                "바탕화면에 'Ari autonomy strict audit' 폴더를 만들고, 현재 열린 창 제목들을 수집해서 "
+                "브라우저 관련 창과 일반 앱 창으로 분류한 markdown 보고서를 summary.md로 저장해줘. "
+                "브라우저 창은 서비스 이름 기준으로 묶고 탭 수를 추정해 함께 적고, "
+                "같은 이름 파일이 이미 있으면 자동 백업 후 안전하게 덮어써줘. "
+                "끝나면 선택 전략과 검증 내용을 짧게 정리해줘."
+            )
+
+            steps = planner.decompose(goal, {})
+            self.assertEqual(len(steps), 2)
+            self.assertIn("list_open_windows", steps[1].content)
+            self.assertIn("save_document", steps[1].content)
+            self.assertNotIn("organize_folder", steps[1].content)
+
+            def run_once():
+                context = {}
+                for step in steps:
+                    result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
+                    self.assertTrue(result.success, msg=result.error or result.output)
+                    context[f"step_{step.step_id}_output"] = result.output
+                return json.loads(context["step_1_output"])
+
+            first_payload = run_once()
+            second_payload = run_once()
+
+            self.assertFalse(first_payload.get("backup_created"))
+            self.assertTrue(second_payload.get("backup_created"))
+            self.assertGreaterEqual(int(second_payload.get("estimated_tabs", 0)), 3)
+
+            report_path = os.path.join(tmp, "Ari autonomy strict audit", "summary.md")
+            self.assertTrue(os.path.exists(report_path))
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = handle.read()
+            self.assertIn("## 브라우저 관련 창 (서비스 기준)", report)
+            self.assertIn("## 일반 앱 창 (앱 종류 기준)", report)
+            self.assertIn("## 브라우저 탭 추정", report)
+            self.assertIn("Whale", report)
+            self.assertIn("## 백업 및 덮어쓰기", report)
+
+    def test_template_plan_is_preferred_over_learned_skill(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        fake_skill = SimpleNamespace(
+            skill_id="skill_1",
+            name="bad-skill",
+            compiled=False,
+            steps=[{
+                "step_id": 0,
+                "step_type": "python",
+                "content": "print('bad skill')",
+                "description_kr": "잘못 학습된 스킬",
+                "expected_output": "",
+                "condition": "",
+                "on_failure": "abort",
+            }],
+        )
+
+        with patch("agent.skill_library.get_skill_library") as mocked_library:
+            mocked_library.return_value.get_applicable_skill.return_value = fake_skill
+            self.assertTrue(
+                orchestrator._should_prefer_template_over_skill(
+                    '바탕화면에 "Ari autonomy test" 폴더를 만들고, 오늘 열린 창 제목들을 요약해서 markdown 보고서로 저장해줘'
+                )
+            )
 
     def test_system_status_goal_builds_template_without_save(self):
         planner = AgentPlanner(DummyLLMProvider())
@@ -282,7 +493,11 @@ class AgentIntegrationTests(unittest.TestCase):
         self.assertIn("timeout", context.get("재계획_이유", ""))
         self.assertIn("example.com", context.get("실패_대상_도메인", ""))
         if context.get("복구_가이드"):
-            self.assertIn("restore_last_backup", context.get("복구_가이드", ""))
+            guidance = context.get("복구_가이드", "")
+            self.assertTrue(
+                "restore_last_backup" in guidance or "최근 유사 목표 에피소드" in guidance,
+                guidance,
+            )
 
     def test_runtime_context_tracks_last_targets(self):
         orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))

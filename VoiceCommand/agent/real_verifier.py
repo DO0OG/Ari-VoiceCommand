@@ -134,6 +134,12 @@ class RealVerifier:
         except Exception:
             is_image_visible = lambda *_args, **_kwargs: False
 
+        named_folder = self._extract_goal_folder_name(goal)
+        if existing_path_items and named_folder:
+            named_folder_lower = named_folder.lower()
+            if not any(named_folder_lower in os.path.abspath(path).lower() for path in existing_path_items):
+                existing_path_items = []
+
         # 파일 생성 작업 확인
         if existing_path_items and describes_storage_action(description_text):
             return VerificationResult(
@@ -270,7 +276,36 @@ class RealVerifier:
 
         return None
 
+    def _extract_goal_folder_name(self, goal: str) -> str:
+        quoted_match = re.search(r'["\']([^"\']+)["\']\s*폴더', goal or "")
+        if quoted_match:
+            return quoted_match.group(1).strip()
+        plain_match = re.search(r'([가-힣A-Za-z0-9][가-힣A-Za-z0-9 ._-]{1,80})\s*폴더', goal or "")
+        if plain_match:
+            candidate = plain_match.group(1).strip()
+            candidate = re.sub(
+                r'^(?:바탕화면(?:에)?|desktop(?:에)?|작업\s*폴더)\s*',
+                '',
+                candidate,
+                flags=re.IGNORECASE,
+            ).strip()
+            if candidate:
+                return candidate
+        return ""
+
     def _ocr_verify(self, goal: str, step_results: list) -> Optional[VerificationResult]:
+        named_folder = self._extract_goal_folder_name(goal)
+        if named_folder:
+            named_folder_lower = named_folder.lower()
+            observed_chunks: List[str] = []
+            for sr in step_results:
+                exec_r = getattr(sr, "exec_result", sr)
+                observed_chunks.append(str(getattr(exec_r, "output", "") or ""))
+                observed_chunks.append(str(getattr(exec_r, "state_delta_summary", "") or ""))
+            observed_text = "\n".join(observed_chunks).lower()
+            if named_folder_lower not in observed_text:
+                return None
+
         expected_keywords = self._extract_expected_keywords(goal, step_results)
         if not expected_keywords:
             return None

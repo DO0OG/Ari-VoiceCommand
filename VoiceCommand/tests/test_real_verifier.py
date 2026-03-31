@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -104,6 +105,48 @@ class RealVerifierTests(unittest.TestCase):
         self.assertTrue(result.verified)
         self.assertEqual(result.method, "heuristic")
         self.assertIn("browser_url=https://example.com", result.evidence)
+
+    def test_storage_verification_does_not_accept_wrong_folder_target(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        result = verifier._heuristic_verify(
+            '바탕화면에 "Ari autonomy test" 폴더를 만들고 보고서를 저장해줘',
+            [_DummyStepResult("분석 보고서 저장", output=r"C:\Users\안지훈\Desktop\summary.md")],
+        )
+
+        self.assertIsNone(result)
+
+    def test_extract_goal_folder_name_supports_unquoted_name(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        folder_name = verifier._extract_goal_folder_name(
+            "바탕화면에 Ari workspace audit 폴더를 만들고 보고서를 저장해줘"
+        )
+
+        self.assertEqual(folder_name, "Ari workspace audit")
+
+    def test_ocr_verification_requires_named_folder_evidence(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+        step_results = [
+            _DummyStepResult(
+                "폴더 정리",
+                output='{"lnk": 3, "desktop": 1, "json": 1}',
+                state_delta_summary="new_paths=C:\\Users\\안지훈\\Desktop\\MEDIA",
+            )
+        ]
+
+        with patch.object(
+            RealVerifier,
+            "_extract_expected_keywords",
+            return_value=["Ari", "workspace", "audit", "Desktop", "summary"],
+        ):
+            with patch("agent.real_verifier.ocr_screen", return_value="Ari workspace audit Desktop summary"):
+                result = verifier._ocr_verify(
+                    "바탕화면에 Ari workspace audit 폴더를 만들고 보고서를 저장해줘",
+                    step_results,
+                )
+
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

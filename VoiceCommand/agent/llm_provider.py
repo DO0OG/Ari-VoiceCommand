@@ -669,8 +669,47 @@ class LLMProvider:
 
     def _normalize_tool_arguments(self, name, args, user_msg):
         n = dict(args or {})
-        if name == "run_agent_task": n.setdefault("goal", user_msg)
+        if name == "run_agent_task":
+            detailed_request = (n.get("explanation") or user_msg or "").strip()
+            current_goal = (n.get("goal") or "").strip()
+            if not current_goal:
+                n["goal"] = detailed_request
+            elif detailed_request:
+                if (
+                    not self._is_generic_agent_explanation(detailed_request)
+                    and (
+                        len(detailed_request) >= len(current_goal) + 12
+                        or (
+                            self._contains_specific_goal_markers(detailed_request)
+                            and not self._contains_specific_goal_markers(current_goal)
+                        )
+                    )
+                ):
+                    n["goal"] = detailed_request
         return n
+
+    def _is_generic_agent_explanation(self, text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        if not normalized:
+            return True
+        generic_phrases = (
+            "복합 작업으로 판단되어 단계별 실행으로 전환할게요",
+            "복합 작업을 실행할게요",
+            "진행할게요",
+            "처리할게요",
+            "작업을 진행합니다",
+        )
+        return any(phrase in normalized for phrase in generic_phrases)
+
+    def _contains_specific_goal_markers(self, text: str) -> bool:
+        normalized = (text or "").strip().lower()
+        if not normalized:
+            return False
+        return any(marker in normalized for marker in (
+            "'", '"', ".md", ".txt", ".pdf",
+            "summary.md", "report.md", "바탕화면", "desktop", "폴더", "folder",
+            "창 제목", "열린 창",
+        ))
 
     def _fallback_tool_calls_from_text(self, raw, msg, ctx):
         if "execute_python_code" in raw or ctx.get("force_tool"):
@@ -713,6 +752,12 @@ class LLMProvider:
         if not text:
             return ""
         text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        text = re.sub(r'<function[^>]*>.*?</function>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<tool_call[^>]*>.*?</tool_call>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\[[^\n]*\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\{[^\n]*\}', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<=\s)[\]\}\)]+(?=\s|$)', '', text)
         text = re.sub(r'\[(FACT|BIO|PREF|CMD):[^\]]*\]', '', text)
         text = re.sub(r'\s+', ' ', text)
         return text.strip()

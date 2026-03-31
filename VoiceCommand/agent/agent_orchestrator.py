@@ -187,9 +187,12 @@ class AgentOrchestrator:
         except Exception as exc:
             logger.debug(f"[Orchestrator] episode memory 주입 생략: {exc}")
 
-        skill_result = self._run_with_skill_if_available(goal, context)
-        if skill_result is not None:
-            return skill_result
+        if self._should_prefer_template_over_skill(goal):
+            logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
+        else:
+            skill_result = self._run_with_skill_if_available(goal, context)
+            if skill_result is not None:
+                return skill_result
 
         for iteration in range(self.MAX_PLAN_ITERATIONS):
             run_result.total_iterations = iteration + 1
@@ -235,6 +238,14 @@ class AgentOrchestrator:
                 self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
         
         return run_result
+
+    def _should_prefer_template_over_skill(self, goal: str) -> bool:
+        try:
+            template_steps = self.planner._build_template_plan(goal)  # 내부 안정 템플릿 우선
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] 템플릿 우선 판단 생략: {exc}")
+            return False
+        return bool(template_steps)
 
     def _run_with_skill_if_available(self, goal: str, context: Dict[str, str]) -> Optional[AgentRunResult]:
         try:

@@ -89,6 +89,7 @@ class GoalProfile:
     wants_log_report: bool = False
     wants_security_audit: bool = False
     wants_type_text: bool = False
+    wants_window_summary: bool = False
     wants_link_collection: bool = False
     wants_batch_rename: bool = False
     wants_file_set_scan: bool = False
@@ -341,11 +342,14 @@ class AgentPlanner:
         if profile.wants_merge and len(profile.all_paths) >= 2:
             return self._build_merge_files_plan(profile)
 
-        if profile.wants_organize and (profile.source_path or profile.wants_desktop):
-            return self._build_organize_folder_plan(profile)
-
         if profile.wants_log_report and profile.source_path:
             return self._build_log_report_plan(profile)
+
+        if profile.wants_window_summary and (profile.wants_desktop or profile.wants_folder):
+            return self._build_window_summary_save_plan(profile)
+
+        if profile.wants_organize and (profile.source_path or profile.wants_desktop):
+            return self._build_organize_folder_plan(profile)
 
         if profile.wants_analyze and profile.source_path:
             return self._build_data_analysis_plan(profile)
@@ -412,8 +416,11 @@ class AgentPlanner:
                 break
 
         target_name = "result"
+        folder_name = self._extract_folder_name(normalized)
         folder_name_match = re.search(r'([가-힣A-Za-z0-9._-]+)\s*폴더', normalized)
-        if "뉴스" in normalized:
+        if folder_name:
+            target_name = folder_name
+        elif "뉴스" in normalized:
             target_name = "news"
         elif "요약" in normalized:
             target_name = "summary"
@@ -465,13 +472,14 @@ class AgentPlanner:
             wants_rename=any(token in normalized for token in ("이름 변경", "이름바꿔", "이름 바꿔", "이름을", "파일명", "rename")),
             wants_merge=any(token in normalized for token in ("병합", "합쳐", "merge")),
             wants_organize=any(token in normalized for token in ("정리", "분류", "확장자별")),
-            wants_analyze=any(token in normalized for token in ("분석", "통계", "구조 확인", "요약")),
+            wants_analyze=any(token in normalized for token in ("분석", "통계", "구조 확인")),
             wants_log_report="로그" in normalized and any(token in normalized for token in ("리포트", "보고", "분석", "요약")),
             wants_security_audit=any(
                 token in normalized
                 for token in ("보안 점검", "자체 보안 점검", "보안 검사", "보안 진단", "security check", "security audit")
             ),
             wants_type_text=any(token in normalized for token in ("입력", "적어", "써", "작성", "type")),
+            wants_window_summary=any(token in normalized for token in ("열린 창", "창 제목", "윈도우 제목", "window title", "window titles")),
             wants_batch_rename=any(token in normalized for token in ("일괄 변경", "일괄변경", "한꺼번에 이름", "규칙 기반 이름", "batch rename")),
             wants_file_set_scan=any(token in normalized for token in ("파일 세트", "대량 파일", "묶음 파일", "확장자 통계")),
             source_path=source_path,
@@ -518,6 +526,18 @@ class AgentPlanner:
                 candidate = match.group(1).strip()
                 if candidate and candidate != basename:
                     return candidate
+        return ""
+
+    def _extract_folder_name(self, goal: str) -> str:
+        quoted_match = re.search(r'["\']([^"\']+)["\']\s*폴더', goal)
+        if quoted_match:
+            return quoted_match.group(1).strip()
+        plain_match = re.search(r'([가-힣A-Za-z0-9][가-힣A-Za-z0-9 ._-]{1,80})\s*폴더', goal)
+        if plain_match:
+            candidate = plain_match.group(1).strip()
+            candidate = re.sub(r'^(?:바탕화면(?:에)?|desktop(?:에)?|작업\s*폴더)\s*', '', candidate, flags=re.IGNORECASE).strip()
+            if candidate:
+                return candidate
         return ""
 
     def _extract_input_text(self, goal: str, paths: List[str], url: str) -> str:
@@ -1090,6 +1110,263 @@ class AgentPlanner:
             ),
         ]
 
+    def _build_window_summary_save_plan(self, profile: GoalProfile) -> List[ActionStep]:
+        folder_name = profile.target_name or "window_summary"
+        report_title = f"{folder_name} 창 제목 요약 보고서"
+        return [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content=(
+                    "import os\n"
+                    f"folder_path = os.path.join(desktop_path, {json.dumps(folder_name, ensure_ascii=False)})\n"
+                    "os.makedirs(folder_path, exist_ok=True)\n"
+                    "print(folder_path)"
+                ),
+                description_kr="작업 폴더 준비",
+                expected_output="created folder path",
+                on_failure="abort",
+            ),
+            ActionStep(
+                step_id=1,
+                step_type="python",
+                content=(
+                    "import json\n"
+                    "import os\n"
+                    "import re\n"
+                    "from datetime import datetime\n"
+                    "folder_path = step_outputs.get('step_0_output', '').strip()\n"
+                    "if not folder_path:\n"
+                    "    raise RuntimeError('작업 폴더를 준비하지 못했습니다.')\n"
+                    "window_titles = [str(title).strip() for title in list_open_windows(limit=20) if str(title).strip()]\n"
+                    "active_title = (get_active_window_title() or '').strip()\n"
+                    "target_path = os.path.join(folder_path, 'summary.md')\n"
+                    "target_existed = os.path.exists(target_path)\n"
+                    "backup_before = len(get_backup_history())\n"
+                    "browser_markers = ('chrome', 'whale', 'edge', 'msedge', 'firefox', 'safari', 'opera', '브라우저')\n"
+                    "service_aliases = {\n"
+                    "    'github': 'GitHub',\n"
+                    "    'google': 'Google',\n"
+                    "    'youtube': 'YouTube',\n"
+                    "    'naver': 'Naver',\n"
+                    "    'daum': 'Daum',\n"
+                    "    'discord': 'Discord',\n"
+                    "    'notion': 'Notion',\n"
+                    "    'whale': 'Whale',\n"
+                    "    'chrome': 'Chrome',\n"
+                    "    'edge': 'Edge',\n"
+                    "    'msedge': 'Edge',\n"
+                    "}\n"
+                    "app_aliases = {\n"
+                    "    '파일 탐색기': '파일 관리',\n"
+                    "    'explorer': '파일 관리',\n"
+                    "    '설정': '시스템',\n"
+                    "    'windows 입력 환경': '시스템',\n"
+                    "    '카카오톡': '메신저',\n"
+                    "    'discord': '메신저',\n"
+                    "    'code': '개발 도구',\n"
+                    "    'codex': '개발 도구',\n"
+                    "    'pythonw': '개발 도구',\n"
+                    "}\n"
+                    "browser_groups = {}\n"
+                    "app_groups = {}\n"
+                    "service_tab_hints = {}\n"
+                    "tab_estimation_source = {}\n"
+                    "chromium_process_map = {\n"
+                    "    'Whale': 'whale.exe',\n"
+                    "    'Chrome': 'chrome.exe',\n"
+                    "    'Edge': 'msedge.exe',\n"
+                    "    'Opera': 'opera.exe',\n"
+                    "    '기타 브라우저': '',\n"
+                    "}\n"
+                    "def estimate_tabs_from_process(service: str) -> int:\n"
+                    "    exe_name = chromium_process_map.get(service, '')\n"
+                    "    if not exe_name:\n"
+                    "        return 0\n"
+                    "    try:\n"
+                    "        import psutil\n"
+                    "    except Exception:\n"
+                    "        return 0\n"
+                    "    renderer_count = 0\n"
+                    "    for proc in psutil.process_iter(['name', 'cmdline']):\n"
+                    "        name = str((proc.info.get('name') or '')).lower()\n"
+                    "        if name != exe_name:\n"
+                    "            continue\n"
+                    "        cmdline = ' '.join(proc.info.get('cmdline') or []).lower()\n"
+                    "        if '--type=renderer' in cmdline and '--extension-process' not in cmdline:\n"
+                    "            renderer_count += 1\n"
+                    "    if renderer_count <= 0:\n"
+                    "        return 0\n"
+                    "    if service in {'Whale', 'Chrome', 'Edge', 'Opera'}:\n"
+                    "        return max(1, renderer_count - 1)\n"
+                    "    return renderer_count\n"
+                    "def infer_tab_count(title: str) -> int:\n"
+                    "    extra_match = re.search(r'(?:및|외)\\s*(\\d+)\\s*개\\s*탭', title)\n"
+                    "    if extra_match:\n"
+                    "        return int(extra_match.group(1)) + 1\n"
+                    "    total_match = re.search(r'(\\d+)\\s*개\\s*탭', title)\n"
+                    "    if total_match:\n"
+                    "        return int(total_match.group(1))\n"
+                    "    lower_title = title.lower()\n"
+                    "    match = re.search(r'tabs?\\s*(\\d+)', lower_title)\n"
+                    "    if match:\n"
+                    "        return int(match.group(1))\n"
+                    "    match = re.search(r'(\\d+)\\s*tabs?', lower_title)\n"
+                    "    if match:\n"
+                    "        return int(match.group(1))\n"
+                    "    return 0\n"
+                    "def looks_like_browser_title(title: str) -> bool:\n"
+                    "    lowered = title.lower()\n"
+                    "    if '브라우저' in lowered:\n"
+                    "        return True\n"
+                    "    if re.search(r'\\b(whale|chrome|msedge|edge|firefox|safari|opera)\\b', lowered):\n"
+                    "        return True\n"
+                    "    if ' - ' in title:\n"
+                    "        tail = title.rsplit(' - ', 1)[-1].strip().lower()\n"
+                    "        if tail in {'whale', 'chrome', 'edge', 'msedge', 'firefox', 'safari', 'opera'}:\n"
+                    "            return True\n"
+                    "    return False\n"
+                    "def detect_browser_service(title: str) -> str:\n"
+                    "    lowered = title.lower()\n"
+                    "    for alias, service in service_aliases.items():\n"
+                    "        if alias in lowered:\n"
+                    "            return service\n"
+                    "    if ' - ' in title:\n"
+                    "        tail = title.rsplit(' - ', 1)[-1].strip()\n"
+                    "        if len(tail) >= 2:\n"
+                    "            return tail\n"
+                    "    if '|' in title:\n"
+                    "        tail = title.rsplit('|', 1)[-1].strip()\n"
+                    "        if len(tail) >= 2:\n"
+                    "            return tail\n"
+                    "    return '기타 브라우저'\n"
+                    "def detect_app_type(title: str) -> str:\n"
+                    "    lowered = title.lower()\n"
+                    "    for alias, app_type in app_aliases.items():\n"
+                    "        if alias.lower() in lowered:\n"
+                    "            return app_type\n"
+                    "    if '메모장' in title:\n"
+                    "        return '문서 편집'\n"
+                    "    if 'terminal' in lowered or 'powershell' in lowered or 'cmd' in lowered:\n"
+                    "        return '터미널'\n"
+                    "    return '기타 앱'\n"
+                    "for title in window_titles:\n"
+                    "    is_browser = looks_like_browser_title(title)\n"
+                    "    if is_browser:\n"
+                    "        service = detect_browser_service(title)\n"
+                    "        browser_groups.setdefault(service, []).append(title)\n"
+                    "        hinted = infer_tab_count(title)\n"
+                    "        if hinted > 0:\n"
+                    "            service_tab_hints[service] = max(service_tab_hints.get(service, 0), hinted)\n"
+                    "    else:\n"
+                    "        app_type = detect_app_type(title)\n"
+                    "        app_groups.setdefault(app_type, []).append(title)\n"
+                    "estimated_tabs_by_service = {}\n"
+                    "for service, titles in browser_groups.items():\n"
+                    "    title_hint = service_tab_hints.get(service, 0)\n"
+                    "    process_hint = estimate_tabs_from_process(service)\n"
+                    "    if process_hint > title_hint:\n"
+                    "        estimated_tabs_by_service[service] = process_hint\n"
+                    "        tab_estimation_source[service] = 'process'\n"
+                    "    elif title_hint > 0:\n"
+                    "        estimated_tabs_by_service[service] = title_hint\n"
+                    "        tab_estimation_source[service] = 'title'\n"
+                    "    else:\n"
+                    "        estimated_tabs_by_service[service] = len(titles)\n"
+                    "        tab_estimation_source[service] = 'window'\n"
+                    "estimated_tabs_total = sum(estimated_tabs_by_service.values())\n"
+                    "lines = [\n"
+                    f"    '# {report_title}',\n"
+                    "    '',\n"
+                    "    f'*생성 일시: {datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")}*',\n"
+                    "    '',\n"
+                    "    '## 브라우저 관련 창 (서비스 기준)',\n"
+                    "]\n"
+                    "if browser_groups:\n"
+                    "    for service, titles in sorted(browser_groups.items(), key=lambda item: (-len(item[1]), item[0])):\n"
+                    "        lines.append(f'### {service} ({len(titles)})')\n"
+                    "        lines.extend(f'- {title}' for title in titles)\n"
+                    "        lines.append('')\n"
+                    "else:\n"
+                    "    lines.append('- 감지된 브라우저 창이 없습니다.')\n"
+                    "lines.extend([\n"
+                    "    '',\n"
+                    "    '## 일반 앱 창 (앱 종류 기준)',\n"
+                    "])\n"
+                    "if app_groups:\n"
+                    "    for app_type, titles in sorted(app_groups.items(), key=lambda item: (-len(item[1]), item[0])):\n"
+                    "        lines.append(f'### {app_type} ({len(titles)})')\n"
+                    "        lines.extend(f'- {title}' for title in titles)\n"
+                    "        lines.append('')\n"
+                    "else:\n"
+                    "    lines.append('- 감지된 일반 앱 창이 없습니다.')\n"
+                    "lines.extend([\n"
+                    "    '',\n"
+                    "    '## 브라우저 탭 추정',\n"
+                    "])\n"
+                    "if estimated_tabs_by_service:\n"
+                    "    for service, tab_count in sorted(estimated_tabs_by_service.items(), key=lambda item: (-item[1], item[0])):\n"
+                    "        source = tab_estimation_source.get(service, 'window')\n"
+                    "        source_kr = '프로세스 기반' if source == 'process' else ('제목 기반' if source == 'title' else '창 개수 기반')\n"
+                    "        lines.append(f'- {service}: {tab_count}개 ({source_kr})')\n"
+                    "else:\n"
+                    "    lines.append('- 탭 수를 추정할 브라우저 창이 없습니다.')\n"
+                    "lines.extend([\n"
+                    "    '',\n"
+                    "    '## 원본 창 제목 목록',\n"
+                    "])\n"
+                    "if window_titles:\n"
+                    "    lines.extend(f'- {title}' for title in window_titles)\n"
+                    "else:\n"
+                    "    lines.append('- 감지된 열린 창이 없습니다.')\n"
+                    "lines.extend([\n"
+                    "    '',\n"
+                    "    '## 선택한 전략',\n"
+                    "    '- `list_open_windows()`로 열린 창 제목을 수집한 뒤 브라우저/일반 앱으로 분류했습니다.',\n"
+                    "    '- 브라우저 창은 제목의 서비스 키워드로 그룹핑하고, 탭 수는 제목/프로세스 단서를 함께 사용해 추정했습니다.',\n"
+                    "    '- 요청한 폴더를 먼저 준비한 뒤 그 안에 markdown 보고서를 저장했습니다.',\n"
+                    "    '- 기존 `summary.md`가 있으면 `save_document()`의 자동 백업을 사용하도록 했습니다.',\n"
+                    "    '',\n"
+                    "    '## 검증한 내용',\n"
+                    "    f'- 폴더 존재 확인: {folder_path}',\n"
+                    "    f'- 활성 창 제목 확인: {active_title or \"없음\"}',\n"
+                    "    f'- 감지된 창 개수: {len(window_titles)}',\n"
+                    "    f'- 브라우저 그룹 수: {len(browser_groups)}',\n"
+                    "    f'- 일반 앱 그룹 수: {len(app_groups)}',\n"
+                    "    f'- 최종 추정 탭 수: {estimated_tabs_total if estimated_tabs_total > 0 else \"확인 불가\"}',\n"
+                    "])\n"
+                    "provisional = '\\n'.join(lines).strip() + '\\n'\n"
+                    f"saved_path = save_document(folder_path, 'summary', provisional, preferred_format={json.dumps(profile.preferred_format)}, title={json.dumps(report_title, ensure_ascii=False)})\n"
+                    "new_backups = get_backup_history()[backup_before:]\n"
+                    "backup_created = any(os.path.abspath(item.get('target_path', '')) == os.path.abspath(saved_path) for item in new_backups)\n"
+                    "lines.extend([\n"
+                    "    '',\n"
+                    "    '## 백업 및 덮어쓰기',\n"
+                    "    f'- 기존 파일 존재: {\"예\" if target_existed else \"아니오\"}',\n"
+                    "    f'- 자동 백업 생성: {\"예\" if backup_created else (\"불필요\" if not target_existed else \"확인 실패\")}',\n"
+                    "])\n"
+                    "final_content = '\\n'.join(lines).strip() + '\\n'\n"
+                    "with open(saved_path, 'w', encoding='utf-8') as handle:\n"
+                    "    handle.write(final_content)\n"
+                    "print(json.dumps({\n"
+                    "    'folder_path': folder_path,\n"
+                    "    'saved_path': saved_path,\n"
+                    "    'window_count': len(window_titles),\n"
+                    "    'browser_group_count': len(browser_groups),\n"
+                    "    'app_group_count': len(app_groups),\n"
+                    "    'estimated_tabs': estimated_tabs_total,\n"
+                    "    'estimated_tabs_by_service': estimated_tabs_by_service,\n"
+                    "    'backup_created': backup_created,\n"
+                    "    'active_title': active_title,\n"
+                    "}, ensure_ascii=False))"
+                ),
+                description_kr="창 제목 요약 보고서 저장",
+                expected_output="window summary report json",
+                condition="len(step_outputs.get('step_0_output', '')) > 0",
+                on_failure="abort",
+            ),
+        ]
+
     def _build_copy_move_plan(self, profile: GoalProfile, move: bool = False) -> List[ActionStep]:
         verb = "이동" if move else "복사"
         func = "shutil.move" if move else "shutil.copy2"
@@ -1634,6 +1911,10 @@ class AgentPlanner:
                 return json.loads(candidate)
             except Exception:
                 logging.warning(f"[Planner] JSON 배열 파싱 실패: {candidate[:200]}")
+        recovered = self._recover_partial_array(text)
+        if recovered:
+            logging.info("[Planner] 부분 JSON 배열 복구 적용")
+            return recovered
         return []
 
     def _parse_object(self, text: str) -> dict:
@@ -1644,7 +1925,71 @@ class AgentPlanner:
                 return json.loads(candidate)
             except Exception:
                 logging.warning(f"[Planner] JSON 객체 파싱 실패: {candidate[:200]}")
+        recovered = self._recover_partial_object(text)
+        if recovered:
+            logging.info("[Planner] 부분 JSON 객체 복구 적용")
+            return recovered
         return {}
+
+    def _recover_partial_array(self, text: str) -> list:
+        start = text.find("[")
+        if start < 0:
+            return []
+        items = []
+        cursor = start
+        while cursor < len(text):
+            obj_start = text.find("{", cursor)
+            if obj_start < 0:
+                break
+            obj_text, obj_end = self._extract_partial_object(text, obj_start)
+            if not obj_text:
+                break
+            try:
+                items.append(json.loads(obj_text))
+            except Exception:
+                break
+            cursor = obj_end
+            comma_idx = text.find(",", cursor)
+            if comma_idx < 0:
+                break
+            cursor = comma_idx + 1
+        return items
+
+    def _recover_partial_object(self, text: str) -> dict:
+        obj_start = text.find("{")
+        if obj_start < 0:
+            return {}
+        obj_text, _ = self._extract_partial_object(text, obj_start)
+        if not obj_text:
+            return {}
+        try:
+            return json.loads(obj_text)
+        except Exception:
+            return {}
+
+    def _extract_partial_object(self, text: str, start: int) -> tuple[str, int]:
+        depth = 0
+        in_string = False
+        escape = False
+        for idx in range(start, len(text)):
+            ch = text[idx]
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:idx + 1], idx + 1
+        return "", start
 
     def _extract_balanced(self, text: str, open_char: str, close_char: str) -> str:
         start = text.find(open_char)

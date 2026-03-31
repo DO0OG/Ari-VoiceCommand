@@ -38,12 +38,14 @@ class AutonomousExecutorTests(unittest.TestCase):
         self.assertIn('"execution_policy": _automation.get_execution_policy()', script)
         self.assertIn('"execution_policy_summary": _automation.get_execution_policy_summary()', script)
         self.assertIn('execution_globals["get_state_transition_history"] = lambda: []', script)
-        self.assertIn('execution_globals["get_backup_history"] = lambda: []', script)
-        self.assertIn('execution_globals["restore_last_backup"] = lambda target_path=None: target_path or ""', script)
-        self.assertIn('execution_globals["get_recovery_candidates"] = lambda target_paths=None: []', script)
-        self.assertIn('execution_globals["get_recovery_guidance"] = lambda goal="", target_paths=None: ""', script)
+        self.assertIn('execution_globals["get_backup_history"] = lambda: [dict(item) for item in _backup_history]', script)
+        self.assertIn('execution_globals["restore_last_backup"] = _restore_last_backup', script)
+        self.assertIn('execution_globals["get_recovery_candidates"] = lambda target_paths=None: [dict(item) for item in _backup_history[-5:]]', script)
+        self.assertIn('execution_globals["get_recovery_guidance"] = lambda goal="", target_paths=None: "복구 히스토리 확인 가능" if _backup_history else ""', script)
         self.assertIn('execution_globals["get_recent_goal_episodes"] = lambda goal="", limit=3: ""', script)
         self.assertIn('"recent_state_transitions": []', script)
+        self.assertIn('"backup_history": [dict(item) for item in _backup_history[-5:]]', script)
+        self.assertIn('"recovery_candidates": [dict(item) for item in _backup_history[-5:]]', script)
 
     def test_state_delta_summary_is_recorded_in_history(self):
         executor = AutonomousExecutor()

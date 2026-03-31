@@ -1,4 +1,5 @@
 from commands.base_command import BaseCommand
+import json
 import logging
 import re
 import threading
@@ -243,7 +244,7 @@ class AICommand(BaseCommand):
         복잡한 다단계 목표 — Plan→Execute+Self-Fix→Verify 루프 실행.
         달성 여부, 단계 수, 요약을 반환.
         """
-        goal = args.get("goal", "").strip()
+        goal = self._resolve_agent_task_goal(args)
         if not goal:
             return None
         self.tts_wrapper("복잡한 목표를 단계별로 처리할게요.")
@@ -471,9 +472,118 @@ class AICommand(BaseCommand):
 
     def _agent_run_to_korean(self, run: AgentRunResult) -> str:
         steps_done = len(run.step_results)
+        saved_path = self._extract_saved_path_from_agent_run(run)
         if run.achieved:
-            return f"목표 달성 완료 ({steps_done}단계, {run.total_iterations}회 반복). {run.summary_kr}"
-        return f"목표 달성 실패 ({run.total_iterations}회 시도). {run.summary_kr}"
+            if saved_path:
+                folder_name = saved_path.rsplit("\\", 1)[0].rsplit("\\", 1)[-1]
+                file_name = saved_path.rsplit("\\", 1)[-1]
+                return f"작업 완료. {folder_name} 폴더에 {file_name}를 저장했습니다."
+            return f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary_kr)}"
+        return f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary_kr)}"
+
+    def _shorten_user_summary(self, summary: str, limit: int = 90) -> str:
+        normalized = re.sub(r'\s+', ' ', (summary or '').strip())
+        if len(normalized) <= limit:
+            return normalized
+        for separator in (". ", "입니다.", "어요.", "했다."):
+            idx = normalized.find(separator)
+            if 0 < idx < limit:
+                return normalized[:idx + len(separator)].strip()
+        return normalized[:limit].rstrip() + "..."
+
+    def _extract_saved_path_from_agent_run(self, run: AgentRunResult) -> str:
+        for step_result in reversed(run.step_results):
+            exec_result = getattr(step_result, "exec_result", None)
+            output = str(getattr(exec_result, "output", "") or "")
+            if not output:
+                continue
+            try:
+                payload = json.loads(output)
+            except Exception:
+                payload = None
+            if isinstance(payload, dict):
+                saved_path = str(payload.get("saved_path", "") or "")
+                if saved_path:
+                    return saved_path
+            path_match = re.search(r'([A-Za-z]:\\[^\r\n]+?\.(?:md|txt|pdf))', output)
+            if path_match:
+                return path_match.group(1)
+        return ""
+
+    def _is_generic_agent_explanation(self, text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        if not normalized:
+            return True
+        generic_phrases = (
+            "복합 작업으로 판단되어 단계별 실행으로 전환할게요",
+            "복합 작업을 실행할게요",
+            "진행할게요",
+            "처리할게요",
+            "작업을 진행합니다",
+        )
+        return any(phrase in normalized for phrase in generic_phrases)
+
+    def _contains_specific_goal_markers(self, text: str) -> bool:
+        normalized = (text or "").strip().lower()
+        if not normalized:
+            return False
+        return any(marker in normalized for marker in (
+            "'", '"', ".md", ".txt", ".pdf",
+            "summary.md", "report.md", "바탕화면", "desktop", "폴더", "folder",
+            "창 제목", "열린 창",
+        ))
+
+    def _resolve_agent_task_goal(self, args: dict) -> str:
+        goal = str(args.get("goal", "") or "").strip()
+        explanation = str(args.get("explanation", "") or "").strip()
+        if not goal:
+            return explanation
+        if not explanation or explanation == goal:
+            return goal
+        if self._is_generic_agent_explanation(explanation):
+            return goal
+
+        goal_lower = goal.lower()
+        explanation_lower = explanation.lower()
+        if (
+            len(explanation) >= len(goal) + 12
+            or (
+                self._contains_specific_goal_markers(explanation)
+                and not self._contains_specific_goal_markers(goal)
+            )
+        ):
+            return explanation
+        looks_like_short_label = (
+            len(goal) <= 40
+            and len(explanation) >= len(goal) + 20
+            and goal_lower not in explanation_lower
+        )
+        if looks_like_short_label:
+            return explanation
+        if len(explanation) > len(goal) and goal_lower in explanation_lower:
+            return explanation
+        return goal
+
+    def _sanitize_user_facing_text(self, message: Optional[str]) -> str:
+        text = (message or "").strip()
+        if not text:
+            return ""
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+        text = re.sub(r'<function[^>]*>.*?</function>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<tool_call[^>]*>.*?</tool_call>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\[[^\n]*\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\{[^\n]*\}', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'(?<=\s)[\]\}\)]+(?=\s|$)', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        if len(text) <= 1:
+            return ""
+        return text
+
+    def _emit_user_message(self, message: Optional[str]) -> None:
+        cleaned = self._sanitize_user_facing_text(message)
+        if cleaned:
+            self.tts_wrapper(cleaned)
 
     def _recover_tool_calls_from_response(self, user_text: str, response: Optional[str]) -> List[dict]:
         """LLM이 텍스트로만 '[run_agent_task 호출]' 같은 잔해를 남겼을 때 최소 복구."""
@@ -699,29 +809,30 @@ class AICommand(BaseCommand):
                 if tool_calls:
                     # 도구 호출 전 자연스러운 안내 문장만 선행 출력
                     if response and self._should_emit_preface_response(response):
-                        self.tts_wrapper(response)
+                        self._emit_user_message(response)
 
                     results = self._execute_tool_calls(tool_calls)
 
                     non_none = [r for r in results if r is not None]
                     followup = None
-                    if non_none and hasattr(self.ai_assistant, 'feed_tool_result'):
+                    has_agent_task = any(tc.get("name") == "run_agent_task" for tc in tool_calls)
+                    if non_none and hasattr(self.ai_assistant, 'feed_tool_result') and not has_agent_task:
                         followup = self._run_agentic_followup(text, tool_calls, results)
                     if followup:
-                        self.tts_wrapper(followup)
+                        self._emit_user_message(followup)
                     elif non_none:
                         for result in non_none:
-                            self.tts_wrapper(str(result))
+                            self._emit_user_message(str(result))
                 else:
                     if response:
-                        self.tts_wrapper(response)
+                        self._emit_user_message(response)
 
             elif hasattr(self.ai_assistant, 'chat'):
                 response = self.ai_assistant.chat(text, include_context=False)
-                self.tts_wrapper(response)
+                self._emit_user_message(response)
             else:
                 response, _, _ = self.ai_assistant.process_query(text)
-                self.tts_wrapper(response)
+                self._emit_user_message(response)
 
             if response:
                 logging.info(f"AI 응답: {response[:50]}...")
