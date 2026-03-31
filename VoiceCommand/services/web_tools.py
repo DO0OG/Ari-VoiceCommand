@@ -3,7 +3,6 @@
 인터넷 검색, 페이지 조회 및 Selenium 기반의 스마트 브라우저 워크플로우를 제공합니다.
 """
 import html
-import importlib
 import logging
 import os
 import json
@@ -32,14 +31,18 @@ def _is_safe_http_url(url: str) -> bool:
 def _create_search_client():
     """검색 클라이언트를 최신 패키지명 우선으로 로드합니다."""
     import_errors = []
-    for module_name in ("ddgs", "duckduckgo_search"):
-        try:
-            module = importlib.import_module(module_name)
-            ddgs_class = getattr(module, "DDGS", None)
-            if ddgs_class is not None:
-                return ddgs_class()
-        except Exception as exc:
-            import_errors.append(f"{module_name}: {exc}")
+    try:
+        from ddgs import DDGS
+
+        return DDGS()
+    except Exception as exc:
+        import_errors.append(f"ddgs: {exc}")
+    try:
+        from duckduckgo_search import DDGS
+
+        return DDGS()
+    except Exception as exc:
+        import_errors.append(f"duckduckgo_search: {exc}")
     raise ImportError("; ".join(import_errors) or "DDGS client unavailable")
 
 # ── DuckDuckGo 검색 및 단순 Fetch ─────────────────────────────────────────────

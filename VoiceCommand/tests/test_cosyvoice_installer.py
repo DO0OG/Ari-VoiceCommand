@@ -14,14 +14,16 @@ from core import cosyvoice_installer
 class CosyVoiceInstallerTests(unittest.TestCase):
     @patch("core.cosyvoice_installer.download_model")
     @patch("core.cosyvoice_installer.subprocess.run")
-    @patch("core.cosyvoice_installer.check_command", return_value=True)
+    @patch("core.cosyvoice_installer._python_executable", return_value=sys.executable)
+    @patch("core.cosyvoice_installer._git_executable", return_value="git")
     @patch("core.cosyvoice_installer.os.path.exists")
     @patch("core.cosyvoice_installer.os.makedirs")
     def test_install_cosyvoice_returns_absolute_dir(
         self,
         _makedirs,
         mock_exists,
-        _check_command,
+        _git_executable,
+        _python_executable,
         _subprocess_run,
         _download_model,
     ):

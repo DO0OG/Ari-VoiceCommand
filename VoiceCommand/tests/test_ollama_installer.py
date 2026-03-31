@@ -39,6 +39,23 @@ class OllamaInstallerTests(unittest.TestCase):
         mock_ensure_server.assert_called_once()
         mock_pull_models.assert_called_once()
 
+    @patch("core.ollama_installer._post_local_json")
+    @patch("core.ollama_installer._require_existing_executable", return_value=r"C:\Ollama\ollama.exe")
+    def test_pull_models_uses_local_http_api(
+        self,
+        _require_executable,
+        mock_post,
+    ):
+        installed = ollama_installer.pull_models(
+            r"C:\Ollama\ollama.exe",
+            ["llama3.2:3b", "qwen3:4b"],
+            ollama_installer.DEFAULT_OLLAMA_BASE_URL,
+            log=lambda _msg: None,
+        )
+
+        self.assertEqual(installed, ["llama3.2:3b", "qwen3:4b"])
+        self.assertEqual(mock_post.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

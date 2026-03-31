@@ -1,8 +1,6 @@
 """설정창용 마켓플레이스 조회/설치 스레드."""
 from __future__ import annotations
 
-from typing import Any
-
 from PySide6.QtCore import QThread, Signal
 
 

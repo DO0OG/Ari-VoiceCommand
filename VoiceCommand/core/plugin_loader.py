@@ -82,7 +82,7 @@ class PluginManager:
 
     def _runtime_extract_dir(self, plugin_path: str) -> str:
         stat = os.stat(plugin_path)
-        digest = hashlib.sha1(f"{plugin_path}:{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8")).hexdigest()[:12]
+        digest = hashlib.sha256(f"{plugin_path}:{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8")).hexdigest()[:12]
         stem = os.path.splitext(os.path.basename(plugin_path))[0]
         return os.path.join(self._plugin_runtime_dir(), f"{stem}_{digest}")
 

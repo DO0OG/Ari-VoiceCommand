@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import json
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -15,6 +18,8 @@ from typing import Callable, Iterable
 OLLAMA_WINDOWS_INSTALLER_URL = "https://ollama.com/download/OllamaSetup.exe"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_OPENAI_URL = "http://localhost:11434/v1"
+_LOCAL_OLLAMA_HOSTS = {"localhost", "127.0.0.1"}
+_SAFE_MODEL_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 @dataclass(frozen=True)
@@ -71,17 +76,62 @@ def is_ollama_installed() -> bool:
     return find_ollama_executable() is not None
 
 
+def _require_http_url(url: str, allowed_hosts: set[str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or host not in allowed_hosts:
+        raise ValueError(f"허용되지 않는 URL입니다: {url}")
+    return url
+
+
+def _require_existing_executable(path: str, allowed_names: set[str]) -> str:
+    candidate = os.path.abspath(path or "")
+    if not candidate or not os.path.exists(candidate):
+        raise FileNotFoundError(f"실행 파일을 찾을 수 없습니다: {path}")
+    if os.path.basename(candidate).lower() not in {name.lower() for name in allowed_names}:
+        raise ValueError(f"허용되지 않는 실행 파일입니다: {candidate}")
+    return candidate
+
+
+def _validate_model_name(model: str) -> str:
+    name = str(model or "").strip()
+    if not _SAFE_MODEL_RE.fullmatch(name):
+        raise ValueError(f"허용되지 않는 모델 이름입니다: {model}")
+    return name
+
+
+def _safe_open_url(url: str, timeout: float = 2.0):
+    request = urllib.request.Request(_require_http_url(url, _LOCAL_OLLAMA_HOSTS))
+    return urllib.request.urlopen(request, timeout=timeout)  # nosec B310 - localhost http/https만 허용
+
+
+def _post_local_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
+    request = urllib.request.Request(
+        _require_http_url(url, _LOCAL_OLLAMA_HOSTS),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - localhost http/https만 허용
+        raw = response.read().decode("utf-8", errors="replace").strip()
+    return json.loads(raw) if raw else {}
+
+
 def _download_installer(target_path: str, log: Callable[[str], None]) -> None:
     log("Ollama 설치 파일 다운로드 중...")
-    urllib.request.urlretrieve(OLLAMA_WINDOWS_INSTALLER_URL, target_path)
+    request = urllib.request.Request(_require_http_url(OLLAMA_WINDOWS_INSTALLER_URL, {"ollama.com"}))
+    with urllib.request.urlopen(request, timeout=30.0) as response:  # nosec B310 - https://ollama.com만 허용
+        with open(target_path, "wb") as handle:
+            shutil.copyfileobj(response, handle)
 
 
 def _run_installer(installer_path: str, install_dir: str | None, log: Callable[[str], None]) -> None:
-    cmd = [installer_path]
+    safe_installer = _require_existing_executable(installer_path, {"OllamaSetup.exe"})
+    arguments = ""
     if install_dir:
-        cmd.append(f'/DIR="{install_dir}"')
+        arguments = f'/DIR="{os.path.abspath(install_dir)}"'
     log("Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요.")
-    subprocess.run(cmd, check=True)
+    os.startfile(safe_installer, arguments=arguments)
 
 
 def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
@@ -92,18 +142,19 @@ def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
     if os.path.normcase(current) == os.path.normcase(models_dir):
         return
     log(f"모델 저장 경로 설정: {models_dir}")
-    subprocess.run(
-        ["setx", "OLLAMA_MODELS", models_dir],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "OLLAMA_MODELS", 0, winreg.REG_EXPAND_SZ, models_dir)
+    except Exception:
+        pass
     os.environ["OLLAMA_MODELS"] = models_dir
 
 
 def _server_ready(base_url: str) -> bool:
     try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=2.0) as response:
+        with _safe_open_url(f"{base_url}/api/tags", timeout=2.0) as response:
             return response.status == 200
     except Exception:
         return False
@@ -114,14 +165,16 @@ def ensure_ollama_server(ollama_exe: str, base_url: str, log: Callable[[str], No
         return
 
     log("Ollama 서버를 시작합니다...")
+    validated_exe = _require_existing_executable(ollama_exe, {"ollama.exe", "ollama"})
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.Popen(
-        [ollama_exe, "serve"],
+        ["ollama", "serve"],
+        executable=validated_exe,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
         creationflags=creationflags,
-    )
+    )  # nosec B603
 
     deadline = time.time() + 30.0
     while time.time() < deadline:
@@ -138,12 +191,12 @@ def pull_models(
     log: Callable[[str], None],
 ) -> list[str]:
     installed: list[str] = []
-    env = os.environ.copy()
-    env.setdefault("OLLAMA_HOST", base_url.replace("http://", "").replace("https://", ""))
+    _require_existing_executable(ollama_exe, {"ollama.exe", "ollama"})
     for model in normalize_models(models):
-        log(f"모델 다운로드 중: {model}")
-        subprocess.run([ollama_exe, "pull", model], check=True, env=env)
-        installed.append(model)
+        safe_model = _validate_model_name(model)
+        log(f"모델 다운로드 중: {safe_model}")
+        _post_local_json(f"{base_url}/api/pull", {"name": safe_model, "stream": False}, timeout=120.0)
+        installed.append(safe_model)
     return installed
 
 
@@ -192,4 +245,3 @@ def install_ollama(
         "installed_models": installed_models,
         "base_url": DEFAULT_OLLAMA_OPENAI_URL,
     }
-

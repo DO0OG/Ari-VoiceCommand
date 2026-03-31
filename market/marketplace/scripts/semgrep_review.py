@@ -4,7 +4,6 @@ import glob
 import json
 import os
 import re
-import shutil
 import subprocess
 
 
@@ -20,21 +19,23 @@ def load_json(path: str, default):
 
 
 def _run_semgrep() -> None:
-    semgrep_bin = os.environ.get("SEMGREP_BIN") or shutil.which("semgrep") or "semgrep"
-    command = [
-        semgrep_bin,
-        "scan",
-    ]
-    for ruleset in RULESETS:
-        command.extend(["--config", ruleset])
-    command.extend([
-        "./plugin",
-        "--json",
-        "--quiet",
-        "--output",
-        "semgrep_result.json",
-    ])
-    result = subprocess.run(command, check=False, capture_output=True, text=True)  # nosec B603
+    result = subprocess.run(
+        [
+            "semgrep",
+            "scan",
+            "--config", RULESETS[0],
+            "--config", RULESETS[1],
+            "--config", RULESETS[2],
+            "./plugin",
+            "--json",
+            "--quiet",
+            "--output",
+            "semgrep_result.json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )  # nosec B603
     if result.returncode != 0:
         message = (result.stderr or result.stdout or "").strip()
         raise SystemExit(message or f"semgrep failed with exit code {result.returncode}")

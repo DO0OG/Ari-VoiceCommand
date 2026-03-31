@@ -27,8 +27,6 @@ class _TempBrowser(SmartBrowser):
 
 class WebToolsTests(unittest.TestCase):
     def test_create_search_client_prefers_ddgs_package_name(self):
-        calls = []
-
         class _Client:
             def __enter__(self):
                 return self
@@ -36,22 +34,12 @@ class WebToolsTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-        class _Module:
-            DDGS = _Client
-
-        def fake_import(name):
-            calls.append(name)
-            return _Module()
-
-        with patch("services.web_tools.importlib.import_module", side_effect=fake_import):
+        with patch.dict("sys.modules", {"ddgs": type("Mod", (), {"DDGS": _Client})}):
             client = web_tools._create_search_client()
 
         self.assertIsInstance(client, _Client)
-        self.assertEqual(calls, ["ddgs"])
 
     def test_create_search_client_falls_back_to_legacy_package_name(self):
-        calls = []
-
         class _Client:
             def __enter__(self):
                 return self
@@ -59,20 +47,24 @@ class WebToolsTests(unittest.TestCase):
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-        class _Module:
-            DDGS = _Client
+        real_import = __import__
 
-        def fake_import(name):
-            calls.append(name)
+        def side_effect(name, globals=None, locals=None, fromlist=(), level=0):
             if name == "ddgs":
                 raise ImportError("missing ddgs")
-            return _Module()
+            return real_import(name, globals, locals, fromlist, level)
 
-        with patch("services.web_tools.importlib.import_module", side_effect=fake_import):
-            client = web_tools._create_search_client()
+        fake_modules = {"duckduckgo_search": type("Mod", (), {"DDGS": _Client})}
+        with patch.dict("sys.modules", fake_modules, clear=False):
+            with patch("builtins.__import__", side_effect=side_effect):
+                client = web_tools._create_search_client()
 
         self.assertIsInstance(client, _Client)
-        self.assertEqual(calls, ["ddgs", "duckduckgo_search"])
+
+    def test_create_search_client_raises_when_all_packages_missing(self):
+        with patch("builtins.__import__", side_effect=ImportError("missing")):
+            with self.assertRaises(ImportError):
+                web_tools._create_search_client()
 
     def test_selector_history_persists_between_instances(self):
         with tempfile.TemporaryDirectory() as tmp:
