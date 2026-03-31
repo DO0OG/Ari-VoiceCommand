@@ -14,7 +14,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <Navbar />
-          {children}
+          <main>{children}</main>
+          <footer className="mx-auto flex max-w-6xl justify-end px-6 py-5 text-xs text-white/45">
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+              Web UI refresh check · 2026-03-31
+            </span>
+          </footer>
         </AuthProvider>
       </body>
     </html>
