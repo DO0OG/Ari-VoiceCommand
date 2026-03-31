@@ -34,6 +34,7 @@ class PluginContext:
     register_menu_action: Any = None
     register_command: Any = None
     register_tool: Any = None
+    register_character_pack: Any = None
     run_sandboxed: Any = None
     set_character_menu_enabled: Any = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
 
@@ -55,6 +56,7 @@ class PluginInfo:
     registered_menu_actions: List[Any] = field(default_factory=list)
     registered_commands: List[Any] = field(default_factory=list)
     registered_tools: List[str] = field(default_factory=list)
+    registered_character_packs: List[str] = field(default_factory=list)
     character_menu_disabled: bool = False  # 이 플러그인이 캐릭터 우클릭 메뉴를 비활성화했는지
 
 
@@ -193,6 +195,12 @@ class PluginManager:
                     registry_owner.unregister_command(command)
         for tool_name in plugin.registered_tools:
             self._unregister_tool(tool_name)
+        if self._context and getattr(self._context, "character_widget", None):
+            widget = self._context.character_widget
+            unregister_pack = getattr(widget, "unregister_character_pack", None)
+            if callable(unregister_pack):
+                for pack_name in plugin.registered_character_packs:
+                    unregister_pack(pack_name)
 
         # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
         if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:
@@ -325,6 +333,14 @@ class PluginManager:
                 plugin.registered_tools.append(tool_name)
             return result
 
+        def _register_character_pack(pack_name: str, directory: str, activate: bool = False):
+            if not context.register_character_pack:
+                return False
+            result = bool(context.register_character_pack(pack_name, directory, activate))
+            if result:
+                plugin.registered_character_packs.append(str(pack_name))
+            return result
+
         def _set_character_menu_enabled(enabled: bool):
             if not context.set_character_menu_enabled:
                 return
@@ -340,6 +356,7 @@ class PluginManager:
             register_menu_action=_register_menu_action,
             register_command=_register_command,
             register_tool=_register_tool,
+            register_character_pack=_register_character_pack,
             run_sandboxed=context.run_sandboxed,
             set_character_menu_enabled=_set_character_menu_enabled,
         )

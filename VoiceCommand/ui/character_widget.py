@@ -8,6 +8,7 @@ import sys
 import logging
 import ctypes
 from collections import OrderedDict
+from typing import Optional
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
@@ -41,6 +42,17 @@ class LRUCache:
 
 
 class CharacterWidget(QWidget):
+    _ANIMATION_SPECS = {
+        "idle": 8,
+        "walk": 9,
+        "drag": 8,
+        "fall": 8,
+        "sit": 9,
+        "climb": 6,
+        "ceiling": 4,
+        "sleep": 4,
+        "surprised": 2,
+    }
     # 스레드 안전한 시그널
     show_speech_bubble_signal = Signal(str, int)  # text, duration
     hide_speech_bubble_signal = Signal()
@@ -66,6 +78,9 @@ class CharacterWidget(QWidget):
         self.current_animation = "idle"
         self.frame_index = 0
         self.animations = {}
+        self._character_packs = {}
+        self._active_character_pack: Optional[str] = None
+        self._base_images_dir = ""
         self.image_cache = LRUCache()
         self.facing_right = True  # 캐릭터 방향
         self.is_thinking = False   # 추가: 생각 중 여부
@@ -126,10 +141,9 @@ class CharacterWidget(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         # 애니메이션 로드
-        self.load_animations()
-
         # 레이블 생성
         self.label = QLabel(self)
+        self.load_animations()
         self.update_frame()
 
         # 애니메이션 타이머 (속도 향상: 100ms -> 70ms)
@@ -214,37 +228,86 @@ class CharacterWidget(QWidget):
         """애니메이션 프레임 로드"""
         from core.resource_manager import ResourceManager
 
-        animations = {
-            "idle": 8,
-            "walk": 9,
-            "drag": 8,
-            "fall": 8,
-            "sit": 9,
-            "climb": 6,
-            "ceiling": 4,
-            "sleep": 4,
-            "surprised": 2
-        }
+        self._base_images_dir = ResourceManager.get_images_dir()
+        self._reload_animation_set(self._active_images_dir())
 
-        images_dir = ResourceManager.get_images_dir()  # 수정
-
-        for anim_name, frame_count in animations.items():
+    def _load_animation_frames(self, images_dir: str) -> dict[str, list[str]]:
+        loaded = {}
+        for anim_name, frame_count in self._ANIMATION_SPECS.items():
             frames = []
             for i in range(1, frame_count + 1):
                 img_path = os.path.join(images_dir, f"{anim_name}{i}.png")
-                if os.path.exists(img_path):  # 존재 확인 추가
-                    pixmap = self.load_and_cache_image(img_path)
-                    if pixmap:
-                        frames.append(img_path)  # 경로만 저장 (메모리 절약)
-
+                if not os.path.exists(img_path):
+                    continue
+                pixmap = self.load_and_cache_image(img_path)
+                if pixmap:
+                    frames.append(img_path)
             if frames:
-                self.animations[anim_name] = frames
+                loaded[anim_name] = frames
+        return loaded
 
+    def _active_images_dir(self) -> str:
+        if self._active_character_pack:
+            pack_dir = self._character_packs.get(self._active_character_pack)
+            if pack_dir:
+                return pack_dir
+        return self._base_images_dir
+
+    def _reload_animation_set(self, images_dir: str) -> bool:
+        loaded = self._load_animation_frames(images_dir)
+        if not loaded:
+            return False
+        self.image_cache.cache.clear()
+        self.animations = loaded
         if not self.animations:
             logging.error("캐릭터 애니메이션을 하나도 로드하지 못했습니다. images 경로를 확인하세요.")
         else:
             total_frames = sum(len(frames) for frames in self.animations.values())
             logging.info(f"캐릭터 애니메이션 로드 완료: {len(self.animations)}종류 / {total_frames}프레임")
+        if self.current_animation not in self.animations:
+            self.current_animation = "idle" if "idle" in self.animations else next(iter(self.animations))
+            self.frame_index = 0
+        if hasattr(self, "label"):
+            self.update_frame()
+        return True
+
+    def register_character_pack(self, pack_name: str, directory: str, activate: bool = False) -> bool:
+        """플러그인이 캐릭터 이미지 세트를 등록한다."""
+        normalized_name = str(pack_name or "").strip()
+        normalized_dir = os.path.abspath(str(directory or "").strip())
+        if not normalized_name or not os.path.isdir(normalized_dir):
+            return False
+        if not self._load_animation_frames(normalized_dir):
+            return False
+        self._character_packs[normalized_name] = normalized_dir
+        if activate:
+            return self.activate_character_pack(normalized_name)
+        return True
+
+    def activate_character_pack(self, pack_name: Optional[str]) -> bool:
+        """등록된 캐릭터 이미지 세트를 활성화한다. None이면 기본 세트로 복원한다."""
+        if not pack_name:
+            self._active_character_pack = None
+            return self._reload_animation_set(self._base_images_dir)
+        normalized_name = str(pack_name).strip()
+        directory = self._character_packs.get(normalized_name)
+        if not directory:
+            return False
+        if not self._reload_animation_set(directory):
+            return False
+        self._active_character_pack = normalized_name
+        return True
+
+    def unregister_character_pack(self, pack_name: str) -> bool:
+        """등록된 캐릭터 이미지 세트를 제거한다."""
+        normalized_name = str(pack_name or "").strip()
+        if normalized_name not in self._character_packs:
+            return False
+        del self._character_packs[normalized_name]
+        if self._active_character_pack == normalized_name:
+            self._active_character_pack = None
+            self._reload_animation_set(self._base_images_dir)
+        return True
 
     def get_screen_geometry(self):
         """작업표시줄 숨김/가려짐 상태를 감지하여 가용 화면 정보를 동적으로 반환"""

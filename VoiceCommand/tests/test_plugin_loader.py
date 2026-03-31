@@ -110,6 +110,34 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertEqual(len(removed_actions), 1)
             self.assertEqual(removed_actions[0]["label"], "메뉴")
 
+    def test_unload_plugin_unregisters_character_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "hello_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "PLUGIN_INFO = {'name': 'hello', 'version': '1.2.0', 'api_version': '1.0'}\n"
+                    "def register(context):\n"
+                    "    context.register_character_pack('hello_pack', r'C:\\\\packs\\\\hello', True)\n"
+                    "    return {}\n"
+                )
+
+            registered = []
+            unregistered = []
+
+            class _Widget:
+                def register_character_pack(self, pack_name, directory, activate=False):
+                    registered.append((pack_name, directory, activate))
+                    return True
+
+                def unregister_character_pack(self, pack_name):
+                    unregistered.append(pack_name)
+                    return True
+
+            manager = _TempPluginManager(tmp)
+            manager.load_plugins(PluginContext(character_widget=_Widget(), register_character_pack=lambda pack_name, directory, activate=False: True))
+            self.assertTrue(manager.unload_plugin("hello"))
+            self.assertEqual(unregistered, ["hello_pack"])
+
 
 if __name__ == "__main__":
     unittest.main()

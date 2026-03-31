@@ -251,6 +251,7 @@ def main():
                 register_menu_action=tray_icon.add_plugin_menu_action if tray_icon else None,
                 register_command=cmd_registry.register_command if cmd_registry else None,
                 register_tool=_register_tool_for_plugin,
+                register_character_pack=character.register_character_pack if character else None,
                 set_character_menu_enabled=character.set_context_menu_enabled if character else None,
             )
         )

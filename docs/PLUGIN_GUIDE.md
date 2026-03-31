@@ -23,6 +23,7 @@ VoiceCommand/plugins
 | `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴에 항목 추가 (공유 QMenu) |
 | `context.register_command(BaseCommand 인스턴스)` | 음성 명령 동적 등록 |
 | `context.register_tool(schema, handler)` | LLM tool calling 스키마·핸들러 확장 |
+| `context.register_character_pack(name, directory, activate=False)` | 플러그인 ZIP/폴더 안의 캐릭터 이미지 세트 등록 |
 | `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
 | `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 (플러그인 언로드 시 자동 복원) |
 | `context.app` | Qt 애플리케이션 인스턴스 참조 |
@@ -190,6 +191,36 @@ def register(context):
 - 기본 타임아웃은 15초입니다.
 - 타임아웃 초과 시 `ok=False`, `error="타임아웃 (N초) 초과"` 반환.
 - 완전한 OS-레벨 격리가 아니므로 신뢰할 수 없는 코드 실행에는 적합하지 않습니다.
+
+### 6-5. 캐릭터 이미지 세트 등록
+
+플러그인에서 캐릭터 위젯용 이미지 세트를 등록할 수 있습니다. 사용자는 플러그인 ZIP 안에 이미지 폴더를 같이 넣기만 하면 됩니다.
+
+```text
+my_character_pack.zip
+├── plugin.json
+├── my_character_pack.py
+└── character_pack/
+   ├── idle1.png
+   ├── idle2.png
+   ├── walk1.png
+   ├── ...
+```
+
+```python
+import os
+
+
+def register(context):
+    pack_dir = os.path.join(os.path.dirname(__file__), "character_pack")
+    if callable(getattr(context, "register_character_pack", None)):
+        context.register_character_pack("my_character_pack", pack_dir, activate=True)
+    return {}
+```
+
+- 이미지 파일명 규칙은 기본 `images/` 폴더와 동일합니다.
+- `activate=True`면 등록 직후 해당 세트가 활성화됩니다.
+- 플러그인 언로드 시 등록한 이미지 세트는 자동 제거되고 기본 세트로 복원됩니다.
 
 ## 7. `register()` 반환값
 
