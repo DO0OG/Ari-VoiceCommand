@@ -64,6 +64,9 @@
 
 - **Codacy 대응 정리**: React 비동기 핸들러/nullable 경고 정리, non-null assertion 제거, 불필요 optional chaining 제거.
 - **보안 강화**: 마켓플레이스 클라이언트 URL 검증 강화, 플러그인 샌드박스 `multiprocessing` 격리 전환, 검증 스크립트의 subprocess 제거, GitHub Action 릴리스 단계 SHA pin 적용.
+- **설정창 로컬 설치 UI**: `AI & TTS` 탭 상단에 `로컬 설치` 섹션 추가. Ollama 설치/모델 다운로드, CosyVoice3 설치를 설정창에서 바로 진행 가능.
+- **설정창 마켓플레이스 연동**: `확장` 탭에서 플러그인 검색·설치가 가능해졌고, 설치 후 로컬 플러그인 목록과 연동됩니다.
+- **ZIP 플러그인 설치/로드 전환**: 마켓플레이스 플러그인을 `.py` 추출 대신 ZIP 그대로 설치하고, 로더가 `plugin.json`의 `entry`를 읽어 `.py`/`.zip` 모두 핫리로드하도록 변경. 재로드 시 메뉴/도구 중복 등록도 정리.
 - **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.32.4`, `certifi>=2024.7.4`, `ddgs>=8.0.0`.
 - **마켓플레이스 함수 변경**: `upload-plugin`, `notify-developer` 함수 검증 로직 및 스캐너 친화적 패턴으로 정리. 함수 코드 변경 시 `supabase functions deploy` 재실행 필요.
 - **스킬 Step 재작성 (Direction 1)**: `SkillOptimizer.optimize_steps()` — 스킬 실패 2회 시 LLM이 실패 에러를 분석해 JSON 스텝 시퀀스를 자동 수정. `condense_steps()` — 8회 성공 후 불필요 스텝 제거·압축.

@@ -45,6 +45,7 @@ class PluginInfo:
     description: str
     path: str
     entry: str = ""
+    sys_path_entry: str = ""
     runtime_path: str = ""
     enabled: bool = True
     loaded: bool = False
@@ -153,7 +154,17 @@ class PluginManager:
         if active_context.run_sandboxed is None:
             from core.plugin_sandbox import run_sandboxed as _sandbox_fn
             active_context.run_sandboxed = _sandbox_fn
+        self._context = active_context
         plugin = self._plugin_stub(path)
+        existing = next(
+            (
+                item for item in self._plugins
+                if item.path == path or item.name == plugin.name
+            ),
+            None,
+        )
+        if existing is not None:
+            self.unload_plugin(existing.name)
         info = self._load_single_plugin(plugin, active_context)
         self._plugins = [item for item in self._plugins if item.name != info.name]
         self._plugins.append(info)
@@ -193,11 +204,12 @@ class PluginManager:
         module = self._modules.pop(plugin_name, None)
         if module is not None:
             sys.modules.pop(module.__name__, None)
-        if plugin.runtime_path:
+        if plugin.sys_path_entry:
             try:
-                sys.path.remove(plugin.runtime_path)
+                sys.path.remove(plugin.sys_path_entry)
             except ValueError:
                 pass
+        if plugin.runtime_path:
             shutil.rmtree(plugin.runtime_path, ignore_errors=True)
 
         self._plugins = [item for item in self._plugins if item.name != plugin_name]
@@ -227,7 +239,7 @@ class PluginManager:
         module = importlib.util.module_from_spec(spec)
         if sys_path_entry and sys_path_entry not in sys.path:
             sys.path.insert(0, sys_path_entry)
-            plugin.runtime_path = sys_path_entry
+            plugin.sys_path_entry = sys_path_entry
         spec.loader.exec_module(module)
         self._modules[plugin.name] = module
 
@@ -282,6 +294,7 @@ class PluginManager:
 
         plugin.entry = entry
         plugin.runtime_path = extract_dir
+        plugin.sys_path_entry = extract_dir
         return module_path, extract_dir
 
     def _invoke_register(self, register: FunctionType, context: PluginContext) -> Any:

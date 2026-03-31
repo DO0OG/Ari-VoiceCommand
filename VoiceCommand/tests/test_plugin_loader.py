@@ -71,6 +71,45 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertEqual(registry.commands, [])
             self.assertEqual(removed_tools, ["hello_tool"])
 
+    def test_load_plugin_replaces_existing_registered_menu_action(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "hello_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "PLUGIN_INFO = {'name': 'hello', 'version': '1.2.0', 'api_version': '1.0'}\n"
+                    "def register(context):\n"
+                    "    context.register_menu_action('메뉴', lambda: None)\n"
+                    "    return {}\n"
+                )
+
+            added_actions = []
+            removed_actions = []
+
+            class _Tray:
+                def remove_plugin_menu_action(self, action):
+                    removed_actions.append(action)
+
+            def _register_menu_action(label, callback):
+                action = {"label": label, "callback": callback, "id": len(added_actions)}
+                added_actions.append(action)
+                return action
+
+            manager = _TempPluginManager(tmp)
+            context = PluginContext(
+                tray_icon=_Tray(),
+                register_menu_action=_register_menu_action,
+            )
+
+            first = manager.load_plugin(plugin_path, context)
+            second = manager.load_plugin(plugin_path, context)
+
+            self.assertTrue(first.loaded)
+            self.assertTrue(second.loaded)
+            self.assertEqual(len(manager.list_plugins()), 1)
+            self.assertEqual(len(added_actions), 2)
+            self.assertEqual(len(removed_actions), 1)
+            self.assertEqual(removed_actions[0]["label"], "메뉴")
+
 
 if __name__ == "__main__":
     unittest.main()
