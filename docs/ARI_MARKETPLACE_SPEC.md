@@ -48,7 +48,7 @@
   "author": "github_login",
   "commands": ["날씨", "기온"],
   "permissions": ["internet"],
-  "entry": "main.py"
+  "entry": "sit_toggle.py"
 }
 ```
 
@@ -62,7 +62,7 @@
 ```
 my_plugin.zip
 ├── plugin.json       ← 필수
-├── main.py           ← entry 파일 (필수)
+├── sit_toggle.py     ← entry 파일 (필수, 파일명 자유)
 └── ...               ← 기타 의존 파일
 ```
 

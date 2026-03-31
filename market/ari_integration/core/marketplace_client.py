@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import re
 import urllib.parse
 import urllib.request
 import zipfile
@@ -26,12 +27,24 @@ def _require_web_url(url: str) -> str:
     return url
 
 
+def _plugin_target_filename(plugin_name: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
+    safe = safe.strip("._") or "plugin"
+    return f"{safe}.py"
+
+
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
     query = urllib.parse.urlencode({"search": search, "sort": sort})
     request = urllib.request.Request(_require_web_url(f"{MARKETPLACE_API}/get-plugins?{query}"))
     with urllib.request.urlopen(request) as response:  # nosec B310 - validated http/https request only
         payload = json.loads(response.read().decode("utf-8"))
     return payload.get("items", [])
+
+
+def fetch_plugin(plugin_id: str) -> Dict:
+    request = urllib.request.Request(_require_web_url(f"{MARKETPLACE_API}/get-plugin?plugin_id={plugin_id}"))
+    with urllib.request.urlopen(request) as response:  # nosec B310 - validated http/https request only
+        return json.loads(response.read().decode("utf-8"))
 
 
 def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
@@ -45,8 +58,14 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
         data = json.loads(response.read().decode("utf-8"))
 
     release_url = data.get("release_url")
-    if not release_url:
-        logger.error("release_url missing for plugin %s", plugin_id)
+    plugin_name = str(data.get("name", "") or "")
+    entry = str(data.get("entry", "") or "")
+    if not plugin_name or not entry:
+        plugin_meta = fetch_plugin(plugin_id) or {}
+        plugin_name = plugin_name or str(plugin_meta.get("name", "") or "")
+        entry = entry or str(plugin_meta.get("entry", "") or "")
+    if not release_url or not plugin_name or not entry:
+        logger.error("install response incomplete for plugin %s", plugin_id)
         return False
 
     release_request = urllib.request.Request(_require_web_url(release_url))
@@ -55,9 +74,12 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
 
     os.makedirs(plugin_dir, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
-        for member in archive.namelist():
-            if member.endswith(".py") and "/" not in member and "\\" not in member:
-                archive.extract(member, plugin_dir)
+        if entry not in archive.namelist():
+            logger.error("entry file missing in zip: %s", entry)
+            return False
+        target_path = os.path.join(plugin_dir, _plugin_target_filename(plugin_name))
+        with archive.open(entry) as source, open(target_path, "wb") as output:
+            output.write(source.read())
 
     logger.info("plugin installed: %s -> %s", plugin_id, plugin_dir)
     return True

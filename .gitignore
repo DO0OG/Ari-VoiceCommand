@@ -182,3 +182,4 @@ VoiceCommand/porcupine_params_ko.pv
 market/web/.env.local
 market/supabase/.temp/
 supabase/
+.mailmap

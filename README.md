@@ -21,6 +21,7 @@
 | **LLM 자동 라우팅** | 작업 유형(코드/계획/분석/채팅)에 따라 최적 모델 자동 선택 |
 | **감정 표현** | `(기쁨)` 등 AI 태그 기반 캐릭터 애니메이션 |
 | **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS · 초기화 실패 시 자동 폴백 |
+| **로컬 설치 UI** | 설정창 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama / CosyVoice3 설치와 초기 모델 다운로드 지원 |
 | **스트리밍 응답** | 문장 단위 청크 → TTS 즉시 시작, 체감 응답속도 대폭 개선 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 · 우클릭 시 트레이와 동일 메뉴 표시 |
 | **스마트 모드** | LLM tool calling으로 타이머·알람·날씨·유튜브·시스템 제어 자동 실행 |
@@ -195,7 +196,8 @@ pip install elevenlabs
 인터넷 없이, API 비용 없이 로컬에서 LLM 실행:
 
 ```bash
-# 1. https://ollama.com 에서 Ollama 설치 후 실행
+# 1. 설정창 → AI & TTS → 로컬 설치 → "Ollama 설치/모델 받기"
+#    또는 https://ollama.com 에서 Ollama 직접 설치
 
 # 2. 원하는 모델 다운로드
 ollama pull llama3.2        # 4GB, 범용
@@ -209,6 +211,13 @@ ollama pull qwen2.5:14b     # 9GB, 고성능
 ```
 
 권장 사양: RAM 8GB+, 모델에 따라 VRAM 필요.
+
+스크립트로 설치하려면:
+
+```bash
+py -3.11 VoiceCommand/install_ollama.py
+py -3.11 VoiceCommand/install_ollama.py --models llama3.2:3b qwen3:4b
+```
 
 ### 마켓플레이스 함수 재배포가 필요한 경우
 
@@ -226,6 +235,8 @@ supabase functions deploy notify-developer --project-ref <프로젝트ID> --no-v
 ### CosyVoice3 로컬 TTS 설치 (선택)
 
 ```bash
+# 설정창 → AI & TTS → 로컬 설치 → "CosyVoice 설치"
+
 # 대화형 경로 입력
 py -3.11 VoiceCommand/install_cosyvoice.py
 
@@ -242,9 +253,9 @@ py -3.11 VoiceCommand/install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 트레이 아이콘 우클릭(또는 캐릭터 우클릭) → **설정** 에서 4개의 탭으로 관리합니다.
 
 1. **RP 설정**: 캐릭터 성격·시나리오·시스템 프롬프트·기억 지침
-2. **AI & TTS 설정**: 기본/플래너/실행 모델 및 제공자, API 키 검증, TTS 엔진. Ollama 선택 시 API 키 란 숨김 + 서버 주소 안내.
+2. **AI & TTS 설정**: 상단 `로컬 설치` 섹션(Ollama / CosyVoice3 설치), 기본/플래너/실행 모델 및 제공자, API 키 검증, TTS 엔진. Ollama 선택 시 API 키 란 숨김 + 서버 주소 안내.
 3. **장치/UI 설정**: 마이크 선택, **음성 인식 설정** (별도 창 — STT 엔진 전환, Whisper 모델, 마이크 감도, 웨이크워드), 테마 프리셋, 팔레트 직접 편집
-4. **확장 설정**: 플러그인 목록 확인 (api_version·로드 상태·오류 표시)
+4. **확장 설정**: 로컬 플러그인 목록 확인 (api_version·로드 상태·오류 표시), 설정창 내 마켓플레이스 검색·설치
 
 ### 음성 메모리 명령
 

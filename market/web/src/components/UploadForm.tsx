@@ -34,9 +34,16 @@ function getStatusConfig(status: UploadState): { color: string; text: string } {
 
 async function extractPluginJson(file: File): Promise<PluginMeta> {
   const zip = await JSZip.loadAsync(file);
-  const entry = zip.file("plugin.json");
-  if (!entry) throw new Error("plugin.json 파일이 ZIP 루트에 없습니다.");
-  return JSON.parse(await entry.async("text"));
+  const metaEntry = zip.file("plugin.json");
+  if (!metaEntry) throw new Error("plugin.json 파일이 ZIP 루트에 없습니다.");
+  const meta = JSON.parse(await metaEntry.async("text")) as PluginMeta;
+  if (!meta.entry) {
+    throw new Error('plugin.json에 "entry" 값이 필요합니다.');
+  }
+  if (!zip.file(meta.entry)) {
+    throw new Error(`ZIP 루트에 entry 파일(${meta.entry})이 없습니다.`);
+  }
+  return meta;
 }
 
 export function UploadForm() {
@@ -142,7 +149,7 @@ export function UploadForm() {
   return (
     <div className="glass rounded-2xl p-6 shadow-card">
       <h2 className="text-xl font-semibold text-bright">플러그인 업로드</h2>
-      <p className="mt-1 text-sm text-muted">ZIP 파일에 main.py와 plugin.json이 포함되어야 합니다.</p>
+      <p className="mt-1 text-sm text-muted">ZIP 루트에 plugin.json과 entry로 지정한 Python 파일이 포함되어야 합니다.</p>
 
       {/* 드롭존 */}
       <div

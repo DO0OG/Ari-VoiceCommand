@@ -81,6 +81,8 @@ watchdog>=4.0.0
 # sentence-transformers>=2.7.0  # 한국어 임베딩 (paraphrase-multilingual-MiniLM-L12-v2)
 # torch>=2.0.0                  # sentence-transformers 의존
 
-# Ollama 로컬 LLM (설정에서 "Ollama (로컬 LLM)" 선택 시 별도 설치 필요)
+# Ollama 로컬 LLM (설정의 "로컬 설치" 섹션 또는 install_ollama.py로 별도 설치)
 # Ollama 설치: https://ollama.com  →  ollama pull llama3.2
 # openai SDK(이미 포함)로 http://localhost:11434/v1 에 연결 — 별도 패키지 불필요
+
+# CosyVoice3 로컬 TTS는 설정의 "로컬 설치" 섹션 또는 install_cosyvoice.py로 별도 설치

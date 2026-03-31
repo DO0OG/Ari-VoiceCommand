@@ -65,6 +65,23 @@ def register(context):
 
 `api_version`이 현재 Ari가 지원하는 버전과 일치하지 않으면 로드가 거부됩니다. 현재 지원 버전은 `"1.0"`입니다.
 
+## 5-1. 마켓플레이스 업로드 ZIP 규칙
+
+마켓플레이스 업로드용 ZIP은 `main.py`가 고정이 아닙니다.
+
+- ZIP 루트에 `plugin.json` 이 있어야 합니다.
+- `plugin.json` 의 `entry` 값은 ZIP 루트의 Python 파일을 가리켜야 합니다.
+- 예: `entry: "sit_toggle.py"` 또는 `entry: "main.py"`
+- 업로드 검증은 `plugin.json + entry 파일 존재 여부`를 기준으로 동작합니다.
+
+예시:
+
+```text
+my_plugin.zip
+├── plugin.json
+└── sit_toggle.py
+```
+
 ## 6. 훅 사용법
 
 ### 6-1. 트레이 메뉴 항목 추가

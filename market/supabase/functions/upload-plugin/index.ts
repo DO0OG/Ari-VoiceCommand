@@ -104,8 +104,13 @@ async function extractPluginJson(file: File): Promise<PluginMeta> {
     throw new Error("plugin.json not found in zip root");
   }
   const text = await metaEntry.getData(new zip.TextWriter());
+  const meta = JSON.parse(text) as PluginMeta;
+  const entryFile = entries.find((entry: { filename: string }) => entry.filename === meta.entry);
   await reader.close();
-  return JSON.parse(text);
+  if (!entryFile) {
+    throw new Error(`entry file not found in zip root: ${meta.entry}`);
+  }
+  return meta;
 }
 
 function validateMeta(meta: PluginMeta): string | null {
@@ -126,6 +131,9 @@ function validateMeta(meta: PluginMeta): string | null {
   }
   if (meta.entry.includes("/") || meta.entry.includes("\\")) {
     return "entry must be a root-level file";
+  }
+  if (!meta.entry.endsWith(".py")) {
+    return "entry must point to a Python file";
   }
   if (!/^[A-Za-z0-9_.-]+$/.test(meta.name)) {
     return "name contains invalid characters";

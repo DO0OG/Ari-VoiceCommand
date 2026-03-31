@@ -4,7 +4,7 @@
 
 ## 사용자 문서
 
-- [프로그램 사용 가이드](./USAGE.md) — 실행, 기본 사용법, 자동화 예시, NVIDIA NIM, CosyVoice3
+- [프로그램 사용 가이드](./USAGE.md) — 실행, 기본 사용법, 로컬 설치(Ollama/CosyVoice3), 자동화 예시, NVIDIA NIM
 - [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — JSON 테마 파일 편집, 팔레트 에디터 창 사용법
 - [플러그인 가이드](./PLUGIN_GUIDE.md) — 훅(메뉴·명령·도구·샌드박스) 등록, API 버전, 코드 예시
 - [기여 가이드](./CONTRIBUTING.md) — 검증 명령, 브랜치/커밋 규칙, 로컬 산출물 관리

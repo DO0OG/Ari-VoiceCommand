@@ -39,8 +39,9 @@ pip install elevenlabs
 
 1. 앱을 실행합니다.
 2. 트레이 아이콘 우클릭으로 설정창을 엽니다.
-3. AI 모델, TTS, UI 테마를 원하는 값으로 조정합니다.
-4. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
+3. 필요한 경우 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama 또는 CosyVoice3를 먼저 설치합니다.
+4. AI 모델, TTS, UI 테마를 원하는 값으로 조정합니다.
+5. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
 
 ## 3. 텍스트 채팅 UI
 
@@ -103,6 +104,8 @@ py -3.11 install_cosyvoice.py
 py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 ```
 
+설정창에서 더 간단하게 진행하려면 **AI & TTS → 로컬 설치 → CosyVoice 설치** 버튼을 사용하면 됩니다.
+
 설치 후 설정창 → **AI & TTS → TTS 모드 → 로컬 (CosyVoice3)** 선택,
 **CosyVoice 경로**란에 설치 경로를 입력하거나 자동 감지 버튼을 클릭합니다.
 
@@ -110,8 +113,9 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 인터넷 없이, API 비용 없이 로컬에서 LLM을 실행합니다.
 
-1. [https://ollama.com](https://ollama.com) 에서 Ollama를 설치하고 실행합니다.
-2. 터미널에서 모델을 다운로드합니다.
+1. 설정창 → **AI & TTS → 로컬 설치 → Ollama 설치/모델 받기** 버튼으로 설치하거나,
+   [https://ollama.com](https://ollama.com) 에서 직접 설치합니다.
+2. 설정창 설치 버튼을 쓰지 않았다면 터미널에서 모델을 다운로드합니다.
 
    ```bash
    ollama pull llama3.2      # 4GB, 범용
@@ -121,6 +125,13 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 3. 설정창 → **AI & TTS → LLM 제공자 → "Ollama (로컬 LLM)"** 선택합니다.
 4. 모델명을 입력하고 저장합니다 (예: `qwen2.5`).
 5. Ollama 서버 주소는 기본값 `http://localhost:11434/v1` 을 유지하거나 변경합니다.
+
+스크립트로 설치하려면:
+
+```bash
+py -3.11 install_ollama.py
+py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
+```
 
 권장 사양: RAM 8GB+, GPU VRAM 4GB+(선택).
 
@@ -149,6 +160,7 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 Python 파일로 추가합니다.
 앱 시작 시 자동 로드되며, 설정창 `확장` 탭에서 목록과 로드 상태를 확인할 수 있습니다.
+같은 탭의 마켓플레이스 섹션에서 플러그인을 검색하고 바로 설치할 수도 있습니다.
 
 플러그인에서 사용할 수 있는 훅:
 

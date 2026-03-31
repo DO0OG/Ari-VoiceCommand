@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import re
 import urllib.parse
 import urllib.request
 import zipfile
@@ -49,6 +50,12 @@ def _post(url: str, body: dict) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _plugin_target_filename(plugin_name: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
+    safe = safe.strip("._") or "plugin"
+    return f"{safe}.py"
+
+
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
     """마켓플레이스 플러그인 목록 조회."""
     query = urllib.parse.urlencode({"search": search, "sort": sort})
@@ -79,8 +86,20 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
         return False
 
     release_url = data.get("release_url")
-    if not release_url:
-        logger.error("release_url 없음 (plugin_id=%s)", plugin_id)
+    plugin_name = str(data.get("name", "") or "")
+    entry = str(data.get("entry", "") or "")
+    if not plugin_name or not entry:
+        plugin_meta = fetch_plugin(plugin_id) or {}
+        plugin_name = plugin_name or str(plugin_meta.get("name", "") or "")
+        entry = entry or str(plugin_meta.get("entry", "") or "")
+    if not release_url or not plugin_name or not entry:
+        logger.error(
+            "install-plugin 응답/상세정보 누락 (plugin_id=%s, release_url=%s, name=%s, entry=%s)",
+            plugin_id,
+            bool(release_url),
+            plugin_name,
+            entry,
+        )
         return False
 
     # 2. plugin_dir 결정
@@ -105,13 +124,17 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
 
     installed_files: List[str] = []
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
-        for member in archive.namelist():
-            if member.endswith(".py") and "/" not in member and "\\" not in member:
-                archive.extract(member, plugin_dir)
-                installed_files.append(member)
+        if entry not in archive.namelist():
+            logger.error("ZIP에 entry 파일이 없습니다: %s", entry)
+            return False
+        target_name = _plugin_target_filename(plugin_name)
+        target_path = os.path.join(plugin_dir, target_name)
+        with archive.open(entry) as source, open(target_path, "wb") as output:
+            output.write(source.read())
+        installed_files.append(target_name)
 
     if not installed_files:
-        logger.error("설치할 .py 파일이 없습니다.")
+        logger.error("설치할 entry 파일이 없습니다.")
         return False
 
     logger.info("플러그인 설치 완료: %s → %s", installed_files, plugin_dir)

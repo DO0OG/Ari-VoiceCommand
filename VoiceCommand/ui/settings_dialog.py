@@ -9,8 +9,9 @@ from PySide6.QtWidgets import (
     QLineEdit, QTextEdit, QPushButton,
     QComboBox, QGroupBox, QScrollArea, QWidget,
     QTabWidget, QMessageBox, QListWidget, QListWidgetItem, QFrame,
+    QFileDialog, QProgressDialog,
 )
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtGui import QFont, QDesktopServices
 from PySide6.QtCore import QUrl
 from core.config_manager import ConfigManager
@@ -21,6 +22,13 @@ from ui.theme import (
 )
 from ui.theme_editor import ThemeEditorDialog
 from ui.common import create_muted_label
+from ui.local_installers import (
+    CosyVoiceInstallerThread,
+    LocalInstallSection,
+    OllamaInstallDialog,
+    OllamaInstallerThread,
+)
+from ui.marketplace_browser import MarketplaceFetchThread, MarketplaceInstallThread
 
 # ── API 검증 스레드 ────────────────────────────────────────────────────────────
 
@@ -131,6 +139,13 @@ class SettingsDialog(QDialog):
         self._role_provider_combos = {}   # role 키 → QComboBox
         self._validator_threads = {}      # data 키 → _ValidatorThread
         self._validate_labels = {}        # data 키 → QLabel
+        self._ollama_install_thread: OllamaInstallerThread | None = None
+        self._ollama_progress_dialog: QProgressDialog | None = None
+        self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
+        self._cosyvoice_progress_dialog: QProgressDialog | None = None
+        self._market_fetch_thread: MarketplaceFetchThread | None = None
+        self._market_install_thread: MarketplaceInstallThread | None = None
+        self._market_items: list[dict] = []
         self._editor_dialog: ThemeEditorDialog | None = None
         self._init_ui()
 
@@ -248,7 +263,13 @@ class SettingsDialog(QDialog):
         vbox = QVBoxLayout(container)
         vbox.setSpacing(15)
 
-        # 1. AI (LLM) 설정
+        # 1. 로컬 설치
+        self.local_install_section = LocalInstallSection(self)
+        self.local_install_section.ollama_install_requested.connect(self._open_ollama_installer)
+        self.local_install_section.cosyvoice_install_requested.connect(self._install_cosyvoice)
+        vbox.addWidget(self.local_install_section)
+
+        # 2. AI (LLM) 설정
         llm_group = QGroupBox("AI (LLM) 엔진 설정")
         llm_vbox = QVBoxLayout(llm_group)
 
@@ -561,6 +582,47 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
 
+        marketplace_group = QGroupBox("마켓플레이스")
+        mvbox = QVBoxLayout(marketplace_group)
+        mvbox.addWidget(create_muted_label(
+            "설정창 안에서 플러그인을 검색하고 바로 설치할 수 있습니다."
+        ))
+
+        search_row = QHBoxLayout()
+        self.market_search_input = QLineEdit()
+        self.market_search_input.setPlaceholderText("플러그인 검색")
+        search_row.addWidget(self.market_search_input)
+        market_search_btn = QPushButton("검색")
+        market_search_btn.setStyleSheet(secondary_btn_style())
+        market_search_btn.clicked.connect(self._refresh_marketplace_list)
+        search_row.addWidget(market_search_btn)
+        mvbox.addLayout(search_row)
+
+        self.marketplace_list = QListWidget()
+        mvbox.addWidget(self.marketplace_list)
+
+        self.marketplace_status_label = create_muted_label("")
+        mvbox.addWidget(self.marketplace_status_label)
+
+        market_btn_row = QHBoxLayout()
+        self.market_install_btn = QPushButton("선택 플러그인 설치")
+        self.market_install_btn.setStyleSheet(secondary_btn_style())
+        self.market_install_btn.clicked.connect(self._install_selected_marketplace_plugin)
+        market_refresh_btn = QPushButton("목록 새로고침")
+        market_refresh_btn.setStyleSheet(secondary_btn_style())
+        market_refresh_btn.clicked.connect(self._refresh_marketplace_list)
+        market_open_btn = QPushButton("웹 마켓플레이스 열기")
+        market_open_btn.setStyleSheet(secondary_btn_style())
+        market_open_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://ari-voice-command.vercel.app/marketplace"))
+        )
+        market_btn_row.addWidget(self.market_install_btn)
+        market_btn_row.addWidget(market_refresh_btn)
+        market_btn_row.addWidget(market_open_btn)
+        mvbox.addLayout(market_btn_row)
+
+        vbox.addWidget(marketplace_group)
+
         plugin_group = QGroupBox("사용자 플러그인")
         pvbox = QVBoxLayout(plugin_group)
 
@@ -589,16 +651,10 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(reload_btn)
         pvbox.addLayout(btn_row)
 
-        market_btn = QPushButton("🛍️ 마켓플레이스 열기")
-        market_btn.setStyleSheet(secondary_btn_style())
-        market_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl("https://ari-voice-command.vercel.app/marketplace"))
-        )
-        pvbox.addWidget(market_btn)
-
         vbox.addWidget(plugin_group)
         vbox.addStretch()
         self._refresh_plugin_list()
+        self._refresh_marketplace_list()
         return widget
 
     # ── 유틸리티 및 이벤트 ───────────────────────────────────────────────────────
@@ -635,6 +691,64 @@ class SettingsDialog(QDialog):
         is_ollama = provider == "ollama"
         self.ollama_hint_label.setVisible(is_ollama)
         self.ollama_url_input.setVisible(is_ollama)
+
+    def _open_ollama_installer(self):
+        dialog = OllamaInstallDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        selected_models = dialog.selected_models()
+        if not selected_models:
+            confirm = QMessageBox.question(
+                self,
+                "모델 없이 설치",
+                "선택한 모델이 없습니다. Ollama 프로그램만 설치할까요?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if confirm != QMessageBox.Yes:
+                return
+
+        self._ollama_install_thread = OllamaInstallerThread(
+            dialog.install_dir_input.text(),
+            dialog.models_dir_input.text(),
+            selected_models,
+        )
+        self._ollama_install_thread.done.connect(self._on_ollama_install_done)
+        self._ollama_progress_dialog = QProgressDialog(
+            "Ollama 설치를 준비 중입니다.\n설치 창이 뜨면 진행하고, 모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다.",
+            None,
+            0,
+            0,
+            self,
+        )
+        self._ollama_progress_dialog.setWindowTitle("Ollama 설치")
+        self._ollama_progress_dialog.setWindowModality(Qt.ApplicationModal)
+        self._ollama_progress_dialog.setCancelButton(None)
+        self._ollama_progress_dialog.setMinimumDuration(0)
+        self._ollama_progress_dialog.show()
+        self._ollama_install_thread.start()
+
+    def _on_ollama_install_done(self, success: bool, message: str, result: dict):
+        if self._ollama_progress_dialog is not None:
+            self._ollama_progress_dialog.close()
+            self._ollama_progress_dialog = None
+
+        if success and result:
+            self._set_combo(self.llm_provider_combo, "ollama")
+            self.ollama_url_input.setText(result.get("base_url", "http://localhost:11434/v1"))
+            installed_models = result.get("installed_models") or []
+            if installed_models and not self.llm_model_input.text().strip():
+                self.llm_model_input.setText(installed_models[0])
+                model_input = self._llm_model_inputs.get("ollama")
+                if model_input and not model_input.text().strip():
+                    model_input.setText(installed_models[0])
+            self._on_llm_changed()
+            QMessageBox.information(self, "Ollama 설치", message)
+        else:
+            QMessageBox.warning(self, "Ollama 설치", message)
+
+        self._ollama_install_thread = None
 
     def _run_validation(self, provider: str):
         api_key = self._llm_key_inputs[provider].text().strip()
@@ -765,6 +879,105 @@ class SettingsDialog(QDialog):
             label = f"{plugin.name} ({plugin.version}) - {plugin.description or '설명 없음'}"
             self.plugin_list.addItem(QListWidgetItem(label))
 
+    def _installed_plugin_names(self) -> set[str]:
+        try:
+            from core.plugin_loader import get_plugin_manager
+            return {plugin.name for plugin in get_plugin_manager().discover_plugins()}
+        except Exception:
+            return set()
+
+    def _refresh_marketplace_list(self):
+        if self._market_fetch_thread and self._market_fetch_thread.isRunning():
+            return
+
+        self.marketplace_status_label.setText("마켓플레이스 목록을 불러오는 중...")
+        self.marketplace_status_label.setStyleSheet("color: #888;")
+        self.market_install_btn.setEnabled(False)
+        self.marketplace_list.clear()
+
+        self._market_fetch_thread = MarketplaceFetchThread(
+            search=self.market_search_input.text(),
+        )
+        self._market_fetch_thread.done.connect(self._on_marketplace_fetch_done)
+        self._market_fetch_thread.start()
+
+    def _on_marketplace_fetch_done(self, success: bool, items: object, message: str):
+        self._market_fetch_thread = None
+        self.marketplace_list.clear()
+        self._market_items = list(items) if isinstance(items, list) else []
+
+        if not success:
+            self.marketplace_status_label.setText(f"목록 로드 실패: {message}")
+            self.marketplace_status_label.setStyleSheet("color: #e74c3c;")
+            self.market_install_btn.setEnabled(False)
+            return
+
+        installed_names = self._installed_plugin_names()
+        for item in self._market_items:
+            name = str(item.get("name", "이름 없음"))
+            version = str(item.get("version", "0.0.0"))
+            install_count = int(item.get("install_count", 0) or 0)
+            desc = str(item.get("description", "") or "설명 없음")
+            status = "설치됨" if name in installed_names else "설치 가능"
+            label = f"{name} v{version} [{status}] ({install_count} installs)\n{desc}"
+            list_item = QListWidgetItem(label)
+            list_item.setData(Qt.UserRole, item)
+            self.marketplace_list.addItem(list_item)
+
+        if self._market_items:
+            self.marketplace_status_label.setText(f"{len(self._market_items)}개 플러그인을 불러왔습니다.")
+            self.marketplace_status_label.setStyleSheet("color: #27ae60;")
+            self.market_install_btn.setEnabled(True)
+        else:
+            self.marketplace_status_label.setText("표시할 플러그인이 없습니다.")
+            self.marketplace_status_label.setStyleSheet("color: #888;")
+            self.market_install_btn.setEnabled(False)
+
+    def _install_selected_marketplace_plugin(self):
+        item = self.marketplace_list.currentItem()
+        if item is None:
+            QMessageBox.information(self, "마켓플레이스", "설치할 플러그인을 먼저 선택하세요.")
+            return
+
+        payload = item.data(Qt.UserRole) or {}
+        plugin_id = str(payload.get("id", "") or "")
+        plugin_name = str(payload.get("name", "") or "플러그인")
+        if not plugin_id:
+            QMessageBox.warning(self, "마켓플레이스", "선택한 플러그인의 ID를 찾지 못했습니다.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "플러그인 설치",
+            f"{plugin_name} 플러그인을 설치할까요?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        self.market_install_btn.setEnabled(False)
+        self.marketplace_status_label.setText(f"{plugin_name} 설치 중...")
+        self.marketplace_status_label.setStyleSheet("color: #888;")
+
+        self._market_install_thread = MarketplaceInstallThread(plugin_id)
+        self._market_install_thread.done.connect(self._on_marketplace_install_done)
+        self._market_install_thread.start()
+
+    def _on_marketplace_install_done(self, success: bool, message: str):
+        self._market_install_thread = None
+        if success:
+            self.marketplace_status_label.setText(message)
+            self.marketplace_status_label.setStyleSheet("color: #27ae60;")
+            self._refresh_plugin_list()
+            self._refresh_marketplace_list()
+            QMessageBox.information(self, "마켓플레이스", message)
+        else:
+            self.market_install_btn.setEnabled(True)
+            self.marketplace_status_label.setText(message)
+            self.marketplace_status_label.setStyleSheet("color: #e74c3c;")
+            QMessageBox.warning(self, "마켓플레이스", message)
+
     def _open_plugin_folder(self):
         path = self.plugin_dir_input.text().strip()
         if not path:
@@ -858,12 +1071,62 @@ class SettingsDialog(QDialog):
         return any(key in self.changed_keys for key in self.THEME_KEYS)
 
     def _browse_cosyvoice_dir(self):
-        from PySide6.QtWidgets import QFileDialog
         path = QFileDialog.getExistingDirectory(self, "CosyVoice 설치 폴더 선택",
                                                 self.cosyvoice_dir_input.text() or "C:/")
         if path:
             self.cosyvoice_dir_input.setText(path)
             self._check_cosyvoice_dir(path)
+
+    def _install_cosyvoice(self):
+        target_dir = self.cosyvoice_dir_input.text().strip()
+        if not target_dir:
+            target_dir = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "CosyVoice")
+            self.cosyvoice_dir_input.setText(target_dir)
+
+        confirm = QMessageBox.question(
+            self,
+            "CosyVoice 설치",
+            f"아래 경로에 CosyVoice3를 설치할까요?\n\n{target_dir}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        self._cosyvoice_install_thread = CosyVoiceInstallerThread(target_dir)
+        self._cosyvoice_install_thread.done.connect(self._on_cosyvoice_install_done)
+        self._cosyvoice_progress_dialog = QProgressDialog(
+            "CosyVoice3 설치를 진행 중입니다.\n의존성 및 모델 다운로드로 시간이 조금 걸릴 수 있습니다.",
+            None,
+            0,
+            0,
+            self,
+        )
+        self._cosyvoice_progress_dialog.setWindowTitle("CosyVoice3 설치")
+        self._cosyvoice_progress_dialog.setWindowModality(Qt.ApplicationModal)
+        self._cosyvoice_progress_dialog.setCancelButton(None)
+        self._cosyvoice_progress_dialog.setMinimumDuration(0)
+        self._cosyvoice_progress_dialog.show()
+        self._cosyvoice_install_thread.start()
+
+    def _on_cosyvoice_install_done(self, success: bool, message: str, installed_path: str):
+        if self._cosyvoice_progress_dialog is not None:
+            self._cosyvoice_progress_dialog.close()
+            self._cosyvoice_progress_dialog = None
+
+        if success:
+            self.cosyvoice_dir_input.setText(installed_path)
+            self._check_cosyvoice_dir(installed_path)
+            if self.tts_mode_combo.currentData() != "local":
+                self._set_combo(self.tts_mode_combo, "local")
+                self._on_tts_changed()
+            QMessageBox.information(self, "CosyVoice3 설치", message)
+        else:
+            self.cosyvoice_dir_status.setText(message)
+            self.cosyvoice_dir_status.setStyleSheet("color: #e74c3c;")
+            QMessageBox.warning(self, "CosyVoice3 설치", message)
+
+        self._cosyvoice_install_thread = None
 
     def _detect_cosyvoice_dir(self):
         try:
@@ -893,6 +1156,15 @@ class SettingsDialog(QDialog):
     def closeEvent(self, event):
         for thread in self._validator_threads.values():
             if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)
+        for thread in (
+            self._ollama_install_thread,
+            self._cosyvoice_install_thread,
+            self._market_fetch_thread,
+            self._market_install_thread,
+        ):
+            if thread and thread.isRunning():
                 thread.quit()
                 thread.wait(1000)
         super().closeEvent(event)
