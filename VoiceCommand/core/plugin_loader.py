@@ -197,10 +197,10 @@ class PluginManager:
             self._unregister_tool(tool_name)
         if self._context and getattr(self._context, "character_widget", None):
             widget = self._context.character_widget
-            unregister_pack = getattr(widget, "unregister_character_pack", None)
-            if callable(unregister_pack):
+            unregister_pack_fn = getattr(widget, "unregister_character_pack", None)
+            if unregister_pack_fn is not None and callable(unregister_pack_fn):
                 for pack_name in plugin.registered_character_packs:
-                    unregister_pack(pack_name)
+                    unregister_pack_fn(pack_name)
 
         # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
         if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:
