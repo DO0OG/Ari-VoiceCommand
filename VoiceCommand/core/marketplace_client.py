@@ -53,7 +53,32 @@ def _post(url: str, body: dict) -> dict:
 def _plugin_target_filename(plugin_name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
     safe = safe.strip("._") or "plugin"
-    return f"{safe}.py"
+    return f"{safe}.zip"
+
+
+def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, entry: str) -> tuple[str, str]:
+    resolved_name = plugin_name
+    resolved_entry = entry
+
+    try:
+        with archive.open("plugin.json") as meta_file:
+            meta = json.loads(meta_file.read().decode("utf-8"))
+        resolved_name = str(meta.get("name", "") or resolved_name)
+        resolved_entry = str(meta.get("entry", "") or resolved_entry)
+    except Exception as exc:
+        logger.debug("ZIP 내부 plugin.json 재확인 실패: %s", exc)
+
+    root_python_files = [
+        name for name in archive.namelist()
+        if name.endswith(".py") and "/" not in name and "\\" not in name
+    ]
+    if resolved_entry not in archive.namelist():
+        if len(root_python_files) == 1:
+            resolved_entry = root_python_files[0]
+        elif _plugin_target_filename(resolved_name) in root_python_files:
+            resolved_entry = _plugin_target_filename(resolved_name)
+
+    return resolved_name, resolved_entry
 
 
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
@@ -75,7 +100,7 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
     """
     플러그인을 설치합니다.
     1. install-plugin 호출 → install_count 증가 + release_url 획득
-    2. ZIP 다운로드 후 plugin_dir에 .py 파일 추출
+    2. ZIP 다운로드 후 plugin_dir에 ZIP 그대로 저장
     3. 실행 중인 PluginManager에 동적 로드
     """
     # 1. install-plugin 호출
@@ -124,14 +149,22 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
 
     installed_files: List[str] = []
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        plugin_name, entry = _resolve_zip_plugin_metadata(archive, plugin_name, entry)
         if entry not in archive.namelist():
             logger.error("ZIP에 entry 파일이 없습니다: %s", entry)
             return False
         target_name = _plugin_target_filename(plugin_name)
         target_path = os.path.join(plugin_dir, target_name)
-        with archive.open(entry) as source, open(target_path, "wb") as output:
-            output.write(source.read())
+        with open(target_path, "wb") as output:
+            output.write(content)
         installed_files.append(target_name)
+
+    legacy_path = os.path.join(plugin_dir, f"{os.path.splitext(installed_files[0])[0]}.py")
+    if os.path.exists(legacy_path):
+        try:
+            os.remove(legacy_path)
+        except OSError as exc:
+            logger.warning("기존 단일 파일 플러그인 제거 실패: %s", exc)
 
     if not installed_files:
         logger.error("설치할 entry 파일이 없습니다.")
@@ -145,6 +178,7 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
         pm = get_plugin_manager()
         for fname in installed_files:
             path = os.path.join(plugin_dir, fname)
+            pm.unload_plugin(plugin_name)
             pm.load_plugin(path)
             logger.info("플러그인 로드: %s", fname)
     except Exception as e:

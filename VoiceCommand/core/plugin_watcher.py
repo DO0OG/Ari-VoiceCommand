@@ -18,16 +18,20 @@ class _PluginEventHandler(FileSystemEventHandler):
     def _schedule(self, path: str, action: str):
         self._pending[path] = (time.time(), action)
 
+    @staticmethod
+    def _is_plugin_file(path: str) -> bool:
+        return path.endswith(".py") or path.endswith(".zip")
+
     def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith(".py"):
+        if not event.is_directory and self._is_plugin_file(event.src_path):
             self._schedule(event.src_path, "load")
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith(".py"):
+        if not event.is_directory and self._is_plugin_file(event.src_path):
             self._schedule(event.src_path, "reload")
 
     def on_deleted(self, event):
-        if not event.is_directory and event.src_path.endswith(".py"):
+        if not event.is_directory and self._is_plugin_file(event.src_path):
             self._schedule(event.src_path, "unload")
 
     def flush_pending(self):

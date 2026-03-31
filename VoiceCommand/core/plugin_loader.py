@@ -1,18 +1,22 @@
 """사용자 플러그인 로더.
 
-`plugins/*.py` 파일을 스캔하고, 각 모듈의 `register(context)` 함수를 호출해
-확장 기능을 로드합니다.
+`plugins/*.py`와 `plugins/*.zip` 파일을 스캔하고, 각 플러그인의
+`register(context)` 함수를 호출해 확장 기능을 로드합니다.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import logging
 import os
+import shutil
 import sys
+import zipfile
 from dataclasses import dataclass, field
 from types import FunctionType
 from types import ModuleType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +44,8 @@ class PluginInfo:
     version: str
     description: str
     path: str
+    entry: str = ""
+    runtime_path: str = ""
     enabled: bool = True
     loaded: bool = False
     error: str = ""
@@ -64,22 +70,59 @@ class PluginManager:
         except Exception:
             return os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugins")
 
+    def _plugin_runtime_dir(self) -> str:
+        try:
+            from core.resource_manager import ResourceManager
+            path = ResourceManager.get_writable_path("plugin_runtime")
+        except Exception:
+            path = os.path.join(self.plugin_dir(), "_runtime")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def _runtime_extract_dir(self, plugin_path: str) -> str:
+        stat = os.stat(plugin_path)
+        digest = hashlib.sha1(f"{plugin_path}:{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8")).hexdigest()[:12]
+        stem = os.path.splitext(os.path.basename(plugin_path))[0]
+        return os.path.join(self._plugin_runtime_dir(), f"{stem}_{digest}")
+
+    def _zip_metadata(self, path: str) -> Dict[str, Any]:
+        with zipfile.ZipFile(path) as archive:
+            with archive.open("plugin.json") as handle:
+                return json.loads(handle.read().decode("utf-8"))
+
+    def _plugin_stub(self, path: str) -> PluginInfo:
+        stem = os.path.splitext(os.path.basename(path))[0]
+        info = PluginInfo(
+            name=stem,
+            version="0.1.0",
+            description="",
+            path=path,
+        )
+        if path.endswith(".zip"):
+            try:
+                meta = self._zip_metadata(path)
+                info.name = str(meta.get("name", stem))
+                info.version = str(meta.get("version", "0.1.0"))
+                info.description = str(meta.get("description", ""))
+                info.entry = str(meta.get("entry", ""))
+                info.api_version = str(meta.get("api_version", "1.0"))
+            except Exception as exc:
+                info.error = f"plugin.json 읽기 실패: {exc}"
+        return info
+
     def discover_plugins(self) -> List[PluginInfo]:
         directory = self.plugin_dir()
         os.makedirs(directory, exist_ok=True)
         discovered: List[PluginInfo] = []
         for name in sorted(os.listdir(directory)):
-            if not name.endswith(".py") or name.startswith("_"):
+            if name.startswith("_"):
                 continue
             path = os.path.join(directory, name)
-            discovered.append(
-                PluginInfo(
-                    name=os.path.splitext(name)[0],
-                    version="0.1.0",
-                    description="",
-                    path=path,
-                )
-            )
+            if not os.path.isfile(path):
+                continue
+            if not (name.endswith(".py") or name.endswith(".zip")):
+                continue
+            discovered.append(self._plugin_stub(path))
         self._plugins = discovered
         return list(discovered)
 
@@ -110,12 +153,7 @@ class PluginManager:
         if active_context.run_sandboxed is None:
             from core.plugin_sandbox import run_sandboxed as _sandbox_fn
             active_context.run_sandboxed = _sandbox_fn
-        plugin = PluginInfo(
-            name=os.path.splitext(os.path.basename(path))[0],
-            version="0.1.0",
-            description="",
-            path=path,
-        )
+        plugin = self._plugin_stub(path)
         info = self._load_single_plugin(plugin, active_context)
         self._plugins = [item for item in self._plugins if item.name != info.name]
         self._plugins.append(info)
@@ -155,6 +193,12 @@ class PluginManager:
         module = self._modules.pop(plugin_name, None)
         if module is not None:
             sys.modules.pop(module.__name__, None)
+        if plugin.runtime_path:
+            try:
+                sys.path.remove(plugin.runtime_path)
+            except ValueError:
+                pass
+            shutil.rmtree(plugin.runtime_path, ignore_errors=True)
 
         self._plugins = [item for item in self._plugins if item.name != plugin_name]
         logger.info("[PluginLoader] 플러그인 언로드: %s", plugin_name)
@@ -176,10 +220,14 @@ class PluginManager:
 
     def _load_single_plugin(self, plugin: PluginInfo, context: PluginContext) -> PluginInfo:
         module_name = f"ari_user_plugin_{plugin.name}"
-        spec = importlib.util.spec_from_file_location(module_name, plugin.path)
+        module_path, sys_path_entry = self._resolve_load_target(plugin)
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
         if spec is None or spec.loader is None:
             raise RuntimeError("플러그인 모듈 스펙 생성 실패")
         module = importlib.util.module_from_spec(spec)
+        if sys_path_entry and sys_path_entry not in sys.path:
+            sys.path.insert(0, sys_path_entry)
+            plugin.runtime_path = sys_path_entry
         spec.loader.exec_module(module)
         self._modules[plugin.name] = module
 
@@ -209,6 +257,32 @@ class PluginManager:
         plugin.loaded = True
         plugin.error = ""
         return plugin
+
+    def _resolve_load_target(self, plugin: PluginInfo) -> Tuple[str, str]:
+        if plugin.path.endswith(".py"):
+            return plugin.path, os.path.dirname(plugin.path)
+
+        meta = self._zip_metadata(plugin.path)
+        entry = str(meta.get("entry", "") or "").strip()
+        if not entry:
+            raise RuntimeError("plugin.json에 entry가 없습니다.")
+        if "/" in entry or "\\" in entry:
+            raise RuntimeError("entry는 ZIP 루트 파일이어야 합니다.")
+
+        extract_dir = self._runtime_extract_dir(plugin.path)
+        if os.path.isdir(extract_dir):
+            shutil.rmtree(extract_dir, ignore_errors=True)
+        os.makedirs(extract_dir, exist_ok=True)
+        with zipfile.ZipFile(plugin.path) as archive:
+            archive.extractall(extract_dir)
+
+        module_path = os.path.join(extract_dir, entry)
+        if not os.path.exists(module_path):
+            raise RuntimeError(f"ZIP 내부 entry 파일을 찾을 수 없습니다: {entry}")
+
+        plugin.entry = entry
+        plugin.runtime_path = extract_dir
+        return module_path, extract_dir
 
     def _invoke_register(self, register: FunctionType, context: PluginContext) -> Any:
         return register(context)
@@ -262,7 +336,10 @@ class PluginManager:
             if plugin.name == plugin_name:
                 return plugin.path
         direct = os.path.join(self.plugin_dir(), f"{plugin_name}.py")
-        return direct if os.path.exists(direct) else ""
+        if os.path.exists(direct):
+            return direct
+        zipped = os.path.join(self.plugin_dir(), f"{plugin_name}.zip")
+        return zipped if os.path.exists(zipped) else ""
 
     def _unregister_tool(self, tool_name: str) -> None:
         try:

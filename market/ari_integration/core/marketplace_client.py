@@ -30,7 +30,32 @@ def _require_web_url(url: str) -> str:
 def _plugin_target_filename(plugin_name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
     safe = safe.strip("._") or "plugin"
-    return f"{safe}.py"
+    return f"{safe}.zip"
+
+
+def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, entry: str) -> tuple[str, str]:
+    resolved_name = plugin_name
+    resolved_entry = entry
+
+    try:
+        with archive.open("plugin.json") as meta_file:
+            meta = json.loads(meta_file.read().decode("utf-8"))
+        resolved_name = str(meta.get("name", "") or resolved_name)
+        resolved_entry = str(meta.get("entry", "") or resolved_entry)
+    except Exception as exc:
+        logger.debug("failed to read plugin.json from zip: %s", exc)
+
+    root_python_files = [
+        name for name in archive.namelist()
+        if name.endswith(".py") and "/" not in name and "\\" not in name
+    ]
+    if resolved_entry not in archive.namelist():
+        if len(root_python_files) == 1:
+            resolved_entry = root_python_files[0]
+        elif _plugin_target_filename(resolved_name) in root_python_files:
+            resolved_entry = _plugin_target_filename(resolved_name)
+
+    return resolved_name, resolved_entry
 
 
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
@@ -74,12 +99,20 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
 
     os.makedirs(plugin_dir, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        plugin_name, entry = _resolve_zip_plugin_metadata(archive, plugin_name, entry)
         if entry not in archive.namelist():
             logger.error("entry file missing in zip: %s", entry)
             return False
         target_path = os.path.join(plugin_dir, _plugin_target_filename(plugin_name))
-        with archive.open(entry) as source, open(target_path, "wb") as output:
-            output.write(source.read())
+        with open(target_path, "wb") as output:
+            output.write(content)
+
+    legacy_path = os.path.join(plugin_dir, f"{os.path.splitext(_plugin_target_filename(plugin_name))[0]}.py")
+    if os.path.exists(legacy_path):
+        try:
+            os.remove(legacy_path)
+        except OSError as exc:
+            logger.warning("failed to remove legacy plugin file: %s", exc)
 
     logger.info("plugin installed: %s -> %s", plugin_id, plugin_dir)
     return True

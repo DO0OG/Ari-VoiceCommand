@@ -176,6 +176,7 @@ VoiceCommand/conversation_history.json
 VoiceCommand/user_context.json
 VoiceCommand/strategy_memory.json
 VoiceCommand/desktop_workflow_plans.json
+VoiceCommand/plugin_runtime/
 VoiceCommand/vosk-model-*/
 VoiceCommand/*.ppn
 VoiceCommand/porcupine_params_ko.pv

@@ -7,7 +7,7 @@
 #   Phase 1-5: conversation_history 슬라이딩 요약, UserProfileEngine, MemoryIndex(SQLite FTS5),
 #              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
-# 개발 검증: validate_repo.py + unittest discover
+# 개발 검증: validate_repo.py + py_compile
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
 SpeechRecognition==3.10.1

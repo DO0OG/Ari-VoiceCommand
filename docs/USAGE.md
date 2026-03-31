@@ -158,7 +158,7 @@ py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
 
 ## 11. 플러그인 확장
 
-사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 Python 파일로 추가합니다.
+사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 단일 Python 파일 또는 ZIP 패키지로 추가합니다.
 앱 시작 시 자동 로드되며, 설정창 `확장` 탭에서 목록과 로드 상태를 확인할 수 있습니다.
 같은 탭의 마켓플레이스 섹션에서 플러그인을 검색하고 바로 설치할 수도 있습니다.
 

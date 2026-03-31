@@ -36,7 +36,7 @@ class MarketplaceClientTests(unittest.TestCase):
         ):
             self.assertFalse(marketplace_client.install_plugin("plugin-123", plugin_dir="C:\\temp\\ari-test"))
 
-    def test_install_plugin_saves_entry_as_unique_plugin_filename(self):
+    def test_install_plugin_saves_zip_plugin_package(self):
         archive_buffer = io.BytesIO()
         with zipfile.ZipFile(archive_buffer, "w") as archive:
             archive.writestr("plugin.json", '{"name":"sample_plugin","entry":"main.py"}')
@@ -69,7 +69,7 @@ class MarketplaceClientTests(unittest.TestCase):
                     with mock.patch("core.marketplace_client.get_plugin_manager", side_effect=Exception("unused"), create=True):
                         self.assertTrue(marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir))
 
-            self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.py")))
+            self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.zip")))
             self.assertFalse(os.path.exists(os.path.join(temp_dir, "main.py")))
 
     def test_install_plugin_falls_back_to_fetch_plugin_when_install_response_is_old(self):
@@ -105,7 +105,7 @@ class MarketplaceClientTests(unittest.TestCase):
                     with mock.patch("core.marketplace_client.urllib.request.urlopen", return_value=_FakeResponse(archive_buffer.getvalue())):
                         self.assertTrue(marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir))
 
-            self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.py")))
+            self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.zip")))
 
 
 if __name__ == "__main__":

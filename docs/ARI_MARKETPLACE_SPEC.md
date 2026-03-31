@@ -913,8 +913,8 @@ export function PluginCard({ plugin }: { plugin: Plugin }) {
 ```
 📥 설치 방법
 
-1. 아래 "다운로드" 버튼을 클릭해 .py 파일을 받습니다.
-2. 다운로드한 파일을 아래 경로에 복사합니다:
+1. 아래 "다운로드" 버튼을 클릭해 ZIP 파일을 받습니다.
+2. 다운로드한 ZIP 파일을 아래 경로에 그대로 복사합니다:
    • 실행 파일(EXE): %AppData%\Ari\plugins\
    • 개발 환경:      VoiceCommand/plugins/
 3. Ari를 재시작하거나, 설정창 > 확장 탭에서 "다시 적용"을 클릭합니다.

@@ -23,7 +23,7 @@ nofollow 정책:
   ui/character_widget.py     — 벽/천장 타기 도중 드래그 시 중력 미적용 버그 수정
   ui/theme_editor.py         — ThemeEditorDialog 추가 (팔레트 편집 별도 창)
   ui/settings_dialog.py      — 인라인 팔레트 에디터 → ThemeEditorDialog 분리
-  core/plugin_loader.py      — PluginContext 등록 훅(메뉴/명령/도구/샌드박스) + API 버전 협상
+  core/plugin_loader.py      — PluginContext 등록 훅(메뉴/명령/도구/샌드박스) + API 버전 협상 + ZIP 패키지 로드
   core/plugin_sandbox.py     — 플러그인 샌드박스 실행기 (현재는 multiprocessing 격리 방식으로 유지)
   commands/command_registry.py — register_command() 런타임 동적 등록
   commands/ai_command.py     — register_plugin_tool_handler() LLM 도구 동적 디스패치
@@ -61,7 +61,7 @@ nofollow 정책:
   agent/automation_helpers.py — 데스크톱 창 타깃/워크플로우 기억 + wait_image
   agent/strategy_memory.py    — workflow hint 축적 및 재사용
   agent/autonomous_executor.py — adaptive/resilient workflow + planning snapshot 노출
-  core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점
+  core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점 (.py / .zip)
   ui/theme.py, ui/common.py — `%AppData%/Ari/theme/*.json` 기반 UI 테마 시스템
   plugins/sample_plugin.py   — 사용자 플러그인 템플릿
   tts/cosyvoice_tts.py      — 로컬 TTS 워커 재사용 + 안정화된 스트리밍 출력
@@ -105,6 +105,7 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(HERE, "dist", "Ari")
+PLUGIN_RUNTIME_DIR = os.path.join(HERE, "plugin_runtime")
 
 
 def _module_exists(module_name: str) -> bool:
@@ -124,6 +125,10 @@ def _optional_include_packages(*module_names: str) -> list[str]:
 if clean_build and os.path.exists(os.path.join(HERE, "dist")):
     print("기존 빌드 캐시 및 출력물 삭제 중...")
     shutil.rmtree(os.path.join(HERE, "dist"))
+
+if os.path.exists(PLUGIN_RUNTIME_DIR):
+    print("플러그인 런타임 캐시 정리 중...")
+    shutil.rmtree(PLUGIN_RUNTIME_DIR, ignore_errors=True)
 
 nuitka_args = [
     "--standalone" if not one_file else "--onefile",
