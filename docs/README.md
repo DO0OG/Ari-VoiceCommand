@@ -11,6 +11,7 @@
 
 ## 프로젝트 문서
 
+- 최근 자율 실행 코어는 `state transition`, `execution policy`, `episode memory`, `backup/recovery guidance`까지 포함하도록 확장되었습니다. 아래 문서와 README를 함께 보면 최신 흐름을 파악하기 쉽습니다.
 - [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 - [Claude 메모](./CLAUDE.md) — 개발자용 아키텍처·패턴·상수 레퍼런스
 - [마켓플레이스 설정 가이드](./MARKETPLACE_SETUP_GUIDE.md) — Supabase, GitHub OAuth, Edge Functions, Vercel 배포

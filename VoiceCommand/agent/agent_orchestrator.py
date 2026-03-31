@@ -179,6 +179,13 @@ class AgentOrchestrator:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {"goal": goal}
+        try:
+            from agent.episode_memory import get_episode_memory
+            recent_episode_summary = get_episode_memory().get_recent_summary(goal=goal, limit=3)
+            if recent_episode_summary:
+                context["recent_goal_episodes"] = recent_episode_summary[:600]
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] episode memory 주입 생략: {exc}")
 
         skill_result = self._run_with_skill_if_available(goal, context)
         if skill_result is not None:
@@ -451,6 +458,41 @@ class AgentOrchestrator:
             )
         except Exception as e:
             logger.debug(f"[Orchestrator] skill 추출 실패: {e}")
+        try:
+            from agent.episode_memory import GoalEpisode, get_episode_memory
+            target_domains: List[str] = []
+            target_windows: List[str] = []
+            target_paths: List[str] = []
+            state_changes: List[str] = []
+            policy_summary = ""
+            try:
+                policy_summary = str((self.executor.get_runtime_state() or {}).get("execution_policy_summary", "") or "")[:300]
+            except Exception:
+                policy_summary = ""
+            for sr in run_result.step_results:
+                targets = extract_step_targets(getattr(sr.step, "content", "") or "")
+                target_domains.extend(targets.get("domains", []))
+                target_windows.extend(targets.get("windows", []))
+                target_paths.extend(targets.get("paths", []))
+                summary = str(getattr(sr.exec_result, "state_delta_summary", "") or "").strip()
+                if summary:
+                    state_changes.append(summary)
+            get_episode_memory().record(
+                GoalEpisode(
+                    goal=goal,
+                    achieved=run_result.achieved,
+                    summary_kr=run_result.summary_kr,
+                    failure_kind=next((sr.failure_kind for sr in run_result.step_results if sr.failure_kind), ""),
+                    duration_ms=duration_ms,
+                    target_domains=target_domains,
+                    target_windows=target_windows,
+                    target_paths=target_paths,
+                    state_change_summary=" | ".join(state_changes[:3]),
+                    policy_summary=policy_summary,
+                )
+            )
+        except Exception as e:
+            logger.debug(f"[Orchestrator] episode memory 기록 실패: {e}")
         if not run_result.achieved:
             try:
                 from agent.reflection_engine import get_reflection_engine
@@ -465,10 +507,46 @@ class AgentOrchestrator:
         errs = " | ".join([(sr.exec_result.error or sr.exec_result.output or "")[:100] for sr in failed])
         artifacts = extract_artifacts([sr.exec_result.output or "" for sr in failed] + [sr.exec_result.error or "" for sr in failed])
         ctx = {"재계획_이유": f"실행 실패 ({', '.join(set(kinds)) if kinds else '오류'})", "실패_오류": errs[:300]}
+        target_hints = {
+            "paths": [],
+            "domains": [],
+            "windows": [],
+            "goal_hints": [],
+        }
+        for sr in failed:
+            targets = extract_step_targets(getattr(sr.step, "content", "") or "")
+            for key in target_hints:
+                target_hints[key].extend(targets.get(key, []))
+        state_summaries = [
+            str(getattr(sr.exec_result, "state_delta_summary", "") or "").strip()
+            for sr in failed
+            if str(getattr(sr.exec_result, "state_delta_summary", "") or "").strip()
+        ]
+        if state_summaries:
+            ctx["실패_후_상태변화"] = " | ".join(state_summaries[:3])[:400]
         if artifacts["paths"]:
             ctx["관측_경로"] = ", ".join(artifacts["paths"][:3])
         if artifacts["urls"]:
             ctx["관측_URL"] = ", ".join(artifacts["urls"][:3])
+        if target_hints["paths"]:
+            ctx["실패_대상_경로"] = ", ".join(list(dict.fromkeys(target_hints["paths"]))[:3])
+        if target_hints["domains"]:
+            ctx["실패_대상_도메인"] = ", ".join(list(dict.fromkeys(target_hints["domains"]))[:3])
+        if target_hints["windows"]:
+            ctx["실패_대상_창"] = ", ".join(list(dict.fromkeys(target_hints["windows"]))[:3])
+        if target_hints["goal_hints"]:
+            ctx["실패_goal_hint"] = ", ".join(list(dict.fromkeys(target_hints["goal_hints"]))[:3])
+        try:
+            recovery_targets = list(dict.fromkeys(target_hints["paths"]))[:5]
+            candidates = self.executor.get_recovery_candidates(recovery_targets)
+            if candidates:
+                ctx["복구_가능_파일"] = ", ".join(candidate.get("target_path", "") for candidate in candidates[:3] if candidate.get("target_path"))
+                ctx["복구_권장"] = "필요 시 get_recovery_candidates(...) 확인 후 restore_last_backup(path) 사용"
+            guidance = self.executor.get_recovery_guidance(goal=failed[0].step.description_kr if failed else "", target_paths=recovery_targets)
+            if guidance:
+                ctx["복구_가이드"] = guidance[:500]
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] recovery candidate 주입 생략: {exc}")
         return ctx
 
     def _update_runtime_context(self, context: Dict[str, str], exec_result: ExecutionResult) -> None:
@@ -500,6 +578,30 @@ class AgentOrchestrator:
         planning_snapshot = runtime_state.get("planning_snapshot") or {}
         if planning_snapshot:
             context["planning_snapshot_json"] = json.dumps(planning_snapshot, ensure_ascii=False)[:500]
+        execution_policy_summary = str(runtime_state.get("execution_policy_summary", "") or "")
+        if execution_policy_summary:
+            context["execution_policy_summary"] = execution_policy_summary[:400]
+        execution_policy = runtime_state.get("execution_policy") or {}
+        if execution_policy:
+            context["execution_policy_json"] = json.dumps(execution_policy, ensure_ascii=False)[:500]
+        last_state_delta_summary = str(runtime_state.get("last_state_delta_summary", "") or "")
+        if last_state_delta_summary:
+            context["last_state_delta_summary"] = last_state_delta_summary[:300]
+        recent_state_transitions = runtime_state.get("recent_state_transitions") or []
+        if recent_state_transitions:
+            context["recent_state_transitions_json"] = json.dumps(recent_state_transitions, ensure_ascii=False)[:500]
+        backup_history = runtime_state.get("backup_history") or []
+        if backup_history:
+            context["backup_history_json"] = json.dumps(backup_history, ensure_ascii=False)[:500]
+        recovery_candidates = runtime_state.get("recovery_candidates") or []
+        if recovery_candidates:
+            context["recovery_candidates_json"] = json.dumps(recovery_candidates, ensure_ascii=False)[:500]
+        recent_goal_episodes = str(runtime_state.get("recent_goal_episodes", "") or "")
+        if recent_goal_episodes:
+            context["recent_goal_episodes"] = recent_goal_episodes[:600]
+        recovery_guidance = str(runtime_state.get("recovery_guidance", "") or "")
+        if recovery_guidance:
+            context["recovery_guidance"] = recovery_guidance[:500]
         context["last_step_success"] = str(exec_result.success)
         if exec_result.output:
             artifacts = extract_artifacts([exec_result.output])
@@ -507,6 +609,18 @@ class AgentOrchestrator:
                 context["last_artifact_paths"] = ", ".join(artifacts["paths"][:3])
             if artifacts["urls"]:
                 context["last_artifact_urls"] = ", ".join(artifacts["urls"][:3])
+        state_delta_summary = str(getattr(exec_result, "state_delta_summary", "") or "")
+        if state_delta_summary:
+            context["last_state_change"] = state_delta_summary[:300]
+        step_targets = extract_step_targets(str(getattr(exec_result, "code_or_cmd", "") or ""))
+        if step_targets["paths"]:
+            context["last_target_paths"] = ", ".join(step_targets["paths"][:3])
+        if step_targets["domains"]:
+            context["last_target_domains"] = ", ".join(step_targets["domains"][:3])
+        if step_targets["windows"]:
+            context["last_target_windows"] = ", ".join(step_targets["windows"][:3])
+        if step_targets["goal_hints"]:
+            context["last_goal_hints"] = ", ".join(step_targets["goal_hints"][:3])
         if runtime_state:
             context["runtime_state_json"] = json.dumps(runtime_state, ensure_ascii=False)[:500]
 

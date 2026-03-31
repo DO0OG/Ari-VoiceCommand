@@ -11,10 +11,11 @@ from agent.real_verifier import RealVerifier
 
 
 class _DummyExecResult:
-    def __init__(self, success=True, output="", error=""):
+    def __init__(self, success=True, output="", error="", state_delta_summary=""):
         self.success = success
         self.output = output
         self.error = error
+        self.state_delta_summary = state_delta_summary
 
 
 class _DummyStep:
@@ -23,9 +24,9 @@ class _DummyStep:
 
 
 class _DummyStepResult:
-    def __init__(self, description_kr, success=True, output="", error=""):
+    def __init__(self, description_kr, success=True, output="", error="", state_delta_summary=""):
         self.step = _DummyStep(description_kr)
-        self.exec_result = _DummyExecResult(success=success, output=output, error=error)
+        self.exec_result = _DummyExecResult(success=success, output=output, error=error, state_delta_summary=state_delta_summary)
 
 
 class _DummyExecutor:
@@ -92,6 +93,17 @@ class RealVerifierTests(unittest.TestCase):
         self.assertTrue(result.verified)
         self.assertEqual(result.method, "heuristic")
         self.assertIn("성공: wait_url", result.evidence)
+
+    def test_state_delta_summary_can_verify_open_action(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+        result = verifier.verify(
+            "example 사이트 열어줘",
+            [_DummyStepResult("브라우저 열기", output="opened browser", state_delta_summary="browser_url=https://example.com | new_windows=Example Domain - Chrome")],
+        )
+
+        self.assertTrue(result.verified)
+        self.assertEqual(result.method, "heuristic")
+        self.assertIn("browser_url=https://example.com", result.evidence)
 
 
 if __name__ == "__main__":

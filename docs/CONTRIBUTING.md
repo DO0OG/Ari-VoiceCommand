@@ -30,6 +30,7 @@
   - `py -3.11 VoiceCommand/validate_repo.py`
   - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
 - 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
+- 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
 
 ## 로컬 전용 파일
 

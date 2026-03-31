@@ -124,11 +124,13 @@ _DECOMPOSE_PROMPT = """\
 - 문서를 저장할 때는 `save_document(directory, base_name, content, preferred_format='auto', title='')` 도우미를 사용할 수 있습니다.
 - `preferred_format='auto'`면 내용 구조에 따라 txt/md/pdf 중 적절한 형식을 자동 선택합니다.
 - 파일 작업에는 `rename_file`, `merge_files`, `organize_folder`, `analyze_data`, `generate_report`, `detect_file_set`, `batch_rename_files` 도우미를 사용할 수 있습니다.
-- GUI/브라우저 자동화에는 `open_url`, `open_path`, `launch_app`, `wait_seconds`, `click_screen`, `click_image`, `is_image_visible`, `move_mouse`, `type_text`, `press_keys`, `hotkey`, `take_screenshot`, `read_clipboard`, `write_clipboard`, `wait_for_window`, `get_active_window_title`, `list_open_windows`, `get_desktop_state`, `browser_login`, `run_browser_actions`, `run_adaptive_browser_workflow`, `run_resilient_browser_workflow`, `run_desktop_workflow`, `run_adaptive_desktop_workflow`, `run_resilient_desktop_workflow`, `get_runtime_state`, `get_learned_strategies`, `get_planning_snapshot` 헬퍼를 사용할 수 있습니다.
+- GUI/브라우저 자동화에는 `open_url`, `open_path`, `launch_app`, `wait_seconds`, `click_screen`, `click_image`, `is_image_visible`, `move_mouse`, `type_text`, `press_keys`, `hotkey`, `take_screenshot`, `read_clipboard`, `write_clipboard`, `wait_for_window`, `get_active_window_title`, `list_open_windows`, `get_desktop_state`, `browser_login`, `run_browser_actions`, `run_adaptive_browser_workflow`, `run_resilient_browser_workflow`, `run_desktop_workflow`, `run_adaptive_desktop_workflow`, `run_resilient_desktop_workflow`, `get_runtime_state`, `get_state_transition_history`, `get_learned_strategies`, `get_planning_snapshot`, `get_recovery_candidates`, `get_recovery_guidance`, `get_recent_goal_episodes` 헬퍼를 사용할 수 있습니다.
 - 브라우저 액션 타입으로 `wait_url`, `wait_title`, `wait_selector`, `read_title`, `read_url`, `read_links`, `download_wait`를 사용할 수 있습니다.
 - 반복 GUI/브라우저 작업 전에는 `get_planning_snapshot_summary(goal_hint='...')` 또는 `get_planning_snapshot(goal_hint='...')`로 현재 상태 + 과거 성공 전략을 먼저 읽고, 가능한 경우 `run_resilient_browser_workflow(...)` / `run_resilient_desktop_workflow(...)`를 우선 사용하세요.
+- context에 `recent_goal_episodes`, `execution_policy_summary`, `recovery_candidates_json`, `recovery_guidance`가 있으면 우선 참고해 같은 실패를 반복하지 마세요.
 - `run_browser_actions(url, actions, goal_hint='로그인 후 다운로드')`처럼 `goal_hint`를 함께 주면 이전 성공 액션 시퀀스를 재사용할 수 있습니다.
 - `run_desktop_workflow(goal_hint='메모장에 메모 저장', app_target='notepad', expected_window='메모장', actions=[...])`처럼 사용하면 창 전략과 후속 액션을 함께 재사용할 수 있습니다.
+- 기존 문서를 덮어쓸 가능성이 있으면 `get_backup_history()` / `restore_last_backup(path)`를 사용해 복구 경로를 고려하세요.
 - `YOUR_API_KEY`, `newsapi.org`, `nltk.download`, 외부 유료 API 의존 코드는 금지합니다.
 - 한국 뉴스 요약은 검색 결과 텍스트를 적절히 잘라 저장하면 충분합니다. 복잡한 NLP 라이브러리를 추가하지 마세요.
 - 반드시 JSON 배열만 반환하세요
@@ -163,10 +165,11 @@ _FIX_PROMPT = """\
 - 웹 검색이 필요하면 `web_search` / `web_fetch`를 사용하고, `YOUR_API_KEY` 같은 자리표시자는 절대 사용하지 마세요.
 - 문서 저장은 가능하면 `save_document(...)` 도우미를 사용하세요.
 - 파일 작업은 가능하면 `rename_file`, `merge_files`, `organize_folder`, `analyze_data`, `generate_report`, `detect_file_set`, `batch_rename_files` 도우미를 사용하세요.
-- GUI/브라우저 자동화가 필요하면 가능한 한 내장 헬퍼(`open_url`, `launch_app`, `click_screen`, `type_text`, `wait_for_window`, `list_open_windows`, `get_desktop_state`, `browser_login`, `run_browser_actions`, `run_adaptive_browser_workflow`, `run_resilient_browser_workflow`, `run_desktop_workflow`, `run_adaptive_desktop_workflow`, `run_resilient_desktop_workflow`, `get_runtime_state`, `get_learned_strategies`, `get_planning_snapshot` 등)를 사용하세요.
+- GUI/브라우저 자동화가 필요하면 가능한 한 내장 헬퍼(`open_url`, `launch_app`, `click_screen`, `type_text`, `wait_for_window`, `list_open_windows`, `get_desktop_state`, `browser_login`, `run_browser_actions`, `run_adaptive_browser_workflow`, `run_resilient_browser_workflow`, `run_desktop_workflow`, `run_adaptive_desktop_workflow`, `run_resilient_desktop_workflow`, `get_runtime_state`, `get_state_transition_history`, `get_learned_strategies`, `get_planning_snapshot`, `get_recovery_candidates`, `get_recovery_guidance`, `get_recent_goal_episodes` 등)를 사용하세요.
 - 브라우저에서 리다이렉트/동적 로딩이 예상되면 `wait_url`, `wait_title`, `wait_selector` 같은 액션을 포함하세요.
 - 이미 비슷한 전략이 있다면 `get_planning_snapshot_summary(goal_hint=...)`를 우선 참고하고, 필요할 때만 전체 `get_planning_snapshot(...)` 또는 `get_learned_strategies(...)`를 읽으세요.
 - 브라우저 작업은 가능하면 `goal_hint`를 명시해 재사용 가능한 액션 전략을 남기세요.
+- 기존 파일을 덮어썼다면 `get_backup_history()`를 확인하고 필요 시 `restore_last_backup(path)`로 복구하도록 수정하세요.
 - `with`, `for`, `if`, `try` 같은 복합문은 세미콜론 한 줄 코드로 만들지 마세요. 여러 줄로 작성하세요.
 - 반드시 JSON 객체만 반환하세요
 

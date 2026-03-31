@@ -61,6 +61,7 @@ nofollow 정책:
   agent/automation_helpers.py — 데스크톱 창 타깃/워크플로우 기억 + wait_image
   agent/strategy_memory.py    — workflow hint 축적 및 재사용
   agent/autonomous_executor.py — adaptive/resilient workflow + planning snapshot 노출
+  agent/episode_memory.py     — 목표 에피소드 기억 + recovery guidance 재주입
   core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점 (.py / .zip)
   ui/theme.py, ui/common.py — `%AppData%/Ari/theme/*.json` 기반 UI 테마 시스템
   plugins/sample_plugin.py   — 사용자 플러그인 템플릿
@@ -173,6 +174,7 @@ nuitka_args = [
     "--include-module=agent.safety_checker",
     "--include-module=agent.proactive_scheduler",
     "--include-module=agent.strategy_memory",
+    "--include-module=agent.episode_memory",
     "--include-module=agent.automation_helpers",
     "--include-module=agent.few_shot_injector",
     "--include-module=agent.skill_library",

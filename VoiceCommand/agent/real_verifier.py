@@ -102,6 +102,9 @@ class RealVerifier:
                 workflow_payloads.append(payload)
             if hasattr(sr, "step"):
                 descriptions.append(getattr(sr.step, "description_kr", ""))
+            state_delta_summary = str(getattr(exec_r, "state_delta_summary", "") or "").strip()
+            if state_delta_summary:
+                outputs.append(state_delta_summary)
 
         artifacts = extract_artifacts(outputs)
         existing_path_items = existing_paths(artifacts["paths"])
@@ -141,6 +144,22 @@ class RealVerifier:
             )
 
         if describes_open_action(description_text):
+            state_delta_match = next(
+                (
+                    str(getattr(getattr(sr, "exec_result", sr), "state_delta_summary", "") or "")
+                    for sr in step_results
+                    if "browser_url=" in str(getattr(getattr(sr, "exec_result", sr), "state_delta_summary", "") or "")
+                    or "new_windows=" in str(getattr(getattr(sr, "exec_result", sr), "state_delta_summary", "") or "")
+                ),
+                "",
+            )
+            if state_delta_match:
+                return VerificationResult(
+                    verified=True,
+                    method="heuristic",
+                    evidence=state_delta_match[:200],
+                    summary_kr="실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다.",
+                )
             lowered_title = active_title.lower()
             current_url = str(browser_state.get("current_url", "")).lower()
             matched_url = next((url for url in url_candidates if url in current_url), "")
@@ -279,8 +298,8 @@ class RealVerifier:
             for url in artifacts.get("urls", []):
                 domain = url.split("//")[-1].split("/")[0]
                 keywords.extend(part for part in re.split(r"[.\-_/]", domain) if len(part) >= 2)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"[RealVerifier] 목표 키워드 추출 보조 분석 생략: {exc}")
         keywords.extend(token for token in re.findall(r"[A-Za-z가-힣0-9._-]+", goal) if len(token) >= 2)
         for sr in step_results:
             exec_r = getattr(sr, "exec_result", sr)

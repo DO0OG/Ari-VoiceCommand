@@ -8,9 +8,9 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from agent.agent_orchestrator import AgentOrchestrator
+from agent.agent_orchestrator import AgentOrchestrator, StepResult
 from agent.agent_planner import AgentPlanner, ActionStep
-from agent.autonomous_executor import AutonomousExecutor
+from agent.autonomous_executor import AutonomousExecutor, ExecutionResult
 from agent.strategy_memory import StrategyMemory
 from tests.support import DummyLLMProvider
 
@@ -264,6 +264,71 @@ class AgentIntegrationTests(unittest.TestCase):
         groups = orchestrator._group_by_dependency(steps)
 
         self.assertEqual(len(groups), 2)
+
+    def test_adaptive_context_includes_state_change_summary(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        step = ActionStep(step_id=0, step_type="python", content="open_url('https://example.com')", description_kr="브라우저 열기")
+        exec_result = ExecutionResult(
+            success=False,
+            error="timeout",
+            state_delta_summary="browser_url=https://example.com | new_windows=Example Domain - Chrome",
+        )
+
+        context = orchestrator._build_adaptive_context([
+            StepResult(step=step, exec_result=exec_result, failure_kind="timeout")
+        ])
+
+        self.assertIn("browser_url=https://example.com", context.get("실패_후_상태변화", ""))
+        self.assertIn("timeout", context.get("재계획_이유", ""))
+        self.assertIn("example.com", context.get("실패_대상_도메인", ""))
+        if context.get("복구_가이드"):
+            self.assertIn("restore_last_backup", context.get("복구_가이드", ""))
+
+    def test_runtime_context_tracks_last_targets(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        context = {}
+        exec_result = ExecutionResult(
+            success=True,
+            output="opened https://example.com",
+            code_or_cmd='open_url("https://example.com/dashboard"); wait_for_window(title_substring="Chrome", goal_hint="대시보드")',
+            state_delta_summary="browser_url=https://example.com/dashboard | new_windows=Dashboard - Chrome",
+        )
+
+        orchestrator._update_runtime_context(context, exec_result)
+
+        self.assertIn("example.com", context.get("last_target_domains", ""))
+        self.assertIn("Chrome", context.get("last_target_windows", ""))
+        self.assertIn("대시보드", context.get("last_goal_hints", ""))
+
+    def test_runtime_context_tracks_execution_policy_and_backups(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        orchestrator.executor.get_runtime_state = lambda: {
+            "active_window_title": "",
+            "open_window_titles": [],
+            "browser_state": {},
+            "desktop_state": {},
+            "learned_strategies": {},
+            "learned_strategy_summary": "",
+            "planning_snapshot": {},
+            "planning_snapshot_summary": "",
+            "execution_policy": {"recommended_browser_plan": {"plan_type": "adaptive"}},
+            "execution_policy_summary": "browser=adaptive score=4.0",
+            "last_execution_success": True,
+            "last_execution_output": "",
+            "last_execution_error": "",
+            "last_state_delta_summary": "",
+            "recent_state_transitions": [],
+            "backup_history": [{"target_path": r"C:\\temp\\report.txt", "backup_path": r"C:\\temp\\.ari_backups\\1_report.txt"}],
+            "recovery_candidates": [{"target_path": r"C:\\temp\\report.txt", "backup_path": r"C:\\temp\\.ari_backups\\1_report.txt"}],
+        }
+        context = {}
+
+        orchestrator._update_runtime_context(context, ExecutionResult(success=True))
+
+        self.assertIn("browser=adaptive", context.get("execution_policy_summary", ""))
+        self.assertIn("recommended_browser_plan", context.get("execution_policy_json", ""))
+        self.assertIn(".ari_backups", context.get("backup_history_json", ""))
+        self.assertIn(".ari_backups", context.get("recovery_candidates_json", ""))
 
 
 if __name__ == "__main__":

@@ -4,8 +4,9 @@
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
 #   보안 업데이트: certifi / requests / Pillow 상향
 #   웹 검색 패키지: ddgs 우선 사용, legacy duckduckgo-search 는 코드 fallback 전용
-#   Phase 1-5: conversation_history 슬라이딩 요약, UserProfileEngine, MemoryIndex(SQLite FTS5),
-#              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator
+#   Phase 1-6: conversation_history 슬라이딩 요약, UserProfileEngine, MemoryIndex(SQLite FTS5),
+#              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator,
+#              execution policy / episode memory / backup-recovery guidance
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
 # 개발 검증: validate_repo.py + py_compile
 

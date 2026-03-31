@@ -94,11 +94,15 @@ class AutomationHelpersTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             history_path = os.path.join(tmp, "window_targets.json")
             helper = _TempAutomationHelpers(history_path)
+            helper.desktop_path = tmp
+            with open(os.path.join(tmp, "sample.txt"), "w", encoding="utf-8") as handle:
+                handle.write("hello")
             helper.get_browser_state = lambda: {}
             state = helper.get_desktop_state()
 
             self.assertIn("learned_strategies", state)
             self.assertIn("learned_strategy_summary", state)
+            self.assertTrue(any(path.endswith("sample.txt") for path in state.get("desktop_sample_paths", [])))
 
     def test_get_learned_strategy_summary_is_human_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -142,6 +146,29 @@ class AutomationHelpersTests(unittest.TestCase):
             self.assertIn("active_window=제목 없음 - 메모장", summary)
             self.assertIn("browser_url=https://example.com/dashboard", summary)
             self.assertIn("learned=domain=example.com", summary)
+            self.assertIn("policy=browser=adaptive", summary)
+
+    def test_get_execution_policy_prefers_scored_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = os.path.join(tmp, "window_targets.json")
+            helper = _TempAutomationHelpers(history_path)
+            helper.remember_window_target("메모장에 메모 저장", "제목 없음 - 메모장")
+            helper.remember_desktop_workflow_plan("메모장에 메모 저장", [{"type": "hotkey", "keys": ["ctrl", "s"]}])
+            helper.get_browser_state = lambda: {
+                "current_url": "https://example.com/dashboard",
+                "action_plan_strategies": {
+                    "example.com": {
+                        "로그인 후 다운로드": [{"type": "click", "selectors": ["#download"]}]
+                    }
+                },
+            }
+
+            browser_policy = helper.get_execution_policy(goal_hint="로그인 후 다운로드", domain="example.com")
+            desktop_policy = helper.get_execution_policy(goal_hint="메모장에 메모 저장", expected_window="메모장")
+
+            self.assertEqual(browser_policy["recommended_browser_plan"]["plan_type"], "adaptive")
+            self.assertGreater(browser_policy["recommended_browser_plan"]["score"], 0)
+            self.assertEqual(desktop_policy["recommended_desktop_plan"]["plan_type"], "adaptive")
 
     def test_run_adaptive_browser_workflow_prefers_learned_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -309,6 +336,8 @@ class AutomationHelpersTests(unittest.TestCase):
             )
 
             self.assertEqual([plan["plan_type"] for plan in plans], ["adaptive", "learned_only", "fallback_only"])
+            self.assertGreater(plans[0]["score"], plans[-1]["score"])
+            self.assertIn("학습 전략", plans[0]["selection_reason"])
 
     def test_build_adaptive_desktop_plan_merges_learned_and_fallback_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -345,6 +374,8 @@ class AutomationHelpersTests(unittest.TestCase):
             )
 
             self.assertEqual([plan["plan_type"] for plan in plans], ["adaptive", "learned_only", "fallback_only"])
+            self.assertGreater(plans[0]["score"], plans[-1]["score"])
+            self.assertIn("fallback", plans[0]["selection_reason"])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 
 
@@ -34,6 +35,120 @@ class AutonomousExecutorTests(unittest.TestCase):
         self.assertIn('"learned_strategy_summary": _automation.get_learned_strategy_summary()', script)
         self.assertIn('"planning_snapshot": _automation.get_planning_snapshot()', script)
         self.assertIn('"planning_snapshot_summary": _automation.get_planning_snapshot_summary()', script)
+        self.assertIn('"execution_policy": _automation.get_execution_policy()', script)
+        self.assertIn('"execution_policy_summary": _automation.get_execution_policy_summary()', script)
+        self.assertIn('execution_globals["get_state_transition_history"] = lambda: []', script)
+        self.assertIn('execution_globals["get_backup_history"] = lambda: []', script)
+        self.assertIn('execution_globals["restore_last_backup"] = lambda target_path=None: target_path or ""', script)
+        self.assertIn('execution_globals["get_recovery_candidates"] = lambda target_paths=None: []', script)
+        self.assertIn('execution_globals["get_recovery_guidance"] = lambda goal="", target_paths=None: ""', script)
+        self.assertIn('execution_globals["get_recent_goal_episodes"] = lambda goal="", limit=3: ""', script)
+        self.assertIn('"recent_state_transitions": []', script)
+
+    def test_state_delta_summary_is_recorded_in_history(self):
+        executor = AutonomousExecutor()
+        snapshots = iter([
+            {
+                "active_window_title": "메모장",
+                "open_window_titles": ["메모장"],
+                "browser_state": {},
+                "desktop_state": {},
+                "learned_strategies": {},
+                "learned_strategy_summary": "",
+                "planning_snapshot": {},
+                "planning_snapshot_summary": "",
+                "last_execution_success": None,
+                "last_execution_output": "",
+                "last_execution_error": "",
+            },
+            {
+                "active_window_title": "Chrome",
+                "open_window_titles": ["메모장", "Example Domain - Chrome"],
+                "browser_state": {"current_url": "https://example.com", "title": "Example Domain"},
+                "desktop_state": {},
+                "learned_strategies": {},
+                "learned_strategy_summary": "",
+                "planning_snapshot": {},
+                "planning_snapshot_summary": "",
+                "last_execution_success": None,
+                "last_execution_output": "",
+                "last_execution_error": "",
+            },
+        ])
+        executor.get_runtime_state = lambda: next(snapshots)
+
+        result = executor.run_shell("echo ok")
+
+        self.assertTrue(result.success)
+        self.assertIn("browser_url=https://example.com", result.state_delta_summary)
+        runtime_state = executor.get_state_transition_history()
+        self.assertTrue(runtime_state)
+        self.assertIn("browser_url=https://example.com", runtime_state[-1]["summary"])
+
+    def test_runtime_state_includes_execution_policy_and_backup_history(self):
+        executor = AutonomousExecutor()
+        executor._automation.get_execution_policy = lambda goal_hint="", domain="", expected_window="": {
+            "recommended_browser_plan": {"plan_type": "adaptive", "score": 4.1},
+            "recommended_desktop_plan": None,
+        }
+        executor._automation.get_execution_policy_summary = lambda goal_hint="", domain="", expected_window="": "browser=adaptive score=4.1"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            executor._save_document(tmp, "report", "after", preferred_format="txt")
+            state = executor.get_runtime_state()
+
+        self.assertIn("execution_policy", state)
+        self.assertIn("browser=adaptive", state.get("execution_policy_summary", ""))
+        self.assertTrue(state.get("backup_history"))
+
+    def test_recovery_candidates_filter_by_target_path(self):
+        executor = AutonomousExecutor()
+        with tempfile.TemporaryDirectory() as tmp:
+            first = os.path.join(tmp, "one.txt")
+            second = os.path.join(tmp, "two.txt")
+            for path, content in ((first, "one"), (second, "two")):
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+                executor._save_document(tmp, os.path.splitext(os.path.basename(path))[0], content + "_new", preferred_format="txt")
+
+            candidates = executor.get_recovery_candidates([second])
+
+        self.assertEqual(len(candidates), 1)
+        self.assertTrue(candidates[0]["target_path"].endswith("two.txt"))
+
+    def test_recovery_guidance_combines_episode_and_backup_context(self):
+        executor = AutonomousExecutor()
+        executor.get_recent_goal_episodes = lambda goal="", limit=3: "최근 유사 목표 에피소드:\n[실패] report overwrite"
+        executor._backup_history = [
+            {"target_path": r"C:\temp\report.txt", "backup_path": r"C:\temp\.ari_backups\report.txt"}
+        ]
+
+        guidance = executor.get_recovery_guidance(goal="report overwrite", target_paths=[r"C:\temp\report.txt"])
+
+        self.assertIn("최근 유사 목표 에피소드", guidance)
+        self.assertIn("restore_last_backup", guidance)
+
+    def test_save_document_creates_backup_for_overwrite(self):
+        executor = AutonomousExecutor()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+
+            saved = executor._save_document(tmp, "report", "after", preferred_format="txt")
+
+            self.assertEqual(saved, target)
+            backups = executor.get_backup_history()
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(os.path.abspath(backups[0]["target_path"]), os.path.abspath(target))
+
+            restored = executor.restore_last_backup(target)
+            self.assertEqual(os.path.abspath(restored), os.path.abspath(target))
+            with open(target, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "before")
 
 
 if __name__ == "__main__":

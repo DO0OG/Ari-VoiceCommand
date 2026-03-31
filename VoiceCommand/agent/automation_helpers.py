@@ -405,6 +405,7 @@ class AutomationHelpers:
         except Exception:
             open_windows = []
         learned = self.get_learned_strategies(goal_hint=goal_hint, domain=domain)
+        execution_policy = self.get_execution_policy(goal_hint=goal_hint, domain=domain)
         return {
             "goal_hint": goal_hint,
             "active_window_title": active_window,
@@ -414,6 +415,8 @@ class AutomationHelpers:
             "browser_last_action_summary": str(browser_state.get("last_action_summary", "") or ""),
             "learned_strategy_summary": self.get_learned_strategy_summary(goal_hint=goal_hint, domain=domain),
             "learned_strategies": learned,
+            "execution_policy": execution_policy,
+            "execution_policy_summary": self.get_execution_policy_summary(goal_hint=goal_hint, domain=domain),
         }
 
     def get_planning_snapshot_summary(self, goal_hint: str = "", domain: str = "") -> str:
@@ -432,6 +435,8 @@ class AutomationHelpers:
             lines.append(f"browser_last={snapshot['browser_last_action_summary']}")
         if snapshot.get("learned_strategy_summary"):
             lines.append(f"learned={snapshot['learned_strategy_summary']}")
+        if snapshot.get("execution_policy_summary"):
+            lines.append(f"policy={snapshot['execution_policy_summary']}")
         return " | ".join(lines)
 
     def get_desktop_state(self) -> dict:
@@ -455,6 +460,7 @@ class AutomationHelpers:
             "active_window_title": active_window,
             "open_window_titles": open_windows,
             "browser_state": browser_state,
+            "desktop_sample_paths": self._sample_directory_entries(self.desktop_path),
             "window_state_samples": {
                 title: self.get_window_state(title)
                 for title in open_windows[:3]
@@ -465,7 +471,54 @@ class AutomationHelpers:
             "learned_strategy_summary": self.get_learned_strategy_summary(),
             "planning_snapshot": self.get_planning_snapshot(),
             "planning_snapshot_summary": self.get_planning_snapshot_summary(),
+            "execution_policy": self.get_execution_policy(),
+            "execution_policy_summary": self.get_execution_policy_summary(),
         }
+
+    def get_execution_policy(self, goal_hint: str = "", domain: str = "", expected_window: str = "") -> dict:
+        browser_plans = self.build_resilient_browser_plans(
+            url=f"https://{domain}" if domain and "://" not in domain else "",
+            goal_hint=goal_hint,
+            fallback_actions=[],
+        ) if (goal_hint or domain) else []
+        desktop_plans = self.build_resilient_desktop_plans(
+            goal_hint=goal_hint,
+            expected_window=expected_window,
+            fallback_actions=[],
+        ) if (goal_hint or expected_window) else []
+        return {
+            "goal_hint": goal_hint,
+            "domain": domain,
+            "expected_window": expected_window,
+            "recommended_browser_plan": browser_plans[0] if browser_plans else None,
+            "recommended_desktop_plan": desktop_plans[0] if desktop_plans else None,
+        }
+
+    def get_execution_policy_summary(self, goal_hint: str = "", domain: str = "", expected_window: str = "") -> str:
+        policy = self.get_execution_policy(goal_hint=goal_hint, domain=domain, expected_window=expected_window)
+        lines: List[str] = []
+        browser_plan = policy.get("recommended_browser_plan") or {}
+        desktop_plan = policy.get("recommended_desktop_plan") or {}
+        if browser_plan:
+            lines.append(
+                f"browser={browser_plan.get('plan_type')} score={browser_plan.get('score')} reason={browser_plan.get('selection_reason','')}"
+            )
+        if desktop_plan:
+            lines.append(
+                f"desktop={desktop_plan.get('plan_type')} score={desktop_plan.get('score')} reason={desktop_plan.get('selection_reason','')}"
+            )
+        return " | ".join([line for line in lines if line][:2])
+
+    def _sample_directory_entries(self, directory: str, limit: int = 8) -> List[str]:
+        """상태 비교용으로 디렉터리 엔트리 일부만 가볍게 수집합니다."""
+        normalized = os.path.abspath(directory or "")
+        if not normalized or not os.path.isdir(normalized):
+            return []
+        try:
+            entries = sorted(os.listdir(normalized))[:limit]
+        except OSError:
+            return []
+        return [os.path.join(normalized, name) for name in entries]
 
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """브라우저 다운로드 폴더에서 다운로드 완료 파일을 대기합니다."""
@@ -533,21 +586,22 @@ class AutomationHelpers:
                 continue
             if any(existing["actions"] == actions for existing in plans):
                 continue
-            plans.append(
-                {
-                    "plan_type": plan_type,
-                    "goal_hint": goal_hint,
-                    "domain": domain,
-                    "actions": actions,
-                    "summary": self._describe_action_plan(
-                        f"browser:{plan_type}",
-                        goal_hint,
-                        actions,
-                        reused,
-                    ),
-                }
-            )
-        return plans
+            plan = {
+                "plan_type": plan_type,
+                "goal_hint": goal_hint,
+                "domain": domain,
+                "actions": actions,
+                "summary": self._describe_action_plan(
+                    f"browser:{plan_type}",
+                    goal_hint,
+                    actions,
+                    reused,
+                ),
+            }
+            plan["score"] = self._score_browser_plan(plan, browser_state=browser_state, requested_url=normalized_url)
+            plan["selection_reason"] = self._describe_browser_plan_reason(plan, browser_state=browser_state, requested_url=normalized_url)
+            plans.append(plan)
+        return sorted(plans, key=self._plan_sort_key, reverse=True)
 
     def run_browser_actions(self, url: str, actions: list, headless: bool = False, goal_hint: str = "") -> dict:
         """공유 스마트 브라우저로 상태 인식 기반 액션 시퀀스를 수행합니다."""
@@ -693,21 +747,22 @@ class AutomationHelpers:
                 continue
             if any(existing["actions"] == actions and existing["expected_window"] == resolved_window for existing in plans):
                 continue
-            plans.append(
-                {
-                    "plan_type": plan_type,
-                    "goal_hint": goal_hint,
-                    "expected_window": resolved_window,
-                    "actions": actions,
-                    "summary": self._describe_action_plan(
-                        f"desktop:{plan_type}",
-                        goal_hint,
-                        actions,
-                        reused,
-                    ),
-                }
-            )
-        return plans
+            plan = {
+                "plan_type": plan_type,
+                "goal_hint": goal_hint,
+                "expected_window": resolved_window,
+                "actions": actions,
+                "summary": self._describe_action_plan(
+                    f"desktop:{plan_type}",
+                    goal_hint,
+                    actions,
+                    reused,
+                ),
+            }
+            plan["score"] = self._score_desktop_plan(plan)
+            plan["selection_reason"] = self._describe_desktop_plan_reason(plan)
+            plans.append(plan)
+        return sorted(plans, key=self._plan_sort_key, reverse=True)
 
     def run_desktop_workflow(
         self,
@@ -934,6 +989,93 @@ class AutomationHelpers:
             clip_text = self.read_clipboard()
             return f"성공: read_clipboard({clip_text[:40]})"
         return f"건너뜀: {act_type or 'unknown'}"
+
+    def _plan_sort_key(self, plan: dict) -> tuple:
+        priority = {
+            "adaptive": 3,
+            "learned_only": 2,
+            "fallback_only": 1,
+        }
+        return (
+            float(plan.get("score", 0.0)),
+            priority.get(str(plan.get("plan_type", "")), 0),
+        )
+
+    def _score_browser_plan(self, plan: dict, browser_state: dict, requested_url: str = "") -> float:
+        score = 0.0
+        plan_type = str(plan.get("plan_type", "") or "")
+        if plan_type == "adaptive":
+            score += 3.0
+        elif plan_type == "learned_only":
+            score += 2.0
+        elif plan_type == "fallback_only":
+            score += 1.0
+        actions = list(plan.get("actions", []))
+        score += min(len(actions), 6) * 0.1
+        current_url = str((browser_state or {}).get("current_url", "") or "").lower()
+        requested = str(requested_url or "").lower()
+        if current_url and requested:
+            current_domain = current_url.split("//", 1)[-1].split("/", 1)[0]
+            requested_domain = requested.split("//", 1)[-1].split("/", 1)[0]
+            if current_domain == requested_domain:
+                score += 1.0
+            if requested in current_url:
+                score += 0.5
+        if any((action.get("type") or "") == "wait_url" for action in actions):
+            score += 0.2
+        if any((action.get("type") or "") == "download_wait" for action in actions):
+            score += 0.2
+        return round(score, 3)
+
+    def _describe_browser_plan_reason(self, plan: dict, browser_state: dict, requested_url: str = "") -> str:
+        reasons: List[str] = []
+        plan_type = str(plan.get("plan_type", "") or "")
+        if plan_type == "adaptive":
+            reasons.append("학습 전략과 fallback을 함께 사용")
+        elif plan_type == "learned_only":
+            reasons.append("과거 성공 전략 우선")
+        elif plan_type == "fallback_only":
+            reasons.append("기본 fallback 전략")
+        current_url = str((browser_state or {}).get("current_url", "") or "")
+        if current_url and requested_url:
+            current_domain = current_url.lower().split("//", 1)[-1].split("/", 1)[0]
+            requested_domain = requested_url.lower().split("//", 1)[-1].split("/", 1)[0]
+            if current_domain == requested_domain:
+                reasons.append("현재 브라우저 도메인 일치")
+        return " | ".join(reasons[:3])
+
+    def _score_desktop_plan(self, plan: dict) -> float:
+        score = 0.0
+        plan_type = str(plan.get("plan_type", "") or "")
+        if plan_type == "adaptive":
+            score += 3.0
+        elif plan_type == "learned_only":
+            score += 2.0
+        elif plan_type == "fallback_only":
+            score += 1.0
+        actions = list(plan.get("actions", []))
+        score += min(len(actions), 6) * 0.1
+        expected_window = str(plan.get("expected_window", "") or "")
+        if expected_window:
+            score += 0.6
+        if any((action.get("type") or "") == "focus" for action in actions):
+            score += 0.2
+        if any((action.get("type") or "") == "wait_window" for action in actions):
+            score += 0.2
+        return round(score, 3)
+
+    def _describe_desktop_plan_reason(self, plan: dict) -> str:
+        reasons: List[str] = []
+        plan_type = str(plan.get("plan_type", "") or "")
+        if plan_type == "adaptive":
+            reasons.append("학습된 창 타깃과 fallback 결합")
+        elif plan_type == "learned_only":
+            reasons.append("과거 성공 데스크톱 워크플로우 우선")
+        elif plan_type == "fallback_only":
+            reasons.append("기본 fallback 워크플로우")
+        if plan.get("expected_window"):
+            reasons.append("대상 창 대기/포커스 가능")
+        return " | ".join(reasons[:3])
 
     def _workflow_succeeded(self, summary: str) -> bool:
         normalized = (summary or "").strip().lower()
