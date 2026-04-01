@@ -39,6 +39,8 @@ def classify_failure_message(message: str) -> str:
         return "timeout"
     if "permission" in normalized or "권한" in normalized or "access is denied" in normalized:
         return "permission_denied"
+    if "no module named" in normalized or "modulenotfounderror" in normalized:
+        return "missing_module"
     if "not found" in normalized or "찾을 수 없" in normalized or "no such file" in normalized:
         return "missing_resource"
     if "syntaxerror" in normalized or "문법" in normalized:

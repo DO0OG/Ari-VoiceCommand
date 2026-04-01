@@ -14,6 +14,8 @@ import ast
 import json
 import logging
 import re
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -41,6 +43,21 @@ _LOCK_CONTENTION_ERRORS = frozenset({
     "이미 다른 코드가 실행 중입니다.",
     "이미 다른 명령이 실행 중입니다.",
 })
+
+# import명 → pip 패키지명 매핑 (일치하지 않는 경우)
+_IMPORT_TO_PIP: dict = {
+    "PIL": "Pillow",
+    "cv2": "opencv-python-headless",
+    "sklearn": "scikit-learn",
+    "bs4": "beautifulsoup4",
+    "docx": "python-docx",
+    "yaml": "pyyaml",
+    "dotenv": "python-dotenv",
+    "Crypto": "pycryptodome",
+    "gi": "PyGObject",
+    "serial": "pyserial",
+    "usb": "pyusb",
+}
 
 _SAFE_AST_CALLS = {
     "len": len,
@@ -380,15 +397,88 @@ class AgentOrchestrator:
         curr, fixed, res = step, False, ExecutionResult(success=False, error="실행되지 않음")
         for att in range(1, self.MAX_STEP_RETRIES + 2):
             res = self._run_step(curr, context)
-            if res.success: return res, att, fixed
-            if att > self.MAX_STEP_RETRIES: break
+            if res.success:
+                return res, att, fixed
+            if att > self.MAX_STEP_RETRIES:
+                break
             err = res.error or res.output or "오류"
-            if err in _LOCK_CONTENTION_ERRORS: time.sleep(att); continue
-            self._say(f"[걱정] 오류 발생, 수정 중입니다. ({att}/{self.MAX_STEP_RETRIES})")
+            if err in _LOCK_CONTENTION_ERRORS:
+                time.sleep(att)
+                continue
+            # ModuleNotFoundError → pip 자동 설치 후 LLM 수정 없이 재시도
+            if "No module named" in err and self._auto_install_if_needed(err):
+                logger.info("[Orchestrator] 패키지 설치 후 단계 재실행")
+                continue
+            self._say("[걱정] 오류 발생, 수정 중입니다. (%d/%d)" % (att, self.MAX_STEP_RETRIES))
             f = self.planner.fix_step(curr, err, goal, context)
-            if f and f.content and f.content != curr.content: curr, fixed = f, True
-            else: break
+            if f and f.content and f.content != curr.content:
+                curr, fixed = f, True
+            else:
+                break
         return res, att, fixed
+
+    # 자동 설치 시 사용자 동의 없이 설치 가능한 안전 패키지 목록
+    _AUTO_INSTALL_SAFE = frozenset({
+        "pandas", "numpy", "matplotlib", "Pillow", "PIL",
+        "requests", "httpx", "beautifulsoup4", "bs4",
+        "openpyxl", "python-docx", "docx", "reportlab",
+        "scikit-learn", "sklearn", "scipy",
+        "pyyaml", "yaml", "python-dotenv", "dotenv",
+        "opencv-python-headless", "cv2",
+        "tqdm", "colorama", "tabulate", "rich",
+    })
+
+    def _auto_install_if_needed(self, error: str) -> bool:
+        """ModuleNotFoundError 감지 시 pip install 자동 실행.
+        안전 목록 패키지: 자동 설치.
+        미확인 패키지: 사용자 동의 후 설치.
+        설치 성공 시 True 반환."""
+        match = re.search(r"No module named '([^']+)'", error)
+        if not match:
+            return False
+        pkg = match.group(1).split(".")[0]
+        pip_pkg = _IMPORT_TO_PIP.get(pkg, pkg)
+
+        # 미확인 패키지 → 사용자 동의 필요
+        if pip_pkg not in self._AUTO_INSTALL_SAFE and pkg not in self._AUTO_INSTALL_SAFE:
+            self._say("'%s' 패키지 설치가 필요합니다. 허용하시겠습니까?" % pip_pkg)
+            logger.info("[Orchestrator] 미확인 패키지 설치 동의 요청: %s", pip_pkg)
+            try:
+                from agent.safety_checker import SafetyReport, DangerLevel
+                from agent.confirmation_manager import get_confirmation_manager
+                report = SafetyReport(
+                    level=DangerLevel.CAUTION,
+                    matched_patterns=["pip install %s" % pip_pkg],
+                    summary_kr="'%s' 패키지를 설치합니다. 출처를 확인하세요." % pip_pkg,
+                    category="package_install",
+                )
+                confirmed = get_confirmation_manager().request_confirmation(
+                    "pip install %s" % pip_pkg, report, self._say
+                )
+                if not confirmed:
+                    logger.info("[Orchestrator] 패키지 설치 사용자 거부: %s", pip_pkg)
+                    return False
+            except Exception as exc:
+                logger.debug("[Orchestrator] 확인 다이얼로그 생략 (비GUI 환경): %s", exc)
+                return False
+
+        self._say("'%s' 패키지를 자동으로 설치합니다..." % pip_pkg)
+        logger.info("[Orchestrator] 자동 pip install: %s", pip_pkg)
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", pip_pkg, "--quiet"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            if result.returncode == 0:
+                logger.info("[Orchestrator] 패키지 설치 완료: %s", pip_pkg)
+                return True
+            logger.warning("[Orchestrator] 패키지 설치 실패: %s | %s", pip_pkg, result.stderr[:200])
+        except Exception as exc:
+            logger.debug("[Orchestrator] pip install 오류: %s", exc)
+        return False
 
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:
         self._inject_dom_suggestions(step, context, goal_hint=context.get("goal", ""))

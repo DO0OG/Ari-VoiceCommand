@@ -18,6 +18,7 @@ class ReflectionResult:
 _FIX_SUGGESTIONS = {
     "timeout": "대기 시간을 늘리거나 비동기 폴링 방식으로 전환하고, 재시도 횟수를 명시하세요.",
     "permission_denied": "관리자 권한 없이 접근 가능한 경로를 먼저 확인하거나, 권한 요청 단계를 선행하세요.",
+    "missing_module": "필요한 패키지가 없습니다. pip install로 설치 단계를 먼저 실행하거나 표준 라이브러리로 대체하세요.",
     "missing_resource": "파일·경로 존재 여부를 사전에 검증하고, 없으면 생성 단계를 먼저 실행하세요.",
     "syntax_error": "코드의 들여쓰기와 따옴표를 재검토하고, 더 단순한 구조로 재작성하세요.",
     "code_generation_error": "사용할 모듈과 함수명을 명확히 지정하고, 동적 import 경로를 확인하세요.",
@@ -29,6 +30,7 @@ _FIX_SUGGESTIONS = {
 _AVOID_PATTERNS: dict = {
     "timeout": ["동일한 대기 시간 단순 재시도", "blocking I/O 루프 없는 대기"],
     "permission_denied": ["권한 없는 시스템 경로 직접 쓰기", "관리자 권한 검증 없이 레지스트리 접근"],
+    "missing_module": ["설치 확인 없이 외부 패키지 직접 import", "표준 라이브러리 대체 없이 선택 패키지 의존"],
     "missing_resource": ["존재 확인 없이 파일·경로 사용", "상대 경로만으로 파일 탐색"],
     "syntax_error": ["복잡한 중첩 코드 단일 블록 생성", "탭·스페이스 혼합 들여쓰기"],
     "code_generation_error": ["미확인 모듈명 직접 사용", "선택적 패키지 동적 import 없이 참조"],
