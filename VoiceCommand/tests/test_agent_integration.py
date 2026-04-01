@@ -119,7 +119,7 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertIn("list_open_windows", combined_content)
             self.assertNotIn("organize_folder", combined_content)
 
-            context = self._run_steps_with_window_overrides(
+            _ = self._run_steps_with_window_overrides(
                 executor,
                 steps,
                 ["GitHub - Chrome", "메모장", "설정"],
@@ -174,7 +174,7 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertIn("save_document", combined_content)
             self.assertNotIn("organize_folder", combined_content)
 
-            context = self._run_steps_with_window_overrides(
+            _ = self._run_steps_with_window_overrides(
                 executor,
                 steps,
                 mocked_titles,

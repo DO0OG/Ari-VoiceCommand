@@ -462,10 +462,16 @@ class AgentOrchestrator:
                 logger.debug("[Orchestrator] 확인 다이얼로그 생략 (비GUI 환경): %s", exc)
                 return False
 
+        # 패키지명이 유효한 PyPI 식별자인지 확인 (command injection 방지)
+        if not re.fullmatch(r"[A-Za-z0-9_.\-]+", pip_pkg):
+            logger.warning("[Orchestrator] 유효하지 않은 패키지명, 설치 거부: %s", pip_pkg)
+            return False
+
         self._say("'%s' 패키지를 자동으로 설치합니다..." % pip_pkg)
         logger.info("[Orchestrator] 자동 pip install: %s", pip_pkg)
         try:
-            result = subprocess.run(
+            # pip_pkg는 위에서 정규식으로 검증된 안전한 값입니다.
+            result = subprocess.run(  # nosec B603 B607
                 [sys.executable, "-m", "pip", "install", pip_pkg, "--quiet"],
                 capture_output=True,
                 text=True,
