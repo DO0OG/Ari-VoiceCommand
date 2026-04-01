@@ -363,11 +363,12 @@ class StrategyMemory:
                 for rec in pending:
                     try:
                         rec.embedding = embedder.embed(rec.goal_summary).tolist()
-                    except Exception:
+                    except Exception as exc:
+                        logging.debug("[StrategyMemory] 임베딩 실패: %s", exc)
                         rec.embedding = []
                 self._save()
-            except Exception:
-                return
+            except Exception as exc:
+                logging.debug("[StrategyMemory] 임베딩 백필 중단: %s", exc)
 
         threading.Thread(target=_worker, daemon=True).start()
 

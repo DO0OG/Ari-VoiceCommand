@@ -14,15 +14,36 @@ class WeeklyReport:
 
         records = getattr(strategy_memory, "_records", [])
         total = len(records)
-        success = len([record for record in records if record.success])
-        success_rate = int((success / total) * 100) if total else 0
+        success_count = len([r for r in records if r.success])
+        fail_count = total - success_count
+        success_rate = int((success_count / total) * 100) if total else 0
 
-        return (
-            "이번 주 리포트예요! "
-            f"완료한 작업 {total}건, 성공률 {success_rate}%. "
-            f"활성 스킬 {len(skills)}개, "
-            f"기억하고 있는 사실 {len(ctx.context.get('facts', {}))}개예요."
-        )
+        compiled_skills = [s for s in skills if s.compiled]
+        low_confidence = [s for s in skills if s.confidence < 0.5]
+        fact_count = len(ctx.context.get("facts", {}))
+
+        lines = [
+            "이번 주 자기개선 리포트예요!",
+            "완료 작업 %d건 (성공률 %d%%, 실패 %d건)" % (total, success_rate, fail_count),
+            "활성 스킬 %d개 (컴파일 완료 %d개)" % (len(skills), len(compiled_skills)),
+            "기억 중인 사실 %d개" % fact_count,
+        ]
+
+        suggestions = []
+        if fail_count >= 3 and success_rate < 60:
+            suggestions.append("실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요.")
+        if low_confidence:
+            suggestions.append(
+                "신뢰도 낮은 스킬 %d개 (%s)를 재학습하거나 비활성화하세요."
+                % (len(low_confidence), ", ".join(s.name for s in low_confidence[:3]))
+            )
+        if len(compiled_skills) == 0 and len(skills) >= 3:
+            suggestions.append("반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요.")
+
+        if suggestions:
+            lines.append("개선 제안: " + " / ".join(suggestions))
+
+        return " ".join(lines)
 
 
 _weekly_report: WeeklyReport | None = None
