@@ -19,6 +19,26 @@ from tests.support import DummyLLMProvider
 
 
 class AgentIntegrationTests(unittest.TestCase):
+    def _window_override_prefix(self, window_titles, active_title):
+        return (
+            f"_mock_window_titles = {json.dumps(window_titles, ensure_ascii=False)}\n"
+            f"_mock_active_title = {json.dumps(active_title, ensure_ascii=False)}\n"
+            "def list_open_windows(limit=20):\n"
+            "    return _mock_window_titles[:limit]\n"
+            "def get_active_window_title():\n"
+            "    return _mock_active_title\n"
+        )
+
+    def _run_steps_with_window_overrides(self, executor, steps, window_titles, active_title):
+        context = {}
+        prefix = self._window_override_prefix(window_titles, active_title)
+        for step in steps:
+            code = prefix + step.content if step.step_type == "python" else step.content
+            result = executor.run_python(code, extra_globals={"step_outputs": dict(context)})
+            self.assertTrue(result.success, msg=result.error or result.output)
+            context[f"step_{step.step_id}_output"] = result.output
+        return context
+
     def _execute_template_steps(self, goal: str, desktop_path: str):
         planner = AgentPlanner(DummyLLMProvider())
         executor = AutonomousExecutor()
@@ -60,19 +80,18 @@ class AgentIntegrationTests(unittest.TestCase):
             planner = AgentPlanner(DummyLLMProvider())
             executor = AutonomousExecutor()
             executor.execution_globals["desktop_path"] = tmp
-            executor._automation.list_open_windows = lambda limit=20: ["Chrome", "메모장", "설정"]
-            executor._automation.get_active_window_title = lambda: "메모장"
             goal = '바탕화면에 "Ari autonomy test" 폴더를 만들고, 오늘 열린 창 제목들을 요약해서 markdown 보고서로 저장해줘'
 
             steps = planner.decompose(goal, {})
             self.assertEqual(len(steps), 2)
             self.assertIn("list_open_windows", steps[1].content)
 
-            context = {}
-            for step in steps:
-                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
-                self.assertTrue(result.success, msg=result.error or result.output)
-                context[f"step_{step.step_id}_output"] = result.output
+            context = self._run_steps_with_window_overrides(
+                executor,
+                steps,
+                ["Chrome", "메모장", "설정"],
+                "메모장",
+            )
 
             report_payload = context["step_1_output"]
             self.assertIn("summary.md", report_payload)
@@ -92,8 +111,6 @@ class AgentIntegrationTests(unittest.TestCase):
             planner = AgentPlanner(DummyLLMProvider())
             executor = AutonomousExecutor()
             executor.execution_globals["desktop_path"] = tmp
-            executor._automation.list_open_windows = lambda limit=20: ["GitHub - Chrome", "메모장", "설정"]
-            executor._automation.get_active_window_title = lambda: "GitHub - Chrome"
             goal = "바탕화면에 Ari workspace audit 폴더를 만들고, 현재 열린 창 제목들을 수집해서 브라우저 관련 창과 일반 앱 창으로 분류한 markdown 보고서를 저장합니다. 브라우저 창은 도메인이나 서비스 이름 기준으로 묶고, 일반 앱 창은 앱 종류별로 묶어서 정리합니다. 같은 이름 파일이 이미 있으면 자동으로 백업하고 안전하게 덮어써줍니다."
 
             steps = planner.decompose(goal, {})
@@ -102,11 +119,12 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertIn("list_open_windows", combined_content)
             self.assertNotIn("organize_folder", combined_content)
 
-            context = {}
-            for step in steps:
-                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
-                self.assertTrue(result.success, msg=result.error or result.output)
-                context[f"step_{step.step_id}_output"] = result.output
+            context = self._run_steps_with_window_overrides(
+                executor,
+                steps,
+                ["GitHub - Chrome", "메모장", "설정"],
+                "GitHub - Chrome",
+            )
 
             report_path = os.path.join(tmp, "Ari workspace audit", "summary.md")
             self.assertTrue(os.path.isdir(os.path.join(tmp, "Ari workspace audit")))
@@ -136,14 +154,13 @@ class AgentIntegrationTests(unittest.TestCase):
             planner = AgentPlanner(DummyLLMProvider())
             executor = AutonomousExecutor()
             executor.execution_globals["desktop_path"] = tmp
-            executor._automation.list_open_windows = lambda limit=20: [
+            mocked_titles = [
                 "업무 대시보드 (3개 탭) - Whale",
                 "GitHub - Whale",
                 "Visual Studio Code",
                 "파일 탐색기",
                 "설정",
             ]
-            executor._automation.get_active_window_title = lambda: "업무 대시보드 (3개 탭) - Whale"
             goal = (
                 "바탕화면에 'Ari stress final audit' 폴더를 만들고, 현재 열린 창 제목들을 수집해서 "
                 "브라우저 관련 창은 서비스 기준으로, 일반 앱 창은 앱 종류 기준으로 분류한 markdown 보고서를 summary.md로 저장해줘. "
@@ -157,11 +174,12 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertIn("save_document", combined_content)
             self.assertNotIn("organize_folder", combined_content)
 
-            context = {}
-            for step in steps:
-                result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
-                self.assertTrue(result.success, msg=result.error or result.output)
-                context[f"step_{step.step_id}_output"] = result.output
+            context = self._run_steps_with_window_overrides(
+                executor,
+                steps,
+                mocked_titles,
+                "업무 대시보드 (3개 탭) - Whale",
+            )
 
             report_path = os.path.join(tmp, "Ari stress final audit", "summary.md")
             self.assertTrue(os.path.exists(report_path))
@@ -190,7 +208,7 @@ class AgentIntegrationTests(unittest.TestCase):
             planner = AgentPlanner(DummyLLMProvider())
             executor = AutonomousExecutor()
             executor.execution_globals["desktop_path"] = tmp
-            executor._automation.list_open_windows = lambda limit=20: [
+            mocked_titles = [
                 "업무 대시보드 외 2개 탭 - Whale",
                 "Ari Project - GitHub - Whale",
                 "logs 및 1개 탭 - 파일 탐색기",
@@ -198,7 +216,6 @@ class AgentIntegrationTests(unittest.TestCase):
                 "설정",
                 "카카오톡",
             ]
-            executor._automation.get_active_window_title = lambda: "업무 대시보드 외 2개 탭 - Whale"
             goal = (
                 "바탕화면에 'Ari autonomy strict audit' 폴더를 만들고, 현재 열린 창 제목들을 수집해서 "
                 "브라우저 관련 창과 일반 앱 창으로 분류한 markdown 보고서를 summary.md로 저장해줘. "
@@ -214,11 +231,12 @@ class AgentIntegrationTests(unittest.TestCase):
             self.assertNotIn("organize_folder", steps[1].content)
 
             def run_once():
-                context = {}
-                for step in steps:
-                    result = executor.run_python(step.content, extra_globals={"step_outputs": dict(context)})
-                    self.assertTrue(result.success, msg=result.error or result.output)
-                    context[f"step_{step.step_id}_output"] = result.output
+                context = self._run_steps_with_window_overrides(
+                    executor,
+                    steps,
+                    mocked_titles,
+                    "업무 대시보드 외 2개 탭 - Whale",
+                )
                 return json.loads(context["step_1_output"])
 
             first_payload = run_once()
