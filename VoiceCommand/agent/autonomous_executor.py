@@ -349,7 +349,7 @@ class AutonomousExecutor:
             child_env = os.environ.copy()
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
-            process = subprocess.Popen(  # nosec B603 - controlled runner invocation
+            process = subprocess.Popen(
                 [sys.executable, runner_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -396,8 +396,8 @@ class AutonomousExecutor:
             child_env = os.environ.copy()
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
-            process = subprocess.Popen(  # nosec B603 - controlled shell invocation
-                shell_command,  # nosec B603
+            process = subprocess.Popen(
+                shell_command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

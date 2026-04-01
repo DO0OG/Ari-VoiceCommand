@@ -123,13 +123,13 @@ class SystemCommand(BaseCommand):
         try:
             if sys.platform == "win32":
                 win_delay = min(delay_seconds, _WIN_MAX_SHUTDOWN_DELAY)
-                subprocess.run(  # nosec B603 - controlled system command
+                subprocess.run(
                     ["shutdown", "/s", "/t", str(win_delay)], check=False
                 )
             else:
                 # Linux/Mac: shutdown +N minutes (최소 단위 1분)
                 minutes = max(1, delay_seconds // 60)
-                subprocess.run(  # nosec B603 - controlled system command
+                subprocess.run(
                     ["shutdown", f"+{minutes}"], check=False
                 )
         except Exception as e:
@@ -141,11 +141,11 @@ class SystemCommand(BaseCommand):
         logging.info("시스템 종료 명령 실행")
         try:
             if sys.platform == "win32":
-                subprocess.run(  # nosec B603 - controlled system command
+                subprocess.run(
                     ["shutdown", "/s", "/t", "10"], check=False
                 )
             else:
-                subprocess.run(  # nosec B603 - controlled system command
+                subprocess.run(
                     ["shutdown", "-h", "now"], check=False
                 )
         except Exception as e:
@@ -156,13 +156,13 @@ class SystemCommand(BaseCommand):
         logging.info("시스템 종료 취소 명령 실행")
         try:
             if sys.platform == "win32":
-                result = subprocess.run(["shutdown", "/a"], check=False, capture_output=True)  # nosec B603
+                result = subprocess.run(["shutdown", "/a"], check=False, capture_output=True)
                 if result.returncode != 0:
                     logging.warning(f"종료 취소 실패 (returncode={result.returncode}): {result.stderr.decode(errors='ignore').strip()}")
                     self.tts_wrapper("현재 예약된 종료가 없거나 취소에 실패했습니다.")
                     return
             else:
-                result = subprocess.run(["shutdown", "-c"], check=False, capture_output=True)  # nosec B603
+                result = subprocess.run(["shutdown", "-c"], check=False, capture_output=True)
                 if result.returncode != 0:
                     logging.warning(f"종료 취소 실패 (returncode={result.returncode})")
                     self.tts_wrapper("현재 예약된 종료가 없거나 취소에 실패했습니다.")
@@ -178,9 +178,9 @@ class SystemCommand(BaseCommand):
         logging.info("시스템 재시작 명령 실행")
         try:
             if sys.platform == "win32":
-                subprocess.run(["shutdown", "/r", "/t", "10"], check=False)  # nosec B603
+                subprocess.run(["shutdown", "/r", "/t", "10"], check=False)
             else:
-                subprocess.run(["reboot"], check=False)  # nosec B603
+                subprocess.run(["reboot"], check=False)
         except Exception as e:
             logging.error(f"시스템 재시작 명령 실패: {e}")
             self.tts_wrapper("시스템 재시작 명령 실행에 실패했습니다.")
@@ -191,10 +191,10 @@ class SystemCommand(BaseCommand):
         try:
             if sys.platform == "win32":
                 win_delay = min(delay_seconds, _WIN_MAX_SHUTDOWN_DELAY)
-                subprocess.run(["shutdown", "/r", "/t", str(win_delay)], check=False)  # nosec B603
+                subprocess.run(["shutdown", "/r", "/t", str(win_delay)], check=False)
             else:
                 minutes = max(1, delay_seconds // 60)
-                subprocess.run(["shutdown", "-r", f"+{minutes}"], check=False)  # nosec B603
+                subprocess.run(["shutdown", "-r", f"+{minutes}"], check=False)
         except Exception as e:
             logging.error(f"시스템 재시작 예약 실패: {e}")
             self.tts_wrapper("시스템 재시작 예약에 실패했습니다.")

@@ -71,7 +71,8 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
             parsed = urllib.parse.urlparse(url)
             return f"허용되지 않은 URL 스킴: {parsed.scheme or 'unknown'}"
         req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - http/https만 허용
+        # _is_safe_http_url() restricts fetches to http/https URLs only.
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
             raw = resp.read().decode("utf-8", errors="replace")
         
         # 스크립트, 스타일, 태그 제거

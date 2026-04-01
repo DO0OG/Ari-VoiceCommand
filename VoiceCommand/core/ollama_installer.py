@@ -104,7 +104,8 @@ def _validate_model_name(model: str) -> str:
 
 def _safe_open_url(url: str, timeout: float = 2.0):
     request = urllib.request.Request(_require_http_url(url, _LOCAL_OLLAMA_HOSTS))
-    return urllib.request.urlopen(request, timeout=timeout)  # nosec B310 - localhost http/https만 허용
+    # _require_http_url() restricts access to localhost http/https endpoints only.
+    return urllib.request.urlopen(request, timeout=timeout)  # nosec B310
 
 
 def _post_local_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
@@ -114,7 +115,8 @@ def _post_local_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310 - localhost http/https만 허용
+    # _require_http_url() restricts access to localhost http/https endpoints only.
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
         raw = response.read().decode("utf-8", errors="replace").strip()
     return json.loads(raw) if raw else {}
 
@@ -122,7 +124,8 @@ def _post_local_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
 def _download_installer(target_path: str, log: Callable[[str], None]) -> None:
     log("Ollama 설치 파일 다운로드 중...")
     request = urllib.request.Request(_require_http_url(OLLAMA_WINDOWS_INSTALLER_URL, {"ollama.com"}))
-    with urllib.request.urlopen(request, timeout=30.0) as response:  # nosec B310 - https://ollama.com만 허용
+    # _require_http_url() restricts this download to the official ollama.com host.
+    with urllib.request.urlopen(request, timeout=30.0) as response:  # nosec B310
         with open(target_path, "wb") as handle:
             shutil.copyfileobj(response, handle)
 

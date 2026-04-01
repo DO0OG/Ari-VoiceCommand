@@ -55,8 +55,8 @@ class WhisperSTTProvider(STTProvider):
         logging.info(f"[WhisperSTT] 워커 시작: {model_size} / {actual_device} / {compute_type}")
 
         env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
-        # _WORKER는 패키지 내부 고정 경로; 사용자 입력 아님  # nosec B603 B607  # nosemgrep
-        self._proc = subprocess.Popen(  # nosec B603 B607  # nosemgrep
+        # _WORKER는 패키지 내부 고정 경로이며 사용자 입력을 받지 않는다.
+        self._proc = subprocess.Popen(  # nosemgrep
             [sys.executable, self._WORKER, model_size, actual_device, compute_type],  # nosemgrep
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

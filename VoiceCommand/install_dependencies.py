@@ -15,7 +15,7 @@ def main():
         return
 
     try:
-        subprocess.run(  # nosec B603 - controlled installer command
+        subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS)],
             check=True,
         )
@@ -27,7 +27,7 @@ def main():
     if VALIDATOR.exists():
         print("기본 검증을 실행합니다...")
         try:
-            subprocess.run(  # nosec B603 - controlled validator command
+            subprocess.run(
                 [sys.executable, str(VALIDATOR)],
                 check=True,
                 cwd=str(HERE),

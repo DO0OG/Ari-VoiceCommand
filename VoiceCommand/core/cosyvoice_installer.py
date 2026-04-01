@@ -13,6 +13,9 @@ DEFAULT_COSYVOICE_DIR = os.path.join(
     "CosyVoice",
 )
 REPO_URL = "https://github.com/FunAudioLLM/CosyVoice.git"
+MODEL_REPO_ID = "FunAudioLLM/Fun-CosyVoice3-0.5B"
+# Immutable revision pin for Bandit B615 and reproducible installs.
+MODEL_REVISION = "29e01c4e8d000f4bcd70751be16fa94bf3d85a18"
 
 
 def check_command(cmd: str) -> bool:
@@ -36,7 +39,7 @@ def _git_executable() -> str:
 def download_model(model_dir: str) -> None:
     from huggingface_hub import snapshot_download
 
-    snapshot_download("FunAudioLLM/Fun-CosyVoice3-0.5B", local_dir=model_dir)
+    snapshot_download(MODEL_REPO_ID, revision=MODEL_REVISION, local_dir=model_dir)
 
 
 def install_cosyvoice(cosyvoice_dir: str, log: Callable[[str], None] | None = None) -> str:

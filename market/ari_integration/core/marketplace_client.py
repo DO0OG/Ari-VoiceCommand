@@ -61,14 +61,16 @@ def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, ent
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
     query = urllib.parse.urlencode({"search": search, "sort": sort})
     request = urllib.request.Request(_require_web_url(f"{MARKETPLACE_API}/get-plugins?{query}"))
-    with urllib.request.urlopen(request) as response:  # nosec B310 - validated http/https request only
+    # URL scheme/host validation is handled by _require_web_url().
+    with urllib.request.urlopen(request) as response:  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     return payload.get("items", [])
 
 
 def fetch_plugin(plugin_id: str) -> Dict:
     request = urllib.request.Request(_require_web_url(f"{MARKETPLACE_API}/get-plugin?plugin_id={plugin_id}"))
-    with urllib.request.urlopen(request) as response:  # nosec B310 - validated http/https request only
+    # URL scheme/host validation is handled by _require_web_url().
+    with urllib.request.urlopen(request) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -79,7 +81,8 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request) as response:  # nosec B310 - validated http/https request only
+    # URL scheme/host validation is handled by _require_web_url().
+    with urllib.request.urlopen(request) as response:  # nosec B310
         data = json.loads(response.read().decode("utf-8"))
 
     release_url = data.get("release_url")
@@ -94,7 +97,8 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
         return False
 
     release_request = urllib.request.Request(_require_web_url(release_url))
-    with urllib.request.urlopen(release_request) as response:  # nosec B310 - validated http/https request only
+    # URL scheme/host validation is handled by _require_web_url().
+    with urllib.request.urlopen(release_request) as response:  # nosec B310
         content = response.read()
 
     os.makedirs(plugin_dir, exist_ok=True)

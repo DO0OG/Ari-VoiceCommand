@@ -135,7 +135,7 @@ class CosyVoiceTTS(QObject):
         }
         if os.name == "nt":
             popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        self._proc = subprocess.Popen(  # nosec B603 - controlled local worker process
+        self._proc = subprocess.Popen(
             cmd,
             **popen_kwargs,
         )
@@ -352,7 +352,7 @@ class CosyVoiceTTS(QObject):
                 if not chunk:
                     return None
                 buf += chunk
-        except Exception:  # nosec B110
+        except Exception:
             return None
         return buf
 
@@ -377,15 +377,15 @@ class CosyVoiceTTS(QObject):
                 try:
                     self._proc.terminate()
                     self._proc.wait(timeout=2)
-                except Exception:  # nosec B110
+                except Exception:
                     try:
                         self._proc.kill()
-                    except Exception:  # nosec B110
+                    except Exception:
                         pass
             except Exception:
                 try:
                     self._proc.kill()
-                except Exception:  # nosec B110
+                except Exception:
                     pass
         self._close_stream()
         self._clear_pcm_state()
@@ -394,5 +394,5 @@ class CosyVoiceTTS(QObject):
     def __del__(self):
         try:
             self.cleanup()
-        except Exception:  # nosec B110
+        except Exception:
             pass
