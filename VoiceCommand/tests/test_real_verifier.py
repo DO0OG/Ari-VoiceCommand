@@ -8,7 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from agent.real_verifier import RealVerifier
+from agent.real_verifier import RealVerifier, VerificationResult
 
 
 class _DummyExecResult:
@@ -20,13 +20,14 @@ class _DummyExecResult:
 
 
 class _DummyStep:
-    def __init__(self, description_kr):
+    def __init__(self, description_kr, content=""):
         self.description_kr = description_kr
+        self.content = content
 
 
 class _DummyStepResult:
-    def __init__(self, description_kr, success=True, output="", error="", state_delta_summary=""):
-        self.step = _DummyStep(description_kr)
+    def __init__(self, description_kr, success=True, output="", error="", state_delta_summary="", content=""):
+        self.step = _DummyStep(description_kr, content=content)
         self.exec_result = _DummyExecResult(success=success, output=output, error=error, state_delta_summary=state_delta_summary)
 
 
@@ -38,6 +39,83 @@ class _DummyExecutor:
             "get_browser_state": lambda: {},
             "is_image_visible": lambda path, confidence=0.8: path.endswith("confirm.png"),
         }
+
+
+class _FakeCompletionClient:
+    def __init__(self, response_text="print(True)"):
+        self.response_text = response_text
+        self.calls = []
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return type(
+            "Resp",
+            (),
+            {
+                "choices": [
+                    type(
+                        "Choice",
+                        (),
+                        {"message": type("Msg", (), {"content": self.response_text})()},
+                    )()
+                ]
+            },
+        )()
+
+
+class _SequencedCompletionClient:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        current = self.responses.pop(0)
+        if isinstance(current, Exception):
+            raise current
+        content, finish_reason = current
+        return type(
+            "Resp",
+            (),
+            {
+                "choices": [
+                    type(
+                        "Choice",
+                        (),
+                        {
+                            "message": type("Msg", (), {"content": content})(),
+                            "finish_reason": finish_reason,
+                        },
+                    )()
+                ]
+            },
+        )()
+
+
+class _PlannerFallbackLLM:
+    def __init__(self, planner_client, base_client, execution_client):
+        self.client = base_client
+        self.provider = "nvidia_nim"
+        self.model = "selected-base-model"
+        self.planner_client = planner_client
+        self.planner_provider = "gemini"
+        self.planner_model = "selected-planner-model"
+        self.execution_client = execution_client
+        self.execution_provider = "groq"
+        self.execution_model = "selected-execution-model"
+
+    def get_role_fallback_targets(self, role):
+        if role == "planner":
+            return [
+                (self.planner_client, self.planner_provider, self.planner_model),
+                (self.client, self.provider, self.model),
+                (self.execution_client, self.execution_provider, self.execution_model),
+            ]
+        return [(self.client, self.provider, self.model)]
 
 
 class RealVerifierTests(unittest.TestCase):
@@ -147,6 +225,182 @@ class RealVerifierTests(unittest.TestCase):
                 )
 
         self.assertIsNone(result)
+
+    def test_generate_verification_code_uses_planner_client_and_model(self):
+        base_client = _FakeCompletionClient("print(False)")
+        planner_client = _FakeCompletionClient("print(True)")
+        llm = type(
+            "LLM",
+            (),
+            {
+                "client": base_client,
+                "provider": "nvidia_nim",
+                "model": "base-model",
+                "planner_client": planner_client,
+                "planner_provider": "gemini",
+                "planner_model": "gemini-2.5-flash",
+            },
+        )()
+        verifier = RealVerifier(llm_provider=llm, executor=_DummyExecutor())
+
+        code = verifier._generate_verification_code(
+            "저장소 작업이 실제로 검증됐는지 확인해줘",
+            [_DummyStepResult("검증 단계", output="[validate] compile-only checks passed")],
+        )
+
+        self.assertEqual(code, "print(True)")
+        self.assertEqual(len(base_client.calls), 0)
+        self.assertEqual(planner_client.calls[0]["model"], "gemini-2.5-flash")
+
+    def test_generate_verification_code_skips_non_python_text_response(self):
+        planner_client = _FakeCompletionClient("(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요.")
+        llm = type(
+            "LLM",
+            (),
+            {
+                "client": planner_client,
+                "provider": "gemini",
+                "model": "base-model",
+                "planner_client": planner_client,
+                "planner_provider": "gemini",
+                "planner_model": "gemini-2.5-flash",
+            },
+        )()
+        verifier = RealVerifier(llm_provider=llm, executor=_DummyExecutor())
+
+        code = verifier._generate_verification_code(
+            "검증 코드 생성",
+            [_DummyStepResult("검증 단계", output="something")],
+        )
+
+        self.assertIsNone(code)
+
+    def test_call_planner_llm_retries_after_quota_error_and_continues_code(self):
+        planner_client = _SequencedCompletionClient([
+            Exception("429 RESOURCE_EXHAUSTED: retry in 1s"),
+            ("print('hel", "length"),
+            ("lo')\nprint(True)", "stop"),
+        ])
+        llm = type(
+            "LLM",
+            (),
+            {
+                "client": planner_client,
+                "provider": "gemini",
+                "model": "base-model",
+                "planner_client": planner_client,
+                "planner_provider": "gemini",
+                "planner_model": "gemini-2.5-flash",
+            },
+        )()
+        verifier = RealVerifier(llm_provider=llm, executor=_DummyExecutor())
+
+        with patch("agent.real_verifier.time.sleep", return_value=None):
+            code = verifier._call_planner_llm("검증 코드 생성")
+
+        self.assertEqual(code, "print('hello')\nprint(True)")
+        self.assertEqual(len(planner_client.calls), 3)
+
+    def test_call_planner_llm_falls_back_to_other_selected_model_after_planner_quota_exhaustion(self):
+        planner_client = _SequencedCompletionClient([
+            Exception("429 RESOURCE_EXHAUSTED: retry in 1s"),
+            Exception("429 RESOURCE_EXHAUSTED: retry in 1s"),
+            Exception("429 RESOURCE_EXHAUSTED: retry in 1s"),
+        ])
+        base_client = _SequencedCompletionClient([
+            ("print(True)", "stop"),
+        ])
+        execution_client = _SequencedCompletionClient([])
+        verifier = RealVerifier(
+            llm_provider=_PlannerFallbackLLM(planner_client, base_client, execution_client),
+            executor=_DummyExecutor(),
+        )
+
+        with patch("agent.real_verifier.time.sleep", return_value=None):
+            code = verifier._call_planner_llm("검증 코드 생성")
+
+        self.assertEqual(code, "print(True)")
+        self.assertEqual(len(base_client.calls), 1)
+
+    def test_developer_goal_prefers_validation_output_over_ocr(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        result = verifier.verify(
+            "VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
+            [
+                _DummyStepResult(
+                    "코드 수정",
+                    output="changed VoiceCommand/agent/agent_planner.py",
+                    content="from pathlib import Path\nPath('VoiceCommand/agent/agent_planner.py').write_text('patched', encoding='utf-8')",
+                ),
+                _DummyStepResult(
+                    "검증 실행",
+                    output="[validate] compile-only checks passed",
+                    content="py -3.11 VoiceCommand\\validate_repo.py --compile-only",
+                ),
+            ],
+        )
+
+        self.assertTrue(result.verified)
+        self.assertEqual(result.method, "developer")
+        self.assertIn("검증 명령", result.summary_kr)
+
+    def test_developer_goal_treats_fail_output_as_failure(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        result = verifier.verify(
+            "VoiceCommand 저장소 전체 파악 후 코드 변경 및 검증까지 완료",
+            [
+                _DummyStepResult(
+                    "코드 수정",
+                    output="patched file",
+                    content="from pathlib import Path\nPath('VoiceCommand/agent/foo.py').write_text('x', encoding='utf-8')",
+                ),
+                _DummyStepResult(
+                    "검증 실행",
+                    output="FAIL: python -m pytest returned error\nNo module named pytest",
+                    content="python -m pytest tests/test_example.py",
+                ),
+            ],
+        )
+
+        self.assertFalse(result.verified)
+        self.assertEqual(result.method, "developer")
+        self.assertIn("실패 신호", result.summary_kr)
+
+    def test_run_verification_rejects_mutating_code(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        result = verifier._run_verification(
+            "import subprocess\nsubprocess.run(['py', '-3.11', 'VoiceCommand/validate_repo.py'])\nprint(True)"
+        )
+
+        self.assertIsNone(result)
+
+    def test_developer_goal_does_not_fallback_to_ocr_success(self):
+        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+
+        with patch("agent.real_verifier.ocr_screen", return_value="VoiceCommand 저장소 코드 변경 검증 완료"):
+            with patch.object(
+                RealVerifier,
+                "_llm_verify",
+                return_value=VerificationResult(
+                    verified=False,
+                    method="llm",
+                    evidence="",
+                    summary_kr="LLM 검증 실패",
+                ),
+            ):
+                result = verifier.verify(
+                    "VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
+                    [
+                        _DummyStepResult("저장소 구조 스캔", output='{"agent": {"file_count": 1}}', content="print('scan')"),
+                        _DummyStepResult("검증 스크립트 확인", output="validate_repo.py lines", content="print('validate')"),
+                    ],
+                )
+
+        self.assertFalse(result.verified)
+        self.assertEqual(result.method, "llm")
 
 
 if __name__ == "__main__":

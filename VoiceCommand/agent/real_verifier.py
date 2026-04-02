@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -11,6 +12,7 @@ from agent.execution_analysis import (
     describes_storage_action,
     existing_paths,
     extract_artifacts,
+    is_read_only_step_content,
 )
 from agent.ocr_helper import ocr_contains, ocr_screen
 
@@ -31,7 +33,7 @@ _VERIFY_CODE_PROMPT = """\
 2. 주의: 브라우저 열기(open_url), 앱 실행(launch_app) 등 상태를 변화시키는 함수를 다시 호출하지 마세요. (읽기 전용 검증)
 3. 마지막 줄에 반드시 True 또는 False를 print()로 출력하세요.
 4. 예시:
-   import os; print(os.path.exists(r'C:\\Users\\User\\Desktop\\test.txt'))
+   import os; print(os.path.exists(os.path.join(desktop_path, 'test.txt')))
    또는
    title = get_active_window_title(); print('네이버' in title)
 
@@ -39,6 +41,47 @@ _VERIFY_CODE_PROMPT = """\
 """
 
 _RE_CODE_FENCE = re.compile(r'```(?:python)?\s*', re.IGNORECASE)
+_DEVELOPER_VERIFY_HINTS = (
+    "validate_repo.py",
+    "--compile-only",
+    "pytest",
+    "unittest",
+    "[validate]",
+    "ran ",
+    "tests passed",
+)
+_DEVELOPER_SUCCESS_HINTS = (
+    "compile-only checks passed",
+    "tests-only checks passed",
+    "all checks passed",
+    "[validate] all checks passed",
+)
+_DEVELOPER_FAILURE_HINTS = (
+    "traceback",
+    "syntaxerror",
+    "assertionerror",
+    "failed",
+    "fail:",
+    "error:",
+    "no module named",
+    "modulenotfounderror",
+    "계획 수립에 실패",
+    "실행 실패",
+)
+_LLM_RETRYABLE_ERROR_RE = re.compile(
+    r"(429|resource_exhausted|quota exceeded|rate limit|retry in|retrydelay|temporar|timeout|overloaded|too many requests)",
+    re.IGNORECASE,
+)
+_LLM_RETRY_DELAY_RE_LIST = (
+    re.compile(r"retry in\s*([\d.]+)\s*s", re.IGNORECASE),
+    re.compile(r"retrydelay['\"]?\s*[:=]\s*['\"]?([\d.]+)\s*s", re.IGNORECASE),
+    re.compile(r"'retryDelay':\s*'([\d.]+)s'", re.IGNORECASE),
+)
+_CONTINUE_SYNTAX_HINTS = (
+    "unexpected eof",
+    "unterminated string literal",
+    "was never closed",
+)
 
 
 @dataclass
@@ -60,15 +103,21 @@ class RealVerifier:
 
     def verify(self, goal: str, step_results: list) -> VerificationResult:
         """휴리스틱 → OCR → 코드 → LLM 순으로 검증한다."""
-        # 1. 휴리스틱 검증 (빠른 판단)
-        heuristic = self._heuristic_verify(goal, step_results)
-        if heuristic is not None:
-            return heuristic
+        is_dev_goal = self._is_developer_goal(goal)
+        if is_dev_goal:
+            developer_result = self._developer_verify(goal, step_results)
+            if developer_result is not None:
+                return developer_result
+        else:
+            # 1. 휴리스틱 검증 (빠른 판단)
+            heuristic = self._heuristic_verify(goal, step_results)
+            if heuristic is not None:
+                return heuristic
 
-        # 2. OCR 기반 화면 검증
-        ocr_result = self._ocr_verify(goal, step_results)
-        if ocr_result is not None:
-            return ocr_result
+            # 2. OCR 기반 화면 검증
+            ocr_result = self._ocr_verify(goal, step_results)
+            if ocr_result is not None:
+                return ocr_result
 
         # 3. 코드 기반 실제 상태 검증 (Phase 2.2 핵심)
         code = self._generate_verification_code(goal, step_results)
@@ -276,6 +325,70 @@ class RealVerifier:
 
         return None
 
+    def _is_developer_goal(self, goal: str) -> bool:
+        try:
+            from agent.agent_planner import AgentPlanner
+            return AgentPlanner(self.llm).is_developer_goal(goal)
+        except Exception:
+            return False
+
+    def _developer_verify(self, goal: str, step_results: list) -> Optional[VerificationResult]:
+        saw_code_change = False
+        validation_outputs: List[str] = []
+        for sr in step_results:
+            step = getattr(sr, "step", None)
+            exec_r = getattr(sr, "exec_result", sr)
+            content = getattr(step, "content", "") or ""
+            description = getattr(step, "description_kr", "") or ""
+            output = str(getattr(exec_r, "output", "") or "")
+            error = str(getattr(exec_r, "error", "") or "")
+            combined = "\n".join([content, description, output, error]).lower()
+            # 검증 힌트는 실행 출력에서만 확인 — content/description 에는 validate_repo.py
+            # 소스 코드가 포함될 수 있어 오판 방지를 위해 output/error 만 사용
+            exec_output_only = "\n".join([output, error]).lower()
+
+            if step is not None and not is_read_only_step_content(content, description):
+                saw_code_change = True
+
+            if any(token in exec_output_only for token in _DEVELOPER_VERIFY_HINTS):
+                if not getattr(exec_r, "success", False):
+                    return VerificationResult(
+                        verified=False,
+                        method="developer",
+                        evidence=(error or output)[:200],
+                        summary_kr="검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다.",
+                    )
+                validation_outputs.append("\n".join(part for part in [description, output, error] if part).strip())
+
+        if not saw_code_change or not validation_outputs:
+            return None
+
+        joined = "\n".join(validation_outputs).lower()
+        if any(token in joined for token in _DEVELOPER_FAILURE_HINTS):
+            return VerificationResult(
+                verified=False,
+                method="developer",
+                evidence=validation_outputs[-1][:200],
+                summary_kr="검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다.",
+            )
+
+        if any(token in joined for token in _DEVELOPER_SUCCESS_HINTS) or (
+            re.search(r"\bran\s+\d+\s+tests?\b", joined) and re.search(r"(^|\n)ok($|\n)", joined)
+        ):
+            return VerificationResult(
+                verified=True,
+                method="developer",
+                evidence=validation_outputs[-1][:200],
+                summary_kr="코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다.",
+            )
+
+        return VerificationResult(
+            verified=False,
+            method="developer",
+            evidence=validation_outputs[-1][:200],
+            summary_kr="검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다.",
+        )
+
     def _extract_goal_folder_name(self, goal: str) -> str:
         quoted_match = re.search(r'["\']([^"\']+)["\']\s*폴더', goal or "")
         if quoted_match:
@@ -393,22 +506,167 @@ class RealVerifier:
         prompt = _VERIFY_CODE_PROMPT.format(goal=goal, steps_summary=steps_summary)
 
         try:
-            # planner_model을 사용하여 더 정확한 검증 코드 생성
-            code = self.llm.chat(
-                prompt, 
+            code = self._call_planner_llm(
+                prompt,
                 system_override="파이썬 검증 코드만 반환하세요. 설명·마크다운 없음.",
-                model_override=self.llm.planner_model
             )
             code = _RE_CODE_FENCE.sub("", code).strip()
+            if not self._looks_like_python_code(code):
+                logging.warning("[RealVerifier] 검증 코드가 아니어서 실행을 건너뜁니다: %s", code[:120])
+                return None
             self._write_trace(goal, code)
             return code if code else None
         except Exception as e:
             logging.error(f"[RealVerifier] 검증 코드 생성 실패: {e}")
             return None
 
+    def _call_planner_llm(self, prompt: str, system_override: str = "") -> str:
+        if not self.llm:
+            return ""
+
+        candidates = self._get_planner_llm_candidates()
+        if not candidates:
+            return ""
+
+        collected_parts: List[str] = []
+        continuation_budget = 2
+        active_prompt = prompt
+        system_prompt = system_override or "파이썬 코드만 반환하세요."
+
+        for candidate_index, (client, provider, target_model) in enumerate(candidates):
+            while True:
+                text = ""
+                finish_reason = ""
+                failed = False
+                for attempt in range(3):
+                    try:
+                        if provider == "anthropic":
+                            resp = client.messages.create(
+                                model=target_model,
+                                max_tokens=800,
+                                system=system_prompt,
+                                messages=[{"role": "user", "content": active_prompt}],
+                            )
+                            text = " ".join(
+                                block.text for block in resp.content
+                                if getattr(block, "type", "") == "text"
+                            )
+                            finish_reason = str(getattr(resp, "stop_reason", "") or "")
+                        else:
+                            resp = client.chat.completions.create(
+                                model=target_model,
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": active_prompt},
+                                ],
+                                temperature=0.1,
+                                max_tokens=800,
+                            )
+                            choice = resp.choices[0]
+                            text = choice.message.content or ""
+                            finish_reason = str(getattr(choice, "finish_reason", "") or "")
+                        break
+                    except Exception as e:
+                        has_fallback = candidate_index < len(candidates) - 1
+                        delay = self._extract_retry_delay_seconds(e, attempt) if self._is_retryable_llm_error(e) else 0.0
+                        if has_fallback and delay >= 8.0:
+                            next_model = candidates[candidate_index + 1][2]
+                            logging.warning(
+                                f"[RealVerifier] {target_model} 장기 대기 오류({delay:.1f}s) → 선택된 대체 모델 {next_model}로 즉시 전환: {e}"
+                            )
+                            failed = True
+                            break
+                        if attempt < 2 and self._is_retryable_llm_error(e):
+                            logging.warning(
+                                f"[RealVerifier] LLM 일시 오류 ({target_model}) → {delay:.1f}s 대기 후 재시도: {e}"
+                            )
+                            time.sleep(delay)
+                            continue
+                        if has_fallback and self._is_retryable_llm_error(e):
+                            next_model = candidates[candidate_index + 1][2]
+                            logging.warning(
+                                f"[RealVerifier] {target_model} 호출 실패 → 선택된 대체 모델 {next_model}로 전환: {e}"
+                            )
+                            failed = True
+                            break
+                        logging.error(f"[RealVerifier] LLM 호출 오류 ({target_model}): {e}")
+                        return "".join(collected_parts).strip()
+                if failed:
+                    break
+
+                collected_parts.append(text or "")
+                combined = "".join(collected_parts).strip()
+                if continuation_budget <= 0 or not self._should_continue_planner_output(finish_reason, combined):
+                    return combined
+
+                continuation_budget -= 1
+                active_prompt = (
+                    "이전 파이썬 코드 응답이 길이 제한으로 잘렸습니다. 이미 출력한 줄은 반복하지 말고, "
+                    "바로 다음 줄부터 이어서 출력하세요.\n\n"
+                    f"원래 요청:\n{prompt}\n\n"
+                    f"지금까지 출력한 코드:\n{combined[-3000:]}"
+                )
+                logging.info("[RealVerifier] LLM 응답이 잘려 이어받기를 시도합니다.")
+                time.sleep(0.5)
+        return "".join(collected_parts).strip()
+
+    def _get_planner_llm_candidates(self) -> List[tuple]:
+        if not self.llm:
+            return []
+        if hasattr(self.llm, "get_role_fallback_targets"):
+            return list(self.llm.get_role_fallback_targets("planner"))
+        target_model = getattr(self.llm, "planner_model", "") or getattr(self.llm, "model", "")
+        provider = getattr(self.llm, "planner_provider", "") or getattr(self.llm, "provider", "")
+        client = getattr(self.llm, "planner_client", None)
+        if client is None:
+            client = getattr(self.llm, "client", None)
+        if not client or not target_model:
+            return []
+        return [(client, provider, target_model)]
+
+    def _is_retryable_llm_error(self, error: Exception) -> bool:
+        return bool(_LLM_RETRYABLE_ERROR_RE.search(str(error or "")))
+
+    def _extract_retry_delay_seconds(self, error: Exception, attempt: int) -> float:
+        text = str(error or "")
+        for pattern in _LLM_RETRY_DELAY_RE_LIST:
+            match = pattern.search(text)
+            if match:
+                try:
+                    return max(0.5, min(float(match.group(1)), 60.0))
+                except Exception:
+                    continue
+        return min(2.0 * (attempt + 1), 10.0)
+
+    def _should_continue_planner_output(self, finish_reason: str, text: str) -> bool:
+        normalized = (finish_reason or "").lower()
+        if normalized in {"length", "max_tokens"}:
+            return True
+        if not text:
+            return False
+        try:
+            compile(text, "<real_verifier_llm>", "exec")
+            return False
+        except SyntaxError as exc:
+            lowered = str(exc).lower()
+            return any(hint in lowered for hint in _CONTINUE_SYNTAX_HINTS)
+
+    def _looks_like_python_code(self, code: str) -> bool:
+        text = (code or "").strip()
+        if not text:
+            return False
+        try:
+            compile(text, "<real_verifier>", "exec")
+            return True
+        except SyntaxError:
+            return False
+
     def _run_verification(self, code: str) -> Optional[VerificationResult]:
         """검증 코드를 실행하고 결과 해석."""
         try:
+            if not is_read_only_step_content(code, "verification code") or "subprocess.run" in (code or "").lower():
+                logging.warning("[RealVerifier] 읽기 전용이 아닌 검증 코드는 실행하지 않습니다.")
+                return None
             # 검증 코드는 safety check 없이 실행 (읽기 전용으로 유도됨)
             result = self.executor._do_run_python(code, extra_globals={"verification_context": {"mode": "verifier"}})
             if not result.success:

@@ -1,9 +1,11 @@
 from commands.base_command import BaseCommand
 import json
 import logging
+import os
 import re
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
@@ -249,7 +251,10 @@ class AICommand(BaseCommand):
             return None
         self.tts_wrapper("복잡한 목표를 단계별로 처리할게요.")
         run_result: AgentRunResult = self.orchestrator.run(goal)
-        return self._agent_run_to_korean(run_result)
+        report_path = ""
+        if self._is_developer_agent_goal(goal):
+            report_path = self._save_agent_run_report(goal, run_result)
+        return self._agent_run_to_korean(run_result, report_path=report_path)
 
     def _handle_web_search(self, args: dict) -> Optional[str]:
         """인터넷 검색 후 결과 반환"""
@@ -459,6 +464,85 @@ class AICommand(BaseCommand):
             return f"{dt.month}월 {dt.day}일 {ampm} {hour}시 {dt.minute}분"
         return f"{dt.month}월 {dt.day}일 {ampm} {hour}시"
 
+    def _is_developer_agent_goal(self, goal: str) -> bool:
+        try:
+            planner = getattr(self.orchestrator, "planner", None)
+            return bool(planner and hasattr(planner, "is_developer_goal") and planner.is_developer_goal(goal))
+        except Exception:
+            return False
+
+    def _resolve_user_report_dir(self) -> Path:
+        user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+        desktop = user_home / "Desktop"
+        report_root = desktop if desktop.is_dir() else user_home
+        report_dir = report_root / "Ari Reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        return report_dir
+
+    def _save_agent_run_report(self, goal: str, run: AgentRunResult) -> str:
+        try:
+            report_dir = self._resolve_user_report_dir()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_path = report_dir / f"agent_run_{timestamp}.md"
+            saved_path = self._extract_saved_path_from_agent_run(run)
+            lines = [
+                "# Ari Agent Execution Report",
+                "",
+                f"- Generated: {datetime.now().isoformat(timespec='seconds')}",
+                f"- Goal: {goal}",
+                f"- Status: {'success' if run.achieved else 'failure'}",
+                f"- Iterations: {run.total_iterations}",
+                f"- Summary: {self._shorten_user_summary(run.summary_kr, limit=200)}",
+            ]
+            if saved_path:
+                lines.append(f"- Task artifact: {saved_path}")
+            lines.extend(["", "## Steps", ""])
+            if not run.step_results:
+                lines.append("_No executed steps._")
+            for index, step_result in enumerate(run.step_results, start=1):
+                step = step_result.step
+                exec_result = step_result.exec_result
+                content_preview = (step.content or "").strip()
+                output_preview = (exec_result.output or exec_result.error or "").strip()
+                if len(content_preview) > 500:
+                    content_preview = content_preview[:500].rstrip() + "..."
+                if len(output_preview) > 800:
+                    output_preview = output_preview[:800].rstrip() + "..."
+                lines.extend([
+                    f"### {index}. {step.description_kr}",
+                    f"- Type: `{step.step_type}`",
+                    f"- Success: `{bool(exec_result.success)}`",
+                    f"- Attempt: `{step_result.attempt}`",
+                    f"- Auto-fix: `{bool(step_result.was_fixed)}`",
+                ])
+                if content_preview:
+                    lines.extend(["", "```text", content_preview, "```"])
+                if output_preview:
+                    lines.extend(["", "```text", output_preview, "```"])
+                state_delta = str(getattr(exec_result, "state_delta_summary", "") or "").strip()
+                if state_delta:
+                    lines.extend(["", "```text", state_delta[:500], "```"])
+                lines.append("")
+            report_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+            return str(report_path)
+        except Exception as exc:
+            logging.warning(f"[AICommand] 실행 보고서 저장 실패: {exc}")
+            return ""
+
+    def _describe_report_location(self, report_path: str) -> str:
+        if not report_path:
+            return ""
+        path = Path(report_path)
+        user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+        desktop = user_home / "Desktop"
+        if desktop.is_dir():
+            try:
+                path.relative_to(desktop)
+                return f"바탕화면 {path.parent.name} 폴더의 {path.name}"
+            except Exception:
+                pass
+        return f"{path.parent.name} 폴더의 {path.name}"
+
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
 
     def _result_to_korean(self, result: ExecutionResult) -> Optional[str]:
@@ -470,16 +554,21 @@ class AICommand(BaseCommand):
             return f"실행 완료. 출력: {result.output[:200]}"
         return "실행이 완료되었습니다."
 
-    def _agent_run_to_korean(self, run: AgentRunResult) -> str:
+    def _agent_run_to_korean(self, run: AgentRunResult, report_path: str = "") -> str:
         steps_done = len(run.step_results)
         saved_path = self._extract_saved_path_from_agent_run(run)
         if run.achieved:
             if saved_path:
                 folder_name = saved_path.rsplit("\\", 1)[0].rsplit("\\", 1)[-1]
                 file_name = saved_path.rsplit("\\", 1)[-1]
-                return f"작업 완료. {folder_name} 폴더에 {file_name}를 저장했습니다."
-            return f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary_kr)}"
-        return f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary_kr)}"
+                message = f"작업 완료. {folder_name} 폴더에 {file_name}를 저장했습니다."
+            else:
+                message = f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary_kr)}"
+        else:
+            message = f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary_kr)}"
+        if report_path:
+            message += f" 실행 보고서는 {self._describe_report_location(report_path)}에 저장했습니다."
+        return message
 
     def _shorten_user_summary(self, summary: str, limit: int = 90) -> str:
         normalized = re.sub(r'\s+', ' ', (summary or '').strip())
@@ -502,12 +591,17 @@ class AICommand(BaseCommand):
             except Exception:
                 payload = None
             if isinstance(payload, dict):
-                saved_path = str(payload.get("saved_path", "") or "")
-                if saved_path:
-                    return saved_path
-            path_match = re.search(r'([A-Za-z]:\\[^\r\n]+?\.(?:md|txt|pdf))', output)
-            if path_match:
-                return path_match.group(1)
+                for key in ("saved_path", "report_path", "output_path"):
+                    saved_path = str(payload.get(key, "") or "")
+                    if saved_path:
+                        return saved_path
+            for line in output.splitlines():
+                lowered = line.lower()
+                if not any(token in lowered for token in ("saved_path", "report_path", "output_path", "저장", "saved")):
+                    continue
+                path_match = re.search(r'([A-Za-z]:\\[^\r\n]+?\.(?:md|txt|pdf))', line)
+                if path_match:
+                    return path_match.group(1)
         return ""
 
     def _is_generic_agent_explanation(self, text: str) -> bool:
@@ -820,9 +914,12 @@ class AICommand(BaseCommand):
                         followup = self._run_agentic_followup(text, tool_calls, results)
                     if followup:
                         self._emit_user_message(followup)
+                        response = followup
                     elif non_none:
-                        for result in non_none:
-                            self._emit_user_message(str(result))
+                        rendered_results = [str(result) for result in non_none]
+                        for result in rendered_results:
+                            self._emit_user_message(result)
+                        response = "\n".join(rendered_results)
                 else:
                     if response:
                         self._emit_user_message(response)

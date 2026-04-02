@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -46,6 +47,19 @@ class AutonomousExecutorTests(unittest.TestCase):
         self.assertIn('"recent_state_transitions": []', script)
         self.assertIn('"backup_history": [dict(item) for item in _backup_history[-5:]]', script)
         self.assertIn('"recovery_candidates": [dict(item) for item in _backup_history[-5:]]', script)
+        self.assertIn('"repo_root": repo_root', script)
+        self.assertIn('"module_dir": module_dir', script)
+        self.assertIn("os.chdir(repo_root)", script)
+
+    def test_subprocess_kwargs_use_repo_root_and_background_flags(self):
+        executor = AutonomousExecutor()
+
+        kwargs = executor._build_subprocess_kwargs()
+
+        self.assertEqual(kwargs["cwd"], executor._get_repo_root())
+        if sys.platform == "win32":
+            self.assertEqual(kwargs["creationflags"], getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            self.assertEqual(kwargs["startupinfo"].wShowWindow, 0)
 
     def test_state_delta_summary_is_recorded_in_history(self):
         executor = AutonomousExecutor()

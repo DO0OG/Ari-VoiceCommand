@@ -7,7 +7,12 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody
+from tts.cosyvoice_utils import (
+    _PCMChunkBuffer,
+    _normalize_text_cached,
+    apply_emotion_prosody,
+    inject_breath_cues,
+)
 
 
 class PCMChunkBufferTests(unittest.TestCase):
@@ -79,6 +84,25 @@ class ApplyEmotionProsodyTests(unittest.TestCase):
 
     def test_empty_text_unchanged(self):
         self.assertEqual(apply_emotion_prosody("", "기쁨"), "")
+
+
+class InjectBreathCuesTests(unittest.TestCase):
+    def test_long_sentence_adds_single_breath_comma(self):
+        text = "오늘 일정 정리했고 메일 답장도 끝냈으니 이제 점심 드시면 됩니다."
+        result = inject_breath_cues(text)
+
+        self.assertIn(",", result)
+        self.assertTrue(result.endswith("."))
+
+    def test_connector_prefers_breath_before_transition(self):
+        text = "오늘 일정 정리했고 그리고 메일 답장도 끝냈으니 이제 점심 드시면 됩니다."
+        result = inject_breath_cues(text)
+
+        self.assertIn("정리했고, 그리고", result)
+
+    def test_existing_comma_is_preserved(self):
+        text = "안녕하세요, 반갑습니다."
+        self.assertEqual(inject_breath_cues(text), text)
 
 
 if __name__ == "__main__":

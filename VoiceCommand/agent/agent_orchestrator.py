@@ -13,6 +13,7 @@ import concurrent.futures
 import ast
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -32,6 +33,15 @@ from agent.execution_analysis import (
 )
 
 logger = logging.getLogger(__name__)
+
+_DEVELOPER_VERIFY_TOKENS = (
+    "validate_repo.py",
+    "--compile-only",
+    "pytest",
+    "unittest",
+    "tests/test_",
+    "[validate]",
+)
 
 try:
     from services.dom_analyser import suggest_next_actions
@@ -258,11 +268,19 @@ class AgentOrchestrator:
 
     def _should_prefer_template_over_skill(self, goal: str) -> bool:
         try:
+            if self._is_developer_goal(goal):
+                return True
             template_steps = self.planner._build_template_plan(goal)  # 내부 안정 템플릿 우선
         except Exception as exc:
             logger.debug(f"[Orchestrator] 템플릿 우선 판단 생략: {exc}")
             return False
         return bool(template_steps)
+
+    def _is_developer_goal(self, goal: str) -> bool:
+        try:
+            return bool(hasattr(self.planner, "is_developer_goal") and self.planner.is_developer_goal(goal))
+        except Exception:
+            return False
 
     def _run_with_skill_if_available(self, goal: str, context: Dict[str, str]) -> Optional[AgentRunResult]:
         try:
@@ -370,6 +388,7 @@ class AgentOrchestrator:
                 group_results = self._execute_parallel_group(runnable, context, goal)
 
             for sr in group_results:
+                sr = self._apply_developer_step_guard(goal, sr, context)
                 step_results.append(sr)
                 self._emit_progress("step_done", step_id=sr.step.step_id, success=sr.exec_result.success, was_fixed=sr.was_fixed, error=(sr.exec_result.error or "")[:100])
                 if sr.exec_result.success:
@@ -509,6 +528,9 @@ class AgentOrchestrator:
             logger.debug(f"[Orchestrator] DOM suggestion 주입 생략: {exc}")
 
     def _verify(self, goal: str, step_results: List[StepResult]) -> Tuple[bool, str]:
+        developer_precheck = self._verify_developer_goal_completion(goal, step_results)
+        if developer_precheck is not None:
+            return developer_precheck
         try:
             from agent.real_verifier import get_real_verifier
             v = get_real_verifier().verify(goal, step_results)
@@ -519,18 +541,154 @@ class AgentOrchestrator:
         verdict = self.planner.verify(goal, [sr.exec_result for sr in step_results])
         return verdict.get("achieved", False), verdict.get("summary_kr", "검증 실패")
 
+    def _verify_developer_goal_completion(self, goal: str, step_results: List[StepResult]) -> Optional[Tuple[bool, str]]:
+        if not self._is_developer_goal(goal):
+            return None
+
+        has_code_change = False
+        has_validation = False
+        scope_violation = self._find_developer_scope_violation(goal, step_results)
+        if scope_violation:
+            return False, scope_violation
+        for sr in step_results:
+            step = getattr(sr, "step", None)
+            exec_result = getattr(sr, "exec_result", None)
+            content = getattr(step, "content", "") or ""
+            description = getattr(step, "description_kr", "") or ""
+            output = getattr(exec_result, "output", "") or ""
+            error = getattr(exec_result, "error", "") or ""
+            combined = "\n".join([content, description, output, error]).lower()
+
+            if not is_read_only_step_content(content, description):
+                has_code_change = True
+            if self._is_valid_developer_validation_signal(combined):
+                has_validation = True
+
+        if not has_code_change and not has_validation:
+            return False, "저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다."
+        if not has_code_change:
+            return False, "저장소 분석은 수행됐지만 실제 코드 변경이 확인되지 않았습니다."
+        if not has_validation:
+            return False, "코드 변경은 있었지만 validate_repo.py 또는 관련 테스트 검증이 확인되지 않았습니다."
+        return None
+
+    def _apply_developer_step_guard(self, goal: str, sr: StepResult, context: Dict[str, str]) -> StepResult:
+        if not self._is_developer_goal(goal):
+            return sr
+        exec_result = getattr(sr, "exec_result", None)
+        if exec_result is None or not getattr(exec_result, "success", False):
+            return sr
+        error = self._find_developer_step_guard_error(goal, sr, context)
+        if not error:
+            return sr
+        guarded_result = ExecutionResult(
+            success=False,
+            output=getattr(exec_result, "output", "") or "",
+            error=error,
+            duration_ms=getattr(exec_result, "duration_ms", 0),
+            code_or_cmd=getattr(exec_result, "code_or_cmd", "") or "",
+            state_before=getattr(exec_result, "state_before", None),
+            state_after=getattr(exec_result, "state_after", None),
+            state_delta=getattr(exec_result, "state_delta", None),
+            state_delta_summary=getattr(exec_result, "state_delta_summary", "") or "",
+        )
+        return StepResult(
+            step=sr.step,
+            exec_result=guarded_result,
+            attempt=sr.attempt,
+            was_fixed=sr.was_fixed,
+            failure_kind="developer_guard",
+        )
+
+    def _find_developer_step_guard_error(self, goal: str, sr: StepResult, context: Dict[str, str]) -> str:
+        step = getattr(sr, "step", None)
+        exec_result = getattr(sr, "exec_result", None)
+        content = getattr(step, "content", "") or ""
+        output = getattr(exec_result, "output", "") or ""
+        for path in self._extract_developer_result_paths(output):
+            if not self.planner.is_allowed_developer_path(path, goal=goal, context=context):
+                return f"허용 범위를 벗어난 경로가 선택되어 개발 작업을 중단했습니다: {path}"
+        if self._contains_invalid_developer_validation(content):
+            return "허용되지 않은 개발 검증 명령이 계획에 포함되어 실행을 중단했습니다."
+        return ""
+
+    def _find_developer_scope_violation(self, goal: str, step_results: List[StepResult]) -> str:
+        for sr in step_results:
+            step = getattr(sr, "step", None)
+            exec_result = getattr(sr, "exec_result", None)
+            content = getattr(step, "content", "") or ""
+            output = getattr(exec_result, "output", "") or ""
+            for path in self._extract_developer_result_paths("\n".join([content, output])):
+                if not self.planner.is_allowed_developer_path(path, goal=goal, context=None):
+                    return f"허용 범위를 벗어난 파일/경로가 선택되어 작업을 완료로 볼 수 없습니다: {path}"
+        return ""
+
+    def _extract_developer_result_paths(self, text: str) -> List[str]:
+        candidates: List[str] = []
+        normalized_repo_root = os.path.abspath(os.getcwd()).replace("\\", "/").lower()
+
+        def add_candidate(value: str) -> None:
+            if not value:
+                return
+            normalized = str(value).strip().strip('"').strip("'").replace("\\", "/")
+            if not normalized:
+                return
+            lowered = normalized.lower().lstrip("./")
+            if re.match(r"^[a-z]:/", lowered):
+                repo_prefix = normalized_repo_root + "/"
+                if lowered.startswith(repo_prefix):
+                    lowered = lowered[len(repo_prefix):]
+            if lowered and lowered not in candidates:
+                candidates.append(lowered)
+
+        def visit(value) -> None:
+            if isinstance(value, str):
+                for match in re.findall(r'(?:VoiceCommand|docs|tests|market|supabase|\.github|\.claude|\.idea)[/\\][A-Za-z0-9_./\\-]+', value, flags=re.IGNORECASE):
+                    add_candidate(match)
+            elif isinstance(value, dict):
+                for nested in value.values():
+                    visit(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    visit(nested)
+
+        try:
+            payload = json.loads(text)
+        except Exception:
+            payload = None
+        if payload is not None:
+            visit(payload)
+        visit(text)
+        return candidates
+
+    def _contains_invalid_developer_validation(self, content: str) -> bool:
+        normalized = (content or "").lower().replace("\\", "/")
+        if "py_compile" in normalized or "&&" in normalized:
+            return True
+        if "tests/" in normalized and "voicecommand/tests/" not in normalized and "voicecommand.tests." not in normalized:
+            return True
+        return False
+
+    def _is_valid_developer_validation_signal(self, combined: str) -> bool:
+        normalized = (combined or "").lower().replace("\\", "/")
+        if self._contains_invalid_developer_validation(normalized):
+            return False
+        return any(token in normalized for token in _DEVELOPER_VERIFY_TOKENS)
+
     def _record_strategy(self, goal: str, run_result: AgentRunResult, duration: int, lesson: str = ""):
         try:
             from agent.strategy_memory import get_strategy_memory
             failed = [sr for sr in run_result.step_results if not sr.exec_result.success]
             fk = failed[-1].failure_kind if failed else ""
             skill_id = ""
-            try:
-                from agent.skill_library import get_skill_library
-                matched = get_skill_library().get_applicable_skill(goal)
-                skill_id = matched.skill_id if matched and matched.confidence >= 0.45 else ""
-            except Exception:
-                skill_id = ""
+            is_dev_goal = self._is_developer_goal(goal)
+            if not is_dev_goal:
+                try:
+                    from agent.skill_library import get_skill_library
+                    matched = get_skill_library().get_applicable_skill(goal)
+                    skill_id = matched.skill_id if matched and matched.confidence >= 0.45 else ""
+                except Exception:
+                    skill_id = ""
             get_strategy_memory().record(
                 goal=goal,
                 steps=[sr.step for sr in run_result.step_results],
@@ -540,8 +698,8 @@ class AgentOrchestrator:
                 failure_kind=fk,
                 lesson=lesson,
                 skill_id=skill_id,
-                user_feedback="positive" if run_result.achieved else "",
-                few_shot_eligible=run_result.achieved and len(run_result.step_results) <= 5,
+                user_feedback="positive" if run_result.achieved and not is_dev_goal else "",
+                few_shot_eligible=run_result.achieved and len(run_result.step_results) <= 5 and not is_dev_goal,
             )
         except Exception as e: logger.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
 
@@ -555,16 +713,17 @@ class AgentOrchestrator:
             )
         except Exception as e:
             logger.debug(f"[Orchestrator] planner feedback 업데이트 실패: {e}")
-        try:
-            from agent.skill_library import get_skill_library
-            get_skill_library().try_extract_skill(
-                goal,
-                [sr.step for sr in run_result.step_results],
-                run_result.achieved,
-                duration_ms,
-            )
-        except Exception as e:
-            logger.debug(f"[Orchestrator] skill 추출 실패: {e}")
+        if not self._is_developer_goal(goal):
+            try:
+                from agent.skill_library import get_skill_library
+                get_skill_library().try_extract_skill(
+                    goal,
+                    [sr.step for sr in run_result.step_results],
+                    run_result.achieved,
+                    duration_ms,
+                )
+            except Exception as e:
+                logger.debug(f"[Orchestrator] skill 추출 실패: {e}")
         try:
             from agent.episode_memory import GoalEpisode, get_episode_memory
             target_domains: List[str] = []

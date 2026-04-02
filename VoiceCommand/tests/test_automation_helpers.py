@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -24,6 +25,45 @@ class _TempAutomationHelpers(AutomationHelpers):
 
 
 class AutomationHelpersTests(unittest.TestCase):
+    def test_app_aliases_use_runtime_candidates_instead_of_absolute_paths(self):
+        helper = AutomationHelpers()
+
+        for candidates in helper._app_aliases.values():
+            for candidate in candidates:
+                self.assertNotIn(":", candidate)
+                self.assertNotIn("\\", candidate)
+                self.assertNotIn("/", candidate)
+
+    def test_open_url_uses_shell_open_for_background_launch(self):
+        helper = AutomationHelpers()
+        captured = []
+        helper._shell_open = lambda target: captured.append(target)
+
+        opened = helper.open_url("https://example.com")
+
+        self.assertEqual(opened, "https://example.com")
+        self.assertEqual(captured, ["https://example.com"])
+
+    def test_shell_open_uses_no_activate_flag_on_windows(self):
+        helper = AutomationHelpers()
+        if os.name != "nt":
+            self.skipTest("Windows 전용 동작")
+        with patch("agent.automation_helpers.ctypes.windll.shell32.ShellExecuteW", return_value=33) as mocked:
+            helper._shell_open(r"C:\Windows\notepad.exe")
+
+        self.assertEqual(mocked.call_args[0][-1], 4)
+
+    def test_launch_app_uses_runtime_alias_resolution(self):
+        helper = AutomationHelpers()
+        captured = []
+        helper._shell_open = lambda target: captured.append(target)
+        helper._resolve_executable_target = lambda target: r"C:\Resolved\Code.exe" if target == "code" else ""
+
+        launched = helper.launch_app("vscode")
+
+        self.assertEqual(launched, "vscode")
+        self.assertEqual(captured, [r"C:\Resolved\Code.exe"])
+
     def test_window_target_history_persists(self):
         with tempfile.TemporaryDirectory() as tmp:
             history_path = os.path.join(tmp, "window_targets.json")

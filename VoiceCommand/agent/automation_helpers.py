@@ -14,30 +14,30 @@ from typing import Optional, List, Any
 
 logger = logging.getLogger(__name__)
 
-_VSCODE_EXE = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe")
+_APP_ALIAS_CANDIDATES = {
+    "메모장": ("notepad",),
+    "notepad": ("notepad",),
+    "계산기": ("calc", "calculator"),
+    "calculator": ("calc", "calculator"),
+    "explorer": ("explorer",),
+    "파일 탐색기": ("explorer",),
+    "cmd": ("cmd",),
+    "powershell": ("powershell", "pwsh"),
+    "chrome": ("chrome",),
+    "크롬": ("chrome",),
+    "msedge": ("msedge", "edge"),
+    "edge": ("msedge", "edge"),
+    "엣지": ("msedge", "edge"),
+    "code": ("code", "code-insiders"),
+    "vscode": ("code", "code-insiders"),
+    "visual studio code": ("code", "code-insiders"),
+}
 
 
 class AutomationHelpers:
     def __init__(self):
         self.desktop_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
-        self._app_aliases = {
-            "메모장": r"C:\Windows\system32\notepad.exe",
-            "notepad": r"C:\Windows\system32\notepad.exe",
-            "계산기": r"C:\Windows\System32\calc.exe",
-            "calculator": r"C:\Windows\System32\calc.exe",
-            "explorer": r"C:\Windows\explorer.exe",
-            "파일 탐색기": r"C:\Windows\explorer.exe",
-            "cmd": r"C:\Windows\System32\cmd.exe",
-            "powershell": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
-            "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            "크롬": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            "msedge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            "edge": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            "엣지": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            "code": _VSCODE_EXE,
-            "vscode": _VSCODE_EXE,
-            "visual studio code": _VSCODE_EXE,
-        }
+        self._app_aliases = {key: tuple(values) for key, values in _APP_ALIAS_CANDIDATES.items()}
         self._window_target_history = self._load_window_target_history()
         self._desktop_workflow_history = self._load_desktop_workflow_history()
 
@@ -45,7 +45,7 @@ class AutomationHelpers:
 
     def open_url(self, url: str) -> str:
         """웹 브라우저로 URL을 엽니다."""
-        webbrowser.open(url)
+        self._shell_open(url)
         return url
 
     def open_path(self, path: str) -> str:
@@ -62,28 +62,18 @@ class AutomationHelpers:
         if not normalized:
             raise ValueError("실행할 대상이 비어 있습니다.")
 
-        alias_target = os.path.expandvars(self._app_aliases.get(normalized.lower(), ""))
-        direct_target = normalized if os.path.exists(normalized) else alias_target
-        if direct_target and os.path.exists(direct_target):
-            self._shell_open(direct_target)
+        if os.path.exists(normalized):
+            self._shell_open(os.path.abspath(normalized))
             return target
 
-        resolved_exec = self._resolve_executable_target(normalized)
-        if resolved_exec:
-            self._shell_open(resolved_exec)
-            return target
-
-        for candidate in self._app_aliases.values():
-            expanded_candidate = os.path.expandvars(candidate)
-            if normalized.lower() in os.path.basename(expanded_candidate).lower() and os.path.exists(expanded_candidate):
-                self._shell_open(expanded_candidate)
+        for candidate in self._iter_launch_candidates(normalized):
+            resolved_exec = self._resolve_executable_target(candidate)
+            launch_target = resolved_exec or candidate
+            try:
+                self._shell_open(launch_target)
                 return target
-        for executable in ("chrome", "msedge", "code", "notepad", "explorer", "powershell", "cmd"):
-            if normalized.lower() in executable:
-                resolved_exec = self._resolve_executable_target(executable)
-                if resolved_exec:
-                    self._shell_open(resolved_exec)
-                    return target
+            except OSError:
+                continue
 
         raise FileNotFoundError(f"실행 가능한 앱을 찾지 못했습니다: {target}")
 
@@ -99,6 +89,29 @@ class AutomationHelpers:
             if found:
                 return found
         return ""
+
+    def _iter_launch_candidates(self, target: str) -> List[str]:
+        normalized = (target or "").strip().strip('"')
+        lowered = normalized.lower()
+        candidates: List[str] = []
+
+        self._extend_unique(candidates, self._app_aliases.get(lowered, ()))
+        if lowered not in self._app_aliases and normalized:
+            self._extend_unique(candidates, (normalized,))
+
+        for alias, alias_candidates in self._app_aliases.items():
+            if not lowered or alias == lowered:
+                continue
+            if lowered in alias or alias in lowered:
+                self._extend_unique(candidates, alias_candidates)
+
+        return candidates
+
+    @staticmethod
+    def _extend_unique(target: List[str], values) -> None:
+        for value in values:
+            if value and value not in target:
+                target.append(value)
 
     # ── 마우스 및 키보드 제어 ───────────────────────────────────────────────────
 
@@ -1150,7 +1163,8 @@ class AutomationHelpers:
         if os.name != "nt":
             webbrowser.open(target) # 폴백
             return
-        result = ctypes.windll.shell32.ShellExecuteW(None, "open", target, None, None, 1)
+        # SW_SHOWNOACTIVATE(4): 창은 띄우되 포커스를 뺏지 않도록 실행
+        result = ctypes.windll.shell32.ShellExecuteW(None, "open", target, None, None, 4)
         if result <= 32:
             raise OSError(f"ShellExecuteW 호출 실패: {target}")
 

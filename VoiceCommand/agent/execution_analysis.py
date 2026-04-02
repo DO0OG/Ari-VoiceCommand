@@ -10,10 +10,26 @@ from typing import Dict, Iterable, List
 
 
 _MUTATING_TOKENS = (
-    "save_document", "open(", "write_", "os.makedirs", "mkdir", "remove",
-    "delete", "unlink", "copy", "move", "rename", "launch_app", "open_url",
-    "open_path", "click_screen", "click_image", "type_text", "press_keys", "hotkey",
-    "browser_login", "run_browser_actions", "run_desktop_workflow", "shutdown", "set-content", "new-item", "move-item",
+    # 파일 저장/쓰기 — open()의 read 모드는 포함하지 않음
+    "save_document",
+    ", 'w')", ", 'w')", ', "w")', ', "w")',
+    ", 'a')", ', "a")',
+    ", 'x')", ', "x")',
+    ", 'wb')", ', "wb")',
+    ", 'ab')", ', "ab")',
+    ".write(", "write_text(", "write_bytes(", "write_",
+    # 파일시스템 조작
+    "os.makedirs", "mkdir", "os.remove", "os.unlink", "os.rename",
+    "shutil.move", "shutil.copy", "shutil.rmtree",
+    "delete", "unlink", "remove", "rename",
+    # GUI/자동화
+    "launch_app", "open_url", "open_path",
+    "click_screen", "click_image", "type_text", "press_keys", "hotkey",
+    "browser_login", "run_browser_actions", "run_desktop_workflow",
+    # 시스템
+    "shutdown",
+    # PowerShell 변이 cmdlet
+    "set-content", "new-item", "move-item",
     "copy-item", "remove-item", "rename-item", "start-process",
 )
 

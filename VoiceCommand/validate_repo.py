@@ -52,22 +52,26 @@ COMPILE_TARGETS = [
 ]
 
 TEMPLATE_SMOKE = r"""
+import os
+from pathlib import Path
 from agent.agent_planner import AgentPlanner
 from agent.llm_provider import LLMProvider
 
 planner = AgentPlanner(LLMProvider(api_key=""))
+desktop_path = Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop"
+desktop_str = str(desktop_path)
 samples = [
     "바탕화면에 샘플 폴더 만들어줘",
     "시스템 정보 수집해서 md로 저장해줘",
-    r"C:\Users\runneradmin\Desktop 폴더 목록 저장해줘",
+    f"{desktop_str} 폴더 목록 저장해줘",
     "https://example.com 열어줘",
     "https://example.com 에서 파일 다운로드해서 저장해줘",
     '메모장 열고 "테스트 메모" 입력해줘',
     "크롬으로 https://example.com 열어줘",
     "VSCode 열어줘",
     "계산기 실행해줘",
-    r"C:\Users\runneradmin\Desktop\alpha.txt 파일 이름을 beta.txt로 변경해줘",
-    r"C:\Users\runneradmin\Desktop\logs\ari.log 로그 리포트 저장해줘",
+    os.path.join(desktop_str, "alpha.txt") + " 파일 이름을 beta.txt로 변경해줘",
+    os.path.join(desktop_str, "logs", "ari.log") + " 로그 리포트 저장해줘",
 ]
 
 for sample in samples:
@@ -80,8 +84,17 @@ print("template routing ok")
 
 
 def _run_compile(paths: list[str]) -> None:
-    for path in paths:
-        py_compile.compile(path, doraise=True)
+    with tempfile.TemporaryDirectory(prefix="ari_compile_check_") as temp_dir:
+        temp_root = Path(temp_dir)
+        for path in paths:
+            source_path = Path(path).resolve()
+            try:
+                relative_path = source_path.relative_to(HERE)
+            except ValueError:
+                relative_path = Path(source_path.name)
+            target_path = temp_root / relative_path.with_suffix(".pyc")
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            py_compile.compile(str(source_path), cfile=str(target_path), doraise=True)
 
 
 def _run_tests() -> None:

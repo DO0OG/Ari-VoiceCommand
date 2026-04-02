@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
-from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody
+from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -248,6 +248,7 @@ class CosyVoiceTTS(QObject):
         from audio.audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text_cached(text or "")
         text = apply_emotion_prosody(text, emotion)
+        text = inject_breath_cues(text)
         if not text or self._proc is None or self._proc.poll() is not None:
             return False
 

@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from agent.agent_orchestrator import AgentOrchestrator, StepResult
+from agent.agent_orchestrator import AgentOrchestrator, AgentRunResult, StepResult
 from agent.agent_planner import AgentPlanner, ActionStep
 from agent.autonomous_executor import AutonomousExecutor, ExecutionResult
 from agent.strategy_memory import StrategyMemory
@@ -281,6 +281,26 @@ class AgentIntegrationTests(unittest.TestCase):
                 )
             )
 
+    def test_repository_goal_skips_learned_skill_even_without_template(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+
+        self.assertTrue(
+            orchestrator._should_prefer_template_over_skill(
+                "이 저장소를 먼저 전체 파악한 뒤 VoiceCommand/agent, VoiceCommand/core, VoiceCommand/ui, "
+                "VoiceCommand/plugins, VoiceCommand/tests, docs 범위에서 실제 코드 변경까지 진행하고 "
+                "py -3.11 VoiceCommand/validate_repo.py 또는 --compile-only를 실행해줘."
+            )
+        )
+
+    def test_short_repository_goal_also_skips_learned_skill(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+
+        self.assertTrue(
+            orchestrator._should_prefer_template_over_skill(
+                "VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료"
+            )
+        )
+
     def test_system_status_goal_builds_template_without_save(self):
         planner = AgentPlanner(DummyLLMProvider())
         steps = planner.decompose("시스템 상태 확인해줘", {})
@@ -372,10 +392,91 @@ class AgentIntegrationTests(unittest.TestCase):
 
     def test_explorer_goal_builds_desktop_workflow_template(self):
         planner = AgentPlanner(DummyLLMProvider())
-        steps = planner._build_template_plan(r"C:\Users\runneradmin\Desktop 탐색기 열어줘")
+        desktop_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
+        steps = planner._build_template_plan(f"{desktop_path} 탐색기 열어줘")
         self.assertTrue(steps)
         self.assertIn("run_resilient_desktop_workflow", steps[0].content)
-        self.assertIn(r"C:\\Users\\runneradmin\\Desktop", steps[0].content)
+        self.assertIn(desktop_path.replace("\\", "\\\\"), steps[0].content)
+
+    def test_repository_goal_verify_rejects_read_only_bootstrap_steps(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        step_results = [
+            StepResult(
+                step=ActionStep(step_id=0, step_type="python", content="print('scan')", description_kr="저장소 구조 스캔"),
+                exec_result=ExecutionResult(success=True, output='{"agent": {"file_count": 1}}'),
+            ),
+            StepResult(
+                step=ActionStep(step_id=1, step_type="python", content="print('validate script')", description_kr="검증 스크립트 확인"),
+                exec_result=ExecutionResult(success=True, output="validate_repo.py first lines"),
+            ),
+            StepResult(
+                step=ActionStep(step_id=2, step_type="python", content="print('tests')", description_kr="관련 테스트 목록 수집"),
+                exec_result=ExecutionResult(success=True, output='["test_llm_provider.py"]'),
+            ),
+        ]
+
+        achieved, summary = orchestrator._verify(
+            "이 저장소를 먼저 전체 파악한 뒤 VoiceCommand/agent, VoiceCommand/core, VoiceCommand/ui, "
+            "VoiceCommand/plugins, VoiceCommand/tests, docs 범위에서 실제 코드 변경까지 진행하고 "
+            "py -3.11 VoiceCommand/validate_repo.py 또는 --compile-only를 실행해줘.",
+            step_results,
+        )
+
+        self.assertFalse(achieved)
+        self.assertIn("실제 코드 변경", summary)
+
+    def test_execute_plan_stops_when_developer_target_file_leaves_allowed_scope(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        goal = (
+            "VoiceCommand/agent, VoiceCommand/core, VoiceCommand/ui, VoiceCommand/plugins, "
+            "VoiceCommand/tests, docs 범위에서 코드 변경과 검증까지 완료"
+        )
+        steps = [
+            ActionStep(
+                step_id=0,
+                step_type="python",
+                content="print('candidate scan')",
+                description_kr="개선 대상 파일 선정",
+                on_failure="abort",
+            )
+        ]
+
+        with patch.object(
+            orchestrator,
+            "_execute_step_with_retry",
+            return_value=(
+                ExecutionResult(
+                    success=True,
+                    output='{"target_file":"market\\\\ari_integration\\\\ui\\\\settings_dialog_patch.py"}',
+                ),
+                1,
+                False,
+            ),
+        ):
+            all_success, step_results = orchestrator._execute_plan(steps, {}, goal)
+
+        self.assertFalse(all_success)
+        self.assertEqual(len(step_results), 1)
+        self.assertIn("허용 범위를 벗어난 경로", step_results[0].exec_result.error)
+
+    def test_post_run_update_skips_skill_extraction_for_developer_goal(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        run_result = AgentRunResult(
+            goal="VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
+            achieved=False,
+            summary_kr="저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다.",
+            step_results=[],
+        )
+
+        with patch("agent.planner_feedback.get_planner_feedback_loop") as planner_feedback:
+            with patch("agent.skill_library.get_skill_library") as skill_library:
+                with patch("agent.episode_memory.get_episode_memory") as episode_memory:
+                    planner_feedback.return_value.record.return_value = None
+                    episode_memory.return_value.record.return_value = None
+
+                    orchestrator._post_run_update(run_result.goal, run_result, 120)
+
+        self.assertFalse(skill_library.return_value.try_extract_skill.called)
 
     def test_chrome_url_goal_builds_desktop_workflow_template(self):
         planner = AgentPlanner(DummyLLMProvider())

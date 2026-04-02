@@ -4,6 +4,10 @@ import logging
 from datetime import datetime
 from typing import List, Dict
 
+_INTERNAL_USER_PREFIXES = (
+    "당신은 AI 에이전트 스킬을 Python 함수로 컴파일합니다.",
+)
+
 
 class ConversationHistory:
     """최근 대화와 압축 요약을 함께 관리한다."""
@@ -20,6 +24,8 @@ class ConversationHistory:
         self.load()
 
     def add(self, user_msg: str, ai_response: str):
+        if self._is_internal_entry(user_msg, ai_response):
+            return
         entry = {
             "timestamp": datetime.now().isoformat(),
             "user": user_msg,
@@ -70,6 +76,11 @@ class ConversationHistory:
     def get_recent(self, n: int = 5):
         return self.active[-n:]
 
+    def _is_internal_entry(self, user_msg: str, ai_response: str) -> bool:
+        del ai_response
+        normalized = (user_msg or "").strip()
+        return any(normalized.startswith(prefix) for prefix in _INTERNAL_USER_PREFIXES)
+
     def save(self):
         payload = {"active": self.active, "summaries": self.summaries}
         try:
@@ -88,6 +99,10 @@ class ConversationHistory:
             else:
                 self.active = list(payload.get("active", []))[-self.MAX_ACTIVE:]
                 self.summaries = list(payload.get("summaries", []))[-self.MAX_SUMMARIES:]
+            self.active = [
+                item for item in self.active
+                if not self._is_internal_entry(item.get("user", ""), item.get("ai", ""))
+            ][-self.MAX_ACTIVE:]
             logging.info(f"대화 기록 로드: active={len(self.active)}, summaries={len(self.summaries)}")
         except FileNotFoundError:
             logging.info("새 대화 기록 시작")

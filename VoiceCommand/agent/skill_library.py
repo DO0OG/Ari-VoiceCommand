@@ -9,6 +9,15 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import List, Optional
 
+_DEVELOPER_SCOPE_RE = re.compile(
+    r"(voicecommand(?:/(?:agent|core|ui|plugins|tests)\b|\s*(?:저장소|repository|codebase|repo)\b)?|저장소|repository|codebase|\brepo\b|\bdocs\b)",
+    re.IGNORECASE,
+)
+_DEVELOPER_ACTION_RE = re.compile(
+    r"(validate_repo\.py|--compile-only|pytest|unittest|코드\s*(?:변경|수정)|검증|테스트(?:\s*실행)?|구현|개선(?:\s*과제)?|분석|전체\s*파악)",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class Skill:
@@ -69,6 +78,8 @@ class SkillLibrary:
         return [skill for skill in self.skills if skill.enabled]
 
     def get_applicable_skill(self, goal: str) -> Optional[Skill]:
+        if self._looks_like_developer_goal(goal):
+            return None
         normalized = self._normalize_goal(goal)
         best_skill = None
         best_score = 0
@@ -85,6 +96,8 @@ class SkillLibrary:
         return best_skill
 
     def try_extract_skill(self, goal: str, steps: list, success: bool, duration_ms: int = 0) -> Optional[Skill]:
+        if self._looks_like_developer_goal(goal):
+            return None
         if not success or not steps or len(steps) > 5:
             return None
         normalized = self._normalize_goal(goal)
@@ -224,6 +237,10 @@ class SkillLibrary:
 
     def _normalize_goal(self, goal: str) -> str:
         return re.sub(r"\s+", " ", (goal or "").strip().lower())
+
+    def _looks_like_developer_goal(self, goal: str) -> bool:
+        normalized = self._normalize_goal(goal)
+        return bool(normalized and _DEVELOPER_SCOPE_RE.search(normalized) and _DEVELOPER_ACTION_RE.search(normalized))
 
     def _extract_patterns(self, normalized_goal: str) -> List[str]:
         tokens = re.findall(r"[가-힣a-zA-Z0-9]{2,}", normalized_goal)

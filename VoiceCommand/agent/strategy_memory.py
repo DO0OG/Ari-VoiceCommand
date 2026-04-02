@@ -91,7 +91,7 @@ class StrategyMemory:
             lesson=lesson[:400],
             skill_id=skill_id[:80],
             user_feedback=user_feedback[:40],
-            few_shot_eligible=bool(few_shot_eligible or (success and len(steps or []) <= 5 and bool(getattr(steps[0], "description_kr", "") if steps else True))),
+            few_shot_eligible=bool(few_shot_eligible),  # 호출자가 전달한 값 그대로 사용 — 자동 승격 없음
             duration_ms=duration_ms,
             timestamp=datetime.now().isoformat(),
             embedding=[],

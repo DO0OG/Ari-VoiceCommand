@@ -15,42 +15,34 @@ from typing import Optional, List, Dict, Tuple, Any
 _PROVIDER_CONFIG = {
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.3-70b-versatile",
         "label": "Groq",
     },
     "openai": {
         "base_url": None,  # openai SDK 기본값 사용
-        "default_model": "gpt-4o-mini",
         "label": "OpenAI",
     },
     "anthropic": {
         "base_url": None,  # anthropic SDK 사용
-        "default_model": "claude-haiku-4-5-20251001",
         "label": "Anthropic",
     },
     "mistral": {
         "base_url": "https://api.mistral.ai/v1",
-        "default_model": "mistral-small-latest",
         "label": "Mistral AI",
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.0-flash",
         "label": "Google Gemini",
     },
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
         "label": "OpenRouter",
     },
     "nvidia_nim": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "default_model": "meta/llama-3.3-70b-instruct",
         "label": "NVIDIA NIM",
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
-        "default_model": "llama3.2",
         "label": "Ollama (로컬)",
         "requires_api_key": False,
     },
@@ -97,11 +89,11 @@ class LLMProvider:
                  planner_model="", execution_model="",
                  planner_provider="", execution_provider="",
                  planner_api_key="", execution_api_key="",
-                 system_prompt="", personality="", scenario="", history_instruction=""):
-        cfg = _PROVIDER_CONFIG.get(provider, _PROVIDER_CONFIG["groq"])
+                 system_prompt="", personality="", scenario="", history_instruction="",
+                 router_enabled=False):
         self.provider = provider
         self.api_key = api_key
-        self.model = model.strip() or cfg["default_model"]
+        self.model = model.strip()
         self.planner_model = planner_model.strip() or self.model
         self.execution_model = execution_model.strip() or self.model
         # 역할별 제공자 (비어있으면 기본 제공자 사용)
@@ -110,6 +102,7 @@ class LLMProvider:
         self.system_prompt = system_prompt
         self.personality = personality
         self.scenario = scenario
+        self.router_enabled = bool(router_enabled)
         self.conversation_history = []
         self.max_history = 10
         self.client = None
@@ -443,44 +436,71 @@ class LLMProvider:
     def _offline_response(self, message: str) -> str:
         return "(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요. 기본 명령은 그대로 쓸 수 있어요."
 
+    def _has_any_client(self) -> bool:
+        return any((self.client, self.planner_client, self.execution_client))
+
+    def _missing_model_response(self, provider: str, role: str = "default") -> str:
+        label = _PROVIDER_CONFIG.get(provider, {}).get("label", provider)
+        role_label = {
+            "planner": "플래너",
+            "execution": "실행",
+        }.get(role, "기본")
+        return f"{label} {role_label} 모델이 설정되지 않았습니다. 설정에서 선택한 모델을 지정해주세요."
+
+    def _get_role_target(self, role: str) -> tuple[Any, str, str]:
+        if role == "planner":
+            provider = self.planner_provider
+            model = self.planner_model or self.model
+            client = self.client if provider == self.provider else self.planner_client
+        elif role == "execution":
+            provider = self.execution_provider
+            model = self.execution_model or self.model
+            client = self.client if provider == self.provider else self.execution_client
+        else:
+            provider = self.provider
+            model = self.model
+            client = self.client
+
+        if client:
+            return client, provider, model
+
+        logging.warning("[LLMRouter] %s 역할 클라이언트가 없어 기본 모델로 폴백합니다.", role)
+        return self.client, self.provider, self.model
+
+    def get_role_fallback_targets(self, preferred_role: str = "default") -> list[tuple[Any, str, str]]:
+        role_order = {
+            "planner": ("planner", "default", "execution"),
+            "execution": ("execution", "default", "planner"),
+            "default": ("default", "planner", "execution"),
+        }.get(preferred_role, ("default", "planner", "execution"))
+        targets: list[tuple[Any, str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for role in role_order:
+            client, provider, model = self._get_role_target(role)
+            key = (str(provider or ""), str(model or ""))
+            if not client or not model or key in seen:
+                continue
+            seen.add(key)
+            targets.append((client, provider, model))
+        return targets
+
     def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:
         provider = self.provider
         model = model_override or self.model
         client = self.client
-        if model_override:
+        if model_override or not self.router_enabled:
             return client, provider, model
         try:
-            from agent.llm_router import LLMRouter
-            route = LLMRouter().route(user_message, {})
-            candidate_provider = route.provider
-            candidate_model = route.model
-            candidate_client = self._get_client_for_provider(candidate_provider)
-            if candidate_client:
-                provider = candidate_provider
-                model = candidate_model
-                client = candidate_client
+            from agent.llm_router import get_llm_router
+            route = get_llm_router().route(user_message, {})
+            return self._get_role_target(route.role)
         except Exception as e:
             logging.debug(f"[LLMRouter] 라우팅 생략: {e}")
         return client, provider, model
 
-    def _get_client_for_provider(self, provider: str):
-        if provider == self.provider:
-            return self.client
-        try:
-            from core.config_manager import ConfigManager
-            settings = ConfigManager.load_settings()
-            if provider == "ollama":
-                return self._make_client("ollama", "ollama")
-            api_key = settings.get(_KEY_MAP.get(provider, ""), "")
-            if not api_key:
-                return None
-            return self._make_client(provider, api_key)
-        except Exception:
-            return None
-
     def chat(self, user_message, include_context=True, model_override="", system_override=""):
         """단순 대화"""
-        if not self.client:
+        if not self._has_any_client():
             return "AI 기능이 비활성화되어 있습니다."
 
         cached = self._response_cache.get(user_message) if self._should_cache(user_message) else None
@@ -490,6 +510,9 @@ class LLMProvider:
             client, provider, model = self._resolve_route(user_message, model_override)
             if not client:
                 return self._offline_response(user_message)
+            if not model:
+                logging.warning("[LLMProvider] 모델 미설정: provider=%s", provider)
+                return self._missing_model_response(provider)
             self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context)}]
             messages.extend(self.conversation_history)
@@ -523,13 +546,16 @@ class LLMProvider:
 
     def chat_with_tools(self, user_message, include_context=True, model_override=""):
         """도구 포함 대화"""
-        if not self.client:
+        if not self._has_any_client():
             return "AI 기능 비활성화 상태입니다.", []
 
         try:
             client, provider, model = self._resolve_route(user_message, model_override)
             if not client:
                 return self._offline_response(user_message), []
+            if not model:
+                logging.warning("[LLMProvider] 도구 대화 모델 미설정: provider=%s", provider)
+                return self._missing_model_response(provider), []
             self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": self._build_system(include_context)}]
             messages.extend(self.conversation_history)
@@ -539,7 +565,13 @@ class LLMProvider:
 
             if provider == "anthropic":
                 # Anthropic tool use is more complex, using simple fallback for now
-                return self._anthropic_chat(user_message, include_context, use_tools=True, model_override=model)
+                return self._anthropic_chat(
+                    user_message,
+                    include_context,
+                    use_tools=True,
+                    model_override=model,
+                    client_override=client,
+                )
 
             response = client.chat.completions.create(
                 model=model, messages=messages, tools=tools, tool_choice=tool_choice,
@@ -577,11 +609,23 @@ class LLMProvider:
 
     def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="") -> str:
         """도구 결과 피드백"""
-        if not self.client: return ""
-        model = model_override or self.model
+        if not self._has_any_client():
+            return ""
         try:
-            if self.provider == "anthropic":
-                return self._anthropic_feed_tool_result(original_msg, tool_calls, results, model_override=model)
+            client, provider, model = self._resolve_route(original_msg, model_override)
+            if not client:
+                return ""
+            if not model:
+                logging.warning("[LLMProvider] tool_result 모델 미설정: provider=%s", provider)
+                return ""
+            if provider == "anthropic":
+                return self._anthropic_feed_tool_result(
+                    original_msg,
+                    tool_calls,
+                    results,
+                    model_override=model,
+                    client_override=client,
+                )
 
             assistant_tool_calls = []
             for tc in tool_calls:
@@ -602,7 +646,7 @@ class LLMProvider:
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
-            response = self.client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=300)
+            response = client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=300)
             msg = self._clean_response(response.choices[0].message.content or "")
             if msg: self.add_to_history("assistant", msg)
             return msg
@@ -610,8 +654,9 @@ class LLMProvider:
             logging.error(f"feed_tool_result 오류 ({model}): {e}")
             return ""
 
-    def _anthropic_chat(self, user_message, include_context, use_tools, model_override=""):
+    def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None):
         model = model_override or self.model
+        client = client_override or self.client
         try:
             system = self._build_system(include_context)
             messages = list(self.conversation_history)
@@ -619,7 +664,7 @@ class LLMProvider:
             if use_tools:
                 kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"]["description"], "input_schema": t["function"]["parameters"]} for t in self.get_available_tools()]
             
-            resp = self.client.messages.create(**kwargs)
+            resp = client.messages.create(**kwargs)
             tool_calls, text_parts = [], []
             for b in resp.content:
                 if b.type == "tool_use": tool_calls.append({"id": b.id, "name": b.name, "arguments": b.input})
@@ -633,13 +678,14 @@ class LLMProvider:
             logging.error(f"Anthropic API 오류: {e}")
             return f"오류 발생: {e}", []
 
-    def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override=""):
+    def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override="", client_override=None):
         model = model_override or self.model
+        client = client_override or self.client
         try:
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
             messages = list(self.conversation_history)
             messages.append({"role": "user", "content": results_content})
-            resp = self.client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
+            resp = client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
             msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
             if msg: self.add_to_history("assistant", msg)
             return msg
@@ -809,6 +855,7 @@ def get_llm_provider() -> LLMProvider:
             personality=s.get("personality", ""),
             scenario=s.get("scenario", ""),
             history_instruction=s.get("history_instruction", ""),
+            router_enabled=s.get("llm_router_enabled", False),
         )
     return _instance
 

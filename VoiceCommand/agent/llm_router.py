@@ -7,27 +7,23 @@ from dataclasses import dataclass
 @dataclass
 class RouteResult:
     task_type: str
-    provider: str
-    model: str
+    role: str
 
 
 class LLMRouter:
-    ROUTE_TABLE = {
-        "simple_chat": {"provider": "groq", "model": "llama-3.3-70b-versatile"},
-        "complex_plan": {"provider": "groq", "model": "llama-3.3-70b-versatile"},
-        "code_gen": {"provider": "groq", "model": "qwen-qwq-32b"},
-        "long_analysis": {"provider": "openai", "model": "gpt-4o-mini"},
-        "offline": {"provider": "ollama", "model": "llama3.2"},
+    ROLE_MAP = {
+        "simple_chat": "default",
+        "complex_plan": "planner",
+        "code_gen": "execution",
+        "long_analysis": "planner",
     }
-
     CODE_KEYWORDS = ("코드", "파이썬", "버그", "리팩토링", "테스트", "shell", "cmd")
     PLAN_KEYWORDS = ("계획", "단계", "자동화", "정리", "분석", "보고서", "설계")
     LONG_KEYWORDS = ("비교", "분석", "자세히", "깊게", "길게", "정리해줘")
 
     def route(self, message: str, context: dict | None = None) -> RouteResult:
         task_type = self._classify_task(message)
-        route = self.ROUTE_TABLE[task_type]
-        return RouteResult(task_type=task_type, provider=route["provider"], model=route["model"])
+        return RouteResult(task_type=task_type, role=self.ROLE_MAP.get(task_type, "default"))
 
     def _classify_task(self, message: str) -> str:
         text = (message or "").strip().lower()

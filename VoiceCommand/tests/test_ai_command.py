@@ -1,7 +1,10 @@
 import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -10,6 +13,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from commands.ai_command import AICommand
+from agent.agent_orchestrator import AgentRunResult
 
 
 class _FakeAssistant:
@@ -144,6 +148,80 @@ class AICommandTests(unittest.TestCase):
 
         self.assertIn("작업 완료.", combined)
         self.assertNotIn("읽히면 안 됩니다", combined)
+
+    def test_handle_agent_task_saves_developer_report_in_user_report_dir(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        run_result = AgentRunResult(
+            goal="VoiceCommand 저장소 개선",
+            achieved=True,
+            summary_kr="코드 변경과 검증을 완료했습니다.",
+            total_iterations=1,
+            step_results=[
+                SimpleNamespace(
+                    step=SimpleNamespace(step_type="python", description_kr="코드 수정", content="print('patched')"),
+                    exec_result=SimpleNamespace(success=True, output="patched file", error="", state_delta_summary=""),
+                    attempt=1,
+                    was_fixed=False,
+                ),
+                SimpleNamespace(
+                    step=SimpleNamespace(step_type="shell", description_kr="검증 실행", content="py -3.11 VoiceCommand\\validate_repo.py --compile-only"),
+                    exec_result=SimpleNamespace(success=True, output="[validate] compile-only checks passed", error="", state_delta_summary=""),
+                    attempt=1,
+                    was_fixed=False,
+                ),
+            ],
+        )
+        command.orchestrator.run = lambda goal: run_result
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.object(command, "_resolve_user_report_dir", return_value=Path(temp_dir)):
+                message = command._handle_agent_task({"goal": run_result.goal, "explanation": run_result.goal})
+
+            created = os.listdir(temp_dir)
+            self.assertEqual(len(created), 1)
+            report_path = os.path.join(temp_dir, created[0])
+            self.assertTrue(os.path.exists(report_path))
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = handle.read()
+
+        self.assertIn("실행 보고서는", message)
+        self.assertIn("코드 수정", report)
+        self.assertIn("검증 실행", report)
+
+    def test_run_agent_task_stores_tool_result_in_conversation_history(self):
+        command = AICommand(_AgentTaskAssistant(), lambda msg: None, {"enabled": False})
+        command._dispatch["run_agent_task"] = lambda args: "작업 실패 (2회 시도). 계획 수립에 실패했습니다. 실행 보고서는 바탕화면 Ari Reports 폴더의 agent_run_test.md에 저장했습니다."
+
+        with patch("memory.conversation_history.add_conversation") as add_conversation:
+            combined = command.run_interaction("VoiceCommand 저장소 전체 파악 후 코드 변경 및 검증")
+
+        self.assertIn("실행 보고서", combined)
+        add_conversation.assert_called_once()
+        self.assertIn("실행 보고서", add_conversation.call_args[0][1])
+
+    def test_extract_saved_path_ignores_scanned_markdown_path_without_save_signal(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        run_result = AgentRunResult(
+            goal="VoiceCommand 저장소 개선",
+            achieved=True,
+            summary_kr="완료",
+            total_iterations=1,
+            step_results=[
+                SimpleNamespace(
+                    step=SimpleNamespace(step_type="python", description_kr="파일 스캔", content="print('scan')"),
+                    exec_result=SimpleNamespace(
+                        success=True,
+                        output='{"docs": {"md": ["D:\\\\Git\\\\Ari-VoiceCommand\\\\docs\\\\ARI_ENHANCEMENT_PLAN.md"]}}',
+                        error="",
+                        state_delta_summary="",
+                    ),
+                    attempt=1,
+                    was_fixed=False,
+                ),
+            ],
+        )
+
+        self.assertEqual(command._extract_saved_path_from_agent_run(run_result), "")
 
     def test_delayed_shutdown_is_scheduled_not_executed_immediately(self):
         # P2-5 이후: 지연 종료는 SystemCommand 경로(execute_command)로 라우팅됨

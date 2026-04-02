@@ -11,6 +11,13 @@ from agent.llm_provider import LLMProvider
 
 
 class LLMProviderTests(unittest.TestCase):
+    def test_provider_does_not_apply_code_default_model(self):
+        provider = LLMProvider(provider="nvidia_nim")
+
+        self.assertEqual(provider.model, "")
+        self.assertEqual(provider.planner_model, "")
+        self.assertEqual(provider.execution_model, "")
+
     def test_normalize_run_agent_task_prefers_detailed_explanation(self):
         provider = LLMProvider()
 
@@ -61,6 +68,116 @@ class LLMProviderTests(unittest.TestCase):
         )
 
         self.assertEqual(cleaned, "(평온) 진행할게요.")
+
+    def test_resolve_route_keeps_base_model_when_router_disabled(self):
+        provider = LLMProvider(
+            provider="nvidia_nim",
+            api_key="test-key",
+            model="selected-base-model",
+            planner_model="selected-planner-model",
+            execution_model="selected-execution-model",
+            planner_provider="gemini",
+            execution_provider="groq",
+            router_enabled=False,
+        )
+        provider.client = object()
+        provider.planner_client = object()
+        provider.execution_client = object()
+
+        client, selected_provider, selected_model = provider._resolve_route("코드 버그 수정해줘")
+
+        self.assertIs(client, provider.client)
+        self.assertEqual(selected_provider, "nvidia_nim")
+        self.assertEqual(selected_model, "selected-base-model")
+
+    def test_resolve_route_selects_execution_role_model_when_router_enabled(self):
+        provider = LLMProvider(
+            provider="nvidia_nim",
+            api_key="test-key",
+            model="selected-base-model",
+            planner_model="selected-planner-model",
+            execution_model="selected-execution-model",
+            planner_provider="gemini",
+            execution_provider="groq",
+            router_enabled=True,
+        )
+        provider.client = object()
+        provider.planner_client = object()
+        provider.execution_client = object()
+
+        client, selected_provider, selected_model = provider._resolve_route("코드 버그 수정해줘")
+
+        self.assertIs(client, provider.execution_client)
+        self.assertEqual(selected_provider, "groq")
+        self.assertEqual(selected_model, "selected-execution-model")
+
+    def test_resolve_route_selects_planner_role_model_when_router_enabled(self):
+        provider = LLMProvider(
+            provider="nvidia_nim",
+            api_key="test-key",
+            model="selected-base-model",
+            planner_model="selected-planner-model",
+            execution_model="selected-execution-model",
+            planner_provider="gemini",
+            execution_provider="groq",
+            router_enabled=True,
+        )
+        provider.client = object()
+        provider.planner_client = object()
+        provider.execution_client = object()
+
+        client, selected_provider, selected_model = provider._resolve_route("복잡한 작업을 자세히 분석해서 계획 세워줘")
+
+        self.assertIs(client, provider.planner_client)
+        self.assertEqual(selected_provider, "gemini")
+        self.assertEqual(selected_model, "selected-planner-model")
+
+    def test_resolve_route_falls_back_to_selected_base_model_when_role_model_is_empty(self):
+        provider = LLMProvider(
+            provider="nvidia_nim",
+            api_key="test-key",
+            model="selected-base-model",
+            planner_model="",
+            execution_model="",
+            planner_provider="gemini",
+            execution_provider="groq",
+            router_enabled=True,
+        )
+        provider.client = object()
+        provider.planner_client = object()
+        provider.execution_client = object()
+
+        client, selected_provider, selected_model = provider._resolve_route("코드 버그 수정해줘")
+
+        self.assertIs(client, provider.execution_client)
+        self.assertEqual(selected_provider, "groq")
+        self.assertEqual(selected_model, "selected-base-model")
+
+    def test_get_role_fallback_targets_prioritizes_selected_planner_then_base_then_execution(self):
+        provider = LLMProvider(
+            provider="nvidia_nim",
+            api_key="test-key",
+            model="selected-base-model",
+            planner_model="selected-planner-model",
+            execution_model="selected-execution-model",
+            planner_provider="gemini",
+            execution_provider="groq",
+            router_enabled=True,
+        )
+        provider.client = object()
+        provider.planner_client = object()
+        provider.execution_client = object()
+
+        targets = provider.get_role_fallback_targets("planner")
+
+        self.assertEqual(
+            [(selected_provider, selected_model) for _, selected_provider, selected_model in targets],
+            [
+                ("gemini", "selected-planner-model"),
+                ("nvidia_nim", "selected-base-model"),
+                ("groq", "selected-execution-model"),
+            ],
+        )
 
 
 if __name__ == "__main__":

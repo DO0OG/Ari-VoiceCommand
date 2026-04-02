@@ -62,6 +62,8 @@ class AutonomousExecutor:
             'webbrowser': __import__('webbrowser'),
             'datetime': __import__('datetime').datetime,
             'desktop_path': os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop'),
+            'repo_root': self._get_repo_root(),
+            'module_dir': self._get_module_dir(),
             'save_document': self._save_document,
             'choose_document_format': self._choose_document_format,
             'open_url': self._automation.open_url,
@@ -357,6 +359,7 @@ class AutonomousExecutor:
                 encoding="utf-8",
                 errors="replace",
                 env=child_env,
+                **self._build_subprocess_kwargs(),
             )
             stdout, stderr = process.communicate(timeout=30)
             output = (stdout or "").strip()
@@ -404,6 +407,7 @@ class AutonomousExecutor:
                 encoding="utf-8",
                 errors="replace",
                 env=child_env,
+                **self._build_subprocess_kwargs(),
             )
             stdout, stderr = process.communicate(timeout=30)
             if stdout:
@@ -639,9 +643,12 @@ class AutonomousExecutor:
             "desktop_path",
             os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop'),
         )
+        repo_root = self._get_repo_root()
+        module_dir = self._get_module_dir()
         payload = {
             "desktop_path": desktop_path,
-            "module_dir": os.path.dirname(os.path.dirname(__file__)),
+            "repo_root": repo_root,
+            "module_dir": module_dir,
         }
         payload.update(self._sanitize_runner_payload(extra_globals))
         payload_json = json.dumps(payload, ensure_ascii=False)
@@ -664,9 +671,12 @@ from datetime import datetime
 
 PAYLOAD = json.loads({payload_json!r})
 desktop_path = PAYLOAD.get("desktop_path", "")
+repo_root = PAYLOAD.get("repo_root", "")
 step_outputs = PAYLOAD.get("step_outputs", {{}})
 verification_context = PAYLOAD.get("verification_context", {{}})
 module_dir = PAYLOAD.get("module_dir", "")
+if repo_root:
+    os.chdir(repo_root)
 if module_dir and module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 from agent.automation_helpers import AutomationHelpers
@@ -729,13 +739,33 @@ def _can_write_pdf() -> bool:
     except Exception:
         return False
 
+def _get_cjk_font_candidates() -> list:
+    """플랫폼별 CJK 폰트 후보 (name, path) 목록을 반환합니다. 하드코딩 경로 없음."""
+    candidates = []
+    if sys.platform == "win32":
+        win_fonts = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")
+        candidates.append(("MalgunGothic", os.path.join(win_fonts, "malgun.ttf")))
+        candidates.append(("MalgunGothicBold", os.path.join(win_fonts, "malgunbd.ttf")))
+    elif sys.platform == "darwin":
+        candidates.extend([
+            ("AppleGothic", "/Library/Fonts/AppleGothic.ttf"),
+            ("AppleGothic", "/System/Library/Fonts/AppleGothic.ttf"),
+        ])
+    else:
+        candidates.extend([
+            ("NanumGothic", "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
+            ("NotoSansCJK", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        ])
+    return candidates
+
+
 def _write_simple_pdf(path: str, content: str, title: str = ""):
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfgen import canvas
     font_name = "Helvetica"
-    for candidate_name, candidate_path in [("MalgunGothic", r"C:\\Windows\\Fonts\\malgun.ttf"), ("AppleGothic", r"C:\\Windows\\Fonts\\malgun.ttf")]:
+    for candidate_name, candidate_path in _get_cjk_font_candidates():
         if os.path.exists(candidate_path):
             try:
                 pdfmetrics.registerFont(TTFont(candidate_name, candidate_path))
@@ -812,6 +842,8 @@ execution_globals = {{
     "webbrowser": webbrowser,
     "datetime": datetime,
     "desktop_path": desktop_path,
+    "repo_root": repo_root,
+    "module_dir": module_dir,
     "step_outputs": step_outputs,
     "verification_context": verification_context,
     "save_document": save_document,
@@ -926,6 +958,22 @@ except Exception:
                 os.unlink(path)
         except OSError as e:
             logging.debug(f"[Executor] 임시 파일 삭제 실패: {e}")
+
+    def _get_module_dir(self) -> str:
+        return os.path.dirname(os.path.dirname(__file__))
+
+    def _get_repo_root(self) -> str:
+        return os.path.dirname(self._get_module_dir())
+
+    def _build_subprocess_kwargs(self) -> dict:
+        kwargs = {"cwd": self._get_repo_root()}
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            kwargs["startupinfo"] = startupinfo
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return kwargs
 
     def _build_shell_command(self, command: str) -> List[str]:
         normalized = (command or "").strip()

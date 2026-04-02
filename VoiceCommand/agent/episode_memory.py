@@ -7,10 +7,20 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import List
+
+_DEVELOPER_SCOPE_RE = re.compile(
+    r"(voicecommand(?:/(?:agent|core|ui|plugins|tests)\b|\s*(?:저장소|repository|codebase|repo)\b)?|저장소|repository|codebase|\brepo\b|\bdocs\b)",
+    re.IGNORECASE,
+)
+_DEVELOPER_ACTION_RE = re.compile(
+    r"(validate_repo\.py|--compile-only|pytest|unittest|코드\s*(?:변경|수정)|검증|테스트(?:\s*실행)?|구현|개선(?:\s*과제)?|분석|전체\s*파악)",
+    re.IGNORECASE,
+)
 
 
 def _get_memory_file() -> str:
@@ -73,6 +83,7 @@ class EpisodeMemory:
     def get_recent_summary(self, goal: str = "", limit: int = 3) -> str:
         normalized_goal = (goal or "").strip().lower()
         candidates = self._episodes
+        matched_by_goal = False
         if normalized_goal:
             goal_tokens = set(normalized_goal.split())
             scored = []
@@ -82,10 +93,24 @@ class EpisodeMemory:
                 if overlap == 0 and normalized_goal not in (episode.goal or "").lower():
                     continue
                 scored.append((overlap, episode))
-            candidates = [episode for _, episode in sorted(scored, key=lambda item: item[0], reverse=True)] or self._episodes
+            if scored:
+                matched_by_goal = True
+                candidates = [
+                    episode
+                    for _, episode in sorted(
+                        scored,
+                        key=lambda item: (item[0], getattr(item[1], "timestamp", "")),
+                        reverse=True,
+                    )
+                ]
+            else:
+                candidates = self._episodes
+        filtered = [episode for episode in candidates if not self._is_suspicious_developer_success(episode)]
+        candidates = filtered or candidates
 
         lines: List[str] = []
-        for episode in candidates[-limit:]:
+        selected = candidates[:limit] if matched_by_goal else candidates[-limit:]
+        for episode in selected:
             status = "성공" if episode.achieved else "실패"
             line = f"[{status}] {episode.goal[:60]}"
             if episode.policy_summary:
@@ -96,6 +121,20 @@ class EpisodeMemory:
                 line += f" | failure={episode.failure_kind}"
             lines.append(line)
         return "\n".join(lines)
+
+    def _looks_like_developer_goal(self, goal: str) -> bool:
+        normalized = (goal or "").strip().lower()
+        return bool(normalized and _DEVELOPER_SCOPE_RE.search(normalized) and _DEVELOPER_ACTION_RE.search(normalized))
+
+    def _is_suspicious_developer_success(self, episode: GoalEpisode) -> bool:
+        if not episode.achieved or not self._looks_like_developer_goal(episode.goal):
+            return False
+        summary = (episode.summary_kr or "").lower()
+        if "화면 ocr" in summary:
+            return True
+        if "실제 경로(documents)" in summary:
+            return True
+        return False
 
     def get_goal_guidance(self, goal: str, limit: int = 3) -> str:
         summary = self.get_recent_summary(goal=goal, limit=limit)
