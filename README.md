@@ -69,7 +69,9 @@
 - 저장소 작업 보고서는 실행 사용자 기준 Desktop `Ari Reports`에 저장하고, CI 전용/특정 사용자 절대 경로에 의존하지 않도록 정리했습니다.
 - 개발 플래너/오케스트레이터는 `VoiceCommand/{agent,core,ui,plugins,tests}` + `docs` 범위 밖 경로 선택, `py_compile`만으로 끝내는 약한 검증, `tests/` 루트 경로, 가짜 성공/OCR 기반 성공 판정을 거부하도록 강화했습니다.
 - `validate_repo.py --compile-only`는 `__pycache__` 대신 임시 위치로 컴파일해 로컬 환경 락/권한 문제에도 더 안정적으로 동작합니다.
-- 앞으로 더 개선할 부분: 복잡한 다파일 명령의 실제 영향 테스트 선택 정확도, 라이브 제공자 quota 고갈 시 장기 작업 성공률, 누적된 실패 메모리/아티팩트 자동 정리 경험.
+- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 테스트 156개 통과 확인.
+- **영향 테스트 자동 선별**: `_infer_relevant_tests`가 goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=` 항목으로 LLM에게 우선 제시. 테스트 목록도 첫 5개 샘플 대신 전체 목록(`all=`) 표시로 전환.
+- **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. `.gitignore`에 런타임 산출물(`ari_memory.db`, `episode_memory.json` 등) 추가.
 
 <details>
 <summary>최근 업데이트 자세히 보기 (2026-03-29 ~ 2026-03-31)</summary>

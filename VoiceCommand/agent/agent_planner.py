@@ -386,7 +386,7 @@ class AgentPlanner:
 
         # 과거 전략 기억 주입
         if is_dev_goal:
-            ctx_block = self._fmt_developer_context(context)
+            ctx_block = self._fmt_developer_context(context, goal=goal)
             failure_hints = self._get_failure_hints(goal)
             if failure_hints:
                 ctx_block = "## 최근 실패 힌트\n" + failure_hints + "\n" + ctx_block
@@ -452,7 +452,7 @@ class AgentPlanner:
         if not context or not any(key.startswith("step_") for key in context):
             return []
         # 재시도 시 컨텍스트를 최소화 — 실패 힌트/긴 로그 제외하고 순수 개발 컨텍스트만 사용
-        retry_ctx = self._fmt_developer_context(context)
+        retry_ctx = self._fmt_developer_context(context, goal=goal)
         retry_prompt = _DEVELOPER_RETRY_PROMPT.format(goal=goal, context_block=retry_ctx)
         retry_raw = self._call_llm(
             retry_prompt,
@@ -499,7 +499,7 @@ class AgentPlanner:
                     "        for name in sorted(names):\n"
                     "            rel = os.path.relpath(os.path.join(root, name), target_path).replace('\\\\', '/')\n"
                     "            files.append(rel)\n"
-                    "    summary[label] = {'file_count': len(files), 'samples': files[:15]}\n"
+                    "    summary[label] = {'file_count': len(files), 'samples': files[:5]}\n"
                     "print(json.dumps(summary, ensure_ascii=False))"
                 ),
                 description_kr="저장소 구조 스캔",
@@ -539,6 +539,7 @@ class AgentPlanner:
                     "    name\n"
                     "    for name in sorted(os.listdir(tests_dir))\n"
                     "    if os.path.isfile(os.path.join(tests_dir, name))\n"
+                    "    and name.startswith('test_') and name.endswith('.py')\n"
                     "]\n"
                     "print(json.dumps(names, ensure_ascii=False))"
                 ),
@@ -2535,7 +2536,23 @@ class AgentPlanner:
             lines.append(f"  {k}: {str(v)[:120]}")
         return "\n".join(lines) + "\n"
 
-    def _fmt_developer_context(self, context: Dict[str, str]) -> str:
+    @staticmethod
+    def _infer_relevant_tests(test_names: list, goal: str) -> list:
+        """goal에서 대상 .py 파일명을 추출해 관련 테스트 파일을 선별."""
+        if not test_names or not goal:
+            return []
+        py_refs = re.findall(r'\b(\w+)\.py\b', goal.lower())
+        target_bases = {name.removeprefix("test_") for name in py_refs if name}
+        if not target_bases:
+            return []
+        relevant = []
+        for test_name in test_names:
+            base = test_name.lower().removeprefix("test_").removesuffix(".py")
+            if any(base in tb or tb in base for tb in target_bases if len(tb) > 3):
+                relevant.append(test_name)
+        return relevant
+
+    def _fmt_developer_context(self, context: Dict[str, str], goal: str = "") -> str:
         if not context:
             return ""
         lines = ["저장소 개발 컨텍스트:"]
@@ -2562,7 +2579,15 @@ class AgentPlanner:
             try:
                 test_names = json.loads(tests_output)
                 if isinstance(test_names, list):
-                    lines.append(f"  tests: count={len(test_names)}, samples={', '.join(test_names[:5])}")
+                    relevant = self._infer_relevant_tests(test_names, goal)
+                    if relevant:
+                        lines.append(
+                            f"  tests: count={len(test_names)}, "
+                            f"relevant={', '.join(relevant)}, "
+                            f"all={', '.join(test_names)}"
+                        )
+                    else:
+                        lines.append(f"  tests: count={len(test_names)}, all={', '.join(test_names)}")
                 else:
                     lines.append(f"  tests: {tests_output[:180]}")
             except Exception:

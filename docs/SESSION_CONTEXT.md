@@ -3,8 +3,8 @@
 이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-03-30
-## 상태: Phase 1-5 구현 완료 · 전체 문서 업데이트 완료 · 135/135 테스트 통과
+## Last Updated: 2026-04-02
+## 상태: Phase 1-5 구현 완료 · 자율 저장소 작업 안정화 완료 · 156/156 테스트 통과
 
 ---
 
@@ -137,7 +137,25 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 6. 알려진 미해결 문제
+## 6. 2026-04-02 자율 저장소 작업 안정화 변경사항
+
+### 핵심 버그 수정
+- `agent_orchestrator.py` `_execute_plan`: step 출력 저장 한도 300자 → developer goal 시 2000자로 확장. bootstrap step_0(repo scan ~1900자)·step_2(테스트 목록 ~800자) JSON이 잘려 LLM이 저장소 구조를 못 받던 근본 원인 해결.
+
+### 영향 테스트 선별
+- `agent_planner.py` `_infer_relevant_tests`: goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=`로 LLM에게 우선 제시. 테스트 목록도 `all=` 전체 표시로 전환.
+- bootstrap step_2: `test_*.py` 파일만 수집하도록 필터링.
+- bootstrap step_0: samples 15 → 5개로 축소.
+
+### 에피소드 메모리 정리
+- `episode_memory.py` `prune_old_failures(max_age_days=30)`: 30일 이상 된 실패 에피소드 제거. `_post_run_update`에서 매 실행 후 자동 호출.
+
+### .gitignore
+- 런타임 산출물(`ari_memory.db`, `episode_memory.json`, `planner_stats.json`, `skill_library.json`, `user_profile.json`, `plugins/*.zip`, `AGENT_HANDOFF_*.md` 등) 추가.
+
+---
+
+## 알려진 미해결 문제
 
 ### 🟡 Groq Llama-3.3-70b tool call 신뢰도
 

@@ -10,7 +10,7 @@ import os
 import re
 import threading
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 _DEVELOPER_SCOPE_RE = re.compile(
@@ -143,6 +143,25 @@ class EpisodeMemory:
         lines = ["최근 유사 목표 에피소드:"]
         lines.extend(summary.splitlines())
         return "\n".join(lines)
+
+    def prune_old_failures(self, max_age_days: int = 30) -> int:
+        """max_age_days일 이상 된 실패 에피소드 제거. 반환: 삭제된 수."""
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        before = len(self._episodes)
+        self._episodes = [
+            ep for ep in self._episodes
+            if ep.achieved or not ep.timestamp or self._parse_ts(ep.timestamp) >= cutoff
+        ]
+        removed = before - len(self._episodes)
+        if removed:
+            self._save()
+        return removed
+
+    def _parse_ts(self, ts: str) -> datetime:
+        try:
+            return datetime.fromisoformat(ts)
+        except Exception:
+            return datetime.min
 
     def _load(self) -> None:
         if not os.path.exists(self.filepath):

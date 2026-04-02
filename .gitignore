@@ -159,7 +159,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 config.json
 
@@ -184,3 +184,14 @@ market/web/.env.local
 market/supabase/.temp/
 supabase/
 .mailmap
+
+# ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
+VoiceCommand/ari_memory.db
+VoiceCommand/episode_memory.json
+VoiceCommand/planner_stats.json
+VoiceCommand/skill_library.json
+VoiceCommand/user_profile.json
+VoiceCommand/plugins/*.zip
+collected.json
+package-lock.json
+AGENT_HANDOFF_*.md

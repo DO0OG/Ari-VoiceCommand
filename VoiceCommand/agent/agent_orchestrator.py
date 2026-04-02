@@ -392,7 +392,9 @@ class AgentOrchestrator:
                 step_results.append(sr)
                 self._emit_progress("step_done", step_id=sr.step.step_id, success=sr.exec_result.success, was_fixed=sr.was_fixed, error=(sr.exec_result.error or "")[:100])
                 if sr.exec_result.success:
-                    if sr.exec_result.output: context[f"step_{sr.step.step_id}_output"] = sr.exec_result.output[:300]
+                    if sr.exec_result.output:
+                        _out_limit = 2000 if self._is_developer_goal(goal) else 300
+                        context[f"step_{sr.step.step_id}_output"] = sr.exec_result.output[:_out_limit]
                     self._update_runtime_context(context, sr.exec_result)
                 elif sr.step.on_failure == "abort":
                     return False, step_results
@@ -743,7 +745,8 @@ class AgentOrchestrator:
                 summary = str(getattr(sr.exec_result, "state_delta_summary", "") or "").strip()
                 if summary:
                     state_changes.append(summary)
-            get_episode_memory().record(
+            mem = get_episode_memory()
+            mem.record(
                 GoalEpisode(
                     goal=goal,
                     achieved=run_result.achieved,
@@ -757,6 +760,10 @@ class AgentOrchestrator:
                     policy_summary=policy_summary,
                 )
             )
+            try:
+                mem.prune_old_failures(max_age_days=30)
+            except Exception as _prune_exc:
+                logger.debug("[Orchestrator] episode prune 실패: %s", _prune_exc)
         except Exception as e:
             logger.debug(f"[Orchestrator] episode memory 기록 실패: {e}")
         if not run_result.achieved:
