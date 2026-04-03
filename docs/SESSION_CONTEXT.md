@@ -37,7 +37,7 @@
 | 클래스 | priority | 트리거 |
 |--------|----------|--------|
 | SystemCommand | 10 | 컴퓨터 종료·재시작·종료취소 |
-| LearningCommand | 20 | 학습 모드 |
+| LearningCommand | 20 | 학습 모드 (스마트 어시스턴트 자동 승격/패턴 기록 토글) |
 | TimerCommand | 30 | 타이머, 알람 |
 | MemoryCommand | 45 | 자주 하는 작업, 스킬 목록, 메모리 정리 등 6종 |
 | WeatherCommand | 50 | 날씨 |
