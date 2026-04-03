@@ -446,7 +446,6 @@ class StrategyMemory:
                     except Exception as exc:
                         logging.debug("[StrategyMemory] 임베딩 실패: %s", exc)
                         rec.embedding = []
-                self._save()
             except Exception as exc:
                 logging.debug("[StrategyMemory] 임베딩 백필 중단: %s", exc)
 

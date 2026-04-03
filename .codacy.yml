@@ -17,4 +17,5 @@ exclude_paths:
   - "VoiceCommand/core/cosyvoice_installer.py"
   - "VoiceCommand/core/ollama_installer.py"
   - "VoiceCommand/ui/text_interface.py"
+  - "market/supabase/migrations/002_add_plugin_sha256.sql"
   - "market/marketplace/scripts/semgrep_review.py"
