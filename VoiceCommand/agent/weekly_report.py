@@ -36,7 +36,7 @@ class WeeklyReport:
 
         lines = [
             "이번 주 자기개선 리포트예요!",
-            "완료 작업 %d건 (성공률 %d%%, 실패 %d건)" % (total, success_rate, fail_count),
+            "완료 작업 %d건 (성공 %d건, 성공률 %d%%, 실패 %d건)" % (total, success_count, success_rate, fail_count),
             "활성 스킬 %d개 (컴파일 완료 %d개)" % (len(skills), len(compiled_skills)),
             "기억 중인 사실 %d개" % fact_count,
         ]
@@ -73,13 +73,21 @@ class WeeklyReport:
 
         return " ".join(lines)
 
+    def _parse_started_at(self, row: dict) -> datetime | None:
+        started_at_raw = row.get("started_at", "")
+        if not started_at_raw:
+            return None
+        try:
+            return datetime.fromisoformat(str(started_at_raw))
+        except ValueError:
+            return None
+
     def _recent_task_runs(self, rows: list[dict], days: int = 7) -> list[dict]:
         cutoff = datetime.now() - timedelta(days=max(int(days or 0), 0))
         recent = []
         for row in rows or []:
-            try:
-                started_at = datetime.fromisoformat(str(row.get("started_at", "")))
-            except Exception:
+            started_at = self._parse_started_at(row)
+            if started_at is None:
                 continue
             if started_at >= cutoff:
                 recent.append(row)

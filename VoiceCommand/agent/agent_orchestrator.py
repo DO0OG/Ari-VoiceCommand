@@ -15,8 +15,6 @@ import json
 import logging
 import os
 import re
-import subprocess
-import sys
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -507,6 +505,20 @@ class AgentOrchestrator:
         "tqdm", "colorama", "tabulate", "rich",
     })
 
+    def _run_pip_install(self, pip_pkg: str) -> bool:
+        try:
+            from pip._internal.cli.main import main as pip_main
+        except Exception as exc:
+            logger.debug("[Orchestrator] pip 모듈 import 실패: %s", exc)
+            return False
+
+        try:
+            exit_code = pip_main(["install", pip_pkg, "--quiet"])
+        except Exception as exc:
+            logger.debug("[Orchestrator] pip install 오류: %s", exc)
+            return False
+        return int(exit_code or 0) == 0
+
     def _auto_install_if_needed(self, error: str) -> bool:
         """ModuleNotFoundError 감지 시 pip install 자동 실행.
         안전 목록 패키지: 자동 설치.
@@ -548,21 +560,10 @@ class AgentOrchestrator:
 
         self._say("'%s' 패키지를 자동으로 설치합니다..." % pip_pkg)
         logger.info("[Orchestrator] 자동 pip install: %s", pip_pkg)
-        try:
-            # pip_pkg는 위에서 정규식으로 검증된 안전한 값입니다.
-            result = subprocess.run(  # nosec B603 B607
-                [sys.executable, "-m", "pip", "install", pip_pkg, "--quiet"],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-            if result.returncode == 0:
-                logger.info("[Orchestrator] 패키지 설치 완료: %s", pip_pkg)
-                return True
-            logger.warning("[Orchestrator] 패키지 설치 실패: %s | %s", pip_pkg, result.stderr[:200])
-        except Exception as exc:
-            logger.debug("[Orchestrator] pip install 오류: %s", exc)
+        if self._run_pip_install(pip_pkg):
+            logger.info("[Orchestrator] 패키지 설치 완료: %s", pip_pkg)
+            return True
+        logger.warning("[Orchestrator] 패키지 설치 실패: %s", pip_pkg)
         return False
 
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:

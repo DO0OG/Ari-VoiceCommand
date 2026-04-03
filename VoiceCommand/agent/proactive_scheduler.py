@@ -33,6 +33,13 @@ def _init_schedule_log_file() -> str:
     except Exception:
         return os.path.join(os.path.dirname(__file__), "scheduled_task_runs.jsonl")
 
+
+def _parse_task_run_line(text: str) -> Dict[str, Any] | None:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
 @dataclass
 class ScheduledTask:
     task_id: str
@@ -216,9 +223,8 @@ class ProactiveScheduler:
                     text = raw.strip()
                     if not text:
                         continue
-                    try:
-                        item = json.loads(text)
-                    except Exception:
+                    item = _parse_task_run_line(text)
+                    if item is None:
                         continue
                     if task_id and item.get("task_id") != task_id:
                         continue

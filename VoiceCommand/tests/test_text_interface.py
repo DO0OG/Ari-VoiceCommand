@@ -24,7 +24,7 @@ class _DummyChatWidget:
 class TextInterfaceStreamingTests(unittest.TestCase):
     def _make_interface(self):
         spoken = []
-        interface = TextInterface.__new__(TextInterface)
+        interface = super(TextInterface, TextInterface).__new__(TextInterface)
         interface.tts_callback = spoken.append
         interface.chat_widget = _DummyChatWidget()
         interface._stream_message_index = None

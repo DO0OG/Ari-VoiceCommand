@@ -37,7 +37,7 @@ _MEMORY_FILE = _get_memory_file()
 _MAX_EPISODES = 120
 _EMBED_DIM = 64
 _LOCK = threading.RLock()
-_INSTANCE = None
+_INSTANCE: EpisodeMemory | None = None
 
 
 @dataclass
@@ -362,7 +362,6 @@ def get_episode_memory() -> EpisodeMemory:
 
 
 def flush_episode_memory() -> None:
-    global _INSTANCE
     if _INSTANCE is None:
         return
     try:

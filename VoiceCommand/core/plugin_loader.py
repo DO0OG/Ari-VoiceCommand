@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import FunctionType
 from types import ModuleType
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 
 logger = logging.getLogger(__name__)
@@ -234,8 +234,9 @@ class PluginManager:
             widget = self._context.character_widget
             unregister_pack_fn = getattr(widget, "unregister_character_pack", None)
             if callable(unregister_pack_fn):  # None 및 비호출 객체 동시 배제
+                unregister_character_pack = cast(Callable[[str], None], unregister_pack_fn)
                 for pack_name in plugin.registered_character_packs:
-                    unregister_pack_fn(pack_name)  # type: ignore[operator]
+                    unregister_character_pack(pack_name)
 
         # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
         if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:

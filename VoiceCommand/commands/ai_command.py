@@ -539,8 +539,8 @@ class AICommand(BaseCommand):
             try:
                 path.relative_to(desktop)
                 return f"바탕화면 {path.parent.name} 폴더의 {path.name}"
-            except Exception:
-                pass
+            except ValueError:
+                return f"{path.parent.name} 폴더의 {path.name}"
         return f"{path.parent.name} 폴더의 {path.name}"
 
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
