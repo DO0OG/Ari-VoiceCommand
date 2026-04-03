@@ -2,14 +2,16 @@
 전략 기억 (Strategy Memory) — Phase 3.2 고도화
 실패 원인 분석(Lesson)을 포함한 지능형 검색 및 전략 주입을 지원합니다.
 """
+import atexit
 import json
 import logging
 import os
 import re
 import hashlib
 import threading
+from collections import Counter
 from dataclasses import dataclass, asdict, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
 
@@ -66,6 +68,9 @@ class StrategyMemory:
     def __init__(self, filepath: str = _MEMORY_FILE):
         self.filepath = filepath
         self._records: List[StrategyRecord] = []
+        self._save_lock = threading.RLock()
+        self._save_timer: Optional[threading.Timer] = None
+        self._save_delay_seconds = 0.1
         self._load()
 
     def record(self, goal: str, steps: list, success: bool, error: str = "", 
@@ -103,7 +108,7 @@ class StrategyMemory:
             rec.embedding = []
         self._records.append(rec)
         self._prune()
-        self._save()
+        self._schedule_save()
         logging.info(f"[StrategyMemory] 저장됨: {'성공' if success else '실패'} / {goal[:30]}")
 
     def get_relevant_context(self, goal: str) -> str:
@@ -220,6 +225,70 @@ class StrategyMemory:
             failures.append(f"{rec.goal_summary[:80]} -> {reason[:120]}")
         return failures
 
+    def get_lessons_by_cause(self, root_cause: str, limit: int = 3) -> List[str]:
+        normalized = str(root_cause or "").strip().lower()
+        if not normalized:
+            return []
+        lessons: List[str] = []
+        for rec in sorted(self._records, key=lambda item: item.timestamp or "", reverse=True):
+            failure_kind = str(rec.failure_kind or self._classify_failure(rec.error_summary)).strip().lower()
+            lesson = str(rec.lesson or "").strip()
+            if rec.success or failure_kind != normalized or not lesson:
+                continue
+            if lesson not in lessons:
+                lessons.append(lesson)
+            if len(lessons) >= limit:
+                break
+        return lessons
+
+    def get_stats(self, days: int = 7, offset: int = 0) -> dict:
+        now = datetime.now()
+        safe_days = max(int(days or 0), 0)
+        safe_offset = max(int(offset or 0), 0)
+        window_end = now - timedelta(days=safe_offset)
+        window_start = window_end - timedelta(days=safe_days)
+        records = [
+            rec for rec in self._records
+            if window_start <= self._parse_timestamp(rec.timestamp) < window_end
+        ]
+        success_count = len([rec for rec in records if rec.success])
+        fail_count = len(records) - success_count
+        durations = [int(rec.duration_ms or 0) for rec in records if int(rec.duration_ms or 0) > 0]
+        failure_counts = Counter(
+            str(rec.failure_kind or self._classify_failure(rec.error_summary) or "execution_failed")
+            for rec in records
+            if not rec.success
+        )
+        return {
+            "days": safe_days,
+            "offset": safe_offset,
+            "total": len(records),
+            "success": success_count,
+            "fail": fail_count,
+            "success_rate": round((success_count / len(records)) if records else 0.0, 4),
+            "avg_duration_ms": int(sum(durations) / len(durations)) if durations else 0,
+            "top_failure_kinds": [
+                {"failure_kind": kind, "count": count}
+                for kind, count in failure_counts.most_common(5)
+            ],
+        }
+
+    def get_repeated_failures(self, min_count: int = 3) -> List[tuple[str, int]]:
+        threshold = max(int(min_count or 0), 1)
+        counts = Counter(
+            str(rec.failure_kind or self._classify_failure(rec.error_summary) or "execution_failed")
+            for rec in self._records
+            if not rec.success
+        )
+        return [
+            (kind, count)
+            for kind, count in counts.most_common()
+            if count >= threshold
+        ]
+
+    def count(self) -> int:
+        return len(self._records)
+
     # ── 내부 로직 ──────────────────────────────────────────────────────────────
 
     def _extract_tags(self, text: str) -> List[str]:
@@ -318,11 +387,16 @@ class StrategyMemory:
                 logging.warning(f"[StrategyMemory] 로드 오류: {e}")
 
     def _save(self):
-        try:
-            with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump([asdict(r) for r in self._records], f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.warning(f"[StrategyMemory] 저장 오류: {e}")
+        with self._save_lock:
+            self._save_timer = None
+            try:
+                os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+                with open(self.filepath, "w", encoding="utf-8") as f:
+                    json.dump([asdict(r) for r in self._records], f, ensure_ascii=False, indent=2)
+            except FileNotFoundError as e:
+                logging.debug(f"[StrategyMemory] 저장 생략: {e}")
+            except Exception as e:
+                logging.warning(f"[StrategyMemory] 저장 오류: {e}")
 
     def _normalize_record(self, raw: dict) -> StrategyRecord:
         goal_summary = str(raw.get("goal_summary", ""))
@@ -351,6 +425,12 @@ class StrategyMemory:
     def _classify_failure(self, error: str) -> str:
         return classify_failure_message(error)
 
+    def _parse_timestamp(self, timestamp: str) -> datetime:
+        try:
+            return datetime.fromisoformat(str(timestamp or ""))
+        except Exception:
+            return datetime.min
+
     def _backfill_missing_embeddings(self) -> None:
         pending = [rec for rec in self._records if not rec.embedding]
         if not pending:
@@ -372,6 +452,22 @@ class StrategyMemory:
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    def _schedule_save(self) -> None:
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(self._save_delay_seconds, self._save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def flush(self) -> None:
+        with self._save_lock:
+            timer = self._save_timer
+            self._save_timer = None
+        if timer is not None:
+            timer.cancel()
+        self._save()
+
 
 _instance: Optional[StrategyMemory] = None
 
@@ -380,3 +476,15 @@ def get_strategy_memory() -> StrategyMemory:
     if _instance is None:
         _instance = StrategyMemory()
     return _instance
+
+
+def flush_strategy_memory() -> None:
+    if _instance is None:
+        return
+    try:
+        _instance.flush()
+    except Exception as exc:
+        logging.debug("[StrategyMemory] flush 생략: %s", exc)
+
+
+atexit.register(flush_strategy_memory)

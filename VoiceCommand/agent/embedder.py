@@ -8,6 +8,7 @@ import hashlib
 import importlib
 import logging
 import os
+import threading
 from typing import Any, Optional
 
 import numpy as np
@@ -23,6 +24,7 @@ class Embedder:
         self.dim: int = _EMBED_DIM_FALLBACK
         self._model = None
         self._client = None
+        self._warmup_started = False
         self._init_backend(preferred)
 
     def _init_backend(self, preferred: str):
@@ -128,6 +130,19 @@ class Embedder:
         if denom == 0:
             return 0.0
         return float(np.dot(a, b) / denom)
+
+    def warmup_async(self, sample_text: str = "아리 성능 워밍업") -> None:
+        if self._warmup_started:
+            return
+        self._warmup_started = True
+
+        def _worker():
+            try:
+                self.embed(sample_text)
+            except Exception as exc:
+                log.debug("[Embedder] warmup 실패: %s", exc)
+
+        threading.Thread(target=_worker, daemon=True, name="AriEmbedderWarmup").start()
 
 
 class CrossEncoderReranker:

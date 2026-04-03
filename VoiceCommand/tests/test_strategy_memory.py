@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -79,6 +80,40 @@ class StrategyMemoryTests(unittest.TestCase):
 
             self.assertTrue(results)
             self.assertEqual(results[0].goal_summary, "브라우저 다운로드 자동화")
+
+    def test_lesson_lookup_stats_and_repeated_failures_are_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = StrategyMemory(filepath=os.path.join(tmp, "strategy.json"))
+            now = datetime.now().isoformat()
+            memory.record("브라우저 다운로드 자동화", [], False, error="timeout", failure_kind="timeout", lesson="대기 후 재확인", duration_ms=120)
+            memory.record("브라우저 다운로드 자동화", [], False, error="timeout", failure_kind="timeout", lesson="도메인별 셀렉터 점검", duration_ms=150)
+            memory.record("브라우저 다운로드 자동화", [], True, duration_ms=90)
+            for record in memory._records:
+                record.timestamp = now
+            memory._save()
+
+            lessons = memory.get_lessons_by_cause("timeout", limit=2)
+            stats = memory.get_stats(days=7)
+            repeated = memory.get_repeated_failures(min_count=2)
+
+            self.assertEqual(len(lessons), 2)
+            self.assertIn("대기 후 재확인", lessons)
+            self.assertEqual(stats["total"], 3)
+            self.assertEqual(stats["fail"], 2)
+            self.assertTrue(any(kind == "timeout" and count == 2 for kind, count in repeated))
+
+    def test_flush_persists_pending_debounced_save(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "strategy.json")
+            memory = StrategyMemory(filepath=path)
+            memory.record("보고서 저장", [], True)
+
+            memory.flush()
+
+            self.assertTrue(os.path.exists(path))
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            self.assertEqual(len(payload), 1)
 
 
 if __name__ == "__main__":

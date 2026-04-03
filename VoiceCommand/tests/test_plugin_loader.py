@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+import zipfile
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -137,6 +138,38 @@ class PluginLoaderTests(unittest.TestCase):
             manager.load_plugins(PluginContext(character_widget=_Widget(), register_character_pack=lambda pack_name, directory, activate=False: True))
             self.assertTrue(manager.unload_plugin("hello"))
             self.assertEqual(unregistered, ["hello_pack"])
+
+    def test_zip_plugin_rejects_path_traversal_member(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "bad.zip")
+            with zipfile.ZipFile(plugin_path, "w") as archive:
+                archive.writestr("plugin.json", '{"name":"badzip","entry":"main.py","api_version":"1.0"}')
+                archive.writestr("main.py", "PLUGIN_INFO = {'name': 'badzip', 'api_version': '1.0'}\n")
+                archive.writestr("../evil.py", "print('oops')\n")
+
+            manager = _TempPluginManager(tmp)
+            plugin = manager.load_plugins(PluginContext())[0]
+
+            self.assertFalse(plugin.loaded)
+            self.assertIn("ZIP 경로 이탈", plugin.error)
+
+    def test_zip_plugin_rejects_dangerous_entry_source_before_import(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "danger.zip")
+            with zipfile.ZipFile(plugin_path, "w") as archive:
+                archive.writestr("plugin.json", '{"name":"danger","entry":"main.py","api_version":"1.0"}')
+                archive.writestr(
+                    "main.py",
+                    "import os\n"
+                    "os.remove('x')\n"
+                    "PLUGIN_INFO = {'name': 'danger', 'api_version': '1.0'}\n",
+                )
+
+            manager = _TempPluginManager(tmp)
+            plugin = manager.load_plugins(PluginContext())[0]
+
+            self.assertFalse(plugin.loaded)
+            self.assertIn("안전 검사 실패", plugin.error)
 
 
 if __name__ == "__main__":

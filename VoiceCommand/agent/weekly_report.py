@@ -1,26 +1,38 @@
 """주간 자기개선 리포트 생성."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 
 class WeeklyReport:
-    def generate(self) -> str:
+    def generate(self, days: int = 7) -> str:
         from agent.strategy_memory import get_strategy_memory
         from agent.skill_library import get_skill_library
+        from agent.proactive_scheduler import get_scheduler
+        from agent.learning_metrics import get_learning_metrics
+        from agent.regression_guard import get_regression_guard
         from memory.user_context import get_context_manager
 
         strategy_memory = get_strategy_memory()
         skills = get_skill_library().list_skills()
+        scheduler = get_scheduler()
         ctx = get_context_manager()
+        learning_metrics = get_learning_metrics()
+        regression_guard = get_regression_guard()
 
-        records = getattr(strategy_memory, "_records", [])
-        total = len(records)
-        success_count = len([r for r in records if r.success])
-        fail_count = total - success_count
-        success_rate = int((success_count / total) * 100) if total else 0
+        stats = strategy_memory.get_stats(days=days)
+        total = stats["total"]
+        success_count = stats["success"]
+        fail_count = stats["fail"]
+        success_rate = int(stats["success_rate"] * 100) if total else 0
 
         compiled_skills = [s for s in skills if s.compiled]
         low_confidence = [s for s in skills if s.confidence < 0.5]
         fact_count = len(ctx.context.get("facts", {}))
+        repeated_failures = strategy_memory.get_repeated_failures(min_count=2)
+        recent_task_runs = self._recent_task_runs(scheduler.get_task_runs(limit=30), days=days)
+        task_success = len([item for item in recent_task_runs if item.get("success")])
+        task_fail = len(recent_task_runs) - task_success
 
         lines = [
             "이번 주 자기개선 리포트예요!",
@@ -28,6 +40,20 @@ class WeeklyReport:
             "활성 스킬 %d개 (컴파일 완료 %d개)" % (len(skills), len(compiled_skills)),
             "기억 중인 사실 %d개" % fact_count,
         ]
+        if recent_task_runs:
+            lines.append(
+                "예약 작업 %d건 처리 (성공 %d건, 실패 %d건)"
+                % (len(recent_task_runs), task_success, task_fail)
+            )
+        if repeated_failures:
+            top_failures = ", ".join(f"{kind} {count}회" for kind, count in repeated_failures[:3])
+            lines.append("반복 실패 패턴: " + top_failures)
+        metric_lines = learning_metrics.get_report_lines(limit=3)
+        if metric_lines:
+            lines.append("학습 기여도: " + " / ".join(metric_lines))
+        regression_alert = regression_guard.check()
+        if regression_alert:
+            lines.append("회귀 경고: " + regression_alert)
 
         suggestions = []
         if fail_count >= 3 and success_rate < 60:
@@ -39,11 +65,25 @@ class WeeklyReport:
             )
         if len(compiled_skills) == 0 and len(skills) >= 3:
             suggestions.append("반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요.")
+        if recent_task_runs and task_fail >= 2:
+            suggestions.append("예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요.")
 
         if suggestions:
             lines.append("개선 제안: " + " / ".join(suggestions))
 
         return " ".join(lines)
+
+    def _recent_task_runs(self, rows: list[dict], days: int = 7) -> list[dict]:
+        cutoff = datetime.now() - timedelta(days=max(int(days or 0), 0))
+        recent = []
+        for row in rows or []:
+            try:
+                started_at = datetime.fromisoformat(str(row.get("started_at", "")))
+            except Exception:
+                continue
+            if started_at >= cutoff:
+                recent.append(row)
+        return recent
 
 
 _weekly_report: WeeklyReport | None = None

@@ -117,6 +117,7 @@ class AgentRunResult:
     achieved: bool = False
     summary_kr: str = ""
     total_iterations: int = 0
+    learning_components: Dict[str, bool] = field(default_factory=dict)
 
     def all_exec_results(self) -> List[ExecutionResult]:
         return [sr.exec_result for sr in self.step_results]
@@ -144,6 +145,8 @@ class AgentOrchestrator:
         self.progress_callback = progress_callback
         self.thinking_callback = thinking_callback
         self._run_lock = threading.Lock()
+        self._background_updates_enabled = True
+        self._post_run_thread: Optional[threading.Thread] = None
 
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
@@ -177,6 +180,8 @@ class AgentOrchestrator:
 
     def run(self, goal: str) -> AgentRunResult:
         """복잡한 목표를 다층 루프로 자율 달성."""
+        if self._post_run_thread is not None and self._post_run_thread.is_alive():
+            self._post_run_thread.join(timeout=5.0)
         if not self._run_lock.acquire(blocking=False):
             logger.warning("[Orchestrator] 이미 에이전트가 실행 중입니다.")
             return AgentRunResult(goal=goal, summary_kr="다른 작업이 진행 중입니다.")
@@ -185,40 +190,86 @@ class AgentOrchestrator:
         self._set_thinking(True)
         try:
             run_result = self._run_loop(goal)
-            duration = int((time.time() - start_time) * 1000)
-            self._post_run_update(goal, run_result, duration)
-            
-            # 실패 시 L4 반성 및 교훈 도출
             lesson = ""
+            reflection = None
             if not run_result.achieved:
-                lesson_data = self._reflect_on_failure(goal, run_result)
-                lesson = lesson_data.get("lesson", "")
+                reflection = self._reflect_on_failure(goal, run_result)
+                run_result.learning_components["ReflectionEngine"] = True
+                lesson = getattr(reflection, "lesson", "") or ""
                 if lesson:
                     run_result.summary_kr += f"\n(교훈: {lesson})"
 
-            self._record_strategy(goal, run_result, duration, lesson)
+            duration = int((time.time() - start_time) * 1000)
+            self._schedule_post_run_update(goal, run_result, duration)
+            self._record_learning_metrics(run_result)
+            self._record_strategy(
+                goal,
+                run_result,
+                duration,
+                lesson=lesson,
+                failure_kind_override=getattr(reflection, "root_cause", ""),
+            )
             return run_result
         finally:
             self._set_thinking(False)
             self._run_lock.release()
 
+    def _schedule_post_run_update(self, goal: str, run_result: AgentRunResult, duration_ms: int) -> None:
+        if not self._background_updates_enabled:
+            self._post_run_update(goal, run_result, duration_ms)
+            return
+        t = threading.Thread(
+            target=self._post_run_update_safe,
+            args=(goal, run_result, duration_ms),
+            daemon=False,
+            name="AriPostRunUpdate",
+        )
+        self._post_run_thread = t
+        t.start()
+
+    def _post_run_update_safe(self, goal: str, run_result: AgentRunResult, duration_ms: int) -> None:
+        try:
+            self._post_run_update(goal, run_result, duration_ms)
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] background post-run update 실패: {exc}")
+
     def _run_loop(self, goal: str) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {"goal": goal}
+        learning_components: Dict[str, bool] = {}
         try:
             from agent.episode_memory import get_episode_memory
             recent_episode_summary = get_episode_memory().get_recent_summary(goal=goal, limit=3)
             if recent_episode_summary:
                 context["recent_goal_episodes"] = recent_episode_summary[:600]
+                learning_components["EpisodeMemory"] = True
         except Exception as exc:
             logger.debug(f"[Orchestrator] episode memory 주입 생략: {exc}")
+        try:
+            from agent.goal_predictor import get_goal_predictor
+            prediction = get_goal_predictor().warn_if_high_risk(goal)
+            if prediction.warning_kr:
+                learning_components["GoalPredictor"] = True
+                context["goal_risk_warning"] = prediction.warning_kr[:300]
+                if prediction.risk_factors:
+                    context["goal_risk_factors"] = " | ".join(prediction.risk_factors[:3])[:300]
+                self._emit_progress(
+                    "risk_warning",
+                    warning=prediction.warning_kr,
+                    sample_size=prediction.sample_size,
+                    success_rate=prediction.estimated_success_rate,
+                )
+                self._say(f"[진지] {prediction.warning_kr}")
+        except Exception as exc:
+            logger.debug(f"[Orchestrator] goal predictor 주입 생략: {exc}")
 
         if self._should_prefer_template_over_skill(goal):
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
         else:
-            skill_result = self._run_with_skill_if_available(goal, context)
+            skill_result = self._run_with_skill_if_available(goal, context, learning_components)
             if skill_result is not None:
+                self._merge_learning_components(skill_result.learning_components, learning_components)
                 return skill_result
 
         for iteration in range(self.MAX_PLAN_ITERATIONS):
@@ -227,6 +278,7 @@ class AgentOrchestrator:
 
             # Layer 1: Plan
             steps = self.planner.decompose(goal, context)
+            self._merge_learning_components(learning_components, self.planner.get_last_learning_signals())
             if not steps:
                 run_result.summary_kr = "계획 수립에 실패했습니다."
                 break
@@ -263,7 +315,7 @@ class AgentOrchestrator:
                 context["이전_시도"] = summary
                 self._emit_progress("not_achieved", summary=summary, iteration=iteration)
                 self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
-        
+        run_result.learning_components = learning_components
         return run_result
 
     def _should_prefer_template_over_skill(self, goal: str) -> bool:
@@ -282,19 +334,26 @@ class AgentOrchestrator:
         except Exception:
             return False
 
-    def _run_with_skill_if_available(self, goal: str, context: Dict[str, str]) -> Optional[AgentRunResult]:
+    def _run_with_skill_if_available(
+        self,
+        goal: str,
+        context: Dict[str, str],
+        learning_components: Dict[str, bool],
+    ) -> Optional[AgentRunResult]:
         try:
             from agent.skill_library import get_skill_library
             from agent.agent_planner import ActionStep
             skill = get_skill_library().get_applicable_skill(goal)
             if not skill:
                 return None
+            learning_components["SkillLibrary"] = True
 
             # Direction 2: 컴파일된 Python 스킬 우선 실행
             if skill.compiled:
                 result = self._run_compiled_skill(skill, goal)
                 if result is not None:
                     context["skill_id"] = skill.skill_id
+                    result.learning_components["SkillLibrary"] = True
                     return result
                 # 컴파일 스킬 실패 → 일반 스텝 실행으로 폴백
 
@@ -312,6 +371,7 @@ class AgentOrchestrator:
             ]
             all_success, step_results = self._execute_plan(steps, context, goal)
             result = AgentRunResult(goal=goal, step_results=step_results, total_iterations=1)
+            result.learning_components["SkillLibrary"] = True
             if all_success:
                 achieved, summary = self._verify(goal, step_results)
                 result.achieved = achieved
@@ -352,17 +412,15 @@ class AgentOrchestrator:
             logger.debug(f"[Orchestrator] 컴파일 스킬 실행 오류: {exc}")
             return None
 
-    def _reflect_on_failure(self, goal: str, run_result: AgentRunResult) -> Dict[str, str]:
-        """실패한 시나리오에 대해 L4 반성(Post-mortem) 수행"""
-        history_lines = []
-        for i, sr in enumerate(run_result.step_results):
-            status = "✅" if sr.exec_result.success else "❌"
-            history_lines.append(f"[{i+1}] {status} {sr.step.description_kr}")
-            if not sr.exec_result.success:
-                history_lines.append(f"   오류: {(sr.exec_result.error or sr.exec_result.output or '')[:100]}")
-        
-        history_summary = "\n".join(history_lines)
-        return self.planner.reflect(goal, history_summary)
+    def _reflect_on_failure(self, goal: str, run_result: AgentRunResult):
+        """실패한 시나리오에 대해 ReflectionEngine 단일 경로로 반성 수행"""
+        from agent.reflection_engine import get_reflection_engine
+        return get_reflection_engine().reflect(goal, run_result)
+
+    def _merge_learning_components(self, target: Dict[str, bool], updates: Dict[str, bool] | None) -> None:
+        for name, activated in dict(updates or {}).items():
+            if activated:
+                target[name] = True
 
     def _execute_plan(self, steps: List[ActionStep], context: Dict[str, str], goal: str) -> Tuple[bool, List[StepResult]]:
         step_results: List[StepResult] = []
@@ -677,11 +735,18 @@ class AgentOrchestrator:
             return False
         return any(token in normalized for token in _DEVELOPER_VERIFY_TOKENS)
 
-    def _record_strategy(self, goal: str, run_result: AgentRunResult, duration: int, lesson: str = ""):
+    def _record_strategy(
+        self,
+        goal: str,
+        run_result: AgentRunResult,
+        duration: int,
+        lesson: str = "",
+        failure_kind_override: str = "",
+    ):
         try:
             from agent.strategy_memory import get_strategy_memory
             failed = [sr for sr in run_result.step_results if not sr.exec_result.success]
-            fk = failed[-1].failure_kind if failed else ""
+            fk = failure_kind_override or (failed[-1].failure_kind if failed else "")
             skill_id = ""
             is_dev_goal = self._is_developer_goal(goal)
             if not is_dev_goal:
@@ -705,13 +770,36 @@ class AgentOrchestrator:
             )
         except Exception as e: logger.warning(f"[Orchestrator] StrategyMemory 기록 실패: {e}")
 
+    def _record_learning_metrics(self, run_result: AgentRunResult) -> None:
+        try:
+            from agent.learning_metrics import get_learning_metrics
+
+            metrics = get_learning_metrics()
+            component_names = (
+                "GoalPredictor",
+                "StrategyMemory",
+                "EpisodeMemory",
+                "FewShot",
+                "PlannerFeedback",
+                "SkillLibrary",
+                "ReflectionEngine",
+            )
+            usage = dict(run_result.learning_components or {})
+            for name in component_names:
+                metrics.record(name, activated=bool(usage.get(name, False)), success=bool(run_result.achieved))
+        except Exception as exc:
+            logger.debug("[Orchestrator] learning metrics 기록 실패: %s", exc)
+
     def _post_run_update(self, goal: str, run_result: AgentRunResult, duration_ms: int):
         try:
             from agent.planner_feedback import get_planner_feedback_loop
-            get_planner_feedback_loop().record(
-                [sr.step for sr in run_result.step_results],
+            feedback_loop = get_planner_feedback_loop()
+            steps = [sr.step for sr in run_result.step_results]
+            feedback_loop.record(
+                steps,
                 run_result.achieved,
                 duration_ms,
+                tags=feedback_loop.infer_tags(goal=goal, steps=steps),
             )
         except Exception as e:
             logger.debug(f"[Orchestrator] planner feedback 업데이트 실패: {e}")
@@ -766,14 +854,6 @@ class AgentOrchestrator:
                 logger.debug("[Orchestrator] episode prune 실패: %s", _prune_exc)
         except Exception as e:
             logger.debug(f"[Orchestrator] episode memory 기록 실패: {e}")
-        if not run_result.achieved:
-            try:
-                from agent.reflection_engine import get_reflection_engine
-                reflection = get_reflection_engine().reflect(goal, run_result)
-                if reflection.lesson and reflection.lesson not in run_result.summary_kr:
-                    run_result.summary_kr = f"{run_result.summary_kr}\n(교훈: {reflection.lesson})".strip()
-            except Exception as e:
-                logger.debug(f"[Orchestrator] reflection 생성 실패: {e}")
 
     def _build_adaptive_context(self, failed: List[StepResult]) -> Dict[str, str]:
         kinds = [sr.failure_kind for sr in failed if sr.failure_kind]

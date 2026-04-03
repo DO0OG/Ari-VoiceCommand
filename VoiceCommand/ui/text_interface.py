@@ -93,6 +93,11 @@ class ChatWidget(QFrame):
             self.history = self.history[-self.MAX_MESSAGES:]
         self.render_history()
 
+    def update_message(self, index: int, message: str) -> None:
+        if 0 <= index < len(self.history):
+            self.history[index]["message"] = message
+            self.render_history()
+
     def _add_message_widget(self, message: str, is_user: bool) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
         display_message = message
@@ -373,6 +378,7 @@ class TextInterfaceThread(QThread):
 
     response_ready = Signal(str)
     progress_event = Signal(str, dict)   # event_type, kwargs_dict
+    stream_chunk = Signal(str)
 
     def __init__(self, ai_assistant, query: str):
         super().__init__()
@@ -399,7 +405,7 @@ class TextInterfaceThread(QThread):
                 from commands.ai_command import AICommand
                 for command in _command_registry.commands:
                     if isinstance(command, AICommand):
-                        result = command.run_interaction(self.query)
+                        result = command.run_interaction(self.query, stream_callback=self._on_stream_chunk)
                         if result:
                             return result
         except Exception as e:
@@ -407,13 +413,17 @@ class TextInterfaceThread(QThread):
 
         # 폴백: ai_assistant 직접 호출
         if hasattr(self.ai_assistant, "chat_with_tools"):
-            response, _ = self.ai_assistant.chat_with_tools(self.query, include_context=True)
+            response, _ = self._invoke_with_optional_stream(
+                self.ai_assistant.chat_with_tools,
+                self.query,
+                include_context=True,
+            )
             return response
         if hasattr(self.ai_assistant, "process_query"):
             response, _, _ = self.ai_assistant.process_query(self.query)
             return response
         if hasattr(self.ai_assistant, "chat"):
-            return self.ai_assistant.chat(self.query)
+            return self._invoke_with_optional_stream(self.ai_assistant.chat, self.query)
         return "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
 
     def _attach_progress_callback(self) -> None:
@@ -432,6 +442,19 @@ class TextInterfaceThread(QThread):
 
     def _on_progress(self, event_type: str, **kwargs) -> None:
         self.progress_event.emit(event_type, kwargs)
+
+    def _on_stream_chunk(self, chunk: str) -> None:
+        if chunk:
+            self.stream_chunk.emit(str(chunk))
+
+    def _invoke_with_optional_stream(self, func, *args, **kwargs):
+        try:
+            return func(*args, stream_callback=self._on_stream_chunk, **kwargs)
+        except TypeError as exc:
+            message = str(exc)
+            if "stream_callback" not in message and "unexpected keyword argument" not in message:
+                raise
+            return func(*args, **kwargs)
 
 
 # ── 커스텀 타이틀 바 ──────────────────────────────────────────────────────────
@@ -476,6 +499,10 @@ class TextInterface(QMainWindow):
         self.context_manager = get_context_manager() if get_context_manager else None
         self._scheduler_panel = None
         self._memory_panel    = None
+        self._stream_message_index: Optional[int] = None
+        self._stream_response_buffer = ""
+        self._stream_tts_buffer = ""
+        self._stream_tts_spoken = False
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -624,9 +651,14 @@ class TextInterface(QMainWindow):
         self.scroll_to_bottom()
 
         if self.ai_assistant:
+            self._stream_message_index = None
+            self._stream_response_buffer = ""
+            self._stream_tts_buffer = ""
+            self._stream_tts_spoken = False
             self.processing_thread = TextInterfaceThread(self.ai_assistant, query)
             self.processing_thread.response_ready.connect(self._handle_response)
             self.processing_thread.progress_event.connect(self._on_progress_event)
+            self.processing_thread.stream_chunk.connect(self._handle_stream_chunk)
             self.processing_thread.finished.connect(lambda: self._set_ui_enabled(True))
             self.processing_thread.start()
         else:
@@ -638,16 +670,62 @@ class TextInterface(QMainWindow):
         self.send_message()
 
     def _handle_response(self, response: str) -> None:
-        self.chat_widget.add_message(response, is_user=False)
+        final_response = response or self._stream_response_buffer
+        if self._stream_message_index is not None:
+            self.chat_widget.update_message(self._stream_message_index, final_response)
+        else:
+            self.chat_widget.add_message(final_response, is_user=False)
+        self._stream_message_index = None
+        self._stream_response_buffer = ""
         self.scroll_to_bottom()
         self.refresh_status_panel()
         if self.tts_callback:
-            self.tts_callback(response)
+            # 스트리밍 중 문장 단위 TTS가 이미 시작된 경우: 남은 버퍼만 처리
+            if self._stream_tts_spoken:
+                remaining = self._stream_tts_buffer.strip()
+                if remaining:
+                    self.tts_callback(remaining)
+            else:
+                self.tts_callback(final_response)
+        self._stream_tts_buffer = ""
+        self._stream_tts_spoken = False
 
     def _on_progress_event(self, event_type: str, kwargs: dict) -> None:
         """워커 스레드 progress 이벤트 → 메인 스레드 대시보드 업데이트."""
         self.dashboard.on_progress(event_type, **kwargs)
         self.scroll_to_bottom()
+
+    def _handle_stream_chunk(self, chunk: str) -> None:
+        if not chunk:
+            return
+        if self._stream_message_index is None:
+            self.chat_widget.add_message("", is_user=False)
+            self._stream_message_index = len(self.chat_widget.history) - 1
+        self._stream_response_buffer += chunk
+        self.chat_widget.update_message(self._stream_message_index, self._stream_response_buffer)
+        self.scroll_to_bottom()
+        if self.tts_callback:
+            self._try_stream_tts(chunk)
+
+    _TTS_SENTENCE_SEPS = ("。", "! ", "? ", ". ", "!\n", "?\n", ".\n")
+    _TTS_MIN_SENTENCE_LEN = 8
+
+    def _try_stream_tts(self, chunk: str) -> None:
+        """스트리밍 청크에서 문장 경계 감지 시 TTS를 즉시 시작한다."""
+        self._stream_tts_buffer += chunk
+        while True:
+            idx = -1
+            for sep in self._TTS_SENTENCE_SEPS:
+                pos = self._stream_tts_buffer.find(sep)
+                if pos >= 0 and (idx < 0 or pos < idx):
+                    idx = pos + len(sep)
+            if idx < 0:
+                break
+            sentence = self._stream_tts_buffer[:idx].strip()
+            self._stream_tts_buffer = self._stream_tts_buffer[idx:]
+            if len(sentence) >= self._TTS_MIN_SENTENCE_LEN:
+                self._stream_tts_spoken = True
+                self.tts_callback(sentence)
 
     # ── UI 헬퍼 ───────────────────────────────────────────────────────────────
 

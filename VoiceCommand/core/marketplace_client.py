@@ -1,6 +1,7 @@
 """Ari 앱에서 마켓플레이스를 조회하고 설치하는 클라이언트."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -56,6 +57,10 @@ def _plugin_target_filename(plugin_name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
     safe = safe.strip("._") or "plugin"
     return f"{safe}.zip"
+
+
+def _compute_sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
 
 
 def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, entry: str) -> tuple[str, str]:
@@ -115,17 +120,20 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
     release_url = data.get("release_url")
     plugin_name = str(data.get("name", "") or "")
     entry = str(data.get("entry", "") or "")
-    if not plugin_name or not entry:
+    sha256 = str(data.get("sha256", "") or "")
+    if not plugin_name or not entry or not sha256:
         plugin_meta = fetch_plugin(plugin_id) or {}
         plugin_name = plugin_name or str(plugin_meta.get("name", "") or "")
         entry = entry or str(plugin_meta.get("entry", "") or "")
-    if not release_url or not plugin_name or not entry:
+        sha256 = sha256 or str(plugin_meta.get("sha256", "") or "")
+    if not release_url or not plugin_name or not entry or not sha256:
         logger.error(
-            "install-plugin 응답/상세정보 누락 (plugin_id=%s, release_url=%s, name=%s, entry=%s)",
+            "install-plugin 응답/상세정보 누락 (plugin_id=%s, release_url=%s, name=%s, entry=%s, sha256=%s)",
             plugin_id,
             bool(release_url),
             plugin_name,
             entry,
+            bool(sha256),
         )
         return False
 
@@ -148,6 +156,11 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
             content = resp.read()
     except Exception as e:
         logger.error("ZIP 다운로드 실패: %s", e)
+        return False
+
+    actual_sha256 = _compute_sha256(content)
+    if actual_sha256 != sha256:
+        logger.error("ZIP SHA256 검증 실패: expected=%s actual=%s", sha256, actual_sha256)
         return False
 
     installed_files: List[str] = []

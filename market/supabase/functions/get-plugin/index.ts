@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
       created_at,
       reviewed_at,
       release_url,
+      sha256,
       review_report,
       developers(github_login)
     `)

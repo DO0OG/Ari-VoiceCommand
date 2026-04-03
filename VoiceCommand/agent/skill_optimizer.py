@@ -155,6 +155,10 @@ class SkillOptimizer:
         if not code:
             return False, "컴파일된 스킬 없음"
         try:
+            from agent.safety_checker import DangerLevel, get_safety_checker
+            report = get_safety_checker().check_python(code)
+            if report.level == DangerLevel.DANGEROUS:
+                return False, f"실행 직전 안전 검사 실패: {report.summary_kr}"
             with tempfile.TemporaryDirectory(prefix="ari_skill_") as temp_dir:
                 module_path = os.path.join(temp_dir, f"skill_{skill_id}.py")
                 with open(module_path, "w", encoding="utf-8") as f:

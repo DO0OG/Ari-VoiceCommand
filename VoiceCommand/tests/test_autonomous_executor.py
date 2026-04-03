@@ -166,6 +166,29 @@ class AutonomousExecutorTests(unittest.TestCase):
             with open(target, "r", encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "before")
 
+    def test_state_delta_tracks_removed_paths_and_browser_title_changes(self):
+        executor = AutonomousExecutor()
+        delta = executor._build_state_delta(
+            {
+                "active_window_title": "Chrome",
+                "open_window_titles": ["Chrome", "메모장"],
+                "browser_state": {"current_url": "", "title": "Old Title"},
+                "desktop_state": {"desktop_sample_paths": [r"C:\temp\old.txt"]},
+            },
+            {
+                "active_window_title": "Chrome",
+                "open_window_titles": ["Chrome"],
+                "browser_state": {"current_url": "", "title": "New Title"},
+                "desktop_state": {"desktop_sample_paths": []},
+            },
+        )
+
+        summary = executor._summarize_state_delta(delta)
+
+        self.assertIn("browser_title=New Title", summary)
+        self.assertIn("closed_windows=메모장", summary)
+        self.assertIn("removed_paths=C:\\temp\\old.txt", summary)
+
 
 if __name__ == "__main__":
     unittest.main()

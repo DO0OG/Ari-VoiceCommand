@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
@@ -49,7 +50,7 @@ def main() -> None:
     if status == "approved":
         plugin = (
             supabase.table("plugins")
-            .select("zip_url, name, version")
+            .select("zip_url, name, version, sha256")
             .eq("id", plugin_id)
             .single()
             .execute()
@@ -64,6 +65,7 @@ def main() -> None:
             {"content-type": "application/zip", "upsert": "true"},
         )
         update_payload["release_url"] = supabase.storage.from_("plugin-releases").get_public_url(destination)
+        update_payload["sha256"] = plugin.get("sha256") or hashlib.sha256(content).hexdigest()
 
     supabase.table("plugins").update(update_payload).eq("id", plugin_id).execute()
 

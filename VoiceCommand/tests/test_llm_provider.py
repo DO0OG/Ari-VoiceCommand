@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 import unittest
 
 
@@ -178,6 +179,37 @@ class LLMProviderTests(unittest.TestCase):
                 ("groq", "selected-execution-model"),
             ],
         )
+
+    def test_should_cache_only_static_questions(self):
+        provider = LLMProvider()
+
+        self.assertTrue(provider._should_cache("파이썬 딕셔너리가 뭐야?"))
+        self.assertFalse(provider._should_cache("지금 몇 시야?"))
+        self.assertFalse(provider._should_cache("오늘 날씨 알려줘"))
+
+    def test_history_updates_are_thread_safe(self):
+        provider = LLMProvider()
+
+        def worker(index: int):
+            provider.add_to_history("user", f"msg-{index}")
+
+        threads = [threading.Thread(target=worker, args=(idx,)) for idx in range(30)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        snapshot = provider._history_snapshot()
+        self.assertEqual(len(snapshot), 20)
+        self.assertTrue(all(item["role"] == "user" for item in snapshot))
+
+    def test_emit_stream_text_sends_incremental_chunks(self):
+        provider = LLMProvider()
+        chunks = []
+
+        provider._emit_stream_text("abcdefghijklmnopqrstuvwxyz", chunks.append, chunk_size=10)
+
+        self.assertEqual(chunks, ["abcdefghij", "klmnopqrst", "uvwxyz"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Ari 앱에서 마켓플레이스를 조회하고 설치하는 클라이언트."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -31,6 +32,10 @@ def _plugin_target_filename(plugin_name: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (plugin_name or "plugin").strip())
     safe = safe.strip("._") or "plugin"
     return f"{safe}.zip"
+
+
+def _compute_sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
 
 
 def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, entry: str) -> tuple[str, str]:
@@ -88,11 +93,13 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
     release_url = data.get("release_url")
     plugin_name = str(data.get("name", "") or "")
     entry = str(data.get("entry", "") or "")
-    if not plugin_name or not entry:
+    sha256 = str(data.get("sha256", "") or "")
+    if not plugin_name or not entry or not sha256:
         plugin_meta = fetch_plugin(plugin_id) or {}
         plugin_name = plugin_name or str(plugin_meta.get("name", "") or "")
         entry = entry or str(plugin_meta.get("entry", "") or "")
-    if not release_url or not plugin_name or not entry:
+        sha256 = sha256 or str(plugin_meta.get("sha256", "") or "")
+    if not release_url or not plugin_name or not entry or not sha256:
         logger.error("install response incomplete for plugin %s", plugin_id)
         return False
 
@@ -100,6 +107,9 @@ def install_plugin(plugin_id: str, plugin_dir: str) -> bool:
     # URL scheme/host validation is handled by _require_web_url().
     with urllib.request.urlopen(release_request) as response:  # nosec B310
         content = response.read()
+    if _compute_sha256(content) != sha256:
+        logger.error("sha256 verification failed for plugin %s", plugin_id)
+        return False
 
     os.makedirs(plugin_dir, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(content)) as archive:

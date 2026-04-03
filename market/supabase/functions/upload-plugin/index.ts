@@ -20,6 +20,13 @@ type PluginMeta = {
   permissions?: string[];
 };
 
+async function computeSha256Hex(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return corsOptions();
   if (req.method !== "POST") {
@@ -46,10 +53,13 @@ Deno.serve(async (req) => {
       return json({ error: validationError }, 400);
     }
 
+    const fileBuffer = await file.arrayBuffer();
+    const sha256 = await computeSha256Hex(fileBuffer);
+
     const filePath = `${user.id}/${meta.name}-${meta.version}.zip`;
     const uploadRes = await supabase.storage.from("plugin-uploads").upload(
       filePath,
-      await file.arrayBuffer(),
+      fileBuffer,
       {
         contentType: "application/zip",
         upsert: true,
@@ -72,6 +82,7 @@ Deno.serve(async (req) => {
           permissions: meta.permissions ?? [],
           entry: meta.entry,
           zip_url: uploadRes.data.path,
+          sha256,
           status: "pending",
           review_report: {},
           reviewed_at: null,

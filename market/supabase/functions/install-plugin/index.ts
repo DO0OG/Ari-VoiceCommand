@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
 
   const { data: plugin, error } = await supabase
     .from("plugins")
-    .select("id, name, entry, release_url, install_count")
+    .select("id, name, entry, release_url, sha256, install_count")
     .eq("id", pluginId)
     .eq("status", "approved")
     .single();
@@ -29,5 +29,10 @@ Deno.serve(async (req) => {
     .update({ install_count: Number(plugin.install_count ?? 0) + 1 })
     .eq("id", plugin.id);
 
-  return json({ release_url: plugin.release_url, name: plugin.name, entry: plugin.entry });
+  return json({
+    release_url: plugin.release_url,
+    name: plugin.name,
+    entry: plugin.entry,
+    sha256: plugin.sha256,
+  });
 });

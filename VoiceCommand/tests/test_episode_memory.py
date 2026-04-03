@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+import json
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -91,6 +92,46 @@ class EpisodeMemoryTests(unittest.TestCase):
 
             self.assertIn("VoiceCommand 저장소", summary)
             self.assertNotIn("바탕화면", summary)
+
+    def test_failure_patterns_surface_similar_failed_episode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "episode_memory.json")
+            memory = EpisodeMemory(filepath=path)
+            memory.record(
+                GoalEpisode(
+                    goal="브라우저 로그인 후 다운로드",
+                    achieved=False,
+                    summary_kr="다운로드 실패",
+                    failure_kind="timeout",
+                    target_domains=["example.com"],
+                )
+            )
+            memory.record(
+                GoalEpisode(
+                    goal="메모장에 메모 저장",
+                    achieved=False,
+                    summary_kr="저장 실패",
+                    failure_kind="permission_denied",
+                )
+            )
+
+            patterns = memory.get_failure_patterns("example.com", limit=2)
+
+            self.assertTrue(patterns)
+            self.assertIn("브라우저 로그인 후 다운로드", patterns[0])
+            self.assertIn("timeout", patterns[0])
+
+    def test_flush_persists_pending_episode_without_waiting_for_timer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "episode_memory.json")
+            memory = EpisodeMemory(filepath=path)
+            memory.record(GoalEpisode(goal="메모 저장", achieved=True, summary_kr="저장 성공"))
+
+            memory.flush()
+
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            self.assertEqual(len(payload), 1)
 
 
 if __name__ == "__main__":

@@ -25,13 +25,24 @@ COMPILE_TARGETS = [
     "agent/agent_orchestrator.py",
     "agent/agent_planner.py",
     "agent/autonomous_executor.py",
+    "agent/episode_memory.py",
     "agent/file_tools.py",
+    "agent/goal_predictor.py",
+    "agent/learning_metrics.py",
+    "agent/llm_provider.py",
+    "agent/planner_feedback.py",
     "agent/proactive_scheduler.py",
     "agent/real_verifier.py",
+    "agent/reflection_engine.py",
+    "agent/regression_guard.py",
     "agent/safety_checker.py",
+    "agent/skill_library.py",
+    "agent/skill_optimizer.py",
     "agent/strategy_memory.py",
+    "agent/weekly_report.py",
     "services/web_tools.py",
     "core/config_manager.py",
+    "core/marketplace_client.py",
     "memory/user_context.py",
     "memory/memory_manager.py",
     "memory/conversation_history.py",
@@ -82,6 +93,144 @@ for sample in samples:
 print("template routing ok")
 """
 
+CLEAN_ENV_SMOKE = r"""
+import json
+import os
+import tempfile
+import threading
+
+from agent.learning_metrics import LearningMetrics
+from agent.proactive_scheduler import ProactiveScheduler
+from core.config_manager import ConfigManager
+from core.resource_manager import ResourceManager
+from agent import proactive_scheduler as proactive_scheduler_module
+
+
+def _reset_runtime_state():
+    ResourceManager.reset_cache()
+    ConfigManager._cached_settings = None
+    proactive_scheduler_module._SCHEDULE_FILE = ""
+    proactive_scheduler_module._SCHEDULE_RUN_LOG_FILE = ""
+
+
+original_env = os.environ.get("ARI_APP_DATA_DIR")
+original_project_root = ResourceManager._project_root
+
+try:
+    with tempfile.TemporaryDirectory(prefix="ari_clean_env_") as clean_root:
+        runtime_root = os.path.join(clean_root, "runtime")
+        os.environ["ARI_APP_DATA_DIR"] = runtime_root
+        ResourceManager._project_root = staticmethod(lambda: clean_root)
+        _reset_runtime_state()
+
+        defaults = ConfigManager.load_settings()
+        if defaults.get("llm_router_enabled") is not True:
+            raise SystemExit("default settings not loaded in clean env")
+
+        metrics = LearningMetrics()
+        metrics.record("SkillLibrary", activated=True, success=True)
+        if not os.path.exists(os.path.join(runtime_root, "learning_metrics.json")):
+            raise SystemExit("learning metrics not stored in runtime dir")
+
+        proactive_scheduler_module._SCHEDULE_FILE = proactive_scheduler_module._init_schedule_file()
+        proactive_scheduler_module._SCHEDULE_RUN_LOG_FILE = proactive_scheduler_module._init_schedule_log_file()
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._tasks = {}
+        scheduler._lock = threading.Lock()
+        scheduler._run_log_lock = threading.Lock()
+        scheduler._save()
+        if proactive_scheduler_module._SCHEDULE_FILE != os.path.join(runtime_root, "scheduled_tasks.json"):
+            raise SystemExit("scheduler file not isolated in runtime dir")
+
+    with tempfile.TemporaryDirectory(prefix="ari_legacy_env_") as legacy_root:
+        runtime_root = os.path.join(legacy_root, ".ari_runtime")
+        with open(os.path.join(legacy_root, "ari_settings.json"), "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "llm_provider": "gemini",
+                    "llm_router_enabled": False,
+                },
+                handle,
+                ensure_ascii=False,
+                indent=2,
+            )
+        with open(os.path.join(legacy_root, "scheduled_tasks.json"), "w", encoding="utf-8") as handle:
+            json.dump(
+                [
+                    {
+                        "task_id": "legacy-task",
+                        "goal": "정리",
+                        "schedule_expr": "매일 9시 0",
+                        "next_run": "2026-04-01T09:00:00",
+                    }
+                ],
+                handle,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+        os.environ["ARI_APP_DATA_DIR"] = runtime_root
+        ResourceManager._project_root = staticmethod(lambda: legacy_root)
+        _reset_runtime_state()
+
+        migrated = ConfigManager.load_settings()
+        if migrated.get("llm_provider") != "gemini":
+            raise SystemExit("legacy settings were not migrated")
+        proactive_scheduler_module._SCHEDULE_FILE = proactive_scheduler_module._init_schedule_file()
+        proactive_scheduler_module._SCHEDULE_RUN_LOG_FILE = proactive_scheduler_module._init_schedule_log_file()
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._tasks = {}
+        scheduler._load()
+        if "legacy-task" not in scheduler._tasks:
+            raise SystemExit("legacy scheduled tasks were not migrated")
+finally:
+    ResourceManager._project_root = original_project_root
+    if original_env is None:
+        os.environ.pop("ARI_APP_DATA_DIR", None)
+    else:
+        os.environ["ARI_APP_DATA_DIR"] = original_env
+    _reset_runtime_state()
+
+print("clean environment runtime ok")
+"""
+
+MARKETPLACE_CONTRACT_SMOKE = r"""
+from pathlib import Path
+
+repo_root = Path.cwd().parent
+required = {
+    "python_client": repo_root / "VoiceCommand" / "core" / "marketplace_client.py",
+    "integration_client": repo_root / "market" / "ari_integration" / "core" / "marketplace_client.py",
+    "install_function": repo_root / "market" / "supabase" / "functions" / "install-plugin" / "index.ts",
+    "get_function": repo_root / "market" / "supabase" / "functions" / "get-plugin" / "index.ts",
+    "upload_function": repo_root / "market" / "supabase" / "functions" / "upload-plugin" / "index.ts",
+    "finalize_script": repo_root / "market" / "marketplace" / "scripts" / "finalize.py",
+    "sql_init": repo_root / "market" / "supabase" / "migrations" / "001_init.sql",
+    "sql_patch": repo_root / "market" / "supabase" / "migrations" / "002_add_plugin_sha256.sql",
+    "web_types": repo_root / "market" / "web" / "src" / "lib" / "types.ts",
+}
+
+texts = {name: path.read_text(encoding="utf-8") for name, path in required.items()}
+if "sha256" not in texts["python_client"] or "sha256" not in texts["integration_client"]:
+    raise SystemExit("python marketplace client does not enforce sha256")
+if ".select(\"id, name, entry, release_url, sha256, install_count\")" not in texts["install_function"]:
+    raise SystemExit("install-plugin function missing sha256 select")
+if "sha256: plugin.sha256" not in texts["install_function"]:
+    raise SystemExit("install-plugin function missing sha256 response")
+if "sha256," not in texts["upload_function"]:
+    raise SystemExit("upload-plugin function missing sha256 persistence")
+if "sha256," not in texts["get_function"]:
+    raise SystemExit("get-plugin function missing sha256 projection")
+if "sha256" not in texts["finalize_script"]:
+    raise SystemExit("finalize script missing sha256 propagation")
+if "sha256 text" not in texts["sql_init"] and "add column if not exists sha256 text" not in texts["sql_patch"]:
+    raise SystemExit("sql migration missing sha256 column")
+if "sha256?: string" not in texts["web_types"]:
+    raise SystemExit("web types missing sha256 field")
+
+print("marketplace sha256 contract ok")
+"""
+
 
 def _run_compile(paths: list[str]) -> None:
     with tempfile.TemporaryDirectory(prefix="ari_compile_check_") as temp_dir:
@@ -108,13 +257,19 @@ def _run_smoke() -> None:
     previous_cwd = os.getcwd()
     try:
         os.chdir(HERE)
-        with tempfile.NamedTemporaryFile("w", suffix="_template_smoke.py", encoding="utf-8", delete=False) as temp_file:
-            temp_file.write(TEMPLATE_SMOKE)
-            temp_path = temp_file.name
-        try:
-            runpy.run_path(temp_path, run_name="__main__")
-        finally:
-            os.remove(temp_path)
+        smoke_scripts = (
+            ("template planner routing", TEMPLATE_SMOKE),
+            ("clean environment runtime", CLEAN_ENV_SMOKE),
+            ("marketplace sha256 contract", MARKETPLACE_CONTRACT_SMOKE),
+        )
+        for _, script in smoke_scripts:
+            with tempfile.NamedTemporaryFile("w", suffix="_smoke.py", encoding="utf-8", delete=False) as temp_file:
+                temp_file.write(script)
+                temp_path = temp_file.name
+            try:
+                runpy.run_path(temp_path, run_name="__main__")
+            finally:
+                os.remove(temp_path)
     finally:
         os.chdir(previous_cwd)
 
@@ -150,14 +305,20 @@ def main() -> int:
     payload = {
         "compile_targets": COMPILE_TARGETS,
         "unit_tests": "tests/test_*.py",
-        "smoke_tests": "template planner routing",
+        "smoke_tests": [
+            "template planner routing",
+            "clean environment runtime",
+            "marketplace sha256 contract",
+        ],
     }
     if args.list:
         print("[validate] compile targets:")
         for path in COMPILE_TARGETS:
             print(f"  - {path}")
         print("[validate] unit tests: tests/test_*.py")
-        print("[validate] smoke tests: template planner routing")
+        print("[validate] smoke tests:")
+        for item in payload["smoke_tests"]:
+            print(f"  - {item}")
         return 0
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -191,7 +352,7 @@ def main() -> int:
     timings["compile"] = run(lambda: _run_compile(compile_targets), "compile critical modules")
     timings["tests"] = run(_run_tests, "unit tests")
     if not args.no_smoke:
-        timings["smoke"] = run(_run_smoke, "template planner smoke test")
+        timings["smoke"] = run(_run_smoke, "smoke checks")
     total = sum(timings.values())
     print(f"[validate] summary: {json.dumps({k: round(v, 2) for k, v in timings.items()}, ensure_ascii=False)}", flush=True)
     print(f"[validate] total: {total:.2f}s", flush=True)

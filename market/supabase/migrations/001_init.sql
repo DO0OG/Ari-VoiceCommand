@@ -20,6 +20,7 @@ create table if not exists public.plugins (
   entry text not null default 'main.py',
   zip_url text,
   release_url text,
+  sha256 text,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   review_report jsonb not null default '{}'::jsonb,
   install_count integer not null default 0,

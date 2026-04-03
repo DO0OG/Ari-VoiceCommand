@@ -29,17 +29,19 @@
 - 기본 검증 명령:
   - `py -3.11 VoiceCommand/validate_repo.py`
   - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
+- `validate_repo.py`는 현재 compile + unit test 외에 clean runtime 환경과 marketplace SHA256 계약 smoke도 함께 확인합니다.
 - 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
 
 ## 로컬 전용 파일
 
 - 아래 파일/폴더는 로컬 개발 산출물이라 기본적으로 Git 추적 대상이 아닙니다.
-  - `VoiceCommand/ari_settings.json`
+  - `VoiceCommand/.ari_runtime/`
   - `VoiceCommand/reference.wav`
   - `market/web/.env.local`
   - `market/supabase/.temp/`
   - `supabase/`
+- 루트 `VoiceCommand/ari_settings.json`과 `VoiceCommand/scheduled_tasks.json`은 템플릿 기준선입니다. 개인 API 키나 실행 상태는 `.ari_runtime/` 아래에만 남도록 유지해 주세요.
 - 문서나 빌드 스크립트를 수정할 때는 이런 로컬 파일이 없어도 동작하도록 유지해 주세요.
 
 ## 커밋 메시지 가이드라인

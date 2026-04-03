@@ -42,6 +42,19 @@ class _AgentTaskAssistant:
         return "tool_calls: [{\"name\":\"run_agent_task\"}] 이 문장은 읽히면 안 됩니다."
 
 
+class _StreamingAssistant:
+    def chat_with_tools(self, text, include_context=True, stream_callback=None):
+        del text, include_context
+        if stream_callback:
+            stream_callback("안녕")
+            stream_callback("하세요")
+        return "안녕하세요", []
+
+    def feed_tool_result(self, original_text, tool_calls, results, stream_callback=None):
+        del original_text, tool_calls, results, stream_callback
+        return ""
+
+
 class _FakeScheduler:
     def __init__(self):
         self.calls = []
@@ -148,6 +161,15 @@ class AICommandTests(unittest.TestCase):
 
         self.assertIn("작업 완료.", combined)
         self.assertNotIn("읽히면 안 됩니다", combined)
+
+    def test_run_interaction_passes_stream_callback_when_supported(self):
+        command = AICommand(_StreamingAssistant(), lambda msg: None, {"enabled": False})
+        streamed = []
+
+        combined = command.run_interaction("안녕", stream_callback=streamed.append)
+
+        self.assertEqual("".join(streamed), "안녕하세요")
+        self.assertIn("안녕하세요", combined)
 
     def test_handle_agent_task_saves_developer_report_in_user_report_dir(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

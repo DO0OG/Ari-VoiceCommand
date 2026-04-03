@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from collections import OrderedDict
 from datetime import datetime
@@ -63,23 +64,26 @@ class ResponseCache:
         self.max_items = max_items
         self.ttl_seconds = ttl_seconds
         self._store: OrderedDict[str, tuple[float, str]] = OrderedDict()
+        self._lock = threading.RLock()
 
     def get(self, message: str) -> Optional[str]:
-        item = self._store.get(message)
-        if not item:
-            return None
-        saved_at, response = item
-        if time.time() - saved_at > self.ttl_seconds:
-            self._store.pop(message, None)
-            return None
-        self._store.move_to_end(message)
-        return response
+        with self._lock:
+            item = self._store.get(message)
+            if not item:
+                return None
+            saved_at, response = item
+            if time.time() - saved_at > self.ttl_seconds:
+                self._store.pop(message, None)
+                return None
+            self._store.move_to_end(message)
+            return response
 
     def set(self, message: str, response: str):
-        self._store[message] = (time.time(), response)
-        self._store.move_to_end(message)
-        while len(self._store) > self.max_items:
-            self._store.popitem(last=False)
+        with self._lock:
+            self._store[message] = (time.time(), response)
+            self._store.move_to_end(message)
+            while len(self._store) > self.max_items:
+                self._store.popitem(last=False)
 
 
 class LLMProvider:
@@ -104,6 +108,7 @@ class LLMProvider:
         self.scenario = scenario
         self.router_enabled = bool(router_enabled)
         self.conversation_history = []
+        self._history_lock = threading.RLock()
         self.max_history = 10
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
@@ -413,9 +418,18 @@ class LLMProvider:
     # ── 대화 ───────────────────────────────────────────────────────────────────
 
     def add_to_history(self, role, content):
-        self.conversation_history.append({"role": role, "content": content})
-        if len(self.conversation_history) > self.max_history * 2:
-            self.conversation_history = self.conversation_history[-self.max_history * 2:]
+        with self._history_lock:
+            self.conversation_history.append({"role": role, "content": content})
+            if len(self.conversation_history) > self.max_history * 2:
+                self.conversation_history = self.conversation_history[-self.max_history * 2:]
+
+    def clear_history(self):
+        with self._history_lock:
+            self.conversation_history = []
+
+    def _history_snapshot(self) -> list[dict]:
+        with self._history_lock:
+            return list(self.conversation_history)
 
     def _estimate_max_tokens(self, message: str) -> int:
         length = len(message or "")
@@ -429,9 +443,16 @@ class LLMProvider:
 
     def _should_cache(self, message: str) -> bool:
         text = (message or "").lower()
-        cache_keywords = ("날씨", "시간", "몇 시", "temperature", "weather")
-        skip_keywords = ("예약", "저장", "실행", "삭제", "이동", "복사", "tool", "명령")
-        return any(keyword in text for keyword in cache_keywords) and not any(keyword in text for keyword in skip_keywords)
+        skip_keywords = (
+            "날씨", "기온", "시간", "몇 시", "temperature", "weather", "forecast",
+            "예약", "스케줄", "일정", "저장", "실행", "삭제", "이동", "복사",
+            "tool", "명령", "지금", "현재", "today", "now",
+        )
+        static_signals = (
+            "뭐야", "뭐에요", "설명", "알려줘", "란", "의미", "정의",
+            "what is", "explain", "tell me about",
+        )
+        return any(signal in text for signal in static_signals) and not any(keyword in text for keyword in skip_keywords)
 
     def _offline_response(self, message: str) -> str:
         return "(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요. 기본 명령은 그대로 쓸 수 있어요."
@@ -498,13 +519,15 @@ class LLMProvider:
             logging.debug(f"[LLMRouter] 라우팅 생략: {e}")
         return client, provider, model
 
-    def chat(self, user_message, include_context=True, model_override="", system_override=""):
+    def chat(self, user_message, include_context=True, model_override="", system_override="", stream_callback=None, save_history=True):
         """단순 대화"""
         if not self._has_any_client():
             return "AI 기능이 비활성화되어 있습니다."
 
         cached = self._response_cache.get(user_message) if self._should_cache(user_message) else None
         if cached:
+            if stream_callback:
+                self._emit_stream_text(cached, stream_callback)
             return cached
         try:
             client, provider, model = self._resolve_route(user_message, model_override)
@@ -513,9 +536,10 @@ class LLMProvider:
             if not model:
                 logging.warning("[LLMProvider] 모델 미설정: provider=%s", provider)
                 return self._missing_model_response(provider)
-            self.add_to_history("user", user_message)
+            if save_history:
+                self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context)}]
-            messages.extend(self.conversation_history)
+            messages.extend(self._history_snapshot())
 
             if provider == "anthropic":
                 resp = client.messages.create(
@@ -523,20 +547,24 @@ class LLMProvider:
                     messages=messages[1:]
                 )
                 raw_msg = resp.content[0].text
+                if stream_callback and raw_msg:
+                    self._emit_stream_text(raw_msg, stream_callback)
             else:
-                resp = client.chat.completions.create(
+                raw_msg = self._stream_or_chat_completion(
+                    client,
                     model=model,
                     messages=messages,
                     temperature=0.7,
                     max_tokens=self._estimate_max_tokens(user_message),
+                    stream_callback=stream_callback,
                 )
-                raw_msg = resp.choices[0].message.content or ""
             
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
             msg = self._clean_response(memory_manager.clean_response(raw_msg))
-            self.add_to_history("assistant", msg)
+            if save_history:
+                self.add_to_history("assistant", msg)
             if msg and self._should_cache(user_message):
                 self._response_cache.set(user_message, msg)
             return msg
@@ -544,7 +572,7 @@ class LLMProvider:
             logging.error(f"LLM chat 오류 ({model}): {e}")
             return self._offline_response(user_message)
 
-    def chat_with_tools(self, user_message, include_context=True, model_override=""):
+    def chat_with_tools(self, user_message, include_context=True, model_override="", stream_callback=None):
         """도구 포함 대화"""
         if not self._has_any_client():
             return "AI 기능 비활성화 상태입니다.", []
@@ -558,7 +586,7 @@ class LLMProvider:
                 return self._missing_model_response(provider), []
             self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": self._build_system(include_context)}]
-            messages.extend(self.conversation_history)
+            messages.extend(self._history_snapshot())
             
             request_ctx = self._analyze_request(user_message)
             tools, tool_choice = self._select_tools_for_request(request_ctx)
@@ -571,6 +599,7 @@ class LLMProvider:
                     use_tools=True,
                     model_override=model,
                     client_override=client,
+                    stream_callback=stream_callback,
                 )
 
             response = client.chat.completions.create(
@@ -601,13 +630,15 @@ class LLMProvider:
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
             msg = self._clean_response(memory_manager.clean_response(raw_msg))
+            if stream_callback and msg and not tool_calls:
+                self._emit_stream_text(msg, stream_callback)
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
             logging.error(f"LLM chat_with_tools 오류 ({model}): {e}")
             return self._offline_response(user_message), []
 
-    def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="") -> str:
+    def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="", stream_callback=None) -> str:
         """도구 결과 피드백"""
         if not self._has_any_client():
             return ""
@@ -625,6 +656,7 @@ class LLMProvider:
                     results,
                     model_override=model,
                     client_override=client,
+                    stream_callback=stream_callback,
                 )
 
             assistant_tool_calls = []
@@ -642,24 +674,26 @@ class LLMProvider:
                 })
 
             messages = [{"role": "system", "content": self._build_system()}]
-            messages.extend(self.conversation_history)
+            messages.extend(self._history_snapshot())
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
-            response = client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=300)
+            response = client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=self._estimate_max_tokens(original_msg))
             msg = self._clean_response(response.choices[0].message.content or "")
+            if stream_callback and msg:
+                self._emit_stream_text(msg, stream_callback)
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
             logging.error(f"feed_tool_result 오류 ({model}): {e}")
             return ""
 
-    def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None):
+    def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None, stream_callback=None):
         model = model_override or self.model
         client = client_override or self.client
         try:
             system = self._build_system(include_context)
-            messages = list(self.conversation_history)
+            messages = self._history_snapshot()
             kwargs = {"model": model, "max_tokens": 1000, "system": system, "messages": messages}
             if use_tools:
                 kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"]["description"], "input_schema": t["function"]["parameters"]} for t in self.get_available_tools()]
@@ -672,26 +706,89 @@ class LLMProvider:
             
             raw_msg = " ".join(text_parts)
             msg = self._clean_response(raw_msg)
+            if stream_callback and msg and not tool_calls:
+                self._emit_stream_text(msg, stream_callback)
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
             logging.error(f"Anthropic API 오류: {e}")
             return f"오류 발생: {e}", []
 
-    def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override="", client_override=None):
+    def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override="", client_override=None, stream_callback=None):
         model = model_override or self.model
         client = client_override or self.client
         try:
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
-            messages = list(self.conversation_history)
+            messages = self._history_snapshot()
             messages.append({"role": "user", "content": results_content})
             resp = client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
             msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
+            if stream_callback and msg:
+                self._emit_stream_text(msg, stream_callback)
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
             logging.error(f"Anthropic feed 오류: {e}")
             return ""
+
+    def _stream_or_chat_completion(
+        self,
+        client,
+        *,
+        model: str,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+        stream_callback=None,
+    ) -> str:
+        if not stream_callback:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return resp.choices[0].message.content or ""
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+            parts: List[str] = []
+            for chunk in stream:
+                try:
+                    delta = chunk.choices[0].delta.content or ""
+                except Exception:
+                    delta = ""
+                if not delta:
+                    continue
+                parts.append(delta)
+                stream_callback(delta)
+            text = "".join(parts)
+            if text:
+                return text
+        except Exception as exc:
+            logging.debug("[LLMProvider] 스트리밍 폴백: %s", exc)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        text = resp.choices[0].message.content or ""
+        self._emit_stream_text(text, stream_callback)
+        return text
+
+    def _emit_stream_text(self, text: str, stream_callback, chunk_size: int = 24) -> None:
+        if not stream_callback or not text:
+            return
+        for start in range(0, len(text), chunk_size):
+            chunk = text[start:start + chunk_size]
+            if chunk:
+                stream_callback(chunk)
 
     def _analyze_request(self, user_message: str) -> dict:
         text = (user_message or "").strip()

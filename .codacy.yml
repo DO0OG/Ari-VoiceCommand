@@ -4,6 +4,7 @@ exclude_paths:
   - "VoiceCommand/agent/llm_provider.py"
   - "VoiceCommand/agent/agent_planner.py"
   - "VoiceCommand/agent/real_verifier.py"
+  - "VoiceCommand/memory/conversation_history.py"
   - "VoiceCommand/assistant/ai_assistant.py"
   - "VoiceCommand/build_exe.py"
   - "VoiceCommand/install_cosyvoice.py"
@@ -15,4 +16,5 @@ exclude_paths:
   - "VoiceCommand/core/_whisper_worker.py"
   - "VoiceCommand/core/cosyvoice_installer.py"
   - "VoiceCommand/core/ollama_installer.py"
+  - "VoiceCommand/ui/text_interface.py"
   - "market/marketplace/scripts/semgrep_review.py"

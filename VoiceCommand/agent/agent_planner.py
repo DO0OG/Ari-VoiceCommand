@@ -348,6 +348,7 @@ class AgentPlanner:
 
     def __init__(self, llm_provider):
         self.llm = llm_provider
+        self._last_learning_signals: Dict[str, bool] = {}
 
     def reflect(self, goal: str, history_summary: str) -> Dict[str, str]:
         """실패 원인 분석 및 교훈 도출 (planner_model 사용)"""
@@ -369,6 +370,12 @@ class AgentPlanner:
         from agent.dag_builder import extract_resources, build_dag, assign_parallel_groups, annotate_steps
         from agent.few_shot_injector import get_few_shot_injector
         from agent.planner_feedback import get_planner_feedback_loop
+        signals = {
+            "StrategyMemory": False,
+            "EpisodeMemory": False,
+            "FewShot": False,
+            "PlannerFeedback": False,
+        }
 
         def _annotate(steps: List[ActionStep]) -> List[ActionStep]:
             for step in steps:
@@ -380,6 +387,7 @@ class AgentPlanner:
         templated = self._build_template_plan(goal)
         if templated:
             logging.info(f"[Planner] 템플릿 계획 사용: {goal}")
+            self._last_learning_signals = signals
             return _annotate(templated)
 
         is_dev_goal = self.is_developer_goal(goal)
@@ -389,17 +397,27 @@ class AgentPlanner:
             ctx_block = self._fmt_developer_context(context, goal=goal)
             failure_hints = self._get_failure_hints(goal)
             if failure_hints:
+                signals["StrategyMemory"] = True
                 ctx_block = "## 최근 실패 힌트\n" + failure_hints + "\n" + ctx_block
         else:
+            feedback_loop = get_planner_feedback_loop()
+            feedback_tags = feedback_loop.infer_tags(goal=goal)
             strategy_ctx = self._get_strategy_context(goal)
+            episode_failure_patterns = self._get_episode_failure_patterns(goal)
             ctx_block = self._fmt_context(context)
             if strategy_ctx:
+                signals["StrategyMemory"] = True
                 ctx_block = strategy_ctx + "\n" + ctx_block
+            if episode_failure_patterns:
+                signals["EpisodeMemory"] = True
+                ctx_block = "## 반복 실패 패턴\n" + episode_failure_patterns + "\n" + ctx_block
             few_shot = get_few_shot_injector().get_examples(goal)
             if few_shot:
+                signals["FewShot"] = True
                 ctx_block = few_shot + "\n" + ctx_block
-            feedback_hints = get_planner_feedback_loop().get_hints(goal, [])
+            feedback_hints = feedback_loop.get_hints(goal, feedback_tags)
             if feedback_hints:
+                signals["PlannerFeedback"] = True
                 ctx_block = feedback_hints + "\n" + ctx_block
 
         prompt_template = _DEVELOPER_DECOMPOSE_PROMPT if is_dev_goal else _DECOMPOSE_PROMPT
@@ -421,9 +439,11 @@ class AgentPlanner:
                 fallback_steps = self._build_developer_bootstrap_plan(context)
                 if fallback_steps:
                     logging.info("[Planner] 개발 목표용 부트스트랩 계획 사용")
+                    self._last_learning_signals = signals
                     return _annotate(fallback_steps)
         if not items:
             logging.warning(f"[Planner] decompose 파싱 실패: {raw[:200]}")
+            self._last_learning_signals = signals
             return []
         steps = [
             ActionStep(
@@ -437,7 +457,11 @@ class AgentPlanner:
             )
             for i, s in enumerate(items)
         ]
+        self._last_learning_signals = signals
         return _annotate(steps)
+
+    def get_last_learning_signals(self) -> Dict[str, bool]:
+        return dict(self._last_learning_signals)
 
     def is_developer_goal(self, goal: str) -> bool:
         normalized = re.sub(r"\s+", " ", (goal or "").strip())
@@ -2139,6 +2163,14 @@ class AgentPlanner:
                 return "\n".join(f"- {f}" for f in failures) if failures else ""
             except Exception:
                 return ""
+
+    def _get_episode_failure_patterns(self, goal: str) -> str:
+        try:
+            from agent.episode_memory import get_episode_memory
+            failures = get_episode_memory().get_failure_patterns(goal, limit=3)
+            return "\n".join(f"- {item}" for item in failures) if failures else ""
+        except Exception:
+            return ""
 
     def _call_llm(self, prompt: str, model: str = "", client_override=None, provider_override: str = "", role_hint: str = "planner") -> str:
         """대화 히스토리와 독립적으로 LLM 호출. model이 없으면 planner_model 사용."""

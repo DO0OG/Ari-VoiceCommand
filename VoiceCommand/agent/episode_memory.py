@@ -4,7 +4,9 @@
 """
 from __future__ import annotations
 
+import atexit
 import json
+import hashlib
 import logging
 import os
 import re
@@ -33,6 +35,7 @@ def _get_memory_file() -> str:
 
 _MEMORY_FILE = _get_memory_file()
 _MAX_EPISODES = 120
+_EMBED_DIM = 64
 _LOCK = threading.RLock()
 _INSTANCE = None
 
@@ -50,19 +53,33 @@ class GoalEpisode:
     state_change_summary: str = ""
     policy_summary: str = ""
     timestamp: str = ""
+    embedding: List[float] = field(default_factory=list)
 
 
 class EpisodeMemory:
     def __init__(self, filepath: str = _MEMORY_FILE):
         self.filepath = filepath
         self._episodes: List[GoalEpisode] = []
+        self._save_lock = threading.RLock()
+        self._save_timer: threading.Timer | None = None
+        self._save_delay_seconds = 0.1
         self._load()
 
     def record(self, episode: GoalEpisode) -> None:
+        summary_kr = (episode.summary_kr or "")[:300]
+        similarity_text = self._build_similarity_text(
+            goal=(episode.goal or "")[:200],
+            summary_kr=summary_kr,
+            target_domains=episode.target_domains or [],
+            target_windows=episode.target_windows or [],
+            target_paths=episode.target_paths or [],
+            state_change_summary=(episode.state_change_summary or "")[:300],
+            policy_summary=(episode.policy_summary or "")[:300],
+        )
         item = GoalEpisode(
             goal=(episode.goal or "")[:200],
             achieved=bool(episode.achieved),
-            summary_kr=(episode.summary_kr or "")[:300],
+            summary_kr=summary_kr,
             failure_kind=(episode.failure_kind or "")[:80],
             duration_ms=int(episode.duration_ms or 0),
             target_domains=list(dict.fromkeys(episode.target_domains or []))[:5],
@@ -71,11 +88,12 @@ class EpisodeMemory:
             state_change_summary=(episode.state_change_summary or "")[:300],
             policy_summary=(episode.policy_summary or "")[:300],
             timestamp=episode.timestamp or datetime.now().isoformat(),
+            embedding=list(episode.embedding or self._compute_embedding(similarity_text)),
         )
         self._episodes.append(item)
         if len(self._episodes) > _MAX_EPISODES:
             self._episodes = self._episodes[-_MAX_EPISODES:]
-        self._save()
+        self._schedule_save()
 
     def get_recent_episodes(self, limit: int = 10) -> List[GoalEpisode]:
         return list(self._episodes[-limit:])
@@ -85,11 +103,10 @@ class EpisodeMemory:
         candidates = self._episodes
         matched_by_goal = False
         if normalized_goal:
-            goal_tokens = set(normalized_goal.split())
+            goal_embedding = self._compute_embedding(normalized_goal)
             scored = []
             for episode in self._episodes:
-                episode_tokens = set((episode.goal or "").lower().split())
-                overlap = len(goal_tokens & episode_tokens)
+                overlap = self._score_episode(goal, episode, goal_embedding=goal_embedding)
                 if overlap == 0 and normalized_goal not in (episode.goal or "").lower():
                     continue
                 scored.append((overlap, episode))
@@ -121,6 +138,39 @@ class EpisodeMemory:
                 line += f" | failure={episode.failure_kind}"
             lines.append(line)
         return "\n".join(lines)
+
+    def get_failure_patterns(self, domain: str, limit: int = 5) -> List[str]:
+        normalized = str(domain or "").strip().lower()
+        if not normalized:
+            return []
+        goal_embedding = self._compute_embedding(normalized)
+        scored = []
+        for episode in self._episodes:
+            if episode.achieved:
+                continue
+            score = self._score_episode(domain, episode, goal_embedding=goal_embedding)
+            if normalized in (episode.goal or "").lower():
+                score += 0.2
+            if normalized in (episode.summary_kr or "").lower():
+                score += 0.15
+            if any(normalized in value.lower() for value in (episode.target_domains or [])):
+                score += 0.2
+            if any(normalized in value.lower() for value in (episode.target_windows or [])):
+                score += 0.1
+            if any(normalized in value.lower() for value in (episode.target_paths or [])):
+                score += 0.1
+            if score <= 0:
+                continue
+            reason = episode.failure_kind or episode.summary_kr or "실패 기록"
+            scored.append((score, episode.timestamp or "", f"{episode.goal[:80]} -> {reason[:120]}"))
+
+        patterns: List[str] = []
+        for _, _, pattern in sorted(scored, key=lambda item: (item[0], item[1]), reverse=True):
+            if pattern not in patterns:
+                patterns.append(pattern)
+            if len(patterns) >= limit:
+                break
+        return patterns
 
     def _looks_like_developer_goal(self, goal: str) -> bool:
         normalized = (goal or "").strip().lower()
@@ -169,17 +219,138 @@ class EpisodeMemory:
         try:
             with open(self.filepath, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
-            self._episodes = [GoalEpisode(**item) for item in data if isinstance(item, dict)]
+            self._episodes = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                episode = GoalEpisode(**item)
+                if not episode.embedding:
+                    episode.embedding = self._compute_embedding(self._build_similarity_text(
+                        goal=episode.goal,
+                        summary_kr=episode.summary_kr,
+                        target_domains=episode.target_domains,
+                        target_windows=episode.target_windows,
+                        target_paths=episode.target_paths,
+                        state_change_summary=episode.state_change_summary,
+                        policy_summary=episode.policy_summary,
+                    ))
+                self._episodes.append(episode)
         except Exception as exc:
             logging.warning(f"[EpisodeMemory] 로드 실패: {exc}")
 
     def _save(self) -> None:
+        with self._save_lock:
+            self._save_timer = None
+            try:
+                os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+                with open(self.filepath, "w", encoding="utf-8") as handle:
+                    json.dump([asdict(item) for item in self._episodes], handle, ensure_ascii=False, indent=2)
+            except Exception as exc:
+                logging.warning(f"[EpisodeMemory] 저장 실패: {exc}")
+
+    def _build_similarity_text(
+        self,
+        goal: str,
+        summary_kr: str,
+        target_domains: List[str],
+        target_windows: List[str],
+        target_paths: List[str],
+        state_change_summary: str,
+        policy_summary: str,
+    ) -> str:
+        return " ".join(
+            part for part in [
+                goal,
+                summary_kr,
+                " ".join(target_domains or []),
+                " ".join(target_windows or []),
+                " ".join(target_paths or []),
+                state_change_summary,
+                policy_summary,
+            ]
+            if part
+        )
+
+    def _score_episode(self, goal: str, episode: GoalEpisode, goal_embedding: List[float] | None = None) -> float:
+        goal_text = str(goal or "")
+        episode_text = self._build_similarity_text(
+            goal=episode.goal,
+            summary_kr=episode.summary_kr,
+            target_domains=episode.target_domains,
+            target_windows=episode.target_windows,
+            target_paths=episode.target_paths,
+            state_change_summary=episode.state_change_summary,
+            policy_summary=episode.policy_summary,
+        )
+        token_score = self._token_similarity(self._extract_tokens(goal_text), self._extract_tokens(episode_text))
+        ngram_score = self._ngram_similarity(self._extract_ngrams(goal_text), self._extract_ngrams(episode_text))
+        embedding_score = self._cosine_similarity(
+            goal_embedding or self._compute_embedding(goal_text),
+            episode.embedding or self._compute_embedding(episode_text),
+        )
+        return token_score * 0.35 + ngram_score * 0.2 + max(0.0, embedding_score) * 0.45
+
+    def _extract_tokens(self, text: str) -> set[str]:
+        return set(re.findall(r"[가-힣A-Za-z][가-힣A-Za-z0-9_-]{1,20}", str(text or "").lower()))
+
+    def _extract_ngrams(self, text: str, size: int = 3) -> set[str]:
+        normalized = re.sub(r"\s+", "", str(text or "").lower())
+        if not normalized:
+            return set()
+        if len(normalized) < size:
+            return {normalized}
+        return {
+            normalized[idx:idx + size]
+            for idx in range(len(normalized) - size + 1)
+        }
+
+    def _token_similarity(self, left: set[str], right: set[str]) -> float:
+        if not left or not right:
+            return 0.0
+        return len(left & right) / len(left | right)
+
+    def _ngram_similarity(self, left: set[str], right: set[str]) -> float:
+        if not left or not right:
+            return 0.0
+        return len(left & right) / len(left | right)
+
+    def _compute_embedding(self, text: str) -> List[float]:
         try:
-            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-            with open(self.filepath, "w", encoding="utf-8") as handle:
-                json.dump([asdict(item) for item in self._episodes], handle, ensure_ascii=False, indent=2)
-        except Exception as exc:
-            logging.warning(f"[EpisodeMemory] 저장 실패: {exc}")
+            from agent.embedder import get_embedder
+            return get_embedder().embed(text).tolist()
+        except Exception:
+            vector = [0.0] * _EMBED_DIM
+            for token in self._extract_tokens(text):
+                digest = hashlib.sha256(token.encode("utf-8")).digest()
+                index = int.from_bytes(digest[:4], "big") % _EMBED_DIM
+                vector[index] += 1.0
+            return vector
+
+    def _cosine_similarity(self, left: List[float], right: List[float]) -> float:
+        if not left or not right:
+            return 0.0
+        dot = sum(a * b for a, b in zip(left, right))
+        left_norm = sum(a * a for a in left) ** 0.5
+        right_norm = sum(b * b for b in right) ** 0.5
+        if left_norm == 0 or right_norm == 0:
+            return 0.0
+        return dot / (left_norm * right_norm)
+
+    def _schedule_save(self) -> None:
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(self._save_delay_seconds, self._save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def flush(self) -> None:
+        with self._save_lock:
+            timer = self._save_timer
+            self._save_timer = None
+        if timer is not None:
+            timer.cancel()
+        self._save()
 
 
 def get_episode_memory() -> EpisodeMemory:
@@ -188,3 +359,16 @@ def get_episode_memory() -> EpisodeMemory:
         if _INSTANCE is None:
             _INSTANCE = EpisodeMemory()
         return _INSTANCE
+
+
+def flush_episode_memory() -> None:
+    global _INSTANCE
+    if _INSTANCE is None:
+        return
+    try:
+        _INSTANCE.flush()
+    except Exception as exc:
+        logging.debug("[EpisodeMemory] flush 생략: %s", exc)
+
+
+atexit.register(flush_episode_memory)

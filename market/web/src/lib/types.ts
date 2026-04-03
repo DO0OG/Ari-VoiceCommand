@@ -23,6 +23,7 @@ export type Plugin = {
   created_at: string;
   reviewed_at?: string;
   release_url?: string;
+  sha256?: string;
   review_report?: PluginReviewReport;
   developers?: {
     github_login?: string;

@@ -1,9 +1,9 @@
 """
 Nuitka EXE 빌드 스크립트 (최적화 버전)
-실행: py -3.11 build_exe.py          # 증분 빌드 (캐시 재사용, 빠름)
-실행: py -3.11 build_exe.py --clean  # 클린 빌드 (캐시 삭제)
+실행: py -3.11 build_exe.py           # 증분 빌드 (캐시 재사용, 빠름)
+실행: py -3.11 build_exe.py --clean   # 클린 빌드 (캐시 삭제)
 실행: py -3.11 build_exe.py --onefile # 단일 파일 빌드 (배포용, 느림)
-권장: py -3.11 validate_repo.py      # 빌드 전 검증
+권장: py -3.11 validate_repo.py       # 빌드 전 검증
 
 nofollow 정책:
   numpy, torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
@@ -11,12 +11,17 @@ nofollow 정책:
 
 출력: dist/Ari/
 
-포함 모듈 (2026-03-31 최신):
+포함 모듈 (2026-04-03 최신):
+  agent/goal_predictor.py   — 반복 실패 위험 예측 + orchestrator 선제 경고
+  agent/learning_metrics.py — 학습 컴포넌트 lift 계측
+  agent/regression_guard.py — 주간 성공률 회귀 경고
+  ui/text_interface.py      — 스트리밍 청크 반영 + 문장 경계 TTS 즉시 시작
+  core/resource_manager.py  — 개발 모드 `.ari_runtime` 분리 + 레거시 상태 마이그레이션
+  validate_repo.py          — clean environment runtime / marketplace sha256 contract smoke 추가
   market/web/src/*          — Codacy 대응용 비동기 핸들러/nullable 정리 (웹 배포 산출물과 동작 일치)
   market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
   agent/agent_planner.py    — workspace audit 템플릿 강화 (창 분류/탭 추정/백업 보고)
   core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + timeout 상한 적용
-  validate_repo.py          — subprocess 없는 표준 라이브러리 검증 루프
   services/web_tools.py     — ddgs 우선 검색 클라이언트 + legacy fallback
   requirements.txt          — certifi / requests(>=2.33.0) / Pillow 보안 업데이트, ddgs 기본 채택
 
@@ -154,9 +159,9 @@ nuitka_args = [
     "--include-data-files=icon.ico=icon.ico",
     *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
     "--include-data-files=ari_settings.json=ari_settings.json",
+    *(["--include-data-files=scheduled_tasks.json=scheduled_tasks.json"] if os.path.exists(os.path.join(HERE, "scheduled_tasks.json")) else []),
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
-    *(["--include-data-files=agent/scheduled_tasks.json=agent/scheduled_tasks.json"] if os.path.exists(os.path.join(HERE, "agent", "scheduled_tasks.json")) else []),
     *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
 
     # 아이콘 설정
@@ -169,9 +174,12 @@ nuitka_args = [
     "--include-module=agent.autonomous_executor",
     "--include-module=agent.execution_analysis",
     "--include-module=agent.file_tools",
+    "--include-module=agent.goal_predictor",
+    "--include-module=agent.learning_metrics",
     "--include-module=agent.llm_provider",
     "--include-module=agent.llm_router",
     "--include-module=agent.real_verifier",
+    "--include-module=agent.regression_guard",
     "--include-module=agent.safety_checker",
     "--include-module=agent.proactive_scheduler",
     "--include-module=agent.strategy_memory",

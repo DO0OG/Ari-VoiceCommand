@@ -186,9 +186,12 @@ supabase/
 .mailmap
 
 # ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
+VoiceCommand/.ari_runtime/
 VoiceCommand/ari_memory.db
 VoiceCommand/episode_memory.json
+VoiceCommand/learning_metrics.json
 VoiceCommand/planner_stats.json
+VoiceCommand/scheduled_task_runs.jsonl
 VoiceCommand/skill_library.json
 VoiceCommand/user_profile.json
 VoiceCommand/plugins/*.zip

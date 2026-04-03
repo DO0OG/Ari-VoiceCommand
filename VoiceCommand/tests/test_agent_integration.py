@@ -478,6 +478,61 @@ class AgentIntegrationTests(unittest.TestCase):
 
         self.assertFalse(skill_library.return_value.try_extract_skill.called)
 
+    def test_run_uses_reflection_engine_instead_of_planner_reflect(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        failed_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=False,
+            summary_kr="다운로드 실패",
+            step_results=[
+                StepResult(
+                    step=ActionStep(step_id=0, step_type="python", content="print('x')", description_kr="다운로드"),
+                    exec_result=ExecutionResult(success=False, error="timeout"),
+                    failure_kind="timeout",
+                )
+            ],
+        )
+
+        with patch.object(orchestrator, "_run_loop", return_value=failed_result):
+            with patch.object(orchestrator, "_post_run_update", return_value=None):
+                with patch.object(orchestrator, "_record_strategy", return_value=None) as record_strategy:
+                    with patch("agent.reflection_engine.get_reflection_engine") as reflection_engine:
+                        reflection_engine.return_value.reflect.return_value = SimpleNamespace(
+                            lesson="다운로드 버튼을 다시 찾으세요.",
+                            root_cause="timeout",
+                        )
+                        with patch.object(orchestrator.planner, "reflect", side_effect=AssertionError("planner reflect should not be used")):
+                            result = orchestrator.run("브라우저 다운로드 자동화")
+
+        self.assertIn("교훈", result.summary_kr)
+        self.assertEqual(record_strategy.call_args.kwargs.get("failure_kind_override"), "timeout")
+
+    def test_run_records_learning_metrics_for_component_usage(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        run_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=True,
+            summary_kr="완료",
+            learning_components={
+                "GoalPredictor": True,
+                "EpisodeMemory": True,
+                "SkillLibrary": False,
+            },
+        )
+        fake_metrics = SimpleNamespace(record=lambda *args, **kwargs: None)
+
+        with patch.object(orchestrator, "_run_loop", return_value=run_result):
+            with patch.object(orchestrator, "_post_run_update", return_value=None):
+                with patch.object(orchestrator, "_record_strategy", return_value=None):
+                    with patch("agent.learning_metrics.get_learning_metrics", return_value=fake_metrics):
+                        with patch.object(fake_metrics, "record", wraps=fake_metrics.record) as record:
+                            orchestrator.run("브라우저 다운로드 자동화")
+
+        recorded = {(call.args[0], call.kwargs["activated"], call.kwargs["success"]) for call in record.call_args_list}
+        self.assertIn(("GoalPredictor", True, True), recorded)
+        self.assertIn(("EpisodeMemory", True, True), recorded)
+        self.assertIn(("SkillLibrary", False, True), recorded)
+
     def test_chrome_url_goal_builds_desktop_workflow_template(self):
         planner = AgentPlanner(DummyLLMProvider())
         steps = planner._build_template_plan("크롬으로 https://example.com 열어줘")

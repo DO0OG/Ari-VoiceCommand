@@ -489,10 +489,13 @@ class AutonomousExecutor:
             "browser_url_changed": str(before_browser.get("current_url", "") or "") != str(after_browser.get("current_url", "") or ""),
             "browser_url_before": str(before_browser.get("current_url", "") or ""),
             "browser_url_after": str(after_browser.get("current_url", "") or ""),
+            "browser_title_changed": str(before_browser.get("title", "") or "") != str(after_browser.get("title", "") or ""),
+            "browser_title_before": str(before_browser.get("title", "") or ""),
             "browser_title_after": str(after_browser.get("title", "") or ""),
             "new_windows": [title for title in after_windows if title and title not in before_windows][:5],
             "closed_windows": [title for title in before_windows if title and title not in after_windows][:5],
             "new_desktop_paths": [path for path in after_paths if path and path not in before_paths][:5],
+            "removed_desktop_paths": [path for path in before_paths if path and path not in after_paths][:5],
             "last_browser_action": str(after_browser.get("last_action_summary", "") or "")[:200],
         }
 
@@ -504,10 +507,16 @@ class AutonomousExecutor:
             parts.append(f"active_window={delta['active_window_after']}")
         if delta.get("browser_url_changed") and delta.get("browser_url_after"):
             parts.append(f"browser_url={delta['browser_url_after']}")
+        elif delta.get("browser_title_changed") and delta.get("browser_title_after"):
+            parts.append(f"browser_title={delta['browser_title_after']}")
         if delta.get("new_windows"):
             parts.append(f"new_windows={', '.join(delta['new_windows'][:2])}")
+        elif delta.get("closed_windows"):
+            parts.append(f"closed_windows={', '.join(delta['closed_windows'][:2])}")
         if delta.get("new_desktop_paths"):
             parts.append(f"new_paths={', '.join(delta['new_desktop_paths'][:2])}")
+        elif delta.get("removed_desktop_paths"):
+            parts.append(f"removed_paths={', '.join(delta['removed_desktop_paths'][:2])}")
         if delta.get("last_browser_action"):
             parts.append(f"browser_last={delta['last_browser_action']}")
         return " | ".join(parts[:4])

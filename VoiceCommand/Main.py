@@ -159,6 +159,63 @@ def check_cosyvoice_first_run(app):
         QMessageBox.information(None, "설치 완료",
             "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요.")
 
+
+def register_background_learning_tasks(scheduler) -> None:
+    from core.config_manager import ConfigManager
+
+    memory_enabled = True
+    weekly_enabled = bool(ConfigManager.get("weekly_report_enabled", False))
+    scheduler.ensure_task(
+        name="ari_memory_consolidation",
+        goal="메모리 정리 실행",
+        schedule_expr="매일 3시 30",
+        task_type="maintenance",
+        repeat=True,
+        repeat_sec=86400,
+        repeat_rule="daily",
+        enabled=memory_enabled,
+    )
+    scheduler.ensure_task(
+        name="ari_weekly_report",
+        goal="이번 주 자기개선 리포트 생성",
+        schedule_expr="매주 월요일 9시 0",
+        task_type="weekly_report",
+        repeat=True,
+        repeat_sec=86400 * 7,
+        repeat_rule="weekly",
+        enabled=weekly_enabled,
+    )
+
+def start_performance_warmups() -> None:
+    try:
+        from agent.embedder import get_embedder
+        get_embedder().warmup_async()
+    except Exception as exc:
+        logging.debug(f"임베더 워밍업 생략: {exc}")
+
+
+def flush_runtime_state() -> None:
+    try:
+        from agent.strategy_memory import flush_strategy_memory
+        flush_strategy_memory()
+    except Exception as exc:
+        logging.debug(f"StrategyMemory flush 생략: {exc}")
+    try:
+        from agent.episode_memory import flush_episode_memory
+        flush_episode_memory()
+    except Exception as exc:
+        logging.debug(f"EpisodeMemory flush 생략: {exc}")
+    try:
+        from agent.skill_library import flush_skill_library
+        flush_skill_library()
+    except Exception as exc:
+        logging.debug(f"SkillLibrary flush 생략: {exc}")
+    try:
+        from memory.conversation_history import get_conversation_history
+        get_conversation_history().flush()
+    except Exception as exc:
+        logging.debug(f"ConversationHistory flush 생략: {exc}")
+
 def main():
     global ai_assistant
     ari_core = None
@@ -185,6 +242,7 @@ def main():
         # AI 어시스턴트 초기화
         ai_assistant = get_ai_assistant()
         set_ai_assistant(ai_assistant)
+        start_performance_warmups()
 
         use_system_tray = QSystemTrayIcon.isSystemTrayAvailable()
 
@@ -205,9 +263,15 @@ def main():
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
         start_tts_background()
 
+        scheduler = get_scheduler(tts_wrapper)
+        try:
+            register_background_learning_tasks(scheduler)
+        except Exception as exc:
+            logging.debug(f"백그라운드 학습 작업 등록 생략: {exc}")
+
         # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
         try:
-            get_scheduler(tts_wrapper).check_missed_tasks_on_startup()
+            scheduler.check_missed_tasks_on_startup()
         except Exception as exc:
             logging.debug(f"놓친 작업 확인 생략: {exc}")
 
@@ -278,6 +342,7 @@ def main():
         logging.error(f"예외 발생: {str(e)}", exc_info=True)
     finally:
         logging.info("=== 앱 종료 시작 ===")
+        flush_runtime_state()
         if text_interface:
             text_interface.cleanup()
         if character:

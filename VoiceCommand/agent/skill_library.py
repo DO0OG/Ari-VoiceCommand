@@ -1,12 +1,13 @@
 """반복 성공 패턴을 재사용 가능한 스킬로 보관."""
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
 import re
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import List, Optional
 
 _DEVELOPER_SCOPE_RE = re.compile(
@@ -17,6 +18,14 @@ _DEVELOPER_ACTION_RE = re.compile(
     r"(validate_repo\.py|--compile-only|pytest|unittest|코드\s*(?:변경|수정)|검증|테스트(?:\s*실행)?|구현|개선(?:\s*과제)?|분석|전체\s*파악)",
     re.IGNORECASE,
 )
+
+_TAG_KEYWORDS = {
+    "파일": ["파일", "폴더", "저장", "쓰기", "읽기", "복사", "이동", "다운로드"],
+    "웹": ["웹", "브라우저", "사이트", "크롬", "엣지", "url", "링크", "로그인"],
+    "자동화": ["자동", "반복", "스케줄", "예약", "알람", "배치"],
+    "UI": ["창", "클릭", "마우스", "키보드", "화면", "포커스"],
+    "정보": ["뉴스", "날씨", "시간", "요약", "정리", "검색"],
+}
 
 
 @dataclass
@@ -31,6 +40,9 @@ class Skill:
     confidence: float = 0.5
     enabled: bool = True
     compiled: bool = False      # True: Python 함수로 컴파일됨 (Direction 2)
+    user_positive_feedback: int = 0
+    user_negative_feedback: int = 0
+    context_tags: List[str] = field(default_factory=list)
 
     # 자기수정 임계값
     _COMPILE_THRESHOLD = 5       # success_count >= 이 값이면 Python 컴파일 시도
@@ -46,6 +58,9 @@ class SkillLibrary:
         except Exception:
             self.file_path = os.path.join(os.path.dirname(__file__), "skill_library.json")
         self.skills: List[Skill] = []
+        self._save_lock = threading.RLock()
+        self._save_timer: threading.Timer | None = None
+        self._save_delay_seconds = 0.1
         self._load()
 
     def _load(self):
@@ -68,11 +83,16 @@ class SkillLibrary:
             self.skills = []
 
     def _save(self):
-        try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump([asdict(skill) for skill in self.skills], f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.warning(f"[SkillLibrary] 저장 실패: {e}")
+        with self._save_lock:
+            self._save_timer = None
+            try:
+                os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+                with open(self.file_path, "w", encoding="utf-8") as f:
+                    json.dump([asdict(skill) for skill in self.skills], f, ensure_ascii=False, indent=2)
+            except FileNotFoundError as e:
+                logging.debug(f"[SkillLibrary] 저장 생략: {e}")
+            except Exception as e:
+                logging.warning(f"[SkillLibrary] 저장 실패: {e}")
 
     def list_skills(self) -> List[Skill]:
         return [skill for skill in self.skills if skill.enabled]
@@ -81,6 +101,7 @@ class SkillLibrary:
         if self._looks_like_developer_goal(goal):
             return None
         normalized = self._normalize_goal(goal)
+        goal_tags = set(self._infer_context_tags(goal))
         best_skill = None
         best_score = 0
         for skill in self.skills:
@@ -90,7 +111,9 @@ class SkillLibrary:
             for pattern in skill.trigger_patterns:
                 if pattern and pattern in normalized:
                     score += len(pattern)
-            if score > best_score and skill.confidence >= 0.45:
+            tag_overlap = len(goal_tags & set(skill.context_tags or []))
+            score += tag_overlap * 10
+            if score > best_score and skill.confidence >= 0.4:
                 best_skill = skill
                 best_score = score
         return best_skill
@@ -101,12 +124,14 @@ class SkillLibrary:
         if not success or not steps or len(steps) > 5:
             return None
         normalized = self._normalize_goal(goal)
+        context_tags = self._infer_context_tags(goal, steps=steps)
         skill = self.get_applicable_skill(goal)
         if skill:
             skill.success_count += 1
             skill.avg_duration_ms = self._blend_duration(skill.avg_duration_ms, duration_ms, skill.success_count)
-            skill.confidence = min(1.0, round(skill.confidence + 0.05, 2))
-            self._save()
+            skill.context_tags = self._merge_tags(skill.context_tags, context_tags)
+            skill.confidence = self._recalculate_confidence(skill)
+            self._schedule_save()
             # Direction 1: 스텝 압축 (백그라운드)
             if skill.success_count == Skill._CONDENSE_THRESHOLD and not skill.compiled:
                 threading.Thread(
@@ -130,21 +155,23 @@ class SkillLibrary:
             success_count=3,
             avg_duration_ms=int(duration_ms),
             confidence=0.65,
+            context_tags=context_tags,
         )
+        skill.confidence = self._recalculate_confidence(skill)
         self.skills.append(skill)
-        self._save()
+        self._schedule_save()
         return skill
 
-    def record_feedback(self, skill_id: str, positive: bool, error: str = ""):
+    def record_feedback(self, skill_id: str, positive: bool, error: str = "", context_tags: Optional[List[str]] = None):
         for skill in self.skills:
             if skill.skill_id != skill_id:
                 continue
             if positive:
                 skill.success_count += 1
-                skill.confidence = min(1.0, round(skill.confidence + 0.06, 2))
+                skill.user_positive_feedback += 1
             else:
                 skill.fail_count += 1
-                skill.confidence = max(0.0, round(skill.confidence - 0.12, 2))
+                skill.user_negative_feedback += 1
                 if skill.fail_count >= 2 and skill.fail_count > skill.success_count:
                     skill.enabled = False
                 # Direction 1: 실패 시 스텝 수정 (백그라운드)
@@ -157,7 +184,10 @@ class SkillLibrary:
                     threading.Thread(
                         target=self._async_repair_compiled, args=(skill, error), daemon=True
                     ).start()
-            self._save()
+            if context_tags:
+                skill.context_tags = self._merge_tags(skill.context_tags, context_tags)
+            skill.confidence = self._recalculate_confidence(skill)
+            self._schedule_save()
             return
 
     def mark_compiled(self, skill_id: str):
@@ -165,7 +195,7 @@ class SkillLibrary:
         for skill in self.skills:
             if skill.skill_id == skill_id:
                 skill.compiled = True
-                self._save()
+                self._schedule_save()
                 return
 
     def deprecate_if_failing(self, skill_id: str, error: str = ""):
@@ -175,7 +205,7 @@ class SkillLibrary:
         for skill in self.skills:
             if skill.skill_id == skill_id:
                 skill.enabled = False
-                self._save()
+                self._schedule_save()
                 return True
         return False
 
@@ -268,6 +298,57 @@ class SkillLibrary:
             return int(new_value)
         return int(((current * (count - 1)) + new_value) / count)
 
+    def _infer_context_tags(self, goal: str, steps: list | None = None) -> List[str]:
+        text_parts = [self._normalize_goal(goal)]
+        for step in steps or []:
+            text_parts.append(str(getattr(step, "description_kr", "") or "").lower())
+            text_parts.append(str(getattr(step, "content", "") or "").lower())
+        text = " ".join(text_parts)
+        tags = [
+            tag for tag, keywords in _TAG_KEYWORDS.items()
+            if any(keyword.lower() in text for keyword in keywords)
+        ]
+        if re.search(r"https?://", text):
+            tags.append("웹")
+        return self._merge_tags([], tags or ["일반"])
+
+    def _merge_tags(self, current: List[str], new_tags: List[str]) -> List[str]:
+        merged = []
+        for tag in list(current or []) + list(new_tags or []):
+            value = str(tag or "").strip()
+            if not value or value in merged:
+                continue
+            merged.append(value)
+        return merged or ["일반"]
+
+    def _recalculate_confidence(self, skill: Skill) -> float:
+        confidence = 0.35
+        confidence += min(skill.success_count * 0.06, 0.35)
+        confidence -= min(skill.fail_count * 0.08, 0.3)
+        confidence += min(skill.user_positive_feedback * 0.04, 0.12)
+        confidence -= min(skill.user_negative_feedback * 0.06, 0.18)
+        if skill.compiled:
+            confidence += 0.05
+        if skill.context_tags:
+            confidence += min(len(skill.context_tags) * 0.01, 0.05)
+        return round(max(0.0, min(1.0, confidence)), 2)
+
+    def _schedule_save(self) -> None:
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(self._save_delay_seconds, self._save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def flush(self) -> None:
+        with self._save_lock:
+            timer = self._save_timer
+            self._save_timer = None
+        if timer is not None:
+            timer.cancel()
+        self._save()
+
 
 _skill_library: SkillLibrary | None = None
 
@@ -277,3 +358,15 @@ def get_skill_library() -> SkillLibrary:
     if _skill_library is None:
         _skill_library = SkillLibrary()
     return _skill_library
+
+
+def flush_skill_library() -> None:
+    if _skill_library is None:
+        return
+    try:
+        _skill_library.flush()
+    except Exception as exc:
+        logging.debug("[SkillLibrary] flush 생략: %s", exc)
+
+
+atexit.register(flush_skill_library)

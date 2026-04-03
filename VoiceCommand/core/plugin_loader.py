@@ -14,6 +14,7 @@ import shutil
 import sys
 import zipfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import FunctionType
 from types import ModuleType
 from typing import Any, Dict, List, Optional, Tuple
@@ -92,6 +93,40 @@ class PluginManager:
         with zipfile.ZipFile(path) as archive:
             with archive.open("plugin.json") as handle:
                 return json.loads(handle.read().decode("utf-8"))
+
+    def _validate_zip_member_path(self, base_dir: str, member_name: str) -> Path:
+        normalized_member = str(member_name or "").replace("\\", "/").strip("/")
+        if not normalized_member:
+            return Path(base_dir).resolve()
+        base_path = Path(base_dir).resolve()
+        target_path = (base_path / normalized_member).resolve()
+        try:
+            target_path.relative_to(base_path)
+        except ValueError as exc:
+            raise RuntimeError(f"ZIP 경로 이탈이 감지되어 설치를 중단합니다: {member_name}") from exc
+        return target_path
+
+    def _safe_extract_archive(self, archive: zipfile.ZipFile, extract_dir: str) -> None:
+        base_path = Path(extract_dir).resolve()
+        for member in archive.infolist():
+            target_path = self._validate_zip_member_path(str(base_path), member.filename)
+            if member.is_dir():
+                target_path.mkdir(parents=True, exist_ok=True)
+                continue
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member, "r") as source, open(target_path, "wb") as destination:
+                shutil.copyfileobj(source, destination)
+
+    def _inspect_python_source(self, module_path: str) -> None:
+        try:
+            with open(module_path, "r", encoding="utf-8") as handle:
+                source = handle.read()
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"플러그인 소스 인코딩을 읽을 수 없습니다: {module_path}") from exc
+        from agent.safety_checker import DangerLevel, get_safety_checker
+        report = get_safety_checker().check_python(source)
+        if report.level == DangerLevel.DANGEROUS:
+            raise RuntimeError(f"플러그인 안전 검사 실패: {report.summary_kr}")
 
     def _plugin_stub(self, path: str) -> PluginInfo:
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -241,6 +276,13 @@ class PluginManager:
     def _load_single_plugin(self, plugin: PluginInfo, context: PluginContext) -> PluginInfo:
         module_name = f"ari_user_plugin_{plugin.name}"
         module_path, sys_path_entry = self._resolve_load_target(plugin)
+        if plugin.runtime_path:
+            for dirpath, _, filenames in os.walk(plugin.runtime_path):
+                for fname in filenames:
+                    if fname.endswith(".py"):
+                        self._inspect_python_source(os.path.join(dirpath, fname))
+        else:
+            self._inspect_python_source(module_path)
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         if spec is None or spec.loader is None:
             raise RuntimeError("플러그인 모듈 스펙 생성 실패")
@@ -294,7 +336,7 @@ class PluginManager:
             shutil.rmtree(extract_dir, ignore_errors=True)
         os.makedirs(extract_dir, exist_ok=True)
         with zipfile.ZipFile(plugin.path) as archive:
-            archive.extractall(extract_dir)
+            self._safe_extract_archive(archive, extract_dir)
 
         module_path = os.path.join(extract_dir, entry)
         if not os.path.exists(module_path):

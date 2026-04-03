@@ -40,17 +40,30 @@ class GroqAssistant:
         logging.info(f"[GroqAssistant] 레거시 execute_function 호출: {function_name}")
         return ""
 
-    def chat_with_tools(self, user_message, include_context=True):
-        return self._provider.chat_with_tools(user_message, include_context=include_context)
+    def chat_with_tools(self, user_message, include_context=True, stream_callback=None):
+        return self._provider.chat_with_tools(
+            user_message,
+            include_context=include_context,
+            stream_callback=stream_callback,
+        )
 
-    def chat(self, user_message, include_context=True):
-        return self._provider.chat(user_message, include_context=include_context)
+    def chat(self, user_message, include_context=True, stream_callback=None):
+        return self._provider.chat(
+            user_message,
+            include_context=include_context,
+            stream_callback=stream_callback,
+        )
 
-    def feed_tool_result(self, original_msg, tool_calls, results):
-        return self._provider.feed_tool_result(original_msg, tool_calls, results)
+    def feed_tool_result(self, original_msg, tool_calls, results, stream_callback=None):
+        return self._provider.feed_tool_result(
+            original_msg,
+            tool_calls,
+            results,
+            stream_callback=stream_callback,
+        )
 
     def clear_history(self):
-        self._provider.conversation_history = []
+        self._provider.clear_history()
         logging.info("대화 기록 초기화됨")
 
     def process_query(self, query):

@@ -3,8 +3,8 @@
 이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-04-02
-## 상태: Phase 1-5 구현 완료 · 자율 저장소 작업 안정화 완료 · 156/156 테스트 통과
+## Last Updated: 2026-04-03
+## 상태: Phase 1-8 구현 및 성능 보강 완료 · 런타임 상태 분리 완료 · 268/268 테스트 통과
 
 ---
 
@@ -21,7 +21,7 @@
 
 | 디렉터리 | 내용 |
 |----------|------|
-| `VoiceCommand/agent/` | 자율 실행 엔진 + 자기개선 루프 (LLMRouter, SkillLibrary, ReflectionEngine, PlannerFeedback, FewShot, WeeklyReport) |
+| `VoiceCommand/agent/` | 자율 실행 엔진 + 자기개선 루프 (LLMRouter, SkillLibrary, ReflectionEngine, PlannerFeedback, FewShot, GoalPredictor, LearningMetrics, RegressionGuard, WeeklyReport) |
 | `VoiceCommand/commands/` | BaseCommand 구현체 (priority 기반 디스패치) + MemoryCommand |
 | `VoiceCommand/core/` | 앱 런타임 핵심 (AppState, ConfigManager, threads) |
 | `VoiceCommand/services/` | 웹 도구, 타이머, DOM 분석 |
@@ -62,7 +62,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 4. Phase 1-5 신규 모듈 (2026-03-30)
+## 4. Phase 1-8 핵심 모듈 (2026-04-03)
 
 ### agent/ 신규
 
@@ -74,6 +74,9 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 | `skill_optimizer.py` | `SkillOptimizer`, `get_skill_optimizer()` | D1: 스텝 재작성, D2: Python 컴파일·수정 |
 | `reflection_engine.py` | `ReflectionEngine`, `ReflectionResult`, `get_reflection_engine()` | 실패 4레이어 자기반성 |
 | `planner_feedback.py` | `PlannerFeedbackLoop`, `get_planner_feedback_loop()` | step_type별 성공률 통계 → 플래너 힌트 |
+| `goal_predictor.py` | `GoalPredictor`, `get_goal_predictor()` | 과거 전략/실패 패턴 기반 위험 경고 |
+| `learning_metrics.py` | `LearningMetrics`, `get_learning_metrics()` | 학습 컴포넌트별 lift/활성화 기여도 측정 |
+| `regression_guard.py` | `RegressionGuard`, `get_regression_guard()` | 지난 주 대비 성공률 하락 감지 |
 | `weekly_report.py` | `WeeklyReport`, `get_weekly_report()` | 주간 자기개선 리포트 생성 |
 
 ### memory/ 신규
@@ -102,12 +105,14 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - 단일 스케줄러 (AriScheduler 삭제·통합)
 - `add_task(name, goal, schedule_expr)`, `remove_task(task_id)`, `toggle_task(task_id)`, `run_task_now(task_id)`, `check_missed_tasks_on_startup()`
 - `schedule_expr` 필드 (구 `schedule_desc` — 로드 시 자동 마이그레이션)
+- 기준은 `last_run`이 아니라 `next_run <= now` 이며, 실행 시작 시 `last_run`/`next_run`을 선반영해 missed task를 구조적으로 복구합니다.
 - 저장 경로: `ResourceManager.get_writable_path("scheduled_tasks.json")`
 
 ### `agent/llm_provider.py`
 - Ollama 추가: `api_key="ollama"`, `base_url=ollama_base_url` 설정값 사용
 - 도구 16개 정의 완료
 - `planner_client`, `execution_client` 역할별 분리
+- `ResponseCache`는 `RLock`으로 보호되고, `feed_tool_result()`는 `max_tokens=300` 고정값 대신 메시지 길이 기반 동적 추정을 사용합니다.
 
 ### `agent/agent_orchestrator.py`
 - `_post_run_update()`: 성공 시 SkillLibrary 스킬 추출, 실패 시 ReflectionEngine 반성 → StrategyMemory 저장
@@ -127,9 +132,15 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ### `memory/conversation_history.py`
 - 슬라이딩 요약: `MAX_ACTIVE=20`, `COMPRESS_UNIT=5`, `MAX_SUMMARIES=5`
+- `_summarize_chunk()`는 단순 truncation 대신 문장 경계 우선 요약을 사용하고, 종료 시 `flush()`로 debounce 저장을 강제 반영할 수 있습니다.
 
 ### `core/config_manager.py`
-- Phase 1-5 신규 기본값 6개: `llm_router_enabled`, `few_shot_max_examples`, `skill_library_enabled`, `reflection_engine_enabled`, `memory_consolidation_days`, `weekly_report_enabled`
+- Phase 1-8 기본값: `llm_router_enabled=True`, `few_shot_max_examples`, `skill_library_enabled`, `reflection_engine_enabled`, `memory_consolidation_days`, `weekly_report_enabled`
+
+### `core/resource_manager.py`
+- 개발 모드 writable root는 `VoiceCommand/.ari_runtime/`, 배포 모드는 `%AppData%/Ari/`
+- 루트 `ari_settings.json`, `scheduled_tasks.json`은 템플릿 파일로 유지하고, 실제 실행 상태는 `.ari_runtime/` 아래로 분리
+- 레거시 루트 상태 파일이 있으면 새 런타임 경로로 자동 마이그레이션
 
 ### `ui/scheduler_panel.py`
 - Qt 시그널 연결 제거 → `QTimer` 5초 폴링 방식으로 교체
@@ -137,21 +148,26 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 6. 2026-04-02 자율 저장소 작업 안정화 변경사항
+## 6. 2026-04-03 주요 변경사항
 
-### 핵심 버그 수정
-- `agent_orchestrator.py` `_execute_plan`: step 출력 저장 한도 300자 → developer goal 시 2000자로 확장. bootstrap step_0(repo scan ~1900자)·step_2(테스트 목록 ~800자) JSON이 잘려 LLM이 저장소 구조를 못 받던 근본 원인 해결.
+### 보안 / 운영 안정성
+- `plugin_loader.py`: ZIP safe extract, import 직전 `SafetyChecker` 재검사, 악성 경로 차단
+- `skill_optimizer.py`: `run_compiled()` 실행 직전 `check_python()` 재검사
+- `marketplace_client.py` + Supabase functions + SQL migration + web types: `sha256` 계약 end-to-end 정렬
+- `ResourceManager`: 개발 모드 `.ari_runtime/` 분리, 템플릿 파일/실행 상태 분리
+- `validate_repo.py`: compile + unittest 외에 clean runtime / marketplace SHA256 smoke 추가
 
-### 영향 테스트 선별
-- `agent_planner.py` `_infer_relevant_tests`: goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=`로 LLM에게 우선 제시. 테스트 목록도 `all=` 전체 표시로 전환.
-- bootstrap step_2: `test_*.py` 파일만 수집하도록 필터링.
-- bootstrap step_0: samples 15 → 5개로 축소.
+### 자율 학습 / 성능
+- `GoalPredictor`: double-digit 반복 실패(`10회`, `11회` 등)도 경고, fresh start 과잉 경고 방지
+- `LearningMetrics` + `RegressionGuard`: 주간 리포트에서 학습 요소별 lift와 회귀 경고 제공
+- `ConversationHistory`: 문장 경계 우선 요약으로 압축 품질 개선
+- `TextInterface`: 스트리밍 응답 즉시 표시 + 문장 경계 TTS 즉시 시작
+- `Main.py`: 워밍업과 주기 작업 등록 개선
 
-### 에피소드 메모리 정리
-- `episode_memory.py` `prune_old_failures(max_age_days=30)`: 30일 이상 된 실패 에피소드 제거. `_post_run_update`에서 매 실행 후 자동 호출.
-
-### .gitignore
-- 런타임 산출물(`ari_memory.db`, `episode_memory.json`, `planner_stats.json`, `skill_library.json`, `user_profile.json`, `plugins/*.zip`, `AGENT_HANDOFF_*.md` 등) 추가.
+### 검증 기준
+- 전체 테스트: `268/268`
+- `validate_repo.py`: full pass
+- stream TTS 회귀 테스트: `test_text_interface.py`
 
 ---
 

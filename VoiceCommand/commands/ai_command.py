@@ -847,7 +847,7 @@ class AICommand(BaseCommand):
     def execute(self, text: str) -> None:
         self._run_interaction(text, self.tts_wrapper)
 
-    def run_interaction(self, text: str) -> str:
+    def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
         outputs: List[str] = []
 
@@ -855,11 +855,11 @@ class AICommand(BaseCommand):
             if message:
                 outputs.append(str(message))
 
-        self._run_interaction(text, collect)
+        self._run_interaction(text, collect, stream_callback=stream_callback)
         cleaned = [msg.strip() for msg in outputs if msg and msg.strip()]
         return "\n".join(cleaned)
 
-    def _run_interaction(self, text: str, output_callback: Callable[[str], None]) -> None:
+    def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None) -> None:
         if not self._exec_lock.acquire(blocking=False):
             logging.warning(f"AI 명령 실행 중 재진입 시도 무시: {text}")
             return
@@ -879,7 +879,12 @@ class AICommand(BaseCommand):
                 if self.learning_mode_ref.get('enabled'):
                     self._record_user_pattern(text)
 
-                response, tool_calls = self.ai_assistant.chat_with_tools(text, include_context=True)
+                response, tool_calls = self._invoke_with_optional_stream(
+                    self.ai_assistant.chat_with_tools,
+                    text,
+                    include_context=True,
+                    stream_callback=stream_callback,
+                )
 
                 if not tool_calls:
                     tool_calls = self._recover_tool_calls_from_response(text, response)
@@ -911,7 +916,12 @@ class AICommand(BaseCommand):
                     followup = None
                     has_agent_task = any(tc.get("name") == "run_agent_task" for tc in tool_calls)
                     if non_none and hasattr(self.ai_assistant, 'feed_tool_result') and not has_agent_task:
-                        followup = self._run_agentic_followup(text, tool_calls, results)
+                        followup = self._run_agentic_followup(
+                            text,
+                            tool_calls,
+                            results,
+                            stream_callback=stream_callback,
+                        )
                     if followup:
                         self._emit_user_message(followup)
                         response = followup
@@ -925,7 +935,12 @@ class AICommand(BaseCommand):
                         self._emit_user_message(response)
 
             elif hasattr(self.ai_assistant, 'chat'):
-                response = self.ai_assistant.chat(text, include_context=False)
+                response = self._invoke_with_optional_stream(
+                    self.ai_assistant.chat,
+                    text,
+                    include_context=False,
+                    stream_callback=stream_callback,
+                )
                 self._emit_user_message(response)
             else:
                 response, _, _ = self.ai_assistant.process_query(text)
@@ -974,13 +989,35 @@ class AICommand(BaseCommand):
                 results.append(None)
         return results
 
-    def _run_agentic_followup(self, original_text: str, tool_calls: list, results: List[Optional[str]]) -> Optional[str]:
+    def _run_agentic_followup(
+        self,
+        original_text: str,
+        tool_calls: list,
+        results: List[Optional[str]],
+        stream_callback: Optional[Callable[[str], None]] = None,
+    ) -> Optional[str]:
         """도구 실행 결과를 LLM에 피드백하고 최종 응답 문자열을 반환."""
         try:
-            return self.ai_assistant.feed_tool_result(original_text, tool_calls, results)
+            return self._invoke_with_optional_stream(
+                self.ai_assistant.feed_tool_result,
+                original_text,
+                tool_calls,
+                results,
+                stream_callback=stream_callback,
+            )
         except Exception as e:
             logging.error(f"에이전틱 후속 처리 오류: {e}", exc_info=True)
             return None
+
+    def _invoke_with_optional_stream(self, func: Callable, *args, stream_callback=None, **kwargs):
+        if stream_callback:
+            try:
+                return func(*args, stream_callback=stream_callback, **kwargs)
+            except TypeError as exc:
+                message = str(exc)
+                if "stream_callback" not in message and "unexpected keyword argument" not in message:
+                    raise
+        return func(*args, **kwargs)
 
     def _should_emit_preface_response(self, response: str) -> bool:
         normalized = (response or "").strip()

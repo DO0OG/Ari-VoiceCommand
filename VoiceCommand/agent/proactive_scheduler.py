@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional, Any
 
 _SCHEDULE_FILE: str = ""  # _init_schedule_file() 에서 설정
+_SCHEDULE_RUN_LOG_FILE: str = ""  # _init_schedule_log_file() 에서 설정
 _TICK_INTERVAL = 30
 _MAX_TASKS = 50
 
@@ -23,6 +24,14 @@ def _init_schedule_file() -> str:
         return ResourceManager.get_writable_path("scheduled_tasks.json")
     except Exception:
         return os.path.join(os.path.dirname(__file__), "scheduled_tasks.json")
+
+
+def _init_schedule_log_file() -> str:
+    try:
+        from core.resource_manager import ResourceManager
+        return ResourceManager.get_writable_path("scheduled_task_runs.jsonl")
+    except Exception:
+        return os.path.join(os.path.dirname(__file__), "scheduled_task_runs.jsonl")
 
 @dataclass
 class ScheduledTask:
@@ -41,18 +50,35 @@ class ScheduledTask:
     last_run: str = ""
     last_result: str = ""
 
+
+@dataclass
+class ScheduledTaskRun:
+    task_id: str
+    goal: str
+    task_type: str
+    started_at: str
+    finished_at: str
+    success: bool
+    error: str = ""
+    summary: str = ""
+    next_run_before: str = ""
+    next_run_after: str = ""
+
 class ProactiveScheduler:
     """사용자의 컨텍스트를 학습하여 선제적으로 제안하고 지정 시각에 작업을 수행합니다."""
 
     _WEEKDAY_KO = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
     def __init__(self, tts_func: Optional[Callable] = None):
-        global _SCHEDULE_FILE
+        global _SCHEDULE_FILE, _SCHEDULE_RUN_LOG_FILE
         if not _SCHEDULE_FILE:
             _SCHEDULE_FILE = _init_schedule_file()
+        if not _SCHEDULE_RUN_LOG_FILE:
+            _SCHEDULE_RUN_LOG_FILE = _init_schedule_log_file()
         self.tts = tts_func
         self._tasks: Dict[str, ScheduledTask] = {}
         self._lock = threading.Lock()
+        self._run_log_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._orchestrator_func: Optional[Callable] = None
         self._load()
@@ -66,7 +92,7 @@ class ProactiveScheduler:
     def schedule(self, goal: str, next_run_dt: datetime, desc: str,
                  task_type: str = "agent", repeat: bool = False, repeat_sec: int = 0,
                  repeat_rule: str = "", except_dates: Optional[List[str]] = None,
-                 alarm_sound: str = "", name: str = "") -> str:
+                 alarm_sound: str = "", name: str = "", enabled: bool = True) -> str:
         task_id = str(uuid.uuid4())[:8]
         task = ScheduledTask(
             task_id=task_id, goal=goal, schedule_expr=desc,
@@ -75,6 +101,7 @@ class ProactiveScheduler:
             repeat_rule=repeat_rule,
             except_dates=list(except_dates or []),
             alarm_sound=alarm_sound,
+            enabled=enabled,
         )
         with self._lock:
             self._tasks[task_id] = task
@@ -102,6 +129,47 @@ class ProactiveScheduler:
         )
         with self._lock:
             return self._tasks[task_id]
+
+    def ensure_task(self, name: str, goal: str, schedule_expr: str, *,
+                    task_type: str = "agent", repeat: bool = False,
+                    repeat_sec: int = 0, repeat_rule: str = "",
+                    except_dates: Optional[List[str]] = None,
+                    alarm_sound: str = "", enabled: bool = True) -> str:
+        next_run = self._calc_next_run(schedule_expr)
+        should_create = False
+        with self._lock:
+            existing = next((task for task in self._tasks.values() if task.name == name), None)
+            if existing is None:
+                should_create = True
+            else:
+                existing.goal = goal
+                existing.schedule_expr = schedule_expr
+                existing.task_type = task_type
+                existing.repeat = repeat
+                existing.repeat_seconds = repeat_sec
+                existing.repeat_rule = repeat_rule
+                existing.except_dates = list(except_dates or [])
+                existing.alarm_sound = alarm_sound
+                existing.enabled = enabled
+                if not existing.next_run:
+                    existing.next_run = next_run.isoformat()
+                self._save()
+                return existing.task_id
+        if should_create:
+            return self.schedule(
+                goal=goal,
+                next_run_dt=next_run,
+                desc=schedule_expr,
+                task_type=task_type,
+                repeat=repeat,
+                repeat_sec=repeat_sec,
+                repeat_rule=repeat_rule,
+                except_dates=except_dates,
+                alarm_sound=alarm_sound,
+                name=name,
+                enabled=enabled,
+            )
+        return ""
 
     def cancel(self, task_id: str) -> bool:
         with self._lock:
@@ -137,6 +205,28 @@ class ProactiveScheduler:
     def list_tasks(self) -> List[ScheduledTask]:
         with self._lock:
             return list(self._tasks.values())
+
+    def get_task_runs(self, task_id: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+        if not _SCHEDULE_RUN_LOG_FILE or not os.path.exists(_SCHEDULE_RUN_LOG_FILE):
+            return []
+        rows: List[Dict[str, Any]] = []
+        try:
+            with open(_SCHEDULE_RUN_LOG_FILE, "r", encoding="utf-8") as handle:
+                for raw in handle:
+                    text = raw.strip()
+                    if not text:
+                        continue
+                    try:
+                        item = json.loads(text)
+                    except Exception:
+                        continue
+                    if task_id and item.get("task_id") != task_id:
+                        continue
+                    rows.append(item)
+        except OSError as exc:
+            logging.debug(f"[Scheduler] 실행 로그 읽기 실패: {exc}")
+            return []
+        return rows[-limit:]
 
     # ── 선제적 제안 (Phase 3.4 핵심) ──────────────────────────────────────────
 
@@ -210,84 +300,91 @@ class ProactiveScheduler:
             self._check_due_tasks()
 
     def _check_due_tasks(self):
-        now = datetime.now()
-        due = []
-        with self._lock:
-            for tid, t in list(self._tasks.items()):
-                if not t.enabled:
-                    continue
-                try:
-                    dt = datetime.fromisoformat(t.next_run)
-                    if self._is_except_date(t, dt.date().isoformat()):
-                        if t.repeat:
-                            t.next_run = self._compute_next_run(t, dt, now).isoformat()
-                        else:
-                            t.enabled = False
-                        continue
-                    if now >= dt:
-                        due.append(t)
-                        t.last_run = now.isoformat()
-                        if t.repeat:
-                            t.next_run = self._compute_next_run(t, dt, now).isoformat()
-                        else:
-                            t.enabled = False
-                except Exception as exc:
-                    logging.debug(f"[Scheduler] 작업 시간 해석 실패: {tid} ({exc})")
-            if due:
-                self._save()
+        due = self._claim_due_tasks(datetime.now())
+        for task, run_meta in due:
+            threading.Thread(target=self._execute_task, args=(task, run_meta), daemon=True).start()
 
-        for t in due:
-            threading.Thread(target=self._execute_task, args=(t,), daemon=True).start()
-
-    def _execute_task(self, task: ScheduledTask):
+    def _execute_task(self, task: ScheduledTask, run_meta: Optional[Dict[str, str]] = None):
+        started_at = (run_meta or {}).get("started_at") or datetime.now().isoformat()
+        next_run_before = (run_meta or {}).get("next_run_before", "")
+        next_run_after = (run_meta or {}).get("next_run_after", "")
+        success = False
+        error = ""
+        summary = ""
         if task.task_type == "alarm":
             message = f"(기쁨) 알람 시간이에요! 요청하신 '{task.goal}' 시각입니다."
             if task.alarm_sound:
                 message += f" 알림 사운드: {task.alarm_sound}"
-            if self.tts: self.tts(message)
+            summary = message
+            success = True
+            if self.tts:
+                self.tts(message)
+            self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
+            return
+
+        if task.task_type == "maintenance":
+            try:
+                from core.config_manager import ConfigManager
+                from memory.memory_consolidator import get_memory_consolidator
+                days_ago = int(ConfigManager.get("memory_consolidation_days", 14))
+                result = get_memory_consolidator().run_all(days_ago=days_ago)
+                summary = (
+                    f"메모리 정리 완료: 사실 {result['facts']}개, "
+                    f"전략 {result['strategies']}개, 대화 {result['conversations']}건 정리"
+                )
+                success = True
+            except Exception as exc:
+                error = str(exc)
+                summary = "메모리 정리 실패"
+                logging.error(f"[Scheduler] 메모리 정리 실패: {exc}")
+            if self.tts and summary:
+                self.tts(summary if success else f"(걱정) {summary}: {error}")
+            self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
+            return
+
+        if task.task_type == "weekly_report":
+            try:
+                from agent.weekly_report import get_weekly_report
+                summary = get_weekly_report().generate()
+                success = True
+            except Exception as exc:
+                error = str(exc)
+                summary = "주간 리포트 생성 실패"
+                logging.error(f"[Scheduler] 주간 리포트 생성 실패: {exc}")
+            if self.tts and summary:
+                self.tts(summary if success else f"(걱정) {summary}: {error}")
+            self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
         logging.info(f"[Scheduler] 작업 실행: {task.goal}")
-        if self.tts: self.tts(f"(진지) 예약된 작업을 시작할게요: {task.goal}")
+        if self.tts:
+            self.tts(f"(진지) 예약된 작업을 시작할게요: {task.goal}")
         
-        if not self._orchestrator_func: return
+        if not self._orchestrator_func:
+            error = "오케스트레이터가 연결되지 않았습니다."
+            summary = "예약 작업을 실행할 수 없어요."
+            self._finalize_task_run(task, started_at, False, error, summary, next_run_before, next_run_after)
+            return
 
         try:
             res = self._orchestrator_func(task.goal)
             summary = getattr(res, "summary_kr", "작업 완료")
-            with self._lock:
-                if task.task_id in self._tasks: self._tasks[task.task_id].last_result = summary
-            if self.tts: self.tts(summary)
+            success = bool(getattr(res, "achieved", True))
+            if self.tts:
+                self.tts(summary)
         except Exception as e:
             logging.error(f"[Scheduler] 실행 실패: {e}")
+            error = str(e)
+            summary = "예약 작업 실행 실패"
+        self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
 
     def check_missed_tasks_on_startup(self):
         """앱 시작 시 놓친 반복 작업을 보충 실행."""
-        now = datetime.now()
-        missed: List[ScheduledTask] = []
-        with self._lock:
-            for task in self._tasks.values():
-                if not task.enabled or not task.last_run:
-                    continue
-                try:
-                    last = datetime.fromisoformat(task.last_run)
-                except Exception as exc:
-                    logging.debug(f"[Scheduler] last_run 해석 실패: {task.task_id} ({exc})")
-                    continue
-                elapsed = (now - last).total_seconds()
-                threshold = {
-                    "daily": 86400,
-                    "weekly": 86400 * 7,
-                    "hourly": 3600,
-                }.get(task.repeat_rule, 86400 if task.repeat else 0)
-                if threshold and elapsed > threshold:
-                    missed.append(task)
-
-        for task in missed:
+        for task, run_meta in self._claim_due_tasks(datetime.now()):
             logging.info(f"[Scheduler] 놓친 작업 보충 실행: {task.goal}")
             threading.Thread(
                 target=self._execute_task,
-                args=(task,),
+                args=(task, run_meta),
                 daemon=True,
                 name=f"MissedTask-{task.task_id}",
             ).start()
@@ -368,9 +465,18 @@ class ProactiveScheduler:
         elif task.repeat_rule == "hourly":
             next_run = last_due + timedelta(hours=1)
         elif task.repeat_seconds > 0:
-            next_run = now + timedelta(seconds=task.repeat_seconds)
+            next_run = last_due + timedelta(seconds=task.repeat_seconds)
         else:
             next_run = now + timedelta(days=1)
+        while next_run <= now:
+            if task.repeat_rule == "weekly":
+                next_run += timedelta(days=7)
+            elif task.repeat_rule == "hourly":
+                next_run += timedelta(hours=1)
+            elif task.repeat_seconds > 0:
+                next_run += timedelta(seconds=task.repeat_seconds)
+            else:
+                next_run += timedelta(days=1)
         while self._is_except_date(task, next_run.date().isoformat()):
             if task.repeat_rule == "weekly":
                 next_run += timedelta(days=7)
@@ -379,6 +485,149 @@ class ProactiveScheduler:
             else:
                 next_run += timedelta(days=1)
         return next_run
+
+    def _claim_due_tasks(self, now: datetime) -> List[tuple[ScheduledTask, Dict[str, str]]]:
+        claimed: List[tuple[ScheduledTask, Dict[str, str]]] = []
+        with self._lock:
+            dirty = False
+            for tid, task in list(self._tasks.items()):
+                if not task.enabled or not task.next_run:
+                    continue
+                try:
+                    due_at = datetime.fromisoformat(task.next_run)
+                except Exception as exc:
+                    logging.debug(f"[Scheduler] 작업 시간 해석 실패: {tid} ({exc})")
+                    continue
+                if self._is_except_date(task, due_at.date().isoformat()):
+                    if task.repeat:
+                        task.next_run = self._compute_next_run(task, due_at, now).isoformat()
+                    else:
+                        task.enabled = False
+                    dirty = True
+                    continue
+                if due_at > now:
+                    continue
+                started_at = now.isoformat()
+                next_run_before = task.next_run
+                task.last_run = started_at
+                if task.repeat:
+                    task.next_run = self._compute_next_run(task, due_at, now).isoformat()
+                    next_run_after = task.next_run
+                else:
+                    task.enabled = False
+                    next_run_after = ""
+                claimed.append((
+                    ScheduledTask(**asdict(task)),
+                    {
+                        "started_at": started_at,
+                        "next_run_before": next_run_before,
+                        "next_run_after": next_run_after,
+                    },
+                ))
+                dirty = True
+            if dirty:
+                self._save()
+        return claimed
+
+    def _finalize_task_run(
+        self,
+        task: ScheduledTask,
+        started_at: str,
+        success: bool,
+        error: str,
+        summary: str,
+        next_run_before: str,
+        next_run_after: str,
+    ) -> None:
+        finished_at = datetime.now().isoformat()
+        status_text = summary if summary else (error or "실행 결과 없음")
+        with self._lock:
+            current = self._tasks.get(task.task_id)
+            if current is not None:
+                current.last_result = status_text[:300]
+                if not current.last_run:
+                    current.last_run = started_at
+                self._save()
+        self._append_task_run(
+            ScheduledTaskRun(
+                task_id=task.task_id,
+                goal=task.goal,
+                task_type=task.task_type,
+                started_at=started_at,
+                finished_at=finished_at,
+                success=bool(success),
+                error=(error or "")[:300],
+                summary=(summary or "")[:300],
+                next_run_before=next_run_before,
+                next_run_after=next_run_after,
+            )
+        )
+        self._record_learning_artifacts(task, started_at, finished_at, success, error, summary)
+
+    def _append_task_run(self, record: ScheduledTaskRun) -> None:
+        if not _SCHEDULE_RUN_LOG_FILE:
+            return
+        try:
+            os.makedirs(os.path.dirname(_SCHEDULE_RUN_LOG_FILE), exist_ok=True)
+            with self._run_log_lock:
+                with open(_SCHEDULE_RUN_LOG_FILE, "a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+        except OSError as exc:
+            logging.error(f"[Scheduler] 실행 로그 저장 실패: {exc}")
+
+    def _record_learning_artifacts(
+        self,
+        task: ScheduledTask,
+        started_at: str,
+        finished_at: str,
+        success: bool,
+        error: str,
+        summary: str,
+    ) -> None:
+        synthetic_goal = f"[예약:{task.task_type}] {task.goal}"
+        status_summary = (summary or error or "예약 작업 실행")[:300]
+        try:
+            started = datetime.fromisoformat(started_at)
+            finished = datetime.fromisoformat(finished_at)
+            duration_ms = int((finished - started).total_seconds() * 1000)
+        except Exception:
+            duration_ms = 0
+        failure_kind = ""
+        if not success:
+            try:
+                from agent.execution_analysis import classify_failure_message
+                failure_kind = classify_failure_message(error or summary or "") or "execution_failed"
+            except Exception:
+                failure_kind = "execution_failed"
+        try:
+            from agent.strategy_memory import get_strategy_memory
+            get_strategy_memory().record(
+                goal=synthetic_goal,
+                steps=[],
+                success=bool(success),
+                error="" if success else status_summary,
+                duration_ms=duration_ms,
+                failure_kind=failure_kind,
+                lesson="",
+                few_shot_eligible=False,
+            )
+        except Exception as exc:
+            logging.debug(f"[Scheduler] StrategyMemory 기록 실패: {exc}")
+        try:
+            from agent.episode_memory import GoalEpisode, get_episode_memory
+            get_episode_memory().record(
+                GoalEpisode(
+                    goal=synthetic_goal,
+                    achieved=bool(success),
+                    summary_kr=status_summary,
+                    failure_kind=failure_kind,
+                    duration_ms=duration_ms,
+                    state_change_summary=f"task_type={task.task_type} | schedule={task.schedule_expr[:80]}",
+                    policy_summary="scheduled_task",
+                )
+            )
+        except Exception as exc:
+            logging.debug(f"[Scheduler] EpisodeMemory 기록 실패: {exc}")
 
 _instance: Optional[ProactiveScheduler] = None
 
