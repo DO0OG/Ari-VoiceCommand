@@ -26,6 +26,13 @@ PLUGIN_API_VERSION = "1.0"
 _COMPATIBLE_API_VERSIONS = {"1.0"}
 
 
+def _get_unregister_character_pack(widget: Any) -> Optional[Callable[[str], None]]:
+    candidate = getattr(widget, "unregister_character_pack", None)
+    if callable(candidate):
+        return cast(Callable[[str], None], candidate)
+    return None
+
+
 @dataclass
 class PluginContext:
     app: Any = None
@@ -232,9 +239,8 @@ class PluginManager:
             self._unregister_tool(tool_name)
         if self._context and getattr(self._context, "character_widget", None):
             widget = self._context.character_widget
-            unregister_pack_fn = getattr(widget, "unregister_character_pack", None)
-            if callable(unregister_pack_fn):  # None 및 비호출 객체 동시 배제
-                unregister_character_pack = cast(Callable[[str], None], unregister_pack_fn)
+            unregister_character_pack = _get_unregister_character_pack(widget)
+            if unregister_character_pack is not None:
                 for pack_name in plugin.registered_character_packs:
                     unregister_character_pack(pack_name)
 

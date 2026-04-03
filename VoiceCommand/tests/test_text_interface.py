@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from types import MethodType
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -21,10 +22,15 @@ class _DummyChatWidget:
         self.history[index]["message"] = message
 
 
+class _DummyTextInterface:
+    _TTS_SENTENCE_SEPS = TextInterface._TTS_SENTENCE_SEPS
+    _TTS_MIN_SENTENCE_LEN = TextInterface._TTS_MIN_SENTENCE_LEN
+
+
 class TextInterfaceStreamingTests(unittest.TestCase):
     def _make_interface(self):
         spoken = []
-        interface = super(TextInterface, TextInterface).__new__(TextInterface)
+        interface = _DummyTextInterface()
         interface.tts_callback = spoken.append
         interface.chat_widget = _DummyChatWidget()
         interface._stream_message_index = None
@@ -33,6 +39,9 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         interface._stream_tts_spoken = False
         interface.scroll_to_bottom = lambda: None
         interface.refresh_status_panel = lambda: None
+        interface._try_stream_tts = MethodType(TextInterface._try_stream_tts, interface)
+        interface._handle_stream_chunk = MethodType(TextInterface._handle_stream_chunk, interface)
+        interface._handle_response = MethodType(TextInterface._handle_response, interface)
         return interface, spoken
 
     def test_handle_stream_chunk_starts_tts_on_sentence_boundary(self):
