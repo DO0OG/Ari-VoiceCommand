@@ -63,6 +63,7 @@
 - 현재 기준 핵심 변화: Codacy/보안 경고 정리, 플러그인 샌드박스 `multiprocessing` 격리, `validate_repo.py` 표준 라이브러리 검증 루프, `SkillOptimizer` 기반 스킬 자기수정/컴파일, `ddgs` 우선 검색 클라이언트 반영.
 - 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 루트에는 `ari_settings.json` 템플릿만 남기고, 로그/스케줄/메모리/플러그인 캐시는 모두 런타임 디렉터리로 정리됩니다.
 - 즉, `py Main.py`처럼 소스에서 실행할 때는 `.ari_runtime/`를 쓰고, `build_exe.py`로 만든 exe를 실행할 때는 `%AppData%/Ari/`를 씁니다.
+- `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시에는 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
 - `validate_repo.py`는 이제 compile + unittest 외에 `clean environment runtime`, `marketplace sha256 contract` smoke까지 함께 확인합니다.
 - `workspace audit` 템플릿은 열린 창 제목을 브라우저 서비스/일반 앱 유형으로 분류하고, 브라우저 판별 규칙(브라우저명 경계 매칭)과 탭 추정 규칙(`외/및 N개 탭` + 프로세스 단서)을 함께 사용하도록 보강되었습니다.
 - 마켓플레이스 함수는 `market/supabase/functions/*`를 실제 수정했을 때만 `supabase functions deploy ...` 재배포가 필요합니다.
@@ -242,6 +243,7 @@ py -3.11 validate_repo.py --compile-only
 
 소스에서 `py Main.py`로 실행하면 설정/메모리/스케줄 상태는 `VoiceCommand/.ari_runtime/`에 저장되고, 일반 로그는 `VoiceCommand/.ari_runtime/logs/`에 남습니다.
 빌드된 exe를 실행하면 같은 종류의 파일이 프로젝트 폴더가 아니라 `%AppData%/Ari/` 아래에 저장됩니다.
+로컬 CosyVoice 기준 음성 샘플 파일은 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav` 우선, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe는 `%AppData%/Ari/reference.wav` 우선, 없으면 번들된 `reference.wav`를 사용합니다.
 
 ### 선택 의존성
 

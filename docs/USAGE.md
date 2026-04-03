@@ -44,6 +44,7 @@ pip install elevenlabs
 5. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
 6. 소스에서 `py Main.py`로 실행하면 설정/메모리/예약 상태는 `VoiceCommand/.ari_runtime/` 아래에 저장됩니다.
 7. `build_exe.py`로 빌드한 exe를 실행하면 같은 상태 파일은 `%AppData%/Ari/` 아래에 저장됩니다.
+8. CosyVoice용 `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
 
 ## 3. 텍스트 채팅 UI
 
@@ -132,6 +133,9 @@ pip install elevenlabs
 - 짧은 응답(15자 이하)은 ODE 3스텝으로 자동 전환되어 약 200ms 더 빠릅니다.
 - TTS 품질/지연을 바꾸려면 엔진 설정을 조정하고, 테마 변경과는 별개로 보시면 됩니다.
 - 텍스트 채팅 UI에서는 스트리밍 응답 중 문장 경계가 감지되면 전체 응답 완료 전에도 TTS가 먼저 시작될 수 있습니다.
+- `reference.wav` 경로 우선순위는 다음과 같습니다.
+  소스/테스트 실행: `VoiceCommand/.ari_runtime/reference.wav` → `VoiceCommand/reference.wav`
+  빌드된 exe 실행: `%AppData%/Ari/reference.wav` → 번들된 `reference.wav`
 
 ### CosyVoice3 설치
 

@@ -72,7 +72,7 @@ def _get_reference_wav() -> str:
     appdata_path = ResourceManager.get_writable_path("reference.wav")
     if os.path.exists(appdata_path):
         return appdata_path
-    return os.path.join(_HERE, "reference.wav")
+    return ResourceManager.get_bundle_path("reference.wav")
 
 def _get_worker_script() -> str:
     """cosyvoice_worker.py 경로: frozen이면 _MEIPASS, 아니면 _HERE"""

@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -13,6 +14,7 @@ from tts.cosyvoice_utils import (
     apply_emotion_prosody,
     inject_breath_cues,
 )
+from tts.cosyvoice_tts import _get_reference_wav
 
 
 class PCMChunkBufferTests(unittest.TestCase):
@@ -27,6 +29,13 @@ class PCMChunkBufferTests(unittest.TestCase):
         self.assertEqual(buffer.size, 2)
         self.assertEqual(buffer.pop_bytes(8), b"gh")
         self.assertEqual(buffer.size, 0)
+
+
+class CosyVoiceReferencePathTests(unittest.TestCase):
+    def test_reference_wav_falls_back_to_bundle_path_when_runtime_copy_missing(self):
+        expected = os.path.join(ROOT, "reference.wav")
+        with patch("tts.cosyvoice_tts.os.path.exists", return_value=False):
+            self.assertEqual(_get_reference_wav(), expected)
 
     def test_normalize_cache_returns_same_value(self):
         first = _normalize_text_cached("12시 30분")
