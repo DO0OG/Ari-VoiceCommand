@@ -42,7 +42,8 @@ pip install elevenlabs
 3. 필요한 경우 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama 또는 CosyVoice3를 먼저 설치합니다.
 4. AI 모델, TTS, UI 테마를 원하는 값으로 조정합니다.
 5. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
-6. 개발 모드에서 생성되는 설정/메모리/예약 상태는 `VoiceCommand/.ari_runtime/` 아래에 저장됩니다.
+6. 소스에서 `py Main.py`로 실행하면 설정/메모리/예약 상태는 `VoiceCommand/.ari_runtime/` 아래에 저장됩니다.
+7. `build_exe.py`로 빌드한 exe를 실행하면 같은 상태 파일은 `%AppData%/Ari/` 아래에 저장됩니다.
 
 ## 3. 텍스트 채팅 UI
 

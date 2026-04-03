@@ -12,7 +12,8 @@
 ## 프로젝트 문서
 
 - 최근 자율 실행 코어는 `state transition`, `execution policy`, `episode memory`, `backup/recovery guidance`까지 포함하도록 확장되었습니다. `workspace audit` 명령은 열린 창을 브라우저/일반 앱으로 분류하고 `summary.md`를 자동 백업 덮어쓰기하는 템플릿을 사용합니다.
-- 개발 모드 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장되며, 루트 `ari_settings.json` / `scheduled_tasks.json`은 템플릿 기준선을 유지합니다.
+- 소스 실행(`py Main.py`) 기준 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장되며, 루트에는 `ari_settings.json` 템플릿만 유지합니다. 로그는 `VoiceCommand/.ari_runtime/logs/`에 쌓입니다.
+- 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
 - `VoiceCommand/validate_repo.py`는 compile + unittest 외에 clean runtime 환경과 marketplace SHA256 계약 smoke까지 함께 확인합니다.
 - [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 - [Claude 메모](./CLAUDE.md) — 개발자용 아키텍처·패턴·상수 레퍼런스

@@ -8,19 +8,28 @@ from typing import Iterable
 # 앱 이름 (appdata 폴더명)
 APP_NAME = "Ari"
 _DEV_RUNTIME_DIR = ".ari_runtime"
-_LEGACY_RUNTIME_ENTRIES = (
-    "ari_settings.json",
-    "ari_memory.db",
-    "conversation_history.json",
-    "episode_memory.json",
-    "learning_metrics.json",
-    "planner_stats.json",
-    "scheduled_task_runs.jsonl",
-    "scheduled_tasks.json",
-    "skill_library.json",
-    "strategy_memory.json",
-    "user_context.json",
-    "user_profile.json",
+_LEGACY_RUNTIME_MAPPINGS = (
+    ("ari_settings.json", "ari_settings.json"),
+    ("ari_memory.db", "ari_memory.db"),
+    ("browser_action_plans.json", "browser_action_plans.json"),
+    ("browser_selector_history.json", "browser_selector_history.json"),
+    ("compiled_skills", "compiled_skills"),
+    ("conversation_history.json", "conversation_history.json"),
+    ("core/logs", "logs"),
+    ("desktop_window_targets.json", "desktop_window_targets.json"),
+    ("desktop_workflow_plans.json", "desktop_workflow_plans.json"),
+    ("episode_memory.json", "episode_memory.json"),
+    ("learning_metrics.json", "learning_metrics.json"),
+    ("logs", "logs"),
+    ("planner_stats.json", "planner_stats.json"),
+    ("plugin_runtime", "plugin_runtime"),
+    ("scheduled_task_runs.jsonl", "scheduled_task_runs.jsonl"),
+    ("scheduled_tasks.json", "scheduled_tasks.json"),
+    ("agent/scheduled_tasks.json", "scheduled_tasks.json"),
+    ("skill_library.json", "skill_library.json"),
+    ("strategy_memory.json", "strategy_memory.json"),
+    ("user_context.json", "user_context.json"),
+    ("user_profile.json", "user_profile.json"),
 )
 
 
@@ -40,28 +49,67 @@ class ResourceManager:
         return os.path.join(ResourceManager._project_root(), _DEV_RUNTIME_DIR)
 
     @staticmethod
-    def _copy_if_missing(source: str, destination: str) -> None:
-        if os.path.exists(destination) or not os.path.exists(source):
+    def _merge_path_if_missing(source: str, destination: str) -> None:
+        if not os.path.exists(source):
+            return
+        if os.path.isdir(source):
+            os.makedirs(destination, exist_ok=True)
+            for name in os.listdir(source):
+                ResourceManager._merge_path_if_missing(
+                    os.path.join(source, name),
+                    os.path.join(destination, name),
+                )
+            return
+        if os.path.exists(destination):
             return
         os.makedirs(os.path.dirname(destination), exist_ok=True)
-        if os.path.isdir(source):
-            shutil.copytree(source, destination)
-        else:
-            shutil.copy2(source, destination)
+        shutil.copy2(source, destination)
 
     @staticmethod
-    def _migrate_dev_runtime_state(destination_root: str, entries: Iterable[str] = _LEGACY_RUNTIME_ENTRIES) -> None:
+    def _migrate_dev_runtime_state(
+        destination_root: str,
+        mappings: Iterable[tuple[str, str]] = _LEGACY_RUNTIME_MAPPINGS,
+    ) -> None:
         legacy_root = ResourceManager._legacy_project_runtime_dir()
         if os.path.abspath(destination_root) == os.path.abspath(legacy_root):
             return
 
-        for entry in entries:
-            source = os.path.join(legacy_root, entry)
-            destination = os.path.join(destination_root, entry)
+        for source_rel, destination_rel in mappings:
+            source = os.path.join(legacy_root, source_rel)
+            destination = os.path.join(destination_root, destination_rel)
             try:
-                ResourceManager._copy_if_missing(source, destination)
+                ResourceManager._merge_path_if_missing(source, destination)
             except Exception as e:
-                logging.debug(f"런타임 상태 마이그레이션 실패 {entry}: {e}")
+                logging.debug(f"런타임 상태 마이그레이션 실패 {source_rel}: {e}")
+
+    @staticmethod
+    def _cleanup_legacy_runtime_state(
+        destination_root: str,
+        mappings: Iterable[tuple[str, str]] = _LEGACY_RUNTIME_MAPPINGS,
+        preserve: Iterable[str] = ("ari_settings.json",),
+    ) -> None:
+        legacy_root = os.path.abspath(ResourceManager._legacy_project_runtime_dir())
+        if os.path.abspath(destination_root) == legacy_root:
+            return
+
+        preserved = {os.path.normpath(item) for item in preserve}
+        cleaned_sources: set[str] = set()
+        for source_rel, destination_rel in mappings:
+            normalized_source = os.path.normpath(source_rel)
+            if normalized_source in preserved or normalized_source in cleaned_sources:
+                continue
+            source = os.path.join(legacy_root, source_rel)
+            destination = os.path.join(destination_root, destination_rel)
+            if not os.path.exists(source) or not os.path.exists(destination):
+                continue
+            try:
+                if os.path.isdir(source):
+                    shutil.rmtree(source, ignore_errors=True)
+                else:
+                    os.remove(source)
+                cleaned_sources.add(normalized_source)
+            except Exception as e:
+                logging.debug(f"레거시 런타임 상태 정리 실패 {source_rel}: {e}")
 
     @staticmethod
     def reset_cache() -> None:
@@ -90,6 +138,7 @@ class ResourceManager:
         os.makedirs(base, exist_ok=True)
         if not getattr(sys, 'frozen', False):
             ResourceManager._migrate_dev_runtime_state(base)
+            ResourceManager._cleanup_legacy_runtime_state(base)
         ResourceManager._app_data_dir = base
         return base
 

@@ -167,16 +167,10 @@ config.json
 .claude/
 
 # ── Ari 프로젝트 ───────────────────────────────────────────────────────────────
-VoiceCommand/logs/
 VoiceCommand/saved_model/
 VoiceCommand/settings.json
 VoiceCommand/ari_settings.json
 VoiceCommand/reference.wav
-VoiceCommand/conversation_history.json
-VoiceCommand/user_context.json
-VoiceCommand/strategy_memory.json
-VoiceCommand/desktop_workflow_plans.json
-VoiceCommand/plugin_runtime/
 VoiceCommand/vosk-model-*/
 VoiceCommand/*.ppn
 VoiceCommand/porcupine_params_ko.pv
@@ -187,14 +181,6 @@ market/supabase/.temp/
 
 # ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
 VoiceCommand/.ari_runtime/
-VoiceCommand/ari_memory.db
-VoiceCommand/episode_memory.json
-VoiceCommand/learning_metrics.json
-VoiceCommand/planner_stats.json
-VoiceCommand/scheduled_task_runs.jsonl
-VoiceCommand/skill_library.json
-VoiceCommand/user_profile.json
-VoiceCommand/plugins/*.zip
 collected.json
 package-lock.json
 AGENT_HANDOFF_*.md

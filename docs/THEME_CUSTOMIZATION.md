@@ -19,7 +19,11 @@
 빌드된 EXE를 한 번 실행하면 기본 테마 JSON이 아래 위치에 준비됩니다.
 
 ```text
+빌드된 exe 기준 테마 경로:
 %AppData%\Ari\theme
+
+소스 실행(`py Main.py`) 기준 테마 경로:
+VoiceCommand\.ari_runtime\theme
 ```
 
 개발 환경에서는 기본 파일이 아래 폴더에 있습니다.
@@ -30,7 +34,7 @@ VoiceCommand/theme
 
 ### 수정 방법
 
-1. `%AppData%\Ari\theme` 폴더를 엽니다.
+1. 빌드된 exe 실행이면 `%AppData%\Ari\theme`, 소스 실행이면 `VoiceCommand\.ari_runtime\theme` 폴더를 엽니다.
 2. `default.json`을 복사해서 새 이름(예: `my_theme.json`)으로 저장합니다.
 3. JSON 파일을 텍스트 편집기로 열어 수정합니다.
 4. 설정창에서 해당 테마를 선택하면 UI가 즉시 갱신됩니다.

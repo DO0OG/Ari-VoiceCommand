@@ -34,6 +34,13 @@ _APP_ALIAS_CANDIDATES = {
 }
 
 
+def _runtime_fallback_path(filename: str) -> str:
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    runtime_root = os.path.join(project_root, ".ari_runtime")
+    os.makedirs(runtime_root, exist_ok=True)
+    return os.path.join(runtime_root, filename)
+
+
 class AutomationHelpers:
     def __init__(self):
         self.desktop_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
@@ -1173,7 +1180,7 @@ class AutomationHelpers:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("desktop_window_targets.json")
         except Exception:
-            return os.path.join(os.path.dirname(__file__), "desktop_window_targets.json")
+            return _runtime_fallback_path("desktop_window_targets.json")
 
     def _load_window_target_history(self) -> dict:
         path = self._window_target_history_path()
@@ -1202,7 +1209,7 @@ class AutomationHelpers:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("desktop_workflow_plans.json")
         except Exception:
-            return os.path.join(os.path.dirname(__file__), "desktop_workflow_plans.json")
+            return _runtime_fallback_path("desktop_workflow_plans.json")
 
     def _load_desktop_workflow_history(self) -> dict:
         path = self._desktop_workflow_history_path()

@@ -37,7 +37,8 @@ def _get_compiled_dir() -> str:
             from core.resource_manager import ResourceManager
             _COMPILED_DIR = ResourceManager.get_writable_path("compiled_skills")
         except Exception:
-            _COMPILED_DIR = os.path.join(os.path.dirname(__file__), "compiled_skills")
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            _COMPILED_DIR = os.path.join(project_root, ".ari_runtime", "compiled_skills")
         os.makedirs(_COMPILED_DIR, exist_ok=True)
     return _COMPILED_DIR
 

@@ -7,7 +7,11 @@
 빌드된 EXE를 실행하면 사용자 플러그인 폴더가 아래 경로에 준비됩니다.
 
 ```text
+빌드된 exe 기준 플러그인 경로:
 %AppData%\Ari\plugins
+
+소스 실행(`py Main.py`) 기준 플러그인 경로:
+VoiceCommand\.ari_runtime\plugins
 ```
 
 개발 환경에서는 기본 템플릿이 아래 경로에 있습니다.
@@ -46,7 +50,7 @@ VoiceCommand/plugins
 2. 파일 이름을 원하는 이름으로 바꿉니다.
 3. `PLUGIN_INFO`의 이름, 버전, 설명을 수정합니다. **`api_version`은 `"1.0"`으로 유지합니다.**
 4. `register(context)` 함수 안에서 필요한 초기화 코드를 작성합니다.
-5. 파일을 `%AppData%\Ari\plugins`에 두면 앱이 자동으로 감지하여 즉시 로드합니다.
+5. 빌드된 exe 실행 시에는 `%AppData%\Ari\plugins`, 소스 실행 시에는 `VoiceCommand\.ari_runtime\plugins`에 파일을 두면 앱이 자동으로 감지하여 로드합니다.
 6. 마켓플레이스 패키지라면 `.zip` 파일을 그대로 같은 폴더에 두어도 됩니다.
 
 ## 5. 최소 구조

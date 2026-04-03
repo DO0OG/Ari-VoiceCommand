@@ -61,7 +61,8 @@
 ## 개발 현황
 
 - 현재 기준 핵심 변화: Codacy/보안 경고 정리, 플러그인 샌드박스 `multiprocessing` 격리, `validate_repo.py` 표준 라이브러리 검증 루프, `SkillOptimizer` 기반 스킬 자기수정/컴파일, `ddgs` 우선 검색 클라이언트 반영.
-- 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 루트 `ari_settings.json`과 `scheduled_tasks.json`은 템플릿 기준선만 유지합니다.
+- 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 루트에는 `ari_settings.json` 템플릿만 남기고, 로그/스케줄/메모리/플러그인 캐시는 모두 런타임 디렉터리로 정리됩니다.
+- 즉, `py Main.py`처럼 소스에서 실행할 때는 `.ari_runtime/`를 쓰고, `build_exe.py`로 만든 exe를 실행할 때는 `%AppData%/Ari/`를 씁니다.
 - `validate_repo.py`는 이제 compile + unittest 외에 `clean environment runtime`, `marketplace sha256 contract` smoke까지 함께 확인합니다.
 - `workspace audit` 템플릿은 열린 창 제목을 브라우저 서비스/일반 앱 유형으로 분류하고, 브라우저 판별 규칙(브라우저명 경계 매칭)과 탭 추정 규칙(`외/및 N개 탭` + 프로세스 단서)을 함께 사용하도록 보강되었습니다.
 - 마켓플레이스 함수는 `market/supabase/functions/*`를 실제 수정했을 때만 `supabase functions deploy ...` 재배포가 필요합니다.
@@ -119,7 +120,7 @@
 - `validate_repo.py --compile-only`는 `__pycache__` 대신 임시 위치로 컴파일해 로컬 환경 락/권한 문제에도 더 안정적으로 동작합니다.
 - **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 268개 기준으로 유지 중입니다.
 - **영향 테스트 자동 선별**: `_infer_relevant_tests`가 goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=` 항목으로 LLM에게 우선 제시. 테스트 목록도 첫 5개 샘플 대신 전체 목록(`all=`) 표시로 전환.
-- **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. `.gitignore`에 런타임 산출물(`ari_memory.db`, `episode_memory.json` 등)과 개발용 `.ari_runtime/` 디렉터리를 추가.
+- **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. 루트 런타임 파일은 정리하고, 개발용 상태는 `.ari_runtime/` 아래로만 유지합니다.
 
 <details>
 <summary>최근 업데이트 자세히 보기 (2026-03-29 ~ 2026-03-31)</summary>
@@ -134,7 +135,7 @@
 - **의존성 업데이트**: `Pillow>=12.1.1`, `requests>=2.33.0`, `certifi>=2024.7.4`, `ddgs>=8.0.0`.
 - **마켓플레이스 함수 변경**: `upload-plugin`, `notify-developer` 함수 검증 로직 및 스캐너 친화적 패턴으로 정리. 함수 코드 변경 시 `supabase functions deploy` 재실행 필요.
 - **스킬 Step 재작성 (Direction 1)**: `SkillOptimizer.optimize_steps()` — 스킬 실패 2회 시 LLM이 실패 에러를 분석해 JSON 스텝 시퀀스를 자동 수정. `condense_steps()` — 8회 성공 후 불필요 스텝 제거·압축.
-- **Python 코드 컴파일 (Direction 2)**: `SkillOptimizer.compile_to_python()` — 5회 성공한 검증된 스킬을 단일 `run_skill()` Python 함수로 컴파일, `compiled_skills/` 저장. 이후 실행 시 LLM 계획 없이 Python 직접 호출.
+- **Python 코드 컴파일 (Direction 2)**: `SkillOptimizer.compile_to_python()` — 5회 성공한 검증된 스킬을 단일 `run_skill()` Python 함수로 컴파일하고 `VoiceCommand/.ari_runtime/compiled_skills/`에 저장. 이후 실행 시 LLM 계획 없이 Python 직접 호출.
 - **컴파일 코드 자동 수정**: 컴파일 스킬 실패 시 `repair_python()` — LLM이 코드를 읽고 수정해 덮어씀.
 - **실행 우선순위**: 컴파일 스킬 → JSON 스텝 스킬 → 전체 에이전트 루프 순으로 폴백.
 - **안전 검사**: `safety_checker.check_python()` 통과한 코드만 저장·실행. AST 파싱 검증 포함.
@@ -239,7 +240,8 @@ py -3.11 validate_repo.py
 py -3.11 validate_repo.py --compile-only
 ```
 
-개발 모드에서 생성되는 설정/메모리/스케줄 상태는 `VoiceCommand/.ari_runtime/`에 저장됩니다.
+소스에서 `py Main.py`로 실행하면 설정/메모리/스케줄 상태는 `VoiceCommand/.ari_runtime/`에 저장되고, 일반 로그는 `VoiceCommand/.ari_runtime/logs/`에 남습니다.
+빌드된 exe를 실행하면 같은 종류의 파일이 프로젝트 폴더가 아니라 `%AppData%/Ari/` 아래에 저장됩니다.
 
 ### 선택 의존성
 

@@ -183,6 +183,10 @@ try:
         scheduler._load()
         if "legacy-task" not in scheduler._tasks:
             raise SystemExit("legacy scheduled tasks were not migrated")
+        if not os.path.exists(os.path.join(legacy_root, "ari_settings.json")):
+            raise SystemExit("legacy settings template should be preserved")
+        if os.path.exists(os.path.join(legacy_root, "scheduled_tasks.json")):
+            raise SystemExit("legacy scheduled tasks should be cleaned after migration")
 finally:
     ResourceManager._project_root = original_project_root
     if original_env is None:

@@ -9,7 +9,8 @@
 #              execution policy / episode memory / backup-recovery guidance
 #   Phase 1-8: GoalPredictor, LearningMetrics, RegressionGuard, stream TTS, clean env validate smoke
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
-#   런타임 상태는 개발 모드에서 VoiceCommand/.ari_runtime 에 저장
+#   런타임 상태(로그/스케줄/메모리/플러그인 캐시)는 소스 실행 시 VoiceCommand/.ari_runtime,
+#   빌드된 exe 실행 시 %AppData%/Ari 에 저장
 # 개발 검증: validate_repo.py (compile + unittest + smoke)
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────

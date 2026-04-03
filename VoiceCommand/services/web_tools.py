@@ -23,6 +23,13 @@ _HEADERS = {
 }
 
 
+def _runtime_fallback_path(filename: str) -> str:
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    runtime_root = os.path.join(project_root, ".ari_runtime")
+    os.makedirs(runtime_root, exist_ok=True)
+    return os.path.join(runtime_root, filename)
+
+
 def _is_safe_http_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
@@ -431,14 +438,14 @@ class SmartBrowser:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("browser_selector_history.json")
         except Exception:
-            return os.path.join(os.path.dirname(__file__), "browser_selector_history.json")
+            return _runtime_fallback_path("browser_selector_history.json")
 
     def _action_plan_history_path(self) -> str:
         try:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("browser_action_plans.json")
         except Exception:
-            return os.path.join(os.path.dirname(__file__), "browser_action_plans.json")
+            return _runtime_fallback_path("browser_action_plans.json")
 
     def _load_selector_history(self) -> Dict[str, Dict[str, str]]:
         path = self._selector_history_path()

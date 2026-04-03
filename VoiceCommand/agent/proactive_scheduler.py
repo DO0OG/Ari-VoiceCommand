@@ -18,12 +18,20 @@ _SCHEDULE_RUN_LOG_FILE: str = ""  # _init_schedule_log_file() 에서 설정
 _TICK_INTERVAL = 30
 _MAX_TASKS = 50
 
+
+def _runtime_fallback_path(filename: str) -> str:
+    project_root = os.path.dirname(os.path.dirname(__file__))
+    runtime_root = os.path.join(project_root, ".ari_runtime")
+    os.makedirs(runtime_root, exist_ok=True)
+    return os.path.join(runtime_root, filename)
+
+
 def _init_schedule_file() -> str:
     try:
         from core.resource_manager import ResourceManager
         return ResourceManager.get_writable_path("scheduled_tasks.json")
     except Exception:
-        return os.path.join(os.path.dirname(__file__), "scheduled_tasks.json")
+        return _runtime_fallback_path("scheduled_tasks.json")
 
 
 def _init_schedule_log_file() -> str:
@@ -31,7 +39,7 @@ def _init_schedule_log_file() -> str:
         from core.resource_manager import ResourceManager
         return ResourceManager.get_writable_path("scheduled_task_runs.jsonl")
     except Exception:
-        return os.path.join(os.path.dirname(__file__), "scheduled_task_runs.jsonl")
+        return _runtime_fallback_path("scheduled_task_runs.jsonl")
 
 
 def _parse_task_run_line(text: str) -> Dict[str, Any] | None:

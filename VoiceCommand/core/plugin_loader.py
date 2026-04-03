@@ -79,14 +79,24 @@ class PluginManager:
             from core.resource_manager import ResourceManager
             return ResourceManager.ensure_plugin_files()
         except Exception:
-            return os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugins")
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            runtime_plugins = os.path.join(project_root, ".ari_runtime", "plugins")
+            source_plugins = os.path.join(project_root, "plugins")
+            os.makedirs(runtime_plugins, exist_ok=True)
+            if os.path.isdir(source_plugins):
+                for name in os.listdir(source_plugins):
+                    src = os.path.join(source_plugins, name)
+                    dst = os.path.join(runtime_plugins, name)
+                    if os.path.isfile(src) and not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+            return runtime_plugins
 
     def _plugin_runtime_dir(self) -> str:
         try:
             from core.resource_manager import ResourceManager
             path = ResourceManager.get_writable_path("plugin_runtime")
         except Exception:
-            path = os.path.join(self.plugin_dir(), "_runtime")
+            path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".ari_runtime", "plugin_runtime")
         os.makedirs(path, exist_ok=True)
         return path
 

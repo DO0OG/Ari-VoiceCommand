@@ -41,6 +41,8 @@ class RuntimeEnvironmentTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as project_root:
                 runtime_dir = os.path.join(project_root, ".ari_runtime")
+                logs_dir = os.path.join(project_root, "logs")
+                core_logs_dir = os.path.join(project_root, "core", "logs")
                 with open(os.path.join(project_root, "ari_settings.json"), "w", encoding="utf-8") as handle:
                     json.dump({"llm_provider": "gemini", "llm_router_enabled": False}, handle, ensure_ascii=False)
                 with open(os.path.join(project_root, "scheduled_tasks.json"), "w", encoding="utf-8") as handle:
@@ -56,6 +58,12 @@ class RuntimeEnvironmentTests(unittest.TestCase):
                         handle,
                         ensure_ascii=False,
                     )
+                os.makedirs(logs_dir, exist_ok=True)
+                os.makedirs(core_logs_dir, exist_ok=True)
+                with open(os.path.join(logs_dir, "legacy.log"), "w", encoding="utf-8") as handle:
+                    handle.write("legacy root log")
+                with open(os.path.join(core_logs_dir, "legacy_core.log"), "w", encoding="utf-8") as handle:
+                    handle.write("legacy core log")
 
                 os.environ["ARI_APP_DATA_DIR"] = runtime_dir
                 with patch.object(ResourceManager, "_project_root", return_value=project_root):
@@ -71,6 +79,12 @@ class RuntimeEnvironmentTests(unittest.TestCase):
                     scheduler._tasks = {}
                     scheduler._load()
                     self.assertIn("legacy-task", scheduler._tasks)
+                    self.assertTrue(os.path.exists(os.path.join(runtime_dir, "logs", "legacy.log")))
+                    self.assertTrue(os.path.exists(os.path.join(runtime_dir, "logs", "legacy_core.log")))
+                    self.assertTrue(os.path.exists(os.path.join(project_root, "ari_settings.json")))
+                    self.assertFalse(os.path.exists(os.path.join(project_root, "scheduled_tasks.json")))
+                    self.assertFalse(os.path.exists(logs_dir))
+                    self.assertFalse(os.path.exists(core_logs_dir))
         finally:
             if original_env is None:
                 os.environ.pop("ARI_APP_DATA_DIR", None)

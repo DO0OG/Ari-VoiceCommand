@@ -123,7 +123,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### `agent/skill_optimizer.py` (신규 2026-03-31)
 - Direction 1: `optimize_steps(skill, error)` — 실패 에러 기반 스텝 재작성
 - Direction 1: `condense_steps(skill)` — 반복 성공 후 스텝 압축
-- Direction 2: `compile_to_python(skill)` — Python 함수로 컴파일 (`compiled_skills/<id>.py`)
+- Direction 2: `compile_to_python(skill)` — Python 함수로 컴파일 (`ResourceManager.get_writable_path("compiled_skills")/<id>.py`)
 - Direction 2: `repair_python(skill, code, error)` — 컴파일 코드 LLM 수정
 - 안전: `safety_checker.check_python()` + `ast.parse()` 통과한 코드만 저장
 
@@ -139,7 +139,8 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ### `core/resource_manager.py`
 - 개발 모드 writable root는 `VoiceCommand/.ari_runtime/`, 배포 모드는 `%AppData%/Ari/`
-- 루트 `ari_settings.json`, `scheduled_tasks.json`은 템플릿 파일로 유지하고, 실제 실행 상태는 `.ari_runtime/` 아래로 분리
+- 루트에는 `ari_settings.json` 템플릿만 유지하고, 실제 실행 상태와 로그는 `.ari_runtime/` 아래로 분리
+- 정리하면 source run(`py Main.py`)은 `.ari_runtime/`, frozen exe run은 `%AppData%/Ari/`를 사용
 - 레거시 루트 상태 파일이 있으면 새 런타임 경로로 자동 마이그레이션
 
 ### `ui/scheduler_panel.py`
@@ -154,7 +155,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `plugin_loader.py`: ZIP safe extract, import 직전 `SafetyChecker` 재검사, 악성 경로 차단
 - `skill_optimizer.py`: `run_compiled()` 실행 직전 `check_python()` 재검사
 - `marketplace_client.py` + Supabase functions + SQL migration + web types: `sha256` 계약 end-to-end 정렬
-- `ResourceManager`: 개발 모드 `.ari_runtime/` 분리, 템플릿 파일/실행 상태 분리
+- `ResourceManager`: 개발 모드 `.ari_runtime/` 분리, 레거시 루트 상태 자동 마이그레이션/정리
 - `validate_repo.py`: compile + unittest 외에 clean runtime / marketplace SHA256 smoke 추가
 
 ### 자율 학습 / 성능

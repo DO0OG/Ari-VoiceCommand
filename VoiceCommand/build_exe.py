@@ -17,6 +17,7 @@ nofollow 정책:
   agent/regression_guard.py — 주간 성공률 회귀 경고
   ui/text_interface.py      — 스트리밍 청크 반영 + 문장 경계 TTS 즉시 시작
   core/resource_manager.py  — 개발 모드 `.ari_runtime` 분리 + 레거시 상태 마이그레이션
+                              빌드된 exe 실행 시 런타임 루트는 `%AppData%/Ari`
   validate_repo.py          — clean environment runtime / marketplace sha256 contract smoke 추가
   market/web/src/*          — Codacy 대응용 비동기 핸들러/nullable 정리 (웹 배포 산출물과 동작 일치)
   market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
@@ -159,7 +160,6 @@ nuitka_args = [
     "--include-data-files=icon.ico=icon.ico",
     *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
     "--include-data-files=ari_settings.json=ari_settings.json",
-    *(["--include-data-files=scheduled_tasks.json=scheduled_tasks.json"] if os.path.exists(os.path.join(HERE, "scheduled_tasks.json")) else []),
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
     *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
