@@ -323,7 +323,7 @@ class ExecutionEngine:
             with self._context_lock:
                 context["dom_suggestions"] = json.dumps(suggestions, ensure_ascii=False)
         except Exception as exc:
-            logger.debug(f"[ExecutionEngine] DOM suggestion 주입 생략: {exc}")
+            logger.debug("[ExecutionEngine] DOM suggestion 주입 생략: %s", exc)
 
     def _run_pip_install(self, pip_pkg: str) -> bool:
         try:
@@ -777,7 +777,7 @@ class ExecutionEngine:
             if guidance:
                 ctx["복구_가이드"] = guidance[:500]
         except Exception as exc:
-            logger.debug(f"[ExecutionEngine] recovery candidate 주입 생략: {exc}")
+            logger.debug("[ExecutionEngine] recovery candidate 주입 생략: %s", exc)
         return ctx
 
     # ── 개발자 가드 ────────────────────────────────────────────────────────────
@@ -930,7 +930,7 @@ class ExecutionEngine:
             try:
                 self.progress_callback(event_type, **kwargs)
             except Exception as e:
-                logger.debug(f"[ExecutionEngine] 진행 콜백 오류: {e}")
+                logger.debug("[ExecutionEngine] 진행 콜백 오류: %s", e)
 
     def _say(self, msg: str) -> None:
         if self.tts:

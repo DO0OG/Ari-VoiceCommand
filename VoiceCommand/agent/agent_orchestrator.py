@@ -131,7 +131,7 @@ class AgentOrchestrator:
             duration = int((time.time() - start_time) * 1000)
             self._learn.schedule_post_run_update(goal, run_result, duration)
             self._learn.record_learning_metrics(run_result)
-            self._learn.record_strategy(
+            self._record_strategy(
                 goal,
                 run_result,
                 duration,
@@ -161,7 +161,7 @@ class AgentOrchestrator:
                     context["recent_goal_episodes"] = recent_episode_summary[:600]
                 learning_components["EpisodeMemory"] = True
         except Exception as exc:
-            logger.debug(f"[Orchestrator] episode memory 주입 생략: {exc}")
+            logger.debug("[Orchestrator] episode memory 주입 생략: %s", exc)
 
         try:
             from agent.goal_predictor import get_goal_predictor
@@ -182,7 +182,7 @@ class AgentOrchestrator:
                 )
                 self._say(f"[진지] {prediction.warning_kr}")
         except Exception as exc:
-            logger.debug(f"[Orchestrator] goal predictor 주입 생략: {exc}")
+            logger.debug("[Orchestrator] goal predictor 주입 생략: %s", exc)
 
         if self._should_prefer_template_over_skill(goal):
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
@@ -265,7 +265,7 @@ class AgentOrchestrator:
                 return True
             template_steps = self.planner._build_template_plan(goal)
         except Exception as exc:
-            logger.debug(f"[Orchestrator] 템플릿 우선 판단 생략: {exc}")
+            logger.debug("[Orchestrator] 템플릿 우선 판단 생략: %s", exc)
             return False
         return bool(template_steps)
 
@@ -337,7 +337,7 @@ class AgentOrchestrator:
             )
             get_skill_library().deprecate_if_failing(skill.skill_id, error=error)
         except Exception as e:
-            logger.debug(f"[Orchestrator] skill 실행 생략: {e}")
+            logger.debug("[Orchestrator] skill 실행 생략: %s", e)
         return None
 
     def _run_compiled_skill(self, skill, goal: str) -> Optional[AgentRunResult]:
@@ -352,7 +352,7 @@ class AgentOrchestrator:
                 result.achieved = True
                 result.summary_kr = output
                 get_skill_library().record_feedback(skill.skill_id, positive=True)
-                logger.info(f"[Orchestrator] 컴파일 스킬 실행 성공: {skill.name}")
+                logger.info("[Orchestrator] 컴파일 스킬 실행 성공: %s", skill.name)
                 return result
             # 실패 → 코드 수정 트리거 후 None 반환 (스텝 폴백)
             logger.info(
@@ -363,7 +363,7 @@ class AgentOrchestrator:
             )
             return None
         except Exception as exc:
-            logger.debug(f"[Orchestrator] 컴파일 스킬 실행 오류: {exc}")
+            logger.debug("[Orchestrator] 컴파일 스킬 실행 오류: %s", exc)
             return None
 
     # ── 유틸리티 ──────────────────────────────────────────────────────────────
@@ -382,21 +382,50 @@ class AgentOrchestrator:
             try:
                 self.progress_callback(event_type, **kwargs)
             except Exception as e:
-                logger.debug(f"[Orchestrator] 진행 콜백 오류: {e}")
+                logger.debug("[Orchestrator] 진행 콜백 오류: %s", e)
 
     def _set_thinking(self, thinking: bool) -> None:
         if self.thinking_callback:
             try:
                 self.thinking_callback(thinking)
             except Exception as e:
-                logger.debug(f"[Orchestrator] 생각 콜백 오류: {e}")
+                logger.debug("[Orchestrator] 생각 콜백 오류: %s", e)
 
     def _say(self, msg: str) -> None:
         if self.tts:
             self.tts(msg)
 
     def _log_plan(self, steps: List[ActionStep]) -> None:
-        logger.info(f"[Orchestrator] {len(steps)}단계 계획 수립됨")
+        logger.info("[Orchestrator] %d단계 계획 수립됨", len(steps))
+
+    # ── 엔진 위임 proxy (테스트·외부 호환) ──────────────────────────────────────
+
+    def _eval_condition(self, condition: str, context: dict) -> bool:
+        return self._exec._eval_condition(condition, context)
+
+    def _group_by_dependency(self, steps):
+        return self._exec._group_by_dependency(steps)
+
+    def _build_adaptive_context(self, failed_steps) -> dict:
+        return self._exec._build_adaptive_context(failed_steps)
+
+    def _execute_step_with_retry(self, step, goal: str, context: dict):
+        return self._exec._execute_step_with_retry(step, goal, context)
+
+    def _post_run_update(self, goal: str, run_result, duration_ms: int):
+        return self._learn._post_run_update(goal, run_result, duration_ms)
+
+    def _verify(self, goal: str, step_results) -> tuple:
+        return self._verify_engine.verify(goal, step_results)
+
+    def _update_runtime_context(self, context: dict, exec_result) -> None:
+        return self._exec._update_runtime_context(context, exec_result)
+
+    def _execute_plan(self, steps, context: dict, goal: str) -> tuple:
+        return self._exec.execute_plan(steps, context, goal)
+
+    def _record_strategy(self, goal: str, run_result, duration_ms: int, **kwargs) -> None:
+        return self._learn.record_strategy(goal, run_result, duration_ms, **kwargs)
 
 
 # ── 싱글턴 팩토리 ──────────────────────────────────────────────────────────────

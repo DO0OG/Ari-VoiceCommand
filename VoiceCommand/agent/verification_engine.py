@@ -44,7 +44,7 @@ class VerificationEngine:
             v = get_real_verifier().verify(goal, step_results)
             return v.verified, v.summary_kr
         except Exception as exc:
-            logger.debug(f"[VerificationEngine] RealVerifier 폴백: {exc}")
+            logger.debug("[VerificationEngine] RealVerifier 폴백: %s", exc)
         if any(not sr.exec_result.success for sr in step_results):
             return False, "일부 단계 실패"
         verdict = self.planner.verify(
