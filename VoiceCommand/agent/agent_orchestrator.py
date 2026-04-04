@@ -422,7 +422,7 @@ class AgentOrchestrator:
         return self._exec._update_runtime_context(context, exec_result)
 
     def _execute_plan(self, steps, context: dict, goal: str) -> tuple:
-        return self._exec.execute_plan(steps, context, goal)
+        return self._exec.execute_plan(steps, context, goal, step_runner=self._execute_step_with_retry)
 
     def _record_strategy(self, goal: str, run_result, duration_ms: int, **kwargs) -> None:
         return self._learn.record_strategy(goal, run_result, duration_ms, **kwargs)

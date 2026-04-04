@@ -135,8 +135,10 @@ class ExecutionEngine:
         steps: List[ActionStep],
         context: Dict[str, str],
         goal: str,
+        step_runner=None,
     ) -> Tuple[bool, List]:
         """ActionStep 목록을 실행하고 (전체 성공 여부, StepResult 목록) 반환."""
+        runner = step_runner or self._execute_step_with_retry
         step_results: List[StepResult] = []
         groups = self._group_by_dependency(steps)
 
@@ -168,7 +170,7 @@ class ExecutionEngine:
                     desc=step.description_kr,
                     step_type=step.step_type,
                 )
-                result, attempt, fixed = self._execute_step_with_retry(step, goal, context)
+                result, attempt, fixed = runner(step, goal, context)
                 group_results = [
                     StepResult(
                         step=step,
@@ -186,7 +188,7 @@ class ExecutionEngine:
                         desc=s.description_kr,
                         step_type=s.step_type,
                     )
-                group_results = self._execute_parallel_group(runnable, context, goal)
+                group_results = self._execute_parallel_group(runnable, context, goal, runner)
 
             for sr in group_results:
                 sr = self._apply_developer_step_guard(goal, sr, context)
@@ -257,11 +259,13 @@ class ExecutionEngine:
         group: List[ActionStep],
         context: Dict[str, str],
         goal: str,
+        step_runner=None,
     ) -> List:
+        runner = step_runner or self._execute_step_with_retry
         results = [None] * len(group)
 
         def run_one(idx, step):
-            res, att, fixed = self._execute_step_with_retry(step, goal, context)
+            res, att, fixed = runner(step, goal, context)
             return StepResult(
                 step=step,
                 exec_result=res,
