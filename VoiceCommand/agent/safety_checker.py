@@ -69,7 +69,7 @@ _DANGEROUS_URL_KEYWORDS = [
     "banking", "finance", "login", "password", "reset", "delete-account", 
     "account-settings", "payment", "checkout", "transfer"
 ]
-_SENSITIVE_INPUT_KEYWORDS = ["password", "otp", "2fa", "인증", "비밀번호", "보안", "결제"]
+_SENSITIVE_INPUT_KEYWORDS = ["password", "otp", "2fa", "api_key", "인증", "비밀번호", "보안", "결제"]
 
 _ALWAYS_ALLOWED_APPS = ["notepad", "calc", "explorer", "chrome", "msedge", "cmd", "powershell"]
 _BLOCKED_APPS = ["regedit", "powershell_ise", "processhacker", "wireshark"]
@@ -201,7 +201,7 @@ class SafetyChecker:
         # Path.resolve() 기반 정규화로 대소문자/유니코드 우회 방지
         try:
             resolved_stem = Path(app_name).resolve().stem.lower()
-        except Exception:
+        except (OSError, ValueError):
             resolved_stem = ""
         app_lower = app_name.lower()
         normalized = resolved_stem or app_lower

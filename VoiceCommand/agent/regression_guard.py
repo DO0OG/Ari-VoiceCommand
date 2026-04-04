@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 
 
 @dataclass
@@ -70,10 +71,13 @@ class RegressionGuard:
 
 
 _guard: RegressionGuard | None = None
+_guard_lock = threading.Lock()
 
 
 def get_regression_guard() -> RegressionGuard:
     global _guard
     if _guard is None:
-        _guard = RegressionGuard()
+        with _guard_lock:
+            if _guard is None:
+                _guard = RegressionGuard()
     return _guard

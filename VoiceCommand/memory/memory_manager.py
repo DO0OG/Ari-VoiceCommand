@@ -3,11 +3,19 @@
 """
 import logging
 import re
+import threading
 from datetime import datetime
 from memory.user_context import get_context_manager
 from memory.conversation_history import add_conversation
 from memory.memory_index import get_memory_index
 from memory.user_profile_engine import get_user_profile_engine
+
+# 정규식 캐싱
+_RE_FACT = re.compile(r'\[FACT:\s*([^=]+)=([^\]]+)\]')
+_RE_BIO = re.compile(r'\[BIO:\s*([^=]+)=([^\]]+)\]')
+_RE_PREF = re.compile(r'\[PREF:\s*([^=]+)=([^\]]+)\]')
+_RE_TAGS = re.compile(r'\[(FACT|BIO|PREF|CMD):[^\]]+\]')
+_RE_WHITESPACE = re.compile(r'\s+')
 
 # FACT로 저장하면 안 되는 일시적/task-specific 키워드
 _EPHEMERAL_FACT_KEYS = {
@@ -33,21 +41,21 @@ class MemoryManager:
         try:
             add_conversation(user_msg, ai_response)
         except Exception as e:
-            logging.error(f"대화 저장 실패: {e}")
+            logging.warning("대화 저장 실패: %s", e)
         try:
             get_memory_index().index_conversation(user_msg, ai_response, timestamp)
         except Exception as e:
-            logging.debug(f"대화 인덱싱 실패: {e}")
+            logging.warning("대화 인덱싱 실패: %s", e)
         try:
             self._extract_info_from_response(ai_response)
         except Exception as e:
-            logging.error(f"응답 정보 추출 실패: {e}")
+            logging.warning("응답 정보 추출 실패: %s", e)
         try:
             topics = self._extract_topics(user_msg, ai_response)
             if topics:
                 self.context_manager.record_topics(topics)
         except Exception as e:
-            logging.error(f"대화 주제 추출 실패: {e}")
+            logging.warning("대화 주제 추출 실패: %s", e)
         try:
             last_command = ""
             last_commands = self.context_manager.context.get("last_commands", [])
@@ -55,7 +63,7 @@ class MemoryManager:
                 last_command = last_commands[-1].get("command", "")
             get_user_profile_engine().update(user_msg, command_type=last_command, success=True)
         except Exception as e:
-            logging.debug(f"프로파일 업데이트 실패: {e}")
+            logging.warning("프로파일 업데이트 실패: %s", e)
 
     def _is_persistent_fact(self, key: str) -> bool:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""
@@ -65,29 +73,26 @@ class MemoryManager:
         """AI 응답에서 [FACT: ...], [BIO: ...], [PREF: ...] 태그 추출 및 저장"""
         try:
             # 사실 추출: [FACT: key=value] — 지속성 있는 사실만 저장
-            facts = re.findall(r'\[FACT:\s*([^=]+)=([^\]]+)\]', response)
-            for key, value in facts:
+            for key, value in _RE_FACT.findall(response):
                 k = key.strip()
                 if self._is_persistent_fact(k):
-                    logging.info(f"사실 기억함: {k} = {value.strip()}")
+                    logging.info("사실 기억함: %s = %s", k, value.strip())
                     self.context_manager.record_fact(k, value.strip(), source="assistant_tag", confidence=0.75)
                     get_memory_index().index_fact(k, value.strip(), 0.75)
                 else:
-                    logging.info(f"[MemoryManager] 일시적 FACT 무시 (비저장): {k}={value.strip()}")
+                    logging.info("[MemoryManager] 일시적 FACT 무시 (비저장): %s=%s", k, value.strip())
 
             # 기본 정보 추출: [BIO: field=value]
-            bios = re.findall(r'\[BIO:\s*([^=]+)=([^\]]+)\]', response)
-            for field, value in bios:
-                logging.info(f"바이오 업데이트: {field.strip()} = {value.strip()}")
+            for field, value in _RE_BIO.findall(response):
+                logging.info("바이오 업데이트: %s = %s", field.strip(), value.strip())
                 self.context_manager.update_bio(field.strip(), value.strip())
 
             # 선호도 추출: [PREF: category=value]
-            prefs = re.findall(r'\[PREF:\s*([^=]+)=([^\]]+)\]', response)
-            for cat, val in prefs:
-                logging.info(f"선호도 저장: {cat.strip()} = {val.strip()}")
+            for cat, val in _RE_PREF.findall(response):
+                logging.info("선호도 저장: %s = %s", cat.strip(), val.strip())
                 self.context_manager.record_preference(cat.strip(), val.strip())
         except Exception as e:
-            logging.error(f"응답 태그 파싱 실패: {e}")
+            logging.warning("응답 태그 파싱 실패: %s", e)
 
     def get_full_context_prompt(self):
         """LLM에 전달할 전체 컨텍스트 요약 생성"""
@@ -129,8 +134,8 @@ class MemoryManager:
 
     def clean_response(self, response):
         """특수 태그만 제거하고 텍스트 자체는 보존."""
-        cleaned = re.sub(r'\[(FACT|BIO|PREF|CMD):[^\]]+\]', '', response or "")
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        cleaned = _RE_TAGS.sub('', response or "")
+        cleaned = _RE_WHITESPACE.sub(' ', cleaned).strip()
         return cleaned
 
     def _extract_topics(self, user_msg: str, ai_response: str):
@@ -139,9 +144,13 @@ class MemoryManager:
 
 # 싱글톤
 _memory_manager = None
+_memory_manager_lock = threading.Lock()
+
 
 def get_memory_manager():
     global _memory_manager
     if _memory_manager is None:
-        _memory_manager = MemoryManager()
+        with _memory_manager_lock:
+            if _memory_manager is None:
+                _memory_manager = MemoryManager()
     return _memory_manager

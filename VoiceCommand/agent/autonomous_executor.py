@@ -20,6 +20,20 @@ from typing import Any, Dict, List, Optional, Callable
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
 
+# 자식 프로세스에 전달하지 않을 환경 변수 접두사 (API 키 등 민감 정보)
+_SENSITIVE_ENV_PREFIXES = (
+    "OPENAI_", "GROQ_", "ANTHROPIC_", "SUPABASE_",
+    "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_",
+)
+
+
+def _build_child_env() -> dict:
+    """민감한 환경변수를 제외한 안전한 자식 프로세스 환경 반환."""
+    return {
+        k: v for k, v in os.environ.items()
+        if not any(k.upper().startswith(p) for p in _SENSITIVE_ENV_PREFIXES)
+    }
+
 
 @dataclass
 class ExecutionResult:
@@ -47,6 +61,7 @@ class AutonomousExecutor:
         self.tts_wrapper = tts_func
         self._python_slots = threading.BoundedSemaphore(self._MAX_CONCURRENT_PYTHON)
         self._shell_slots = threading.BoundedSemaphore(self._MAX_CONCURRENT_SHELL)
+        self._history_lock = threading.Lock()
         self._history: List[ExecutionResult] = []
         self._state_transitions: List[Dict[str, Any]] = []
         self._backup_history: List[Dict[str, str]] = []
@@ -348,7 +363,7 @@ class AutonomousExecutor:
         process = None
         try:
             runner_path = self._write_python_runner(code, extra_globals=extra_globals)
-            child_env = os.environ.copy()
+            child_env = _build_child_env()
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(
@@ -374,10 +389,12 @@ class AutonomousExecutor:
             return ExecutionResult(success=True, output=output)
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
-            try:
+            if process:
                 process.kill()
-            except Exception as exc:
-                logging.debug(f"[Executor] Python 프로세스 강제 종료 생략: {exc}")
+                try:
+                    process.communicate(timeout=5)
+                except Exception:
+                    pass
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
             return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
@@ -420,11 +437,13 @@ class AutonomousExecutor:
                 error=stderr.strip(),
             )
         except subprocess.TimeoutExpired:
-            logging.error(f"[Executor] Shell 시간 초과: {command}")
-            try:
+            logging.error("[Executor] Shell 시간 초과: %s", command)
+            if process:
                 process.kill()
-            except Exception as exc:
-                logging.debug(f"[Executor] Shell 프로세스 강제 종료 생략: {exc}")
+                try:
+                    process.communicate(timeout=5)
+                except Exception:
+                    pass
             if self.tts_wrapper:
                 self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
             return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
@@ -446,9 +465,10 @@ class AutonomousExecutor:
             return False
 
     def _record_history(self, result: ExecutionResult):
-        self._history.append(result)
-        if len(self._history) > self._MAX_HISTORY:
-            self._history = self._history[-self._MAX_HISTORY:]
+        with self._history_lock:
+            self._history.append(result)
+            if len(self._history) > self._MAX_HISTORY:
+                self._history = self._history[-self._MAX_HISTORY:]
         if result.state_delta_summary:
             self._state_transitions.append({
                 "success": result.success,
@@ -992,7 +1012,7 @@ except Exception:
                 "-NoProfile",
                 "-NonInteractive",
                 "-ExecutionPolicy",
-                "Bypass",
+                "RemoteSigned",
                 "-Command",
                 normalized,
             ]

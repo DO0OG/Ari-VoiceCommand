@@ -5,7 +5,11 @@ FACT 신뢰도 업데이트 엔진.
 """
 
 from dataclasses import dataclass
+import logging
 import math
+import threading
+
+_source_weight_lock = threading.Lock()
 
 SOURCE_WEIGHTS: dict[str, float] = {
     "user": 1.0,
@@ -93,16 +97,18 @@ def batch_decay(facts: dict, current_time) -> dict:
             new_payload = dict(payload)
             new_payload["confidence"] = round(result.new_confidence, 2)
             updated[key] = new_payload
-        except Exception:
+        except Exception as exc:
+            logging.debug("batch_decay 오류 (key=%s): %s", key, exc)
             updated[key] = payload
     return updated
 
 
 def update_source_weight(source: str, was_correct: bool) -> float:
-    current = SOURCE_WEIGHTS.get(source, DEFAULT_SOURCE_WEIGHT)
-    delta = 0.03 if was_correct else -0.05
-    SOURCE_WEIGHTS[source] = max(_MIN_SOURCE_WEIGHT, min(_MAX_SOURCE_WEIGHT, round(current + delta, 2)))
-    return SOURCE_WEIGHTS[source]
+    with _source_weight_lock:
+        current = SOURCE_WEIGHTS.get(source, DEFAULT_SOURCE_WEIGHT)
+        delta = 0.03 if was_correct else -0.05
+        SOURCE_WEIGHTS[source] = max(_MIN_SOURCE_WEIGHT, min(_MAX_SOURCE_WEIGHT, round(current + delta, 2)))
+        return SOURCE_WEIGHTS[source]
 
 
 if __name__ == "__main__":

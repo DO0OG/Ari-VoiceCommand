@@ -11,6 +11,22 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-04 최신):
+  agent/execution_engine.py   — AgentOrchestrator에서 분리된 단계 실행 엔진 (ExecutionEngine)
+  agent/verification_engine.py — 검증 전담 모듈 (VerificationEngine)
+  agent/learning_engine.py    — 학습/기록 전담 모듈 (LearningEngine)
+  agent/autonomous_executor.py — 자식 프로세스 환경변수 격리 (_build_child_env), 좀비 방지
+  agent/reflection_engine.py  — 프롬프트 인젝션 방지 (_sanitize), 길이 상수화
+  agent/skill_optimizer.py    — skill_id 경로 탈출 검증, 스레드 안전 초기화
+  agent/safety_checker.py     — api_key 민감 키워드 추가
+  core/plugin_loader.py       — 유니코드 ZIP entry 경로 검증, except 범위 축소
+  core/plugin_sandbox.py      — finally 블록으로 stdout 복구 보장
+  memory/memory_manager.py    — double-checked locking 싱글톤, 정규식 캐싱
+  memory/trust_engine.py      — update_source_weight 스레드 락 추가
+  ui/settings_llm_page.py    — SettingsDialog LLM 탭 분리 (settings_dialog.py 1190→388줄)
+  ui/settings_tts_page.py    — SettingsDialog TTS 탭 분리
+  ui/settings_plugin_page.py — SettingsDialog 플러그인 탭 분리
+
 포함 모듈 (2026-04-03 최신):
   agent/goal_predictor.py   — 반복 실패 위험 예측 + orchestrator 선제 경고
   agent/learning_metrics.py — 학습 컴포넌트 lift 계측

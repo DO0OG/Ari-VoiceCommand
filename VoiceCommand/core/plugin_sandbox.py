@@ -19,20 +19,23 @@ def _sandbox_worker(code: str, queue) -> None:
 
     stdout_buffer = io.StringIO()
     error_text = ""
+    with tempfile.NamedTemporaryFile("w", suffix="_sandbox_exec.py", encoding="utf-8", delete=False) as temp_file:
+        temp_file.write(code)
+        temp_path = temp_file.name
+    original_stdout = sys.stdout
     try:
-        original_stdout = sys.stdout
         sys.stdout = stdout_buffer
-        with tempfile.NamedTemporaryFile("w", suffix="_sandbox_exec.py", encoding="utf-8", delete=False) as temp_file:
-            temp_file.write(code)
-            temp_path = temp_file.name
-        try:
-            runpy.run_path(temp_path, run_name="__main__")
-            sys.stdout = original_stdout
-        finally:
-            os.remove(temp_path)
-    except Exception:
-        sys.stdout = sys.__stdout__
+        runpy.run_path(temp_path, run_name="__main__")
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).debug("[Sandbox] 실행 중 예외 발생: %s", exc)
         error_text = traceback.format_exc()
+    finally:
+        sys.stdout = original_stdout
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
     queue.put({
         "ok": not error_text,
         "output": stdout_buffer.getvalue()[:4096],

@@ -16,12 +16,27 @@ import logging
 import os
 import re
 import tempfile
+import threading
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
 # 컴파일된 스킬 저장 디렉터리
 _COMPILED_DIR: str = ""
+_COMPILED_DIR_LOCK = threading.Lock()
+
+# 정규식 캐싱
+_RE_JSON_BLOCK = re.compile(r"```json\s*([\s\S]+?)\s*```")
+_RE_PY_BLOCK = re.compile(r"```python\s*([\s\S]+?)\s*```")
+
+# skill_id 허용 패턴 (경로 탈출 방지)
+_SKILL_ID_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
+
+
+def _validate_skill_id(skill_id: str) -> None:
+    """skill_id에 경로 구분자나 특수문자가 없는지 검증."""
+    if not _SKILL_ID_RE.match(skill_id):
+        raise ValueError(f"유효하지 않은 skill_id: {skill_id!r}")
 
 
 def _invoke_run_skill(run_skill, goal: str) -> str:
@@ -33,13 +48,15 @@ def _invoke_run_skill(run_skill, goal: str) -> str:
 def _get_compiled_dir() -> str:
     global _COMPILED_DIR
     if not _COMPILED_DIR:
-        try:
-            from core.resource_manager import ResourceManager
-            _COMPILED_DIR = ResourceManager.get_writable_path("compiled_skills")
-        except Exception:
-            project_root = os.path.dirname(os.path.dirname(__file__))
-            _COMPILED_DIR = os.path.join(project_root, ".ari_runtime", "compiled_skills")
-        os.makedirs(_COMPILED_DIR, exist_ok=True)
+        with _COMPILED_DIR_LOCK:
+            if not _COMPILED_DIR:  # double-checked
+                try:
+                    from core.resource_manager import ResourceManager
+                    _COMPILED_DIR = ResourceManager.get_writable_path("compiled_skills")
+                except (ImportError, AttributeError):
+                    project_root = os.path.dirname(os.path.dirname(__file__))
+                    _COMPILED_DIR = os.path.join(project_root, ".ari_runtime", "compiled_skills")
+                os.makedirs(_COMPILED_DIR, exist_ok=True)
     return _COMPILED_DIR
 
 
@@ -128,6 +145,7 @@ class SkillOptimizer:
 
     def save_compiled(self, skill_id: str, code: str) -> str:
         """컴파일된 코드를 파일로 저장하고 경로 반환."""
+        _validate_skill_id(skill_id)
         path = os.path.join(_get_compiled_dir(), f"{skill_id}.py")
         with open(path, "w", encoding="utf-8") as f:
             f.write(code)
@@ -135,6 +153,7 @@ class SkillOptimizer:
 
     def load_compiled(self, skill_id: str) -> Optional[str]:
         """저장된 컴파일 코드 로드."""
+        _validate_skill_id(skill_id)
         path = os.path.join(_get_compiled_dir(), f"{skill_id}.py")
         if not os.path.exists(path):
             return None
@@ -143,6 +162,7 @@ class SkillOptimizer:
 
     def delete_compiled(self, skill_id: str):
         """컴파일된 스킬 파일 삭제."""
+        _validate_skill_id(skill_id)
         path = os.path.join(_get_compiled_dir(), f"{skill_id}.py")
         if os.path.exists(path):
             os.remove(path)
@@ -152,6 +172,7 @@ class SkillOptimizer:
         저장된 Python 스킬 실행.
         반환: (success, result_or_error)
         """
+        _validate_skill_id(skill_id)
         code = self.load_compiled(skill_id)
         if not code:
             return False, "컴파일된 스킬 없음"
@@ -173,6 +194,7 @@ class SkillOptimizer:
             result = _invoke_run_skill(run_fn, str(goal))
             return True, str(result)
         except Exception as exc:
+            logger.exception("[SkillOptimizer] run_compiled 실패 (skill_id=%s)", skill_id)
             return False, str(exc)
 
     # ── 내부 헬퍼 ─────────────────────────────────────────────────────────
@@ -190,7 +212,7 @@ class SkillOptimizer:
 
     def _parse_json_steps(self, response: str) -> Optional[List[dict]]:
         try:
-            m = re.search(r"```json\s*([\s\S]+?)\s*```", response)
+            m = _RE_JSON_BLOCK.search(response)
             raw = m.group(1) if m else response.strip()
             steps = json.loads(raw)
             if not isinstance(steps, list) or not steps:
@@ -200,11 +222,11 @@ class SkillOptimizer:
                     return None
             return steps
         except Exception as exc:
-            logger.debug(f"[SkillOptimizer] 스텝 파싱 실패: {exc}")
+            logger.debug("[SkillOptimizer] 스텝 파싱 실패: %s", exc)
             return None
 
     def _extract_code_block(self, response: str) -> str:
-        m = re.search(r"```python\s*([\s\S]+?)\s*```", response)
+        m = _RE_PY_BLOCK.search(response)
         return m.group(1).strip() if m else response.strip()
 
     def _validate_python(self, code: str) -> bool:

@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -24,6 +25,14 @@ _BASE_HEADERS = {
     "Content-Type": "application/json",
     "apikey": SUPABASE_ANON_KEY,
 }
+
+
+def _marketplace_available() -> bool:
+    """API URL이 설정된 경우에만 True (anon key는 선택)."""
+    if not MARKETPLACE_API:
+        logger.debug("마켓플레이스 API URL 미설정 — 작업 건너뜀")
+        return False
+    return True
 
 
 def _require_web_url(url: str) -> str:
@@ -90,16 +99,26 @@ def _resolve_zip_plugin_metadata(archive: zipfile.ZipFile, plugin_name: str, ent
 
 def fetch_plugins(search: str = "", sort: str = "install_count") -> List[Dict]:
     """마켓플레이스 플러그인 목록 조회."""
+    if not _marketplace_available():
+        return []
     query = urllib.parse.urlencode({"search": search, "sort": sort})
     return _get(f"{MARKETPLACE_API}/get-plugins?{query}").get("items", [])
 
 
 def fetch_plugin(plugin_id: str) -> Optional[Dict]:
     """특정 플러그인 상세 조회."""
+    if not _marketplace_available():
+        return None
     try:
         return _get(f"{MARKETPLACE_API}/get-plugin?plugin_id={plugin_id}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            logger.info("플러그인 없음 (plugin_id=%s): HTTP 404", plugin_id)
+        else:
+            logger.error("플러그인 조회 실패 — 네트워크 오류 (plugin_id=%s): %s", plugin_id, e)
+        return None
     except Exception as e:
-        logger.error("플러그인 조회 실패: %s", e)
+        logger.error("플러그인 조회 실패 — 네트워크 오류 (plugin_id=%s): %s", plugin_id, e)
         return None
 
 
@@ -110,6 +129,9 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
     2. ZIP 다운로드 후 plugin_dir에 ZIP 그대로 저장
     3. 실행 중인 PluginManager에 동적 로드
     """
+    if not _marketplace_available():
+        return False
+
     # 1. install-plugin 호출
     try:
         data = _post(f"{MARKETPLACE_API}/install-plugin", {"plugin_id": plugin_id})

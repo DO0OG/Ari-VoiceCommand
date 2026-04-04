@@ -170,12 +170,16 @@ class ConfirmationManager:
         holder: dict = {"event": threading.Event(), "result": False}
         self._bridge.request_dialog.emit(action_desc, report, holder)
 
-        confirmed = holder["event"].wait(timeout=20)
+        wait_sec = ConfirmationDialog.COUNTDOWN_SECONDS + 5
+        confirmed = holder["event"].wait(timeout=wait_sec)
         if not confirmed:
-            logging.warning("확인 다이얼로그 timeout (20초)")
+            logging.warning("확인 다이얼로그 timeout (%d초)", wait_sec)
+            holder.clear()
             return False
 
-        return bool(holder["result"])
+        result = bool(holder.get("result", False))
+        holder.clear()
+        return result
 
 
 _manager_instance: Optional[ConfirmationManager] = None

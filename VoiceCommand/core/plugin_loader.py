@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import sys
+import unicodedata
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -78,7 +79,7 @@ class PluginManager:
         try:
             from core.resource_manager import ResourceManager
             return ResourceManager.ensure_plugin_files()
-        except Exception:
+        except (ImportError, AttributeError):
             project_root = os.path.dirname(os.path.dirname(__file__))
             runtime_plugins = os.path.join(project_root, ".ari_runtime", "plugins")
             source_plugins = os.path.join(project_root, "plugins")
@@ -270,7 +271,10 @@ class PluginManager:
             except ValueError:
                 pass
         if plugin.runtime_path:
-            shutil.rmtree(plugin.runtime_path, ignore_errors=True)
+            try:
+                shutil.rmtree(plugin.runtime_path)
+            except OSError as exc:
+                logger.warning("[PluginLoader] 런타임 디렉터리 정리 실패 (%s): %s", plugin.runtime_path, exc)
 
         self._plugins = [item for item in self._plugins if item.name != plugin_name]
         logger.info("[PluginLoader] 플러그인 언로드: %s", plugin_name)
@@ -345,8 +349,9 @@ class PluginManager:
         entry = str(meta.get("entry", "") or "").strip()
         if not entry:
             raise RuntimeError("plugin.json에 entry가 없습니다.")
-        if "/" in entry or "\\" in entry:
-            raise RuntimeError("entry는 ZIP 루트 파일이어야 합니다.")
+        entry_normalized = unicodedata.normalize("NFKC", entry)
+        if "/" in entry_normalized or "\\" in entry_normalized or ".." in entry_normalized:
+            raise RuntimeError(f"entry는 ZIP 루트 파일이어야 합니다: {entry!r}")
 
         extract_dir = self._runtime_extract_dir(plugin.path)
         if os.path.isdir(extract_dir):
