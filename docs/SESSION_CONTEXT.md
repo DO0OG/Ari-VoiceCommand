@@ -155,7 +155,20 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 6. 2026-04-03 주요 변경사항
+## 6. 2026-04-06 주요 변경사항
+
+### 실행 엔진 / 구조 분리
+- `condition_evaluator.py`: ExecutionEngine step 조건 평가를 별도 모듈로 분리
+- `ExecutionEngine`: 조건식 로직을 위 모듈에 위임하고 fail-closed 동작 유지
+
+### 문서 / 검증
+- README 최근 업데이트와 아키텍처 설명을 최신 구조에 맞게 갱신
+- `test_condition_evaluator.py` 추가, `test_execution_engine.py` 확장
+- 전체 검증 기준: `281/281` + smoke pass
+
+---
+
+## 7. 2026-04-03 주요 변경사항
 
 ### 보안 / 운영 안정성
 - `plugin_loader.py`: ZIP safe extract, import 직전 `SafetyChecker` 재검사, 악성 경로 차단
@@ -172,7 +185,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `Main.py`: 워밍업과 주기 작업 등록 개선
 
 ### 검증 기준
-- 전체 테스트: `268/268`
+- 당시 전체 테스트: `268/268`
 - `validate_repo.py`: full pass
 - stream TTS 회귀 테스트: `test_text_interface.py`
 
