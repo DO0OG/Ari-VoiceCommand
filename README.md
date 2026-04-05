@@ -94,7 +94,7 @@
 
 ## 개발 현황
 
-- 현재 기준 핵심 변화: Codacy/보안 경고 정리, 플러그인 샌드박스 `multiprocessing` 격리, `validate_repo.py` 표준 라이브러리 검증 루프, `SkillOptimizer` 기반 스킬 자기수정/컴파일, `ddgs` 우선 검색 클라이언트 반영.
+- 현재 기준 핵심 변화: 런타임 설정 템플릿 분리, 마켓플레이스 업로드/설치 안정성 보강, `LLMProvider` 도구 스키마 분리(`tool_schemas.py`), 실행 엔진 조건 평가 모듈 분리, 프런트엔드 개발 산출물 ignore 정리.
 - 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿으로 유지하고, 실제 `ari_settings.json`과 로그/스케줄/메모리/플러그인 캐시는 모두 런타임 디렉터리로 정리됩니다.
 - 즉, `py Main.py`처럼 소스에서 실행할 때는 `.ari_runtime/`를 쓰고, `build_exe.py`로 만든 exe를 실행할 때는 `%AppData%/Ari/`를 씁니다.
 - `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시에는 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
@@ -463,7 +463,7 @@ Main.py                     ← Qt 앱 진입점
 사용자 요청
      │
      ▼
- LLMProvider (+ ResponseCache · LLMRouter · UserProfile)
+ LLMProvider (+ ResponseCache · LLMRouter · UserProfile · tool_schemas)
      │
      ├── 단순 도구 호출 ──────────────────────────────────► 즉시 실행
      │
