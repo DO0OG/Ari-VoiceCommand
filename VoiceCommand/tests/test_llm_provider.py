@@ -187,6 +187,15 @@ class LLMProviderTests(unittest.TestCase):
         self.assertFalse(provider._should_cache("지금 몇 시야?"))
         self.assertFalse(provider._should_cache("오늘 날씨 알려줘"))
 
+    def test_cache_key_changes_when_prompt_configuration_changes(self):
+        provider_a = LLMProvider(provider="groq", model="model-a", system_prompt="prompt-a")
+        provider_b = LLMProvider(provider="groq", model="model-a", system_prompt="prompt-b")
+
+        self.assertNotEqual(
+            provider_a._build_cache_key("파이썬 딕셔너리가 뭐야?", include_context=False),
+            provider_b._build_cache_key("파이썬 딕셔너리가 뭐야?", include_context=False),
+        )
+
     def test_history_updates_are_thread_safe(self):
         provider = LLMProvider()
 

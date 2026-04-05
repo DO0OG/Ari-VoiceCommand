@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plugin } from "@/lib/types";
 import { signInWithGitHub, supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
+import { trackPluginInstall } from "@/lib/pluginInstall";
 
 function getStatusMeta(status: string): { label: string; color: string; dot: string } {
   switch (status) {
@@ -62,6 +63,7 @@ export default function DashboardPage() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
 
   const loadPlugins = useCallback(async () => {
     const { data } = await supabase.functions.invoke("my-plugins");
@@ -122,6 +124,11 @@ export default function DashboardPage() {
           + 새 플러그인 업로드
         </Link>
       </div>
+      {notice ? (
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {notice}
+        </div>
+      ) : null}
 
       {/* 통계 */}
       {plugins.length > 0 && (
@@ -195,9 +202,14 @@ export default function DashboardPage() {
                       <button
                         onClick={() => {
                           void (async () => {
-                            await supabase.functions.invoke("install-plugin", {
-                              body: { plugin_id: plugin.id },
-                            });
+                            const tracked = await trackPluginInstall(plugin.id);
+                            if (!tracked.tracked) {
+                              setNotice(
+                                tracked.message ?? "다운로드는 시작하지만 설치 기록 저장에는 실패했습니다.",
+                              );
+                            } else {
+                              setNotice("");
+                            }
                             window.open(plugin.release_url, "_blank");
                             await loadPlugins();
                           })();

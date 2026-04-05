@@ -41,7 +41,9 @@
   - `market/web/.env.local`
   - `market/supabase/.temp/`
   - `supabase/`
-- 루트 `VoiceCommand/ari_settings.json`만 템플릿 기준선으로 유지합니다. 소스 실행 중 생성되는 개인 API 키, 예약 작업, 로그, 메모리, 플러그인 캐시는 `.ari_runtime/` 아래에만 남도록 유지해 주세요. 빌드된 exe는 `%AppData%/Ari/`를 사용합니다.
+- 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿 기준선으로 유지합니다. 실제 사용 중인 `VoiceCommand/ari_settings.json`은 로컬 전용 파일이며 Git 추적 대상이 아닙니다.
+- 처음 설정할 때는 템플릿을 참고해 런타임 경로(`VoiceCommand/.ari_runtime/ari_settings.json` 또는 `%AppData%/Ari/ari_settings.json`)에 복사해서 사용하세요.
+- 소스 실행 중 생성되는 개인 API 키, 예약 작업, 로그, 메모리, 플러그인 캐시는 `.ari_runtime/` 아래에만 남도록 유지해 주세요. 빌드된 exe는 `%AppData%/Ari/`를 사용합니다.
 - 문서나 빌드 스크립트를 수정할 때는 이런 로컬 파일이 없어도 동작하도록 유지해 주세요.
 
 ## 커밋 메시지 가이드라인

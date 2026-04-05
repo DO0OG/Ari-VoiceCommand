@@ -112,7 +112,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - Ollama 추가: `api_key="ollama"`, `base_url=ollama_base_url` 설정값 사용
 - 도구 16개 정의 완료
 - `planner_client`, `execution_client` 역할별 분리
-- `ResponseCache`는 `RLock`으로 보호되고, `feed_tool_result()`는 `max_tokens=300` 고정값 대신 메시지 길이 기반 동적 추정을 사용합니다.
+- `ResponseCache`는 `agent/response_cache.py`로 분리되었고 `RLock`으로 보호됩니다. 캐시 키는 질문 원문뿐 아니라 모델/프롬프트 구성을 함께 반영합니다.
 
 ### `agent/agent_orchestrator.py`
 - `_post_run_update()`: 성공 시 SkillLibrary 스킬 추출, 실패 시 ReflectionEngine 반성 → StrategyMemory 저장
@@ -139,7 +139,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ### `core/resource_manager.py`
 - 개발 모드 writable root는 `VoiceCommand/.ari_runtime/`, 배포 모드는 `%AppData%/Ari/`
-- 루트에는 `ari_settings.json` 템플릿만 유지하고, 실제 실행 상태와 로그는 `.ari_runtime/` 아래로 분리
+- 저장소에는 `ari_settings.template.json` 템플릿만 유지하고, 실제 실행 상태와 로그는 `.ari_runtime/` 아래로 분리
 - 정리하면 source run(`py Main.py`)은 `.ari_runtime/`, frozen exe run은 `%AppData%/Ari/`를 사용
 - 레거시 루트 상태 파일이 있으면 새 런타임 경로로 자동 마이그레이션
 

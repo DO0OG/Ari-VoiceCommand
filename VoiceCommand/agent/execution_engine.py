@@ -510,9 +510,9 @@ class ExecutionEngine:
             return bool(self._evaluate_condition_node(parsed, {"step_outputs": ctx}))
         except Exception as exc:
             logger.debug(
-                f"[ExecutionEngine] 조건식 평가 폴백(True): {cond!r} ({exc})"
+                f"[ExecutionEngine] 조건식 평가 실패(False): {cond!r} ({exc})"
             )
-            return True
+            return False
 
     def _evaluate_condition_node(self, node: ast.AST, scope: Dict[str, Any]) -> Any:
         if isinstance(node, ast.Expression):

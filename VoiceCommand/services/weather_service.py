@@ -4,6 +4,9 @@ Open-Meteo API 사용 (무료, API 키 불필요)
 """
 import logging
 import re
+import threading
+import time
+
 import requests
 
 
@@ -52,24 +55,38 @@ CITY_COORDINATES = {
 class WeatherService:
     """날씨 정보 조회 서비스 (Open-Meteo)"""
 
+    _session = requests.Session()
+    _cache_lock = threading.Lock()
+    _location_cache: tuple[float, tuple[float, float, str]] | None = None
+    _weather_cache: dict[tuple[float, float, str, int], tuple[float, str]] = {}
+    _LOCATION_TTL_SECONDS = 30 * 60
+    _WEATHER_TTL_SECONDS = 10 * 60
+
     def __init__(self, api_key=None):
         # api_key는 하위 호환성을 위해 유지 (사용하지 않음)
         pass
 
     def get_current_location(self):
         """IP 기반 현재 위치 조회. 실패 시 서울 기본값 반환."""
+        now = time.time()
+        with self._cache_lock:
+            if self._location_cache and now - self._location_cache[0] < self._LOCATION_TTL_SECONDS:
+                return self._location_cache[1]
         try:
-            data = requests.get("https://ipapi.co/json/", timeout=5).json()
+            data = self._session.get("https://ipapi.co/json/", timeout=5).json()
             lat = data.get("latitude", 37.5665)
             lon = data.get("longitude", 126.9780)
             city_eng = data.get("city", "")
-            
+
             # 한국어 변환
             city = CITY_NAME_MAP.get(city_eng, city_eng)
             if not city: city = "주변"
-            
+
             logging.info(f"IP 위치: {city_eng} -> {city} ({lat}, {lon})")
-            return lat, lon, city
+            resolved = (lat, lon, city)
+            with self._cache_lock:
+                self._location_cache = (now, resolved)
+            return resolved
         except Exception as e:
             logging.error(f"위치 정보 실패: {e}")
             return 37.5665, 126.9780, "서울"
@@ -142,6 +159,13 @@ class WeatherService:
             if not city:
                 city = detected_city
 
+        cache_key = (round(float(lat), 4), round(float(lon), 4), city or "", int(day_offset))
+        now = time.time()
+        with self._cache_lock:
+            cached = self._weather_cache.get(cache_key)
+            if cached and now - cached[0] < self._WEATHER_TTL_SECONDS:
+                return cached[1]
+
         try:
             url = "https://api.open-meteo.com/v1/forecast"
             params = {
@@ -152,7 +176,7 @@ class WeatherService:
                 "timezone": "Asia/Seoul",
                 "forecast_days": max(day_offset + 1, 1),
             }
-            resp = requests.get(url, params=params, timeout=10)
+            resp = self._session.get(url, params=params, timeout=10)
             resp.raise_for_status()
             data = resp.json()
 
@@ -190,6 +214,8 @@ class WeatherService:
                 info += f", 강수 확률은 {pop}%"
             info += "입니다."
 
+            with self._cache_lock:
+                self._weather_cache[cache_key] = (now, info)
             return info
 
         except requests.exceptions.RequestException as e:

@@ -23,11 +23,12 @@ Deno.serve(async (req) => {
     return json({ error: "Approved plugin not found" }, 404);
   }
 
-  await supabase.from("installs").insert({ plugin_id: plugin.id });
-  await supabase
-    .from("plugins")
-    .update({ install_count: Number(plugin.install_count ?? 0) + 1 })
-    .eq("id", plugin.id);
+  const { error: installError } = await supabase.rpc("record_plugin_install", {
+    target_plugin_id: plugin.id,
+  });
+  if (installError) {
+    return json({ error: installError.message }, 500);
+  }
 
   return json({
     release_url: plugin.release_url,

@@ -185,8 +185,10 @@ class MarketplaceClientTests(unittest.TestCase):
         install_fn = os.path.join(repo_root, "market", "supabase", "functions", "install-plugin", "index.ts")
         get_fn = os.path.join(repo_root, "market", "supabase", "functions", "get-plugin", "index.ts")
         upload_fn = os.path.join(repo_root, "market", "supabase", "functions", "upload-plugin", "index.ts")
+        status_fn = os.path.join(repo_root, "market", "supabase", "functions", "plugin-status", "index.ts")
         finalize_script = os.path.join(repo_root, "market", "marketplace", "scripts", "finalize.py")
         migration = os.path.join(repo_root, "market", "supabase", "migrations", "002_add_plugin_sha256.sql")
+        install_sync_migration = os.path.join(repo_root, "market", "supabase", "migrations", "003_record_plugin_install.sql")
         integration_client = os.path.join(repo_root, "market", "ari_integration", "core", "marketplace_client.py")
         web_types = os.path.join(repo_root, "market", "web", "src", "lib", "types.ts")
 
@@ -196,20 +198,28 @@ class MarketplaceClientTests(unittest.TestCase):
             get_text = handle.read()
         with open(upload_fn, "r", encoding="utf-8") as handle:
             upload_text = handle.read()
+        with open(status_fn, "r", encoding="utf-8") as handle:
+            status_text = handle.read()
         with open(finalize_script, "r", encoding="utf-8") as handle:
             finalize_text = handle.read()
         with open(migration, "r", encoding="utf-8") as handle:
             migration_text = handle.read()
+        with open(install_sync_migration, "r", encoding="utf-8") as handle:
+            install_sync_text = handle.read()
         with open(integration_client, "r", encoding="utf-8") as handle:
             integration_text = handle.read()
         with open(web_types, "r", encoding="utf-8") as handle:
             web_types_text = handle.read()
 
         self.assertIn("sha256", install_text)
+        self.assertIn("record_plugin_install", install_text)
         self.assertIn("sha256", get_text)
         self.assertIn("sha256", upload_text)
+        self.assertIn("plugin zip must be 5MB or smaller", upload_text)
+        self.assertIn("review_report", status_text)
         self.assertIn("sha256", finalize_text)
         self.assertIn("sha256", migration_text)
+        self.assertIn("record_plugin_install", install_sync_text)
         self.assertIn("sha256", integration_text)
         self.assertIn("sha256?: string", web_types_text)
 
