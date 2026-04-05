@@ -98,6 +98,7 @@
 - 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿으로 유지하고, 실제 `ari_settings.json`과 로그/스케줄/메모리/플러그인 캐시는 모두 런타임 디렉터리로 정리됩니다.
 - 즉, `py Main.py`처럼 소스에서 실행할 때는 `.ari_runtime/`를 쓰고, `build_exe.py`로 만든 exe를 실행할 때는 `%AppData%/Ari/`를 씁니다.
 - `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시에는 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
+- `market/web/node_modules/`, `market/web/.next/`, `market/web/tsconfig.tsbuildinfo` 같은 프런트엔드 개발 산출물은 Git 추적 대상이 아닙니다.
 - `validate_repo.py`는 이제 compile + unittest 외에 `clean environment runtime`, `marketplace sha256 contract` smoke까지 함께 확인합니다.
 - `workspace audit` 템플릿은 열린 창 제목을 브라우저 서비스/일반 앱 유형으로 분류하고, 브라우저 판별 규칙(브라우저명 경계 매칭)과 탭 추정 규칙(`외/및 N개 탭` + 프로세스 단서)을 함께 사용하도록 보강되었습니다.
 - 마켓플레이스 함수는 `market/supabase/functions/*`를 실제 수정했을 때만 `supabase functions deploy ...` 재배포가 필요합니다.

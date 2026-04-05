@@ -169,6 +169,10 @@ config.json
 # ── 개발 도구 ──────────────────────────────────────────────────────────────────
 .claude/
 .omx/
+market/web/node_modules/
+market/web/.next/
+market/web/tsconfig.tsbuildinfo
+market/web/.vercel/
 
 # ── Ari 프로젝트 ───────────────────────────────────────────────────────────────
 VoiceCommand/saved_model/

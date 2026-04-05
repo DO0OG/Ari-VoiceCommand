@@ -31,6 +31,7 @@ COMPILE_TARGETS = [
     "agent/goal_predictor.py",
     "agent/learning_metrics.py",
     "agent/llm_provider.py",
+    "agent/tool_schemas.py",
     "agent/planner_feedback.py",
     "agent/proactive_scheduler.py",
     "agent/real_verifier.py",

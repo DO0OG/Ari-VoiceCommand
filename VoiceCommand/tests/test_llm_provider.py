@@ -196,6 +196,37 @@ class LLMProviderTests(unittest.TestCase):
             provider_b._build_cache_key("파이썬 딕셔너리가 뭐야?", include_context=False),
         )
 
+    def test_get_available_tools_includes_core_schemas(self):
+        provider = LLMProvider()
+
+        tool_names = {tool["function"]["name"] for tool in provider.get_available_tools()}
+
+        self.assertIn("run_agent_task", tool_names)
+        self.assertIn("web_search", tool_names)
+        self.assertIn("schedule_task", tool_names)
+
+    def test_register_plugin_tool_updates_available_tools_without_mutating_core_tools(self):
+        provider = LLMProvider()
+        base_tool_names = {tool["function"]["name"] for tool in provider.get_available_tools()}
+
+        provider.register_plugin_tool(
+            {
+                "type": "function",
+                "function": {
+                    "name": "plugin_echo",
+                    "description": "plugin helper",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        )
+
+        updated_tool_names = {tool["function"]["name"] for tool in provider.get_available_tools()}
+        self.assertEqual(base_tool_names | {"plugin_echo"}, updated_tool_names)
+
+        provider.unregister_plugin_tool("plugin_echo")
+        reverted_tool_names = {tool["function"]["name"] for tool in provider.get_available_tools()}
+        self.assertEqual(base_tool_names, reverted_tool_names)
+
     def test_history_updates_are_thread_safe(self):
         provider = LLMProvider()
 
