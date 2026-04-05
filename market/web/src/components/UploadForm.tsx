@@ -182,10 +182,9 @@ export function UploadForm() {
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      void handleFile(file);
-    }
+    const file = e.dataTransfer.files.item(0);
+    if (!file) return;
+    void handleFile(file);
   }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {

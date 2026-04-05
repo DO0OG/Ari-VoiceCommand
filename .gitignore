@@ -15,6 +15,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+!market/web/src/lib/
+!market/web/src/lib/*.ts
+!market/web/src/lib/*.tsx
 lib64/
 parts/
 sdist/
