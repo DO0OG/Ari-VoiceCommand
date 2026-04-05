@@ -91,6 +91,51 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             else:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_load_settings_returns_defensive_copy(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+
+                    first = ConfigManager.load_settings()
+                    first["llm_provider"] = "tampered"
+
+                    second = ConfigManager.load_settings()
+                    self.assertNotEqual(second["llm_provider"], "tampered")
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
+    def test_missing_runtime_settings_bootstrap_from_template(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                template_path = os.path.join(project_root, "ari_settings.template.json")
+                with open(template_path, "w", encoding="utf-8") as handle:
+                    json.dump({"llm_provider": "openai", "weekly_report_enabled": True}, handle, ensure_ascii=False)
+
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+                    settings = ConfigManager.load_settings()
+
+                self.assertEqual(settings["llm_provider"], "openai")
+                self.assertTrue(settings["weekly_report_enabled"])
+                self.assertTrue(os.path.exists(os.path.join(runtime_dir, "ari_settings.json")))
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
 
 if __name__ == "__main__":
     unittest.main()

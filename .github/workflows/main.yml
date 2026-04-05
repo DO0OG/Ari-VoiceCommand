@@ -43,10 +43,38 @@ jobs:
       - name: Run unit tests
         working-directory: VoiceCommand
         run: py -3.11 -m unittest discover -s tests -p "test_*.py" -v
-        continue-on-error: true
 
       - name: Security scan (bandit)
         working-directory: VoiceCommand
         run: |
           py -3.11 -m bandit -r . -x tests,__pycache__ --severity-level medium --confidence-level medium -q
-        continue-on-error: true
+
+  validate_market_web:
+    name: Validate Marketplace Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
+      NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL: https://example.supabase.co/functions/v1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install marketplace web dependencies
+        working-directory: market/web
+        run: npm install --no-package-lock
+
+      - name: Type check marketplace web
+        working-directory: market/web
+        run: npx tsc --noEmit
+
+      - name: Build marketplace web
+        working-directory: market/web
+        run: npm run build

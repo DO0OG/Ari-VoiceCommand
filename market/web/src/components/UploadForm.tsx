@@ -3,6 +3,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import JSZip from "jszip";
 import { supabase } from "@/lib/supabase";
+import {
+  MAX_PLUGIN_SIZE_LABEL,
+  validatePluginArchiveSize,
+} from "@/lib/pluginUpload";
 
 type PluginMeta = {
   name: string;
@@ -52,44 +56,89 @@ export function UploadForm() {
   const [message, setMessage] = useState("");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activePollPluginIdRef = useRef<string | null>(null);
+  const pollAttemptsRef = useRef(0);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+      activePollPluginIdRef.current = null;
+    };
   }, []);
 
+  function clearPolling() {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+    activePollPluginIdRef.current = null;
+    pollAttemptsRef.current = 0;
+  }
+
   function startPolling(pluginId: string) {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => {
+    clearPolling();
+    activePollPluginIdRef.current = pluginId;
+
+    const pollOnce = () => {
+      pollAttemptsRef.current += 1;
       void (async () => {
         try {
-          const { data } = await supabase.functions.invoke("my-plugins");
-          const items = (data as { items?: Array<{ id: string; status: string; review_report?: { summary?: string } }> }).items ?? [];
-          const plugin = items.find((p) => p.id === pluginId);
-          if (!plugin || plugin.status === "pending") return;
-          if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-          }
-          if (plugin.status === "approved") {
-            setStatus("done");
-            setMessage("플러그인이 승인되었습니다! 마켓플레이스에 게시됩니다.");
+          const { data, error } = await supabase.functions.invoke("plugin-status", {
+            body: { plugin_id: pluginId },
+          });
+          if (activePollPluginIdRef.current !== pluginId) return;
+          if (error) {
+            if (pollAttemptsRef.current >= 45) {
+              clearPolling();
+              setStatus("error");
+              setMessage(error.message ?? "검증 상태를 확인하지 못했습니다.");
+              return;
+            }
           } else {
-            setStatus("error");
-            setMessage(plugin.review_report?.summary ?? "검증에서 반려되었습니다.");
+            const plugin = (
+              data as { item?: { status: string; review_report?: { summary?: string } } }
+            ).item;
+            if (plugin && plugin.status !== "pending") {
+              clearPolling();
+              if (plugin.status === "approved") {
+                setStatus("done");
+                setMessage("플러그인이 승인되었습니다! 마켓플레이스에 게시됩니다.");
+              } else {
+                setStatus("error");
+                setMessage(plugin.review_report?.summary ?? "검증에서 반려되었습니다.");
+              }
+              return;
+            }
           }
         } catch {
-          // 폴링 실패는 다음 주기에 재시도한다.
+          if (activePollPluginIdRef.current !== pluginId) return;
+          if (pollAttemptsRef.current >= 45) {
+            clearPolling();
+            setStatus("error");
+            setMessage("검증 상태를 확인하지 못했습니다.");
+            return;
+          }
+        }
+        if (activePollPluginIdRef.current === pluginId) {
+          pollRef.current = setTimeout(pollOnce, 4000);
         }
       })();
-    }, 4000);
+    };
+
+    pollOnce();
   }
 
   async function handleFile(file: File) {
+    clearPolling();
     setStatus("idle");
     setMessage("");
     setMeta(null);
     try {
+      const sizeError = validatePluginArchiveSize(file);
+      if (sizeError) {
+        throw new Error(sizeError);
+      }
       const parsed = await extractPluginJson(file);
       if (parsed.api_version !== "1.0") {
         throw new Error(`api_version "${parsed.api_version}"은 지원되지 않습니다.`);
@@ -133,7 +182,8 @@ export function UploadForm() {
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer.files.item(0);
+    if (!file) return;
     void handleFile(file);
   }, []);
 
@@ -168,7 +218,7 @@ export function UploadForm() {
           <p className="text-sm font-medium text-subtle">
             {dragging ? "여기에 놓으세요" : "클릭하거나 ZIP 파일을 드래그하세요"}
           </p>
-          <p className="mt-1 text-xs text-muted">최대 5MB · .zip 형식</p>
+          <p className="mt-1 text-xs text-muted">최대 {MAX_PLUGIN_SIZE_LABEL} · .zip 형식</p>
         </div>
         <input
           ref={inputRef}

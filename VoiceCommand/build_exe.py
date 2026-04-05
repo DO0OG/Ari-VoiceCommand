@@ -96,7 +96,10 @@ import shutil
 import sys
 import multiprocessing
 import importlib.util
+import json
 from datetime import datetime
+
+from core.settings_schema import SENSITIVE_SETTINGS_KEYS, SETTINGS_TEMPLATE_FILE
 
 # 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
 if sys.stdout.encoding != 'utf-8':
@@ -118,6 +121,21 @@ print(f"• 빌드 모드: {'단일 파일' if one_file else '폴더 독립형'}
 print(f"• 작업 유형: {'클린 빌드' if clean_build else '증분 빌드'}")
 print(f"• 병렬 작업: {jobs} 코어 사용\n")
 print("• 권장 사전 검증: python validate_repo.py\n")
+
+
+def _ensure_safe_settings_template() -> None:
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), SETTINGS_TEMPLATE_FILE)
+    with open(template_path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    leaked = [key for key in SENSITIVE_SETTINGS_KEYS if str(payload.get(key, "") or "").strip()]
+    if leaked:
+        raise SystemExit(
+            f"설정 템플릿에 민감값이 포함되어 있습니다: {', '.join(leaked)}"
+        )
+
+
+_ensure_safe_settings_template()
 
 try:
     from nuitka.__main__ import main as nuitka_main
@@ -175,7 +193,7 @@ nuitka_args = [
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
     *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
-    "--include-data-files=ari_settings.json=ari_settings.json",
+    f"--include-data-files={SETTINGS_TEMPLATE_FILE}={SETTINGS_TEMPLATE_FILE}",
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
     *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),

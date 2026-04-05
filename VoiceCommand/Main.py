@@ -1,6 +1,5 @@
 import sys
 import os
-import time
 import logging
 import faulthandler
 from datetime import datetime
@@ -31,7 +30,7 @@ if sys.stderr is not None:
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEventLoop, Qt, QTimer
 
 from assistant.ai_assistant import get_ai_assistant
 from ui.character_widget import CharacterWidget
@@ -140,6 +139,8 @@ def check_cosyvoice_first_run(app):
         progress.setMinimumDuration(0)
         progress.show()
         app.processEvents()
+        install_done = threading.Event()
+        install_error = {"message": ""}
 
         def run_install():
             try:
@@ -147,17 +148,39 @@ def check_cosyvoice_first_run(app):
                 install_cosyvoice.install()
             except Exception as e:
                 logging.error(f"CosyVoice 설치 오류: {e}")
+                install_error["message"] = str(e)
             finally:
-                progress.close()
+                install_done.set()
 
         t = threading.Thread(target=run_install, daemon=True)
         t.start()
-        while t.is_alive():
-            app.processEvents()
-            time.sleep(0.1)
+        loop = QEventLoop()
+        poll_timer = QTimer()
+        poll_timer.setInterval(100)
 
-        QMessageBox.information(None, "설치 완료",
-            "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요.")
+        def finish_install_wait():
+            if not install_done.is_set():
+                return
+            poll_timer.stop()
+            progress.close()
+            loop.quit()
+
+        poll_timer.timeout.connect(finish_install_wait)
+        poll_timer.start()
+        loop.exec()
+
+        if install_error["message"]:
+            QMessageBox.warning(
+                None,
+                "설치 실패",
+                f"CosyVoice3 설치 중 오류가 발생했습니다.\n{install_error['message']}",
+            )
+        else:
+            QMessageBox.information(
+                None,
+                "설치 완료",
+                "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요.",
+            )
 
 
 def register_background_learning_tasks(scheduler) -> None:

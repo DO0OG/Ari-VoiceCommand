@@ -9,6 +9,9 @@ import {
 
 const REQUIRED_FIELDS = ["name", "version", "api_version", "description", "entry"] as const;
 const SUPPORTED_API_VERSIONS = new Set(["1.0"]);
+const MAX_PLUGIN_ZIP_BYTES = 5 * 1024 * 1024;
+const MAX_PLUGIN_ENTRY_COUNT = 128;
+const MAX_PLUGIN_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
 
 type PluginMeta = {
   name: string;
@@ -45,6 +48,9 @@ Deno.serve(async (req) => {
     }
     if (!file.name.toLowerCase().endsWith(".zip")) {
       return json({ error: "plugin must be a zip file" }, 400);
+    }
+    if (file.size > MAX_PLUGIN_ZIP_BYTES) {
+      return json({ error: "plugin zip must be 5MB or smaller" }, 400);
     }
 
     const meta = await extractPluginJson(file);
@@ -96,7 +102,12 @@ Deno.serve(async (req) => {
       return json({ error: error?.message ?? "plugin insert failed" }, 500);
     }
 
-    await triggerValidation(plugin.id, user.id);
+    try {
+      await triggerValidation(plugin.id, user.id);
+    } catch (dispatchError) {
+      await markValidationBootstrapFailure(supabase, plugin.id);
+      throw dispatchError;
+    }
     return json({ plugin_id: plugin.id, status: plugin.status });
   } catch (error) {
     if (error instanceof Response) {
@@ -109,6 +120,18 @@ Deno.serve(async (req) => {
 async function extractPluginJson(file: File): Promise<PluginMeta> {
   const reader = new zip.ZipReader(new zip.BlobReader(file));
   const entries = await reader.getEntries();
+  if (entries.length > MAX_PLUGIN_ENTRY_COUNT) {
+    await reader.close();
+    throw new Error("zip contains too many files");
+  }
+  const totalUncompressedBytes = entries.reduce(
+    (sum: number, entry: { uncompressedSize?: number }) => sum + Number(entry.uncompressedSize ?? 0),
+    0,
+  );
+  if (totalUncompressedBytes > MAX_PLUGIN_UNCOMPRESSED_BYTES) {
+    await reader.close();
+    throw new Error("zip expands beyond the allowed size");
+  }
   const metaEntry = entries.find((entry: { filename: string }) => entry.filename === "plugin.json");
   if (!metaEntry || !metaEntry.getData) {
     await reader.close();
@@ -156,7 +179,7 @@ async function triggerValidation(pluginId: string, developerId: string) {
   const repo = Deno.env.get("GH_REPO");
   const pat = Deno.env.get("GH_PAT");
   if (!repo || !pat) {
-    return;
+    throw new Error("Validation pipeline is not configured");
   }
 
   const response = await fetch(
@@ -179,4 +202,21 @@ async function triggerValidation(pluginId: string, developerId: string) {
     const body = await response.text();
     throw new Error(`Failed to trigger validation: ${response.status} ${body}`);
   }
+}
+
+async function markValidationBootstrapFailure(
+  supabase: ReturnType<typeof createAdminClient>,
+  pluginId: string,
+) {
+  await supabase
+    .from("plugins")
+    .update({
+      status: "rejected",
+      reviewed_at: new Date().toISOString(),
+      review_report: {
+        status: "rejected",
+        summary: "자동 검증 파이프라인 시작에 실패했습니다. 잠시 후 다시 업로드해 주세요.",
+      },
+    })
+    .eq("id", pluginId);
 }

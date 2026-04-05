@@ -21,6 +21,7 @@ COMPILE_TARGETS = [
     "Main.py",
     "build_exe.py",
     "core/plugin_loader.py",
+    "core/settings_schema.py",
     "agent/execution_analysis.py",
     "agent/agent_orchestrator.py",
     "agent/agent_planner.py",
@@ -34,6 +35,7 @@ COMPILE_TARGETS = [
     "agent/proactive_scheduler.py",
     "agent/real_verifier.py",
     "agent/reflection_engine.py",
+    "agent/response_cache.py",
     "agent/regression_guard.py",
     "agent/safety_checker.py",
     "agent/skill_library.py",
@@ -98,6 +100,7 @@ import json
 import os
 import tempfile
 import threading
+from pathlib import Path
 
 from agent.learning_metrics import LearningMetrics
 from agent.proactive_scheduler import ProactiveScheduler
@@ -117,6 +120,10 @@ original_env = os.environ.get("ARI_APP_DATA_DIR")
 original_project_root = ResourceManager._project_root
 
 try:
+    template_path = Path.cwd() / "ari_settings.template.json"
+    if not template_path.exists():
+        raise SystemExit("settings template missing from repo root")
+
     with tempfile.TemporaryDirectory(prefix="ari_clean_env_") as clean_root:
         runtime_root = os.path.join(clean_root, "runtime")
         os.environ["ARI_APP_DATA_DIR"] = runtime_root
@@ -207,10 +214,12 @@ required = {
     "integration_client": repo_root / "market" / "ari_integration" / "core" / "marketplace_client.py",
     "install_function": repo_root / "market" / "supabase" / "functions" / "install-plugin" / "index.ts",
     "get_function": repo_root / "market" / "supabase" / "functions" / "get-plugin" / "index.ts",
+    "status_function": repo_root / "market" / "supabase" / "functions" / "plugin-status" / "index.ts",
     "upload_function": repo_root / "market" / "supabase" / "functions" / "upload-plugin" / "index.ts",
     "finalize_script": repo_root / "market" / "marketplace" / "scripts" / "finalize.py",
     "sql_init": repo_root / "market" / "supabase" / "migrations" / "001_init.sql",
     "sql_patch": repo_root / "market" / "supabase" / "migrations" / "002_add_plugin_sha256.sql",
+    "install_sync_sql": repo_root / "market" / "supabase" / "migrations" / "003_record_plugin_install.sql",
     "web_types": repo_root / "market" / "web" / "src" / "lib" / "types.ts",
 }
 
@@ -219,16 +228,24 @@ if "sha256" not in texts["python_client"] or "sha256" not in texts["integration_
     raise SystemExit("python marketplace client does not enforce sha256")
 if ".select(\"id, name, entry, release_url, sha256, install_count\")" not in texts["install_function"]:
     raise SystemExit("install-plugin function missing sha256 select")
+if "record_plugin_install" not in texts["install_function"]:
+    raise SystemExit("install-plugin function missing DB sync RPC")
 if "sha256: plugin.sha256" not in texts["install_function"]:
     raise SystemExit("install-plugin function missing sha256 response")
 if "sha256," not in texts["upload_function"]:
     raise SystemExit("upload-plugin function missing sha256 persistence")
+if "plugin zip must be 5MB or smaller" not in texts["upload_function"]:
+    raise SystemExit("upload-plugin function missing max size validation")
 if "sha256," not in texts["get_function"]:
     raise SystemExit("get-plugin function missing sha256 projection")
+if "review_report" not in texts["status_function"]:
+    raise SystemExit("plugin-status function missing review report projection")
 if "sha256" not in texts["finalize_script"]:
     raise SystemExit("finalize script missing sha256 propagation")
 if "sha256 text" not in texts["sql_init"] and "add column if not exists sha256 text" not in texts["sql_patch"]:
     raise SystemExit("sql migration missing sha256 column")
+if "record_plugin_install" not in texts["install_sync_sql"]:
+    raise SystemExit("sql migration missing install sync function")
 if "sha256?: string" not in texts["web_types"]:
     raise SystemExit("web types missing sha256 field")
 

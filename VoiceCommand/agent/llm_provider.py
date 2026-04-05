@@ -8,10 +8,9 @@ import logging
 import os
 import re
 import threading
-import time
-from collections import OrderedDict
-from datetime import datetime
 from typing import Optional, List, Dict, Tuple, Any
+
+from agent.response_cache import ResponseCache, build_response_cache_key
 
 _PROVIDER_CONFIG = {
     "groq": {
@@ -55,36 +54,6 @@ _TOOL_INSTRUCTION = (
     "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
     "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
 )
-
-
-class ResponseCache:
-    """최근 응답 캐시."""
-
-    def __init__(self, max_items: int = 50, ttl_seconds: int = 600):
-        self.max_items = max_items
-        self.ttl_seconds = ttl_seconds
-        self._store: OrderedDict[str, tuple[float, str]] = OrderedDict()
-        self._lock = threading.RLock()
-
-    def get(self, message: str) -> Optional[str]:
-        with self._lock:
-            item = self._store.get(message)
-            if not item:
-                return None
-            saved_at, response = item
-            if time.time() - saved_at > self.ttl_seconds:
-                self._store.pop(message, None)
-                return None
-            self._store.move_to_end(message)
-            return response
-
-    def set(self, message: str, response: str):
-        with self._lock:
-            self._store[message] = (time.time(), response)
-            self._store.move_to_end(message)
-            while len(self._store) > self.max_items:
-                self._store.popitem(last=False)
-
 
 class LLMProvider:
     """단일 인터페이스로 여러 LLM 제공자를 지원하는 클래스."""
@@ -457,6 +426,25 @@ class LLMProvider:
     def _offline_response(self, message: str) -> str:
         return "(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요. 기본 명령은 그대로 쓸 수 있어요."
 
+    def _build_cache_key(
+        self,
+        user_message: str,
+        include_context: bool,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> str:
+        return build_response_cache_key(
+            user_message,
+            provider=provider or self.provider,
+            model=model or self.model,
+            system_prompt=self.system_prompt,
+            personality=self.personality,
+            scenario=self.scenario,
+            history_instruction=self.rp_generator.history_instruction,
+            include_context=include_context,
+        )
+
     def _has_any_client(self) -> bool:
         return any((self.client, self.planner_client, self.execution_client))
 
@@ -524,11 +512,6 @@ class LLMProvider:
         if not self._has_any_client():
             return "AI 기능이 비활성화되어 있습니다."
 
-        cached = self._response_cache.get(user_message) if self._should_cache(user_message) else None
-        if cached:
-            if stream_callback:
-                self._emit_stream_text(cached, stream_callback)
-            return cached
         try:
             client, provider, model = self._resolve_route(user_message, model_override)
             if not client:
@@ -536,6 +519,17 @@ class LLMProvider:
             if not model:
                 logging.warning("[LLMProvider] 모델 미설정: provider=%s", provider)
                 return self._missing_model_response(provider)
+            cache_key = self._build_cache_key(
+                user_message,
+                include_context,
+                provider=provider,
+                model=model,
+            )
+            cached = self._response_cache.get(cache_key) if self._should_cache(user_message) else None
+            if cached:
+                if stream_callback:
+                    self._emit_stream_text(cached, stream_callback)
+                return cached
             if save_history:
                 self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context)}]
@@ -566,7 +560,7 @@ class LLMProvider:
             if save_history:
                 self.add_to_history("assistant", msg)
             if msg and self._should_cache(user_message):
-                self._response_cache.set(user_message, msg)
+                self._response_cache.set(cache_key, msg)
             return msg
         except Exception as e:
             logging.error(f"LLM chat 오류 ({model}): {e}")
