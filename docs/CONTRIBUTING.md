@@ -39,6 +39,9 @@
   - `VoiceCommand/.ari_runtime/`
   - `VoiceCommand/reference.wav`
   - `market/web/.env.local`
+  - `market/web/node_modules/`
+  - `market/web/.next/`
+  - `market/web/tsconfig.tsbuildinfo`
   - `market/supabase/.temp/`
   - `supabase/`
 - 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿 기준선으로 유지합니다. 실제 사용 중인 `VoiceCommand/ari_settings.json`은 로컬 전용 파일이며 Git 추적 대상이 아닙니다.
