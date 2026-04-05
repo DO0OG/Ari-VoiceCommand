@@ -26,6 +26,10 @@ class ExecutionEngineConditionTests(unittest.TestCase):
             self.engine._eval_condition("step_outputs.get('step_1_output') == 'done'", context)
         )
 
+    def test_eval_condition_returns_true_for_allowed_length_check(self):
+        context = {"step_1_output": "done", "step_2_output": "saved"}
+        self.assertTrue(self.engine._eval_condition("len(step_outputs) == 2", context))
+
 
 if __name__ == "__main__":
     unittest.main()

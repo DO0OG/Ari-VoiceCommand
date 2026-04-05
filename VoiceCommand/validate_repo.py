@@ -26,6 +26,7 @@ COMPILE_TARGETS = [
     "agent/agent_orchestrator.py",
     "agent/agent_planner.py",
     "agent/autonomous_executor.py",
+    "agent/condition_evaluator.py",
     "agent/episode_memory.py",
     "agent/file_tools.py",
     "agent/goal_predictor.py",

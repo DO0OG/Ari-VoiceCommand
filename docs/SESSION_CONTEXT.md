@@ -113,6 +113,12 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - 도구 16개 정의 완료
 - `planner_client`, `execution_client` 역할별 분리
 - `ResponseCache`는 `agent/response_cache.py`로 분리되었고 `RLock`으로 보호됩니다. 캐시 키는 질문 원문뿐 아니라 모델/프롬프트 구성을 함께 반영합니다.
+- 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어 플러그인 도구와 합쳐집니다.
+
+### `agent/condition_evaluator.py`
+- ExecutionEngine step `condition` 평가를 위한 안전 AST 평가 전담 모듈
+- 허용 호출: `len`, `str`, `int`, `float`, `bool`, `dict.get()`
+- 평가 실패는 상위 `ExecutionEngine._eval_condition()`에서 fail-closed(`False`) 처리
 
 ### `agent/agent_orchestrator.py`
 - `_post_run_update()`: 성공 시 SkillLibrary 스킬 추출, 실패 시 ReflectionEngine 반성 → StrategyMemory 저장

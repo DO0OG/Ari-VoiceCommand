@@ -3,7 +3,6 @@
 단계 실행, 병렬/순차 그룹핑, 조건 평가, 자동 수정, pip 설치,
 런타임 컨텍스트 갱신, 개발자 가드를 담당합니다.
 """
-import ast
 import concurrent.futures
 import json
 import logging
@@ -16,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from agent.agent_planner import AgentPlanner, ActionStep
+from agent.condition_evaluator import evaluate_condition
 from agent.autonomous_executor import AutonomousExecutor, ExecutionResult
 from agent.execution_analysis import (
     classify_failure_message,
@@ -64,36 +64,6 @@ _IMPORT_TO_PIP: dict = {
     "serial": "pyserial",
     "usb": "pyusb",
 }
-
-_SAFE_AST_CALLS = {
-    "len": len,
-    "str": str,
-    "int": int,
-    "float": float,
-    "bool": bool,
-}
-
-_SAFE_AST_METHODS = {
-    dict: {"get"},
-}
-
-_COMPARE_OPERATORS = {
-    ast.Eq: lambda a, b: a == b,
-    ast.NotEq: lambda a, b: a != b,
-    ast.Gt: lambda a, b: a > b,
-    ast.GtE: lambda a, b: a >= b,
-    ast.Lt: lambda a, b: a < b,
-    ast.LtE: lambda a, b: a <= b,
-    ast.In: lambda a, b: a in b,
-    ast.NotIn: lambda a, b: a not in b,
-    ast.Is: lambda a, b: a is b,
-    ast.IsNot: lambda a, b: a is not b,
-}
-
-_UNARY_OPERATORS = {
-    ast.Not: lambda value: not value,
-}
-
 
 # ── 데이터 클래스 (순환 임포트 방지를 위해 여기서 재임포트하지 않고 인라인 사용) ──
 
@@ -506,73 +476,12 @@ class ExecutionEngine:
 
     def _eval_condition(self, cond: str, ctx: Dict[str, str]) -> bool:
         try:
-            parsed = ast.parse(cond, mode="eval")
-            return bool(self._evaluate_condition_node(parsed, {"step_outputs": ctx}))
+            return evaluate_condition(cond, ctx)
         except Exception as exc:
             logger.debug(
                 f"[ExecutionEngine] 조건식 평가 실패(False): {cond!r} ({exc})"
             )
             return False
-
-    def _evaluate_condition_node(self, node: ast.AST, scope: Dict[str, Any]) -> Any:
-        if isinstance(node, ast.Expression):
-            return self._evaluate_condition_node(node.body, scope)
-        if isinstance(node, ast.Constant):
-            return node.value
-        if isinstance(node, ast.Name):
-            if node.id in scope:
-                return scope[node.id]
-            raise ValueError(f"허용되지 않은 이름: {node.id}")
-        if isinstance(node, ast.BoolOp):
-            values = [
-                bool(self._evaluate_condition_node(value, scope))
-                for value in node.values
-            ]
-            if isinstance(node.op, ast.And):
-                return all(values)
-            if isinstance(node.op, ast.Or):
-                return any(values)
-            raise ValueError("허용되지 않은 BoolOp")
-        if isinstance(node, ast.UnaryOp):
-            operator = _UNARY_OPERATORS.get(type(node.op))
-            if operator is None:
-                raise ValueError("허용되지 않은 UnaryOp")
-            return operator(self._evaluate_condition_node(node.operand, scope))
-        if isinstance(node, ast.Compare):
-            left = self._evaluate_condition_node(node.left, scope)
-            for operator_node, comparator in zip(node.ops, node.comparators):
-                right = self._evaluate_condition_node(comparator, scope)
-                operator = _COMPARE_OPERATORS.get(type(operator_node))
-                if operator is None or not operator(left, right):
-                    return False
-                left = right
-            return True
-        if isinstance(node, ast.Subscript):
-            target = self._evaluate_condition_node(node.value, scope)
-            key_node = node.slice  # Python 3.9+: ast.Index 제거됨
-            key = self._evaluate_condition_node(key_node, scope)
-            return target[key]
-        if isinstance(node, ast.Call):
-            return self._evaluate_condition_call(node, scope)
-        if isinstance(node, (ast.List, ast.Tuple)):
-            return [self._evaluate_condition_node(item, scope) for item in node.elts]
-        raise ValueError(f"지원하지 않는 조건식 노드: {type(node).__name__}")
-
-    def _evaluate_condition_call(self, node: ast.Call, scope: Dict[str, Any]) -> Any:
-        if isinstance(node.func, ast.Name):
-            func = _SAFE_AST_CALLS.get(node.func.id)
-            if func is None:
-                raise ValueError(f"허용되지 않은 함수: {node.func.id}")
-            args = [self._evaluate_condition_node(arg, scope) for arg in node.args]
-            return func(*args)
-        if isinstance(node.func, ast.Attribute):
-            owner = self._evaluate_condition_node(node.func.value, scope)
-            allowed_methods = _SAFE_AST_METHODS.get(type(owner), set())
-            if node.func.attr not in allowed_methods:
-                raise ValueError(f"허용되지 않은 메서드: {node.func.attr}")
-            args = [self._evaluate_condition_node(arg, scope) for arg in node.args]
-            return getattr(owner, node.func.attr)(*args)
-        raise ValueError("지원하지 않는 호출식")
 
     def _classify_failure(self, res: ExecutionResult) -> str:
         if res.success:
