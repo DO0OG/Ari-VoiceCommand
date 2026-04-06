@@ -235,9 +235,17 @@ def set_listening_indicator(active: bool, text: str | None = None) -> None:
         _state.character_widget.hide_speech_bubble()
 
 
+def extend_tts_resume_guard(duration: float = _TTS_WAKE_GUARD_SECONDS) -> None:
+    """TTS 직후 웨이크워드 감지 보호 구간을 연장한다."""
+    _state.tts_resume_guard_until = max(
+        _state.tts_resume_guard_until,
+        time.monotonic() + max(0.0, duration),
+    )
+
+
 def _handle_tts_playback_finished() -> None:
     """TTS 종료 후 현재 상태에 맞게 말풍선을 정리한다."""
-    _state.tts_resume_guard_until = time.monotonic() + _TTS_WAKE_GUARD_SECONDS
+    extend_tts_resume_guard()
     if is_tts_playing():
         return
 

@@ -18,7 +18,13 @@ from typing import Optional
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
-from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
+from tts.cosyvoice_utils import (
+    _PCMChunkBuffer,
+    _normalize_text_cached,
+    apply_emotion_prosody,
+    inject_breath_cues,
+    split_tts_segments,
+)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -244,105 +250,107 @@ class CosyVoiceTTS(QObject):
 
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
+    def _speak_segment(self, text: str) -> bool:
+        if not text:
+            return False
+
+        t0 = time.time()
+
+        self._proc.stdin.write((text.replace("\n", " ").strip() + "\n").encode("utf-8"))
+        self._proc.stdin.flush()
+
+        self._clear_pcm_state()
+
+        def pipe_reader():
+            first = True
+            try:
+                while not self._stopping:
+                    hdr = self._read_exact(4)
+                    if not hdr:
+                        break
+                    size = struct.unpack("<I", hdr)[0]
+                    if size == 0:
+                        break
+                    data = self._read_exact(size)
+                    if not data:
+                        break
+                    if first:
+                        logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
+                        first = False
+                    max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
+                    while not self._stopping:
+                        with self._pcm_lock:
+                            if self._pcm_buffer.size + len(data) <= max_buffer_bytes:
+                                self._pcm_buffer.append(data)
+                                break
+                        time.sleep(0.01)
+            except Exception as e:
+                if not self._stopping:
+                    logging.debug(f"pipe_reader 오류: {e}")
+            finally:
+                self._pcm_done.set()
+
+        reader_t = threading.Thread(target=pipe_reader, daemon=True)
+        reader_t.start()
+
+        pa_stream = self._ensure_stream()
+        if not pa_stream.is_active():
+            pa_stream.start_stream()
+
+        reader_t.join(timeout=300)
+        self._pcm_done.set()
+        deadline = time.time() + 30
+        if pa_stream:
+            while pa_stream.is_active() and time.time() < deadline and not self._stopping:
+                time.sleep(0.1)
+
+        try:
+            if pa_stream:
+                self._close_stream()
+        except Exception:  # nosec B110
+            pass
+        if self._stopping:
+            return False
+
+        logging.info(f"[TTS] 전체 완료: {time.time()-t0:.2f}s")
+
+        ctrl = self._wait_ctrl(timeout=60)
+        if ctrl.startswith("ERROR:"):
+            logging.error(f"워커 오류: {ctrl[6:]}")
+        return not ctrl.startswith("ERROR:")
+
     def speak(self, text: str, emotion: str = "평온") -> bool:
         from audio.audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text_cached(text or "")
         text = apply_emotion_prosody(text, emotion)
         text = inject_breath_cues(text)
-        if not text or self._proc is None or self._proc.poll() is not None:
+        segments = split_tts_segments(text)
+        if not segments or self._proc is None or self._proc.poll() is not None:
             return False
 
-        # 워커가 아직 준비되지 않았으면 대기 (최대 300초)
         if not self._ready.is_set():
             logging.info("[TTS] 워커 준비 대기 중...")
             if not self._ready.wait(timeout=300):
                 logging.error("[TTS] 워커 준비 타임아웃 — speak() 건너뜀")
                 return False
 
-        # 오디오 장치 사용을 위해 락 획득
         with _audio_lock:
             with self._speak_lock:
+                self.is_playing = True
                 try:
-                    self.is_playing = True
-                    t0 = time.time()
-
-                    # 워커에 텍스트 전송
-                    self._proc.stdin.write((text.replace("\n", " ").strip() + "\n").encode("utf-8"))
-                    self._proc.stdin.flush()
-
-                    self._clear_pcm_state()
-
-                    def pipe_reader():
-                        first = True
-                        try:
-                            while not self._stopping:
-                                hdr = self._read_exact(4)
-                                if not hdr:
-                                    break
-                                size = struct.unpack("<I", hdr)[0]
-                                if size == 0:
-                                    break
-                                data = self._read_exact(size)
-                                if not data:
-                                    break
-                                if first:
-                                    logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
-                                    first = False
-                                max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
-                                while not self._stopping:
-                                    with self._pcm_lock:
-                                        if self._pcm_buffer.size + len(data) <= max_buffer_bytes:
-                                            self._pcm_buffer.append(data)
-                                            break
-                                    time.sleep(0.01)
-                        except Exception as e:
-                            if not self._stopping:
-                                logging.debug(f"pipe_reader 오류: {e}")
-                        finally:
-                            self._pcm_done.set()
-
-                    reader_t = threading.Thread(target=pipe_reader, daemon=True)
-                    reader_t.start()
-
-                    pa_stream = self._ensure_stream()
-                    if not pa_stream.is_active():
-                        pa_stream.start_stream()
-
-                    # 생성 완료 대기 (최대 300초)
-                    reader_t.join(timeout=300)
-                    # reader가 끝났거나 타임아웃됐어도 완료 플래그를 강제 설정
-                    # → 콜백이 paComplete를 반환할 수 있게 함
-                    self._pcm_done.set()
-                    # 남은 오디오 재생 완료 대기 (드레인 강화)
-                    deadline = time.time() + 30
-                    if pa_stream:
-                        while pa_stream.is_active() and time.time() < deadline and not self._stopping:
-                            time.sleep(0.1)
-
-                    try:
-                        if pa_stream:
-                            self._close_stream()
-                    except Exception:  # nosec B110
-                        pass
-                    if self._stopping:
-                        return False
-
-                    logging.info(f"[TTS] 전체 완료: {time.time()-t0:.2f}s")
-
-                    ctrl = self._wait_ctrl(timeout=60)
-                    if ctrl.startswith("ERROR:"):
-                        logging.error(f"워커 오류: {ctrl[6:]}")
-
-                    self.is_playing = False
-                    self.playback_finished.emit()
-                    return not ctrl.startswith("ERROR:")
-
+                    for index, segment in enumerate(segments, start=1):
+                        if len(segments) > 1:
+                            logging.debug("[TTS] 세그먼트 %s/%s: %s", index, len(segments), segment[:30])
+                        if not self._speak_segment(segment):
+                            return False
+                    return True
                 except Exception as e:
                     if not self._stopping:
                         logging.error(f"CosyVoice TTS speak 오류: {e}")
+                    return False
+                finally:
                     self.is_playing = False
                     self.playback_finished.emit()
-                    return False
 
     def _read_exact(self, n: int):
         """stdout에서 정확히 n바이트 읽기"""

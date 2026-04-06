@@ -96,7 +96,15 @@ class VoiceRecognitionThread(QThread):
                             source,
                             detection_allowed=lambda: not should_pause_wake_detection(),
                         )
-                
+
+                if detected and should_pause_wake_detection():
+                    logging.info("TTS 보호 구간과 겹친 웨이크워드 감지를 무시합니다.")
+                    with _audio_lock:
+                        with self.microphone as source:
+                            self.wake_detector.recalibrate(source)
+                    time.sleep(0.05)
+                    continue
+
                 if detected:
                     self.handle_wake_word()
                 
@@ -172,11 +180,50 @@ class VoiceRecognitionThread(QThread):
 class TTSThread(QThread):
     """TTS 전용 작업 스레드: 큐를 통해 순차 재생"""
     _MAX_QUEUE_SIZE = 32
+    _COALESCE_WINDOW_SEC = 0.08
 
     def __init__(self):
         super().__init__()
         self.queue = Queue(maxsize=self._MAX_QUEUE_SIZE)
         self.is_processing = False
+
+    def _collect_batch(self, first_text):
+        texts = []
+        task_count = 1
+        stop_requested = False
+
+        if first_text:
+            stripped = str(first_text).strip()
+            if stripped:
+                texts.append(stripped)
+
+        deadline = time.monotonic() + self._COALESCE_WINDOW_SEC
+        while True:
+            drained = False
+            while True:
+                try:
+                    next_text = self.queue.get_nowait()
+                except queue.Empty:
+                    break
+                task_count += 1
+                drained = True
+                if next_text is None:
+                    stop_requested = True
+                    break
+                stripped = str(next_text).strip()
+                if stripped:
+                    texts.append(stripped)
+            if stop_requested:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if not drained:
+                time.sleep(min(0.01, remaining))
+
+        if len(texts) > 1:
+            logging.debug("[TTSThread] 인접한 TTS 요청 %d개를 1개로 병합", len(texts))
+        return " ".join(texts).strip(), task_count, stop_requested
 
     def run(self):
         logging.info("TTSThread 구동 중")
@@ -184,20 +231,27 @@ class TTSThread(QThread):
             try:
                 text = self.queue.get(timeout=1.0)
                 if text is None:
+                    self.queue.task_done()
                     break
-                
+
+                batch_text, task_count, stop_requested = self._collect_batch(text)
+
                 try:
                     self.is_processing = True
                     from VoiceCommand import text_to_speech
-                    text_to_speech(text)
+                    if batch_text:
+                        text_to_speech(batch_text)
                 finally:
-                    self.queue.task_done()
+                    for _ in range(task_count):
+                        self.queue.task_done()
                     self.is_processing = False
 
                 # 큐가 완전히 비었을 때 현재 상태(STT 대기 포함)에 맞게 말풍선을 정리
                 if self.queue.empty():
                     from VoiceCommand import _handle_tts_playback_finished
                     _handle_tts_playback_finished()
+                if stop_requested:
+                    break
                     
             except queue.Empty:
                 continue

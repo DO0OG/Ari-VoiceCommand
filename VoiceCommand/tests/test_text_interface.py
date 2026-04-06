@@ -31,9 +31,17 @@ class _DummyChatWidget:
 class _DummyTextInterface:
     _TTS_SENTENCE_SEPS = TextInterface._TTS_SENTENCE_SEPS
     _TTS_MIN_SENTENCE_LEN = TextInterface._TTS_MIN_SENTENCE_LEN
+    _TTS_BATCH_TARGET_LEN = TextInterface._TTS_BATCH_TARGET_LEN
+    _TTS_MAX_BATCH_SENTENCES = TextInterface._TTS_MAX_BATCH_SENTENCES
 
     def _try_stream_tts(self, chunk: str) -> None:
         TextInterface._try_stream_tts(self, chunk)
+
+    def _queue_stream_tts_sentence(self, sentence: str) -> None:
+        TextInterface._queue_stream_tts_sentence(self, sentence)
+
+    def _flush_stream_tts_sentence_batch(self) -> None:
+        TextInterface._flush_stream_tts_sentence_batch(self)
 
     def _handle_stream_chunk(self, chunk: str) -> None:
         TextInterface._handle_stream_chunk(self, chunk)
@@ -59,30 +67,40 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         interface._stream_response_buffer = ""
         interface._stream_tts_buffer = ""
         interface._stream_tts_deferred = ""
+        interface._stream_tts_sentence_batch = []
         interface._stream_tts_spoken = False
         interface._busy = False
         interface.scroll_to_bottom = lambda: None
         interface.refresh_status_panel = lambda: None
         return interface, spoken
 
-    def test_handle_stream_chunk_starts_tts_on_sentence_boundary(self):
+    def test_handle_stream_chunk_starts_tts_on_long_sentence_boundary(self):
         interface, spoken = self._make_interface()
 
-        interface._handle_stream_chunk("첫 번째 문장입니다. 다음")
+        interface._handle_stream_chunk("조금 더 긴 첫 번째 문장입니다. 다음")
 
-        self.assertEqual(spoken, ["첫 번째 문장입니다."])
+        self.assertEqual(spoken, ["조금 더 긴 첫 번째 문장입니다."])
         self.assertEqual(interface._stream_tts_buffer, "다음")
-        self.assertEqual(interface.chat_widget.history[0]["message"], "첫 번째 문장입니다. 다음")
+        self.assertEqual(interface.chat_widget.history[0]["message"], "조금 더 긴 첫 번째 문장입니다. 다음")
+
+    def test_handle_stream_chunk_batches_two_short_sentences_before_tts(self):
+        interface, spoken = self._make_interface()
+
+        interface._handle_stream_chunk("안녕하세요. 반갑습니다. 다음")
+
+        self.assertEqual(spoken, ["안녕하세요. 반갑습니다."])
+        self.assertEqual(interface._stream_tts_buffer, "다음")
+        self.assertEqual(interface._stream_tts_sentence_batch, [])
 
     def test_handle_stream_chunk_defers_following_sentences_while_tts_busy(self):
         interface, spoken = self._make_interface()
 
-        interface._handle_stream_chunk("첫 번째 문장입니다. ")
+        interface._handle_stream_chunk("조금 더 긴 첫 번째 문장입니다. ")
         interface._busy = True
-        interface._handle_stream_chunk("두 번째 문장입니다. ")
+        interface._handle_stream_chunk("조금 더 긴 두 번째 문장입니다. ")
 
-        self.assertEqual(spoken, ["첫 번째 문장입니다."])
-        self.assertEqual(interface._stream_tts_deferred, "두 번째 문장입니다.")
+        self.assertEqual(spoken, ["조금 더 긴 첫 번째 문장입니다."])
+        self.assertEqual(interface._stream_tts_deferred, "조금 더 긴 두 번째 문장입니다.")
 
     def test_handle_response_flushes_remaining_stream_tts_buffer_once(self):
         interface, spoken = self._make_interface()
@@ -90,15 +108,17 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         interface.chat_widget.add_message("", is_user=False)
         interface._stream_tts_spoken = True
         interface._stream_tts_deferred = "두 번째 문장입니다."
+        interface._stream_tts_sentence_batch = ["세 번째 문장입니다."]
         interface._stream_tts_buffer = "남은 문장"
         interface._stream_response_buffer = "전체 응답"
 
         interface._handle_response("")
 
-        self.assertEqual(spoken, ["두 번째 문장입니다. 남은 문장"])
+        self.assertEqual(spoken, ["두 번째 문장입니다. 세 번째 문장입니다. 남은 문장"])
         self.assertEqual(interface.chat_widget.history[0]["message"], "전체 응답")
         self.assertEqual(interface._stream_tts_buffer, "")
         self.assertEqual(interface._stream_tts_deferred, "")
+        self.assertEqual(interface._stream_tts_sentence_batch, [])
         self.assertFalse(interface._stream_tts_spoken)
 
     def test_chat_widget_limits_bubble_width_to_viewport(self):

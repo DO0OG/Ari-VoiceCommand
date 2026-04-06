@@ -142,6 +142,8 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### `core/stt_provider.py`
 - `WhisperSTTProvider`는 READY 신호와 전사 응답을 timeout 기반으로 읽고, 워커 hang/종료 시 자동 재시작
 - `audio/simple_wake.py`, `core/threads.py`는 같은 설정 서명이어도 unhealthy provider를 감지하면 STT 인스턴스를 재생성
+- `audio/simple_wake.py`는 웨이크워드를 정규화된 전체 문구 기준으로 비교해 일반 문장 내부의 `"시작"` 같은 부분 일치 오탐을 줄임
+- `core/threads.py`는 TTS 큐에 연속으로 들어온 짧은 응답을 짧은 시간창에서 병합해 문장별 TTS 호출 오버헤드를 줄임
 
 ### 싱글톤 팩토리 상태
 - `agent_orchestrator`, `agent_planner`, `autonomous_executor`, `embedder`, `llm_provider`, `proactive_scheduler`, `real_verifier`, `skill_library`, `strategy_memory`, `plugin_loader`, `memory_*`, `web_tools` 주요 getter에 생성 락 추가
