@@ -298,10 +298,11 @@ class CosyVoiceTTS(QObject):
         reader_t = threading.Thread(target=pipe_reader, daemon=True)
         reader_t.start()
 
-        pa_stream = self._ensure_stream()
-        # 빈 버퍼로 스트림을 시작하면 하드웨어 초기화 구간에 무음이 재생돼
-        # 첫 문장 음질이 저하되므로 첫 청크 수신 후 시작한다
+        # 스트림 오픈 자체를 첫 청크 수신 후로 미룬다.
+        # pa.open()이 WASAPI 등 일부 드라이버에서 콜백을 즉시 시작하므로
+        # 그 이전에 버퍼를 채워야 무음→오디오 전환 아티팩트를 막을 수 있다.
         _first_chunk_ready.wait(timeout=60)
+        pa_stream = self._ensure_stream()
         if not pa_stream.is_active():
             pa_stream.start_stream()
 
