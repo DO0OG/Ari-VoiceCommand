@@ -4,7 +4,7 @@
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
 ## Last Updated: 2026-04-06
-## 상태: 텍스트 채팅·예약 작업 UI 레이아웃 안정화 반영 완료 · 런타임 상태 분리 완료 · 290/290 테스트 통과
+## 상태: agent_planner 예외 처리 중복 1차 정리 반영 중 · 런타임 상태 분리 완료 · 290/290 테스트 통과
 
 ---
 
@@ -137,6 +137,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### `agent/agent_planner.py`
 - FewShotInjector, PlannerFeedbackLoop 힌트를 시스템 프롬프트에 자동 주입
 - JSON 응답 복구와 균형 괄호 추출 로직은 `agent/planner_json_utils.py`로 분리
+- 전략/에피소드 메모리 접근 helper를 `_with_strategy_memory`, `_with_episode_memory`로 통일해 중첩 `try/except` 없이 fail-closed 동작 유지
 
 ### `memory/conversation_history.py`
 - 슬라이딩 요약: `MAX_ACTIVE=20`, `COMPRESS_UNIT=5`, `MAX_SUMMARIES=5`
@@ -174,6 +175,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `test_planner_json_utils.py`, `test_automation_plan_utils.py` 추가
 - `test_text_interface.py`에 채팅 말풍선 폭 제한·예약 작업 라벨 줄바꿈 회귀 테스트 추가
 - `test_validate_repo.py`에 UI 파일 검증 대상 포함 여부 확인 추가
+- `test_agent_planner_parsing.py`에 strategy/episode memory helper 정상 경로와 fail-closed 회귀 테스트 추가
 - 전체 검증 기준: `290/290` + smoke pass
 
 ---

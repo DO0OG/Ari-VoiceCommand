@@ -154,6 +154,7 @@
 - `agent/automation_plan_utils.py`를 추가해 브라우저/데스크톱 adaptive·resilient 계획 조립, dedupe, 정렬 로직을 공통 유틸리티로 정리했습니다.
 - `agent/assistant_text_utils.py`를 추가해 `LLMProvider`와 `AICommand`가 공유하던 목표 해석·도구 응답 정리 로직을 공통화했습니다.
 - `agent_planner.py`와 `automation_helpers.py`는 기존 공개 동작을 유지하면서 핵심 본체가 더 짧고 검토하기 쉬운 구조로 정리되었습니다.
+- `agent_planner.py`의 전략/에피소드 메모리 접근 경로는 공통 helper로 정리되어, 반복되던 중첩 `try/except` 없이 fail-closed 동작을 유지합니다.
 - `ExecutionEngine`의 조건식 평가는 `agent/condition_evaluator.py`로 분리되어, 안전한 AST 평가 책임과 실행 엔진 본체가 분리되었습니다.
 - `condition_evaluator.py`는 `len`, `str`, `int`, `float`, `bool`, `dict.get()`만 허용하며, 평가 실패는 계속 fail-closed(`False`)로 처리됩니다.
 - `LLMProvider`의 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어, 플러그인 도구 등록과 기본 도구 스키마 관리 경계가 더 명확해졌습니다.
@@ -184,6 +185,12 @@
 - **채팅 말풍선 폭 제한**: `ui/text_interface.py`의 채팅 말풍선 최대 폭을 뷰포트 기준으로 다시 계산해 긴 메시지도 패널 바깥으로 밀려나지 않도록 조정.
 - **예약 작업 UI 줄바꿈 보강**: `ui/scheduler_panel.py`, `ui/scheduled_tasks_dialog.py`에서 긴 작업명/설명/일정 텍스트가 줄바꿈되고 가로 스크롤 없이 읽히도록 정리.
 - **회귀 테스트 추가**: `test_text_interface.py`, `test_validate_repo.py`를 보강해 채팅 말풍선 폭 제한, 예약 작업 라벨 줄바꿈, 검증 대상 포함 여부를 고정.
+
+### 최근 업데이트 (2026-04-06) — agent_planner 예외 처리 중복 1차 정리
+
+- **중복 helper 정리**: `agent_planner.py`의 전략/에피소드 메모리 접근 경로를 `_with_strategy_memory`, `_with_episode_memory` helper로 통합해 중첩 `try/except`를 제거했습니다.
+- **fail-closed 동작 유지**: 선택적 메모리 모듈이 없거나 accessor가 예외를 내도 기존처럼 빈 문자열을 반환하도록 동작을 고정했습니다.
+- **회귀 테스트 보강**: `test_agent_planner_parsing.py`에 전략 문맥/실패 힌트 포맷과 optional module 예외 시 fail-closed 동작을 추가로 검증했습니다.
 
 ### 최근 업데이트 (2026-04-05) — 런타임 설정/마켓플레이스 안정성 보강
 
