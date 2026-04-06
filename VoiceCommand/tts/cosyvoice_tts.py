@@ -182,34 +182,9 @@ class CosyVoiceTTS(QObject):
         return self._ready.wait(timeout=timeout)
 
     def wait_until_warmup_done(self, timeout=300):
-        """웜업 완료 대기 후 PyAudio 하드웨어를 선점한다.
-
-        첫 pa.open() 호출 시 드라이버 초기화 오버헤드가 발생해
-        실제 TTS 재생 첫 문장 음질이 저하되는 문제를 방지한다.
-        """
+        """웜업 완료 대기"""
         logging.info("CosyVoice3 웜업 완료 대기 중...")
-        result = self._warmup_ready.wait(timeout=timeout)
-        self._prewarm_audio()
-        return result
-
-    def _prewarm_audio(self) -> None:
-        """짧은 무음 스트림으로 PyAudio 하드웨어를 미리 초기화한다."""
-        try:
-            stream = self.pa.open(
-                format=pyaudio.paFloat32,
-                channels=1,
-                rate=self.sample_rate,
-                output=True,
-                frames_per_buffer=self._AUDIO_FRAMES_PER_BUFFER,
-            )
-            # 100ms 무음 (하드웨어 버퍼 초기화 목적)
-            silence = b"\x00" * (self._AUDIO_FRAMES_PER_BUFFER * 4 * 5)
-            stream.write(silence)
-            stream.stop_stream()
-            stream.close()
-            logging.debug("[TTS] PyAudio 하드웨어 선점 완료")
-        except Exception as e:
-            logging.debug(f"[TTS] PyAudio 선점 실패 (무시): {e}")
+        return self._warmup_ready.wait(timeout=timeout)
 
     def _wait_ctrl(self, timeout=120) -> str:
         """DONE/ERROR 제어 메시지 대기 (타임아웃 연장)"""
@@ -286,9 +261,6 @@ class CosyVoiceTTS(QObject):
 
         self._clear_pcm_state()
 
-        # 첫 청크가 버퍼에 채워진 뒤 스트림을 시작하기 위한 이벤트
-        _first_chunk_ready = threading.Event()
-
         def pipe_reader():
             first = True
             try:
@@ -303,14 +275,8 @@ class CosyVoiceTTS(QObject):
                     if not data:
                         break
                     if first:
-                        # 첫 청크 앞 50ms에 페이드인: 모델 시작 아티팩트 마스킹
-                        fade_samples = min(1200, len(data) // 4)
-                        if fade_samples > 0:
-                            arr = np.frombuffer(data, dtype=np.float32).copy()
-                            arr[:fade_samples] *= np.linspace(
-                                0.0, 1.0, fade_samples, dtype=np.float32
-                            )
-                            data = arr.tobytes()
+                        logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
+                        first = False
                     max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
                     while not self._stopping:
                         with self._pcm_lock:
@@ -318,24 +284,15 @@ class CosyVoiceTTS(QObject):
                                 self._pcm_buffer.append(data)
                                 break
                         time.sleep(0.01)
-                    if first:
-                        logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
-                        _first_chunk_ready.set()
-                        first = False
             except Exception as e:
                 if not self._stopping:
                     logging.debug(f"pipe_reader 오류: {e}")
             finally:
                 self._pcm_done.set()
-                _first_chunk_ready.set()  # 데이터 없이 종료된 경우 블록 해제
 
         reader_t = threading.Thread(target=pipe_reader, daemon=True)
         reader_t.start()
 
-        # 스트림 오픈 자체를 첫 청크 수신 후로 미룬다.
-        # pa.open()이 WASAPI 등 일부 드라이버에서 콜백을 즉시 시작하므로
-        # 그 이전에 버퍼를 채워야 무음→오디오 전환 아티팩트를 막을 수 있다.
-        _first_chunk_ready.wait(timeout=60)
         pa_stream = self._ensure_stream()
         if not pa_stream.is_active():
             pa_stream.start_stream()
