@@ -6,12 +6,18 @@ import html
 import logging
 import os
 import json
-import re
 import time
 import urllib.parse
 import urllib.request
 from typing import Optional, List, Dict, Any
 
+from agent.automation_plan_utils import (
+    find_similar_goal_key,
+    normalize_goal_hint,
+    normalize_similarity_token,
+    tokenize_goal_hint,
+    token_overlap_score,
+)
 from services.dom_analyser import analyse_dom, suggest_next_actions
 
 _HEADERS = {
@@ -503,8 +509,7 @@ class SmartBrowser:
             logging.warning(f"[SmartBrowser] 액션 플랜 저장 실패: {e}")
 
     def _normalize_plan_key(self, goal_hint: str) -> str:
-        key = re.sub(r"\s+", " ", (goal_hint or "").strip().lower())
-        return re.sub(r"[^a-z0-9가-힣 _-]", "", key)[:80]
+        return normalize_goal_hint(goal_hint)
 
     def _should_remember_action_plan(self, results: List[str]) -> bool:
         return (
@@ -514,49 +519,20 @@ class SmartBrowser:
         )
 
     def _tokenize_plan_key(self, key: str) -> set[str]:
-        tokens = set()
-        for token in re.findall(r"[a-z0-9가-힣]+", (key or "").lower()):
-            normalized = self._normalize_similarity_token(token)
-            if len(normalized) >= 2:
-                tokens.add(normalized)
-        return tokens
+        return tokenize_goal_hint(key)
 
     def _normalize_similarity_token(self, token: str) -> str:
-        normalized = token.strip().lower()
-        for suffix in ("에서", "에게", "으로", "로", "까지", "부터", "하고", "후", "전", "에", "을", "를", "은", "는", "이", "가", "와", "과", "도", "만"):
-            if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
-                return normalized[: -len(suffix)]
-        return normalized
+        return normalize_similarity_token(token)
 
     def _token_overlap_score(self, left: set[str], right: set[str]) -> float:
-        if not left or not right:
-            return 0.0
-        overlap = 0
-        for token in left:
-            if any(token == candidate or token in candidate or candidate in token for candidate in right):
-                overlap += 1
-        return overlap / max(len(left), len(right))
+        return token_overlap_score(left, right)
 
     def _find_similar_plan_key(self, domain: str, goal_hint: str) -> str:
         plan_key = self._normalize_plan_key(goal_hint)
         if not domain or not plan_key:
             return ""
         domain_plans = self._action_plan_history.get(domain, {})
-        if plan_key in domain_plans:
-            return plan_key
-
-        target_tokens = self._tokenize_plan_key(plan_key)
-        best_key = ""
-        best_score = 0.0
-        for candidate in domain_plans:
-            candidate_tokens = self._tokenize_plan_key(candidate)
-            if not target_tokens or not candidate_tokens:
-                continue
-            score = self._token_overlap_score(target_tokens, candidate_tokens)
-            if score > best_score:
-                best_score = score
-                best_key = candidate
-        return best_key if best_score >= 0.34 else ""
+        return find_similar_goal_key(plan_key, domain_plans)
 
     def remember_action_plan(self, domain: str, goal_hint: str, actions: List[Dict[str, Any]], page_key: str = "") -> None:
         plan_key = self._normalize_plan_key(goal_hint)

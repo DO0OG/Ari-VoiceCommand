@@ -135,6 +135,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ### `agent/agent_planner.py`
 - FewShotInjector, PlannerFeedbackLoop 힌트를 시스템 프롬프트에 자동 주입
+- JSON 응답 복구와 균형 괄호 추출 로직은 `agent/planner_json_utils.py`로 분리
 
 ### `memory/conversation_history.py`
 - 슬라이딩 요약: `MAX_ACTIVE=20`, `COMPRESS_UNIT=5`, `MAX_SUMMARIES=5`
@@ -160,11 +161,14 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### 실행 엔진 / 구조 분리
 - `condition_evaluator.py`: ExecutionEngine step 조건 평가를 별도 모듈로 분리
 - `ExecutionEngine`: 조건식 로직을 위 모듈에 위임하고 fail-closed 동작 유지
+- `planner_json_utils.py`: AgentPlanner JSON 응답 복구 로직을 별도 모듈로 분리
+- `automation_plan_utils.py`: AutomationHelpers adaptive/resilient 계획 조립 로직을 별도 모듈로 분리
 
 ### 문서 / 검증
 - README 최근 업데이트와 아키텍처 설명을 최신 구조에 맞게 갱신
 - `test_condition_evaluator.py` 추가, `test_execution_engine.py` 확장
-- 전체 검증 기준: `281/281` + smoke pass
+- `test_planner_json_utils.py`, `test_automation_plan_utils.py` 추가
+- 전체 검증 기준: `286/286` + smoke pass
 
 ---
 
