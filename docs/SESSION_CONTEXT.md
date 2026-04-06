@@ -3,8 +3,8 @@
 이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-04-03
-## 상태: Phase 1-8 구현 및 성능 보강 완료 · 런타임 상태 분리 완료 · 268/268 테스트 통과
+## Last Updated: 2026-04-06
+## 상태: 플래너/자동화 유틸 모듈 분리 반영 완료 · 런타임 상태 분리 완료 · 286/286 테스트 통과
 
 ---
 
@@ -62,7 +62,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 4. Phase 1-8 핵심 모듈 (2026-04-03)
+## 4. Phase 1-8 핵심 모듈 (2026-04-06 반영)
 
 ### agent/ 신규
 
@@ -195,7 +195,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 알려진 미해결 문제
+## 8. 알려진 미해결 문제
 
 ### 🟡 Groq Llama-3.3-70b tool call 신뢰도
 
@@ -213,7 +213,7 @@ LLM이 일시적 상태를 FACT로 저장할 수 있음.
 
 ---
 
-## 7. 개발 검증 명령
+## 9. 개발 검증 명령
 
 ```bash
 # 실행
@@ -231,7 +231,7 @@ py -3.11 VoiceCommand/build_exe.py [--clean] [--onefile]
 
 ---
 
-## 8. 이 파일 사용법
+## 10. 이 파일 사용법
 
 새 AI 세션 시작 시:
 1. 이 파일(`SESSION_CONTEXT.md`)을 먼저 제공
