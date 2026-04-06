@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from ui.common import (
@@ -55,29 +55,38 @@ class TaskRow(QFrame):
         display_name = task.name if getattr(task, "name", "") else task.goal[:30]
         name_lbl = QLabel(f"📋 {display_name}")
         name_lbl.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL, QFont.Bold))
+        name_lbl.setWordWrap(True)
+        name_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        name_lbl.setMinimumWidth(0)
         top.addWidget(name_lbl)
-        top.addStretch()
 
-        top.addWidget(create_icon_button(
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(6)
+        action_layout.addWidget(create_icon_button(
             "▶", "지금 실행", 28, COLOR_SUCCESS,
             lambda: self.run_now_requested.emit(self.task_id)
         ))
         toggle_color = COLOR_PRIMARY if task.enabled else COLOR_MUTED
         toggle_icon  = "⏸" if task.enabled else "▷"
-        top.addWidget(create_icon_button(
+        action_layout.addWidget(create_icon_button(
             toggle_icon, "활성화/비활성화", 28, toggle_color,
             lambda: self.toggle_requested.emit(self.task_id)
         ))
-        top.addWidget(create_icon_button(
+        action_layout.addWidget(create_icon_button(
             "✕", "삭제", 28, COLOR_DANGER,
             lambda: self.delete_requested.emit(self.task_id)
         ))
+        top.addStretch()
+        top.addLayout(action_layout)
         outer.addLayout(top)
 
         # 목표 텍스트 (축약)
         goal_lbl = QLabel(task.goal[:60] + ("…" if len(task.goal) > 60 else ""))
         goal_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
         goal_lbl.setStyleSheet("color: #555;")
+        goal_lbl.setWordWrap(True)
+        goal_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        goal_lbl.setMinimumWidth(0)
         outer.addWidget(goal_lbl)
 
         # 스케줄 + 다음 실행 시각
@@ -89,6 +98,9 @@ class TaskRow(QFrame):
         info_lbl = QLabel(f"🕐 {task.schedule_expr}  →  다음 {next_str}")
         info_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
         info_lbl.setStyleSheet(f"color: {info_color};")
+        info_lbl.setWordWrap(True)
+        info_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        info_lbl.setMinimumWidth(0)
         outer.addWidget(info_lbl)
 
         # 마지막 실행 결과
@@ -101,6 +113,9 @@ class TaskRow(QFrame):
             result_lbl = QLabel(f"✅ 마지막: {last_str}  |  {snippet}")
             result_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
             result_lbl.setStyleSheet(f"color: {COLOR_SUCCESS};")
+            result_lbl.setWordWrap(True)
+            result_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            result_lbl.setMinimumWidth(0)
             outer.addWidget(result_lbl)
 
 
@@ -120,6 +135,7 @@ class SchedulerPanel(FloatingPanel):
         # 작업 목록 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(SCROLLBAR_THIN_STYLE)
         self._scroll = scroll
 

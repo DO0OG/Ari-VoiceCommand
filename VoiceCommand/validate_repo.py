@@ -57,13 +57,23 @@ COMPILE_TARGETS = [
     "tts/cosyvoice_worker.py",
     "tts/fish_tts_ws.py",
     "tts/tts_factory.py",
+    "ui/character_widget.py",
     "ui/theme.py",
     "ui/theme_runtime.py",
     "ui/common.py",
+    "ui/local_installers.py",
+    "ui/marketplace_browser.py",
+    "ui/scheduled_tasks_dialog.py",
     "ui/settings_dialog.py",
+    "ui/settings_llm_page.py",
+    "ui/settings_plugin_page.py",
+    "ui/settings_tts_page.py",
+    "ui/speech_bubble.py",
+    "ui/stt_settings_dialog.py",
     "ui/text_interface.py",
     "ui/memory_panel.py",
     "ui/scheduler_panel.py",
+    "ui/tray_icon.py",
 ]
 
 TEMPLATE_SMOKE = r"""
