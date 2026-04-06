@@ -29,9 +29,6 @@ _BREATH_COMMA_CHARS = ",;:，、"
 _BREATH_MIN_COMPACT_LEN = 22
 _BREATH_MIN_PREFIX_LEN = 8
 _BREATH_MIN_SUFFIX_LEN = 6
-_SEGMENT_MAX_COMPACT_LEN = 28
-_SEGMENT_MIN_PREFIX_LEN = 8
-_SEGMENT_MIN_SUFFIX_LEN = 6
 
 
 _NATIVE_HOURS = [
@@ -175,81 +172,6 @@ def inject_breath_cues(text: str) -> str:
         return normalized
 
     return " ".join(_insert_breath_comma(sentence) for sentence in sentences)
-
-
-def _split_long_segment(sentence: str) -> list[str]:
-    trailing_match = _TRAILING_PUNCT_RE.search(sentence)
-    trailing = trailing_match.group(1) if trailing_match else ""
-    body = sentence[:-len(trailing)] if trailing else sentence
-    body = body.strip()
-    if not body or _compact_len(body) <= _SEGMENT_MAX_COMPACT_LEN:
-        return [sentence.strip()]
-
-    parts = re.split(r"([,;:，、])", body)
-    segments: list[str] = []
-    current = ""
-
-    for idx in range(0, len(parts), 2):
-        clause = parts[idx].strip()
-        punct = parts[idx + 1] if idx + 1 < len(parts) else ""
-        piece = f"{clause}{punct}".strip()
-        if not piece:
-            continue
-
-        candidate = f"{current} {piece}".strip() if current else piece
-        if current and _compact_len(candidate) > _SEGMENT_MAX_COMPACT_LEN:
-            segments.append(current.strip())
-            current = piece
-        else:
-            current = candidate
-
-    if current:
-        segments.append(current.strip())
-
-    if len(segments) == 1:
-        words = body.split()
-        if len(words) < 4:
-            return [sentence.strip()]
-        target = _compact_len(body) / 2
-        best_idx = None
-        best_distance = None
-        for idx in range(1, len(words)):
-            prefix = " ".join(words[:idx])
-            suffix = " ".join(words[idx:])
-            prefix_len = _compact_len(prefix)
-            suffix_len = _compact_len(suffix)
-            if prefix_len < _SEGMENT_MIN_PREFIX_LEN or suffix_len < _SEGMENT_MIN_SUFFIX_LEN:
-                continue
-            distance = abs(prefix_len - target)
-            if best_distance is None or distance < best_distance:
-                best_idx = idx
-                best_distance = distance
-        if best_idx is None:
-            return [sentence.strip()]
-        segments = [
-            " ".join(words[:best_idx]).strip(),
-            " ".join(words[best_idx:]).strip(),
-        ]
-
-    if trailing:
-        segments[-1] = f"{segments[-1]}{trailing}"
-    return [segment for segment in segments if segment]
-
-
-def split_tts_segments(text: str) -> list[str]:
-    """로컬 TTS용 응답을 자연스러운 길이의 세그먼트들로 분할한다."""
-    normalized = _SPACE_RE.sub(" ", text or "").strip()
-    if not normalized:
-        return []
-
-    sentences = _split_with_punctuation(normalized)
-    if not sentences:
-        return [normalized]
-
-    segments: list[str] = []
-    for sentence in sentences:
-        segments.extend(_split_long_segment(sentence))
-    return segments or [normalized]
 
 
 def apply_emotion_prosody(text: str, emotion: str) -> str:
