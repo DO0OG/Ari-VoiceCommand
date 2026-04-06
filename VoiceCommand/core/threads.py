@@ -85,10 +85,17 @@ class VoiceRecognitionThread(QThread):
             while self.running:
                 self._apply_recognizer_settings()
                 self._refresh_stt_provider()
+                from VoiceCommand import should_pause_wake_detection
+                if should_pause_wake_detection():
+                    time.sleep(0.05)
+                    continue
                 # 오디오 장치 점유를 위해 락 획득
                 with _audio_lock:
                     with self.microphone as source:
-                        detected = self.wake_detector.listen_for_wake_word(source)
+                        detected = self.wake_detector.listen_for_wake_word(
+                            source,
+                            detection_allowed=lambda: not should_pause_wake_detection(),
+                        )
                 
                 if detected:
                     self.handle_wake_word()

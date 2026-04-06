@@ -2,10 +2,15 @@
 간단한 음성 트리거 (계정 불필요)
 """
 import logging
+import re
 import speech_recognition as sr
 
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
+
+
+_NORMALIZE_WHITESPACE_RE = re.compile(r"\s+")
+_STRIP_PUNCTUATION_RE = re.compile(r"[^0-9A-Za-z가-힣\s]+")
 
 
 class SimpleWakeWord:
@@ -42,6 +47,18 @@ class SimpleWakeWord:
             self._calibrated = False
             logging.info("[WakeWord] STT 프로바이더 갱신: %s", signature[0])
 
+    def _normalize_text(self, text):
+        normalized = _STRIP_PUNCTUATION_RE.sub(" ", text or "")
+        normalized = _NORMALIZE_WHITESPACE_RE.sub(" ", normalized)
+        return normalized.strip().lower()
+
+    def _matches_wake_word(self, text, wake_word):
+        normalized_text = self._normalize_text(text)
+        normalized_wake_word = self._normalize_text(wake_word)
+        if not normalized_text or not normalized_wake_word:
+            return False
+        return normalized_text == normalized_wake_word
+
     def recalibrate(self, source):
         """TTS 이후 환경 변화 시 임계값 재조정"""
         try:
@@ -50,7 +67,7 @@ class SimpleWakeWord:
         except Exception as e:
             logging.debug(f"재캘리브레이션 실패: {e}")
 
-    def listen_for_wake_word(self, source):
+    def listen_for_wake_word(self, source, detection_allowed=None):
         """웨이크워드 대기 — 첫 호출 시 캘리브레이션, 이후 즉시 청취"""
         if self.should_stop:
             return False
@@ -67,7 +84,10 @@ class SimpleWakeWord:
             logging.debug(f"들은 내용: {text}")
 
             for wake_word in self.wake_words:
-                if wake_word in text:
+                if self._matches_wake_word(text, wake_word):
+                    if detection_allowed is not None and not detection_allowed():
+                        logging.debug("[WakeWord] TTS 재생/보호 구간 중 감지 후보 무시: %s", text)
+                        return False
                     return True
             return False
 

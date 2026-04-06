@@ -544,6 +544,8 @@ class TextInterface(QMainWindow):
         self._stream_message_index: Optional[int] = None
         self._stream_response_buffer = ""
         self._stream_tts_buffer = ""
+        self._stream_tts_deferred = ""
+        self._stream_tts_sentence_batch: list[str] = []
         self._stream_tts_spoken = False
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -697,6 +699,8 @@ class TextInterface(QMainWindow):
             self._stream_message_index = None
             self._stream_response_buffer = ""
             self._stream_tts_buffer = ""
+            self._stream_tts_deferred = ""
+            self._stream_tts_sentence_batch = []
             self._stream_tts_spoken = False
             self.processing_thread = TextInterfaceThread(self.ai_assistant, query)
             self.processing_thread.response_ready.connect(self._handle_response)
@@ -725,12 +729,21 @@ class TextInterface(QMainWindow):
         if self.tts_callback:
             # 스트리밍 중 문장 단위 TTS가 이미 시작된 경우: 남은 버퍼만 처리
             if self._stream_tts_spoken:
-                remaining = self._stream_tts_buffer.strip()
+                remaining = " ".join(
+                    part for part in (
+                        self._stream_tts_deferred.strip(),
+                        " ".join(self._stream_tts_sentence_batch).strip(),
+                        self._stream_tts_buffer.strip(),
+                    )
+                    if part
+                )
                 if remaining:
                     self.tts_callback(remaining)
             else:
                 self.tts_callback(final_response)
         self._stream_tts_buffer = ""
+        self._stream_tts_deferred = ""
+        self._stream_tts_sentence_batch = []
         self._stream_tts_spoken = False
 
     def _on_progress_event(self, event_type: str, kwargs: dict) -> None:
@@ -752,6 +765,17 @@ class TextInterface(QMainWindow):
 
     _TTS_SENTENCE_SEPS = ("。", "! ", "? ", ". ", "!\n", "?\n", ".\n")
     _TTS_MIN_SENTENCE_LEN = 8
+    _TTS_BATCH_TARGET_LEN = 18
+    _TTS_MAX_BATCH_SENTENCES = 2
+
+    def _is_tts_busy(self) -> bool:
+        if not self.tts_callback:
+            return False
+        try:
+            from core.VoiceCommand import is_tts_playing
+            return bool(is_tts_playing())
+        except Exception:
+            return False
 
     def _try_stream_tts(self, chunk: str) -> None:
         """스트리밍 청크에서 문장 경계 감지 시 TTS를 즉시 시작한다."""
@@ -766,9 +790,42 @@ class TextInterface(QMainWindow):
                 break
             sentence = self._stream_tts_buffer[:idx].strip()
             self._stream_tts_buffer = self._stream_tts_buffer[idx:]
-            if len(sentence) >= self._TTS_MIN_SENTENCE_LEN:
-                self._stream_tts_spoken = True
-                self.tts_callback(sentence)
+            self._queue_stream_tts_sentence(sentence)
+
+    def _queue_stream_tts_sentence(self, sentence: str) -> None:
+        sentence = sentence.strip()
+        if not sentence:
+            return
+        self._stream_tts_sentence_batch.append(sentence)
+        total_chars = sum(len(part) for part in self._stream_tts_sentence_batch)
+        if (
+            total_chars < self._TTS_BATCH_TARGET_LEN
+            and len(self._stream_tts_sentence_batch) < self._TTS_MAX_BATCH_SENTENCES
+        ):
+            return
+        self._flush_stream_tts_sentence_batch()
+
+    def _flush_stream_tts_sentence_batch(self) -> None:
+        if not self._stream_tts_sentence_batch:
+            return
+        sentence = " ".join(self._stream_tts_sentence_batch).strip()
+        self._stream_tts_sentence_batch = []
+        if len(sentence) < self._TTS_MIN_SENTENCE_LEN:
+            self._stream_tts_deferred = " ".join(
+                part for part in (self._stream_tts_deferred.strip(), sentence) if part
+            )
+            return
+        if self._stream_tts_spoken and self._is_tts_busy():
+            self._stream_tts_deferred = " ".join(
+                part for part in (self._stream_tts_deferred.strip(), sentence) if part
+            )
+            return
+        utterance = " ".join(
+            part for part in (self._stream_tts_deferred.strip(), sentence) if part
+        )
+        self._stream_tts_deferred = ""
+        self._stream_tts_spoken = True
+        self.tts_callback(utterance)
 
     # ── UI 헬퍼 ───────────────────────────────────────────────────────────────
 

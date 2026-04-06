@@ -18,13 +18,13 @@
 
 | 기능 | 설명 |
 |------|------|
-| **웨이크워드** | 호출어 음성 입력 대기 — 설정에서 키워드 자유 변경 가능 |
+| **웨이크워드** | 호출어 음성 입력 대기 — TTS 재생 중·직후 보호 구간에서 오탐 감지 억제 |
 | **음성 인식** | Google STT (온라인) · faster-whisper (오프라인, 설정에서 전환) |
 | **AI 대화** | Groq · OpenAI · Anthropic · Mistral · Gemini · OpenRouter · NVIDIA NIM · **Ollama (로컬 LLM)** |
 | **역할별 LLM** | 기본 대화 / 플래너 / 실행·수정 모델을 제공자별로 분리 설정 |
 | **LLM 자동 라우팅** | 작업 유형(코드/계획/분석/채팅)에 따라 최적 모델 자동 선택 |
 | **TTS** | Fish Audio · CosyVoice3(로컬) · OpenAI TTS · ElevenLabs · Edge TTS · 초기화 실패 시 자동 폴백 |
-| **스트리밍 응답** | 문장 단위 청크 → TTS 즉시 시작, 체감 응답속도 대폭 개선 |
+| **스트리밍 응답** | 첫 문장은 즉시 TTS 시작, 뒤이은 문장은 재생 중이면 묶어서 이어 재생 |
 | **감정 표현** | `(기쁨)` 등 AI 태그 기반 캐릭터 애니메이션 |
 | **캐릭터 위젯** | Shimeji 스타일 드래그·물리 애니메이션 · 우클릭 시 트레이와 동일 메뉴 표시 |
 | **로컬 설치 UI** | 설정창 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama / CosyVoice3 설치와 초기 모델 다운로드 지원 |
@@ -194,6 +194,8 @@
 
 ### 최근 업데이트 (2026-04-06) — 런타임 안정성·검증 범위·타입/문서 품질 정리
 
+- **웨이크워드 오탐 완화**: `core/VoiceCommand.py`, `core/threads.py`에 TTS 재생 중·종료 직후 보호 구간을 추가해 응답 직후 자기 음성을 다시 웨이크워드로 잡는 현상을 줄였습니다.
+- **스트리밍 TTS 호출 수 절감**: `ui/text_interface.py`는 첫 문장은 즉시 읽고, 이어지는 문장은 TTS가 바쁠 때 묶어서 후속 재생하도록 바꿔 문장마다 합성을 다시 거는 비용을 줄였습니다.
 - **싱글톤 스레드 안전성 보강**: `agent_orchestrator`, `autonomous_executor`, `plugin_loader`, `strategy_memory`, `skill_library`, `web_tools` 등 주요 팩토리 getter에 생성 락을 추가해 동시 초기화 경쟁을 줄였습니다.
 - **STT 복구성 강화**: `core/stt_provider.py`의 Whisper 워커는 startup/transcribe timeout을 감지하고 자동 재시작하며, `simple_wake.py`와 `threads.py`는 비정상 STT 인스턴스를 감지하면 provider를 새로 만듭니다.
 - **예외 처리 보강**: `automation_helpers.py`, `autonomous_executor.py`에서 브라우저/데스크톱 워크플로우 준비 단계와 실행 상태 스냅샷, 문서 저장/백업 실패를 fail-closed 결과로 돌려주도록 정리했습니다.

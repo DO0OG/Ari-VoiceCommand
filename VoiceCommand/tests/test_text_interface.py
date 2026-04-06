@@ -41,6 +41,9 @@ class _DummyTextInterface:
     def _handle_response(self, final_response: str) -> None:
         TextInterface._handle_response(self, final_response)
 
+    def _is_tts_busy(self) -> bool:
+        return getattr(self, "_busy", False)
+
 
 class TextInterfaceStreamingTests(unittest.TestCase):
     @classmethod
@@ -55,7 +58,9 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         interface._stream_message_index = None
         interface._stream_response_buffer = ""
         interface._stream_tts_buffer = ""
+        interface._stream_tts_deferred = ""
         interface._stream_tts_spoken = False
+        interface._busy = False
         interface.scroll_to_bottom = lambda: None
         interface.refresh_status_panel = lambda: None
         return interface, spoken
@@ -69,19 +74,31 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         self.assertEqual(interface._stream_tts_buffer, "다음")
         self.assertEqual(interface.chat_widget.history[0]["message"], "첫 번째 문장입니다. 다음")
 
+    def test_handle_stream_chunk_defers_following_sentences_while_tts_busy(self):
+        interface, spoken = self._make_interface()
+
+        interface._handle_stream_chunk("첫 번째 문장입니다. ")
+        interface._busy = True
+        interface._handle_stream_chunk("두 번째 문장입니다. ")
+
+        self.assertEqual(spoken, ["첫 번째 문장입니다."])
+        self.assertEqual(interface._stream_tts_deferred, "두 번째 문장입니다.")
+
     def test_handle_response_flushes_remaining_stream_tts_buffer_once(self):
         interface, spoken = self._make_interface()
         interface._stream_message_index = 0
         interface.chat_widget.add_message("", is_user=False)
         interface._stream_tts_spoken = True
+        interface._stream_tts_deferred = "두 번째 문장입니다."
         interface._stream_tts_buffer = "남은 문장"
         interface._stream_response_buffer = "전체 응답"
 
         interface._handle_response("")
 
-        self.assertEqual(spoken, ["남은 문장"])
+        self.assertEqual(spoken, ["두 번째 문장입니다. 남은 문장"])
         self.assertEqual(interface.chat_widget.history[0]["message"], "전체 응답")
         self.assertEqual(interface._stream_tts_buffer, "")
+        self.assertEqual(interface._stream_tts_deferred, "")
         self.assertFalse(interface._stream_tts_spoken)
 
     def test_chat_widget_limits_bubble_width_to_viewport(self):
