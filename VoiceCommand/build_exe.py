@@ -12,6 +12,12 @@ nofollow 정책:
 출력: dist/Ari/
 
 포함 모듈 (2026-04-06 최신):
+  audio/simple_wake.py     — 정규화 전체 문구 비교로 문장 내부 부분 일치 오탐 차단
+  core/VoiceCommand.py     — extend_tts_resume_guard() 추가: 세그먼트별 보호 구간 연장
+  core/threads.py          — VoiceRecognitionThread 감지 후 재확인, TTSThread._collect_batch() 추가
+  tts/cosyvoice_utils.py   — split_tts_segments() 추가: 자연 단위 세그먼트 분할
+  tts/cosyvoice_tts.py     — _speak_segment() + split_tts_segments() 기반 멀티세그먼트 내부 처리
+  ui/text_interface.py     — 스트리밍 TTS 짧은 앞문장 배치 재생 (_queue_stream_tts_sentence)
   agent/assistant_text_utils.py — LLM/AICommand 공통 목표 해석·도구 응답 정리 유틸리티 분리
   agent/planner_json_utils.py   — 잘린 JSON 응답 복구/파싱 책임 분리
   agent/automation_plan_utils.py — 브라우저/데스크톱 액션 계획 조립·정렬 유틸리티 분리
