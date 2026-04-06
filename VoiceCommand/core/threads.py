@@ -234,10 +234,10 @@ class TTSThread(QThread):
                     self.queue.task_done()
                     break
 
+                self.is_processing = True
                 batch_text, task_count, stop_requested = self._collect_batch(text)
 
                 try:
-                    self.is_processing = True
                     from VoiceCommand import text_to_speech
                     if batch_text:
                         text_to_speech(batch_text)
