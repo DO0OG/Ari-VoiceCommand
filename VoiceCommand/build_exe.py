@@ -12,6 +12,7 @@ nofollow 정책:
 출력: dist/Ari/
 
 포함 모듈 (2026-04-06 최신):
+  agent/assistant_text_utils.py — LLM/AICommand 공통 목표 해석·도구 응답 정리 유틸리티 분리
   agent/planner_json_utils.py   — 잘린 JSON 응답 복구/파싱 책임 분리
   agent/automation_plan_utils.py — 브라우저/데스크톱 액션 계획 조립·정렬 유틸리티 분리
   agent/agent_planner.py        — JSON 복구 헬퍼 위임으로 플래너 본체 응집도 개선
@@ -211,6 +212,7 @@ nuitka_args = [
     "--include-module=agent.confirmation_manager",
     "--include-module=agent.agent_orchestrator",
     "--include-module=agent.agent_planner",
+    "--include-module=agent.assistant_text_utils",
     "--include-module=agent.autonomous_executor",
     "--include-module=agent.automation_plan_utils",
     "--include-module=agent.execution_analysis",

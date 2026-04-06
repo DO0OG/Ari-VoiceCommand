@@ -152,6 +152,7 @@
 
 - `agent/planner_json_utils.py`를 추가해 플래너의 잘린 JSON 응답 복구·균형 괄호 추출 책임을 분리했습니다.
 - `agent/automation_plan_utils.py`를 추가해 브라우저/데스크톱 adaptive·resilient 계획 조립, dedupe, 정렬 로직을 공통 유틸리티로 정리했습니다.
+- `agent/assistant_text_utils.py`를 추가해 `LLMProvider`와 `AICommand`가 공유하던 목표 해석·도구 응답 정리 로직을 공통화했습니다.
 - `agent_planner.py`와 `automation_helpers.py`는 기존 공개 동작을 유지하면서 핵심 본체가 더 짧고 검토하기 쉬운 구조로 정리되었습니다.
 - `ExecutionEngine`의 조건식 평가는 `agent/condition_evaluator.py`로 분리되어, 안전한 AST 평가 책임과 실행 엔진 본체가 분리되었습니다.
 - `condition_evaluator.py`는 `len`, `str`, `int`, `float`, `bool`, `dict.get()`만 허용하며, 평가 실패는 계속 fail-closed(`False`)로 처리됩니다.
