@@ -12,6 +12,7 @@
 ## 프로젝트 문서
 
 - 최근 자율 실행 코어는 `state transition`, `execution policy`, `episode memory`, `backup/recovery guidance`까지 포함하도록 확장되었습니다. `workspace audit` 명령은 열린 창을 브라우저/일반 앱으로 분류하고 `summary.md`를 자동 백업 덮어쓰기하는 템플릿을 사용합니다.
+- 플래너 JSON 복구 책임은 `agent/planner_json_utils.py`, 브라우저/데스크톱 계획 조립 책임은 `agent/automation_plan_utils.py`로 분리되어 핵심 본체 파일의 응집도를 높였습니다.
 - 소스 실행(`py Main.py`) 기준 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장되며, 저장소에는 `VoiceCommand/ari_settings.template.json` 템플릿만 유지합니다. 실제 설정은 런타임 경로에 생성됩니다. 로그는 `VoiceCommand/.ari_runtime/logs/`에 쌓입니다.
 - 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
 - `reference.wav`는 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav` 우선, 없으면 `VoiceCommand/reference.wav`를 사용하고, 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav` 우선, 없으면 번들된 `reference.wav`를 사용합니다.

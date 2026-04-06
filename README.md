@@ -94,7 +94,7 @@
 
 ## 개발 현황
 
-- 현재 기준 핵심 변화: 런타임 설정 템플릿 분리, 마켓플레이스 업로드/설치 안정성 보강, `LLMProvider` 도구 스키마 분리(`tool_schemas.py`), 실행 엔진 조건 평가 모듈 분리, 프런트엔드 개발 산출물 ignore 정리.
+- 현재 기준 핵심 변화: 런타임 설정 템플릿 분리, 마켓플레이스 업로드/설치 안정성 보강, `LLMProvider` 도구 스키마 분리(`tool_schemas.py`), 실행 엔진 조건 평가 모듈 분리, 플래너 JSON 파서 분리(`planner_json_utils.py`), 자동화 계획 유틸 분리(`automation_plan_utils.py`), 프런트엔드 개발 산출물 ignore 정리.
 - 런타임 상태는 개발 모드에서 `VoiceCommand/.ari_runtime/`, 배포 모드에서 `%AppData%/Ari/`로 분리되어 저장됩니다. 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿으로 유지하고, 실제 `ari_settings.json`과 로그/스케줄/메모리/플러그인 캐시는 모두 런타임 디렉터리로 정리됩니다.
 - 즉, `py Main.py`처럼 소스에서 실행할 때는 `.ari_runtime/`를 쓰고, `build_exe.py`로 만든 exe를 실행할 때는 `%AppData%/Ari/`를 씁니다.
 - `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시에는 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
@@ -150,11 +150,14 @@
 
 ### 최근 자율 저장소 작업 안정화 메모 (2026-04-06)
 
+- `agent/planner_json_utils.py`를 추가해 플래너의 잘린 JSON 응답 복구·균형 괄호 추출 책임을 분리했습니다.
+- `agent/automation_plan_utils.py`를 추가해 브라우저/데스크톱 adaptive·resilient 계획 조립, dedupe, 정렬 로직을 공통 유틸리티로 정리했습니다.
+- `agent_planner.py`와 `automation_helpers.py`는 기존 공개 동작을 유지하면서 핵심 본체가 더 짧고 검토하기 쉬운 구조로 정리되었습니다.
 - `ExecutionEngine`의 조건식 평가는 `agent/condition_evaluator.py`로 분리되어, 안전한 AST 평가 책임과 실행 엔진 본체가 분리되었습니다.
 - `condition_evaluator.py`는 `len`, `str`, `int`, `float`, `bool`, `dict.get()`만 허용하며, 평가 실패는 계속 fail-closed(`False`)로 처리됩니다.
 - `LLMProvider`의 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어, 플러그인 도구 등록과 기본 도구 스키마 관리 경계가 더 명확해졌습니다.
 - 프런트엔드 개발 산출물(`market/web/node_modules`, `.next`, `tsconfig.tsbuildinfo`, `.vercel`)은 Git 추적 대상에서 제외되며, 실제 소스 파일만 반영되도록 ignore 규칙을 보강했습니다.
-- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **281 tests + smoke** 입니다.
+- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **286 tests + smoke** 입니다.
 
 ### 최근 자율 저장소 작업 안정화 메모 (2026-04-05)
 
@@ -162,7 +165,7 @@
 - 저장소 작업 보고서는 실행 사용자 기준 Desktop `Ari Reports`에 저장하고, CI 전용/특정 사용자 절대 경로에 의존하지 않도록 정리했습니다.
 - 개발 플래너/오케스트레이터는 `VoiceCommand/{agent,core,ui,plugins,tests}` + `docs` 범위 밖 경로 선택, `py_compile`만으로 끝내는 약한 검증, `tests/` 루트 경로, 가짜 성공/OCR 기반 성공 판정을 거부하도록 강화했습니다.
 - `validate_repo.py --compile-only`는 `__pycache__` 대신 임시 위치로 컴파일해 로컬 환경 락/권한 문제에도 더 안정적으로 동작합니다.
-- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 281개 기준으로 유지 중입니다.
+- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 286개 기준으로 유지 중입니다.
 - **영향 테스트 자동 선별**: `_infer_relevant_tests`가 goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=` 항목으로 LLM에게 우선 제시. 테스트 목록도 첫 5개 샘플 대신 전체 목록(`all=`) 표시로 전환.
 - **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. 루트 런타임 파일은 정리하고, 개발용 상태는 `.ari_runtime/` 아래로만 유지합니다.
 
@@ -439,6 +442,7 @@ Main.py                     ← Qt 앱 진입점
 │   ├── llm_router.py          ← 작업 유형별 최적 모델 자동 라우팅
 │   ├── agent_orchestrator.py  ← Plan→Execute+Self-Fix→Verify + _post_run_update
 │   ├── agent_planner.py       ← 목표 분해 · 템플릿 · DAG · FewShot/Feedback 주입
+│   ├── planner_json_utils.py  ← 플래너 JSON 복구 · 균형 괄호 추출 유틸리티
 │   ├── few_shot_injector.py   ← 성공 사례 → 플래너 프롬프트 자동 삽입
 │   ├── planner_feedback.py    ← step_type 성공률 통계 → 플래너 힌트
 │   ├── skill_library.py       ← 성공 패턴 자동 추출·스킬 재사용·자동 비활성화·자기수정 트리거
@@ -452,7 +456,8 @@ Main.py                     ← Qt 앱 진입점
 │   ├── real_verifier.py       ← 휴리스틱→OCR→코드→LLM 4단계 검증
 │   ├── embedder.py            ← sentence-transformers / API / 해시 임베딩
 │   ├── safety_checker.py      ← 코드/명령 위험 수준 분류
-│   └── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 헬퍼
+│   ├── automation_helpers.py  ← GUI / 브라우저 / 앱 자동화 헬퍼
+│   └── automation_plan_utils.py ← adaptive/resilient 자동화 계획 공통 유틸리티
 │
 ├── memory/                 ← 사용자 기억·학습 시스템
 │   ├── conversation_history.py ← 슬라이딩 요약 (MAX_ACTIVE=20, 압축 5개 단위)

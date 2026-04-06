@@ -11,6 +11,12 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-06 최신):
+  agent/planner_json_utils.py   — 잘린 JSON 응답 복구/파싱 책임 분리
+  agent/automation_plan_utils.py — 브라우저/데스크톱 액션 계획 조립·정렬 유틸리티 분리
+  agent/agent_planner.py        — JSON 복구 헬퍼 위임으로 플래너 본체 응집도 개선
+  agent/automation_helpers.py   — resilient/adaptive 계획 조립 중복 제거
+
 포함 모듈 (2026-04-04 최신):
   agent/execution_engine.py   — AgentOrchestrator에서 분리된 단계 실행 엔진 (ExecutionEngine)
   agent/verification_engine.py — 검증 전담 모듈 (VerificationEngine)
@@ -206,6 +212,7 @@ nuitka_args = [
     "--include-module=agent.agent_orchestrator",
     "--include-module=agent.agent_planner",
     "--include-module=agent.autonomous_executor",
+    "--include-module=agent.automation_plan_utils",
     "--include-module=agent.execution_analysis",
     "--include-module=agent.file_tools",
     "--include-module=agent.goal_predictor",
@@ -219,6 +226,7 @@ nuitka_args = [
     "--include-module=agent.strategy_memory",
     "--include-module=agent.episode_memory",
     "--include-module=agent.automation_helpers",
+    "--include-module=agent.planner_json_utils",
     "--include-module=agent.few_shot_injector",
     "--include-module=agent.skill_library",
     "--include-module=agent.skill_optimizer",

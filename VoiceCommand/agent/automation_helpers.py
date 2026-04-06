@@ -8,9 +8,31 @@ import time
 import webbrowser
 import logging
 import json
-import re
 import shutil
 from typing import Optional, List, Any
+
+from agent.automation_plan_utils import (
+    action_plan_cache_key,
+    augment_browser_plan_with_state,
+    augment_desktop_plan_with_state,
+    build_ranked_plans,
+    describe_action_plan,
+    describe_browser_plan_reason,
+    describe_desktop_plan_reason,
+    find_similar_goal_key,
+    fingerprint_action,
+    has_action_type,
+    merge_action_sequences,
+    normalize_goal_hint,
+    normalize_similarity_token,
+    plan_sort_key,
+    score_browser_plan,
+    score_desktop_plan,
+    should_remember_desktop_workflow,
+    tokenize_goal_hint,
+    token_overlap_score,
+    workflow_succeeded,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -593,35 +615,28 @@ class AutomationHelpers:
             ("learned_only", list(learned_actions), bool(learned_actions)),
             ("fallback_only", fallback_list, False),
         ]
-        plans: List[dict] = []
-        for plan_type, raw_actions, reused in plan_specs:
-            if not raw_actions:
-                continue
-            actions = self._augment_browser_plan_with_state(
-                list(raw_actions),
+        return build_ranked_plans(
+            plan_specs,
+            goal_hint=goal_hint,
+            summary_kind="browser",
+            base_fields={"domain": domain},
+            augment_actions=lambda actions: self._augment_browser_plan_with_state(
+                actions,
                 browser_state=browser_state,
                 domain=domain,
-            )
-            if not actions:
-                continue
-            if any(existing["actions"] == actions for existing in plans):
-                continue
-            plan = {
-                "plan_type": plan_type,
-                "goal_hint": goal_hint,
-                "domain": domain,
-                "actions": actions,
-                "summary": self._describe_action_plan(
-                    f"browser:{plan_type}",
-                    goal_hint,
-                    actions,
-                    reused,
-                ),
-            }
-            plan["score"] = self._score_browser_plan(plan, browser_state=browser_state, requested_url=normalized_url)
-            plan["selection_reason"] = self._describe_browser_plan_reason(plan, browser_state=browser_state, requested_url=normalized_url)
-            plans.append(plan)
-        return sorted(plans, key=self._plan_sort_key, reverse=True)
+            ),
+            dedupe_key=lambda actions: action_plan_cache_key(actions, domain),
+            score_plan=lambda plan: self._score_browser_plan(
+                plan,
+                browser_state=browser_state,
+                requested_url=normalized_url,
+            ),
+            describe_reason=lambda plan: self._describe_browser_plan_reason(
+                plan,
+                browser_state=browser_state,
+                requested_url=normalized_url,
+            ),
+        )
 
     def run_browser_actions(self, url: str, actions: list, headless: bool = False, goal_hint: str = "") -> dict:
         """공유 스마트 브라우저로 상태 인식 기반 액션 시퀀스를 수행합니다."""
@@ -755,34 +770,19 @@ class AutomationHelpers:
             ("learned_only", learned_actions, bool(learned_actions)),
             ("fallback_only", fallback_list, False),
         ]
-        plans: List[dict] = []
-        for plan_type, raw_actions, reused in plan_specs:
-            if not raw_actions:
-                continue
-            actions = self._augment_desktop_plan_with_state(
-                list(raw_actions),
+        return build_ranked_plans(
+            plan_specs,
+            goal_hint=goal_hint,
+            summary_kind="desktop",
+            base_fields={"expected_window": resolved_window},
+            augment_actions=lambda actions: self._augment_desktop_plan_with_state(
+                actions,
                 expected_window=resolved_window,
-            )
-            if not actions:
-                continue
-            if any(existing["actions"] == actions and existing["expected_window"] == resolved_window for existing in plans):
-                continue
-            plan = {
-                "plan_type": plan_type,
-                "goal_hint": goal_hint,
-                "expected_window": resolved_window,
-                "actions": actions,
-                "summary": self._describe_action_plan(
-                    f"desktop:{plan_type}",
-                    goal_hint,
-                    actions,
-                    reused,
-                ),
-            }
-            plan["score"] = self._score_desktop_plan(plan)
-            plan["selection_reason"] = self._describe_desktop_plan_reason(plan)
-            plans.append(plan)
-        return sorted(plans, key=self._plan_sort_key, reverse=True)
+            ),
+            dedupe_key=lambda actions: action_plan_cache_key(actions, resolved_window),
+            score_plan=self._score_desktop_plan,
+            describe_reason=self._describe_desktop_plan_reason,
+        )
 
     def run_desktop_workflow(
         self,
@@ -1011,99 +1011,22 @@ class AutomationHelpers:
         return f"건너뜀: {act_type or 'unknown'}"
 
     def _plan_sort_key(self, plan: dict) -> tuple:
-        priority = {
-            "adaptive": 3,
-            "learned_only": 2,
-            "fallback_only": 1,
-        }
-        return (
-            float(plan.get("score", 0.0)),
-            priority.get(str(plan.get("plan_type", "")), 0),
-        )
+        return plan_sort_key(plan)
 
     def _score_browser_plan(self, plan: dict, browser_state: dict, requested_url: str = "") -> float:
-        score = 0.0
-        plan_type = str(plan.get("plan_type", "") or "")
-        if plan_type == "adaptive":
-            score += 3.0
-        elif plan_type == "learned_only":
-            score += 2.0
-        elif plan_type == "fallback_only":
-            score += 1.0
-        actions = list(plan.get("actions", []))
-        score += min(len(actions), 6) * 0.1
-        current_url = str((browser_state or {}).get("current_url", "") or "").lower()
-        requested = str(requested_url or "").lower()
-        if current_url and requested:
-            current_domain = current_url.split("//", 1)[-1].split("/", 1)[0]
-            requested_domain = requested.split("//", 1)[-1].split("/", 1)[0]
-            if current_domain == requested_domain:
-                score += 1.0
-            if requested in current_url:
-                score += 0.5
-        if any((action.get("type") or "") == "wait_url" for action in actions):
-            score += 0.2
-        if any((action.get("type") or "") == "download_wait" for action in actions):
-            score += 0.2
-        return round(score, 3)
+        return score_browser_plan(plan, browser_state, requested_url=requested_url)
 
     def _describe_browser_plan_reason(self, plan: dict, browser_state: dict, requested_url: str = "") -> str:
-        reasons: List[str] = []
-        plan_type = str(plan.get("plan_type", "") or "")
-        if plan_type == "adaptive":
-            reasons.append("학습 전략과 fallback을 함께 사용")
-        elif plan_type == "learned_only":
-            reasons.append("과거 성공 전략 우선")
-        elif plan_type == "fallback_only":
-            reasons.append("기본 fallback 전략")
-        current_url = str((browser_state or {}).get("current_url", "") or "")
-        if current_url and requested_url:
-            current_domain = current_url.lower().split("//", 1)[-1].split("/", 1)[0]
-            requested_domain = requested_url.lower().split("//", 1)[-1].split("/", 1)[0]
-            if current_domain == requested_domain:
-                reasons.append("현재 브라우저 도메인 일치")
-        return " | ".join(reasons[:3])
+        return describe_browser_plan_reason(plan, browser_state, requested_url=requested_url)
 
     def _score_desktop_plan(self, plan: dict) -> float:
-        score = 0.0
-        plan_type = str(plan.get("plan_type", "") or "")
-        if plan_type == "adaptive":
-            score += 3.0
-        elif plan_type == "learned_only":
-            score += 2.0
-        elif plan_type == "fallback_only":
-            score += 1.0
-        actions = list(plan.get("actions", []))
-        score += min(len(actions), 6) * 0.1
-        expected_window = str(plan.get("expected_window", "") or "")
-        if expected_window:
-            score += 0.6
-        if any((action.get("type") or "") == "focus" for action in actions):
-            score += 0.2
-        if any((action.get("type") or "") == "wait_window" for action in actions):
-            score += 0.2
-        return round(score, 3)
+        return score_desktop_plan(plan)
 
     def _describe_desktop_plan_reason(self, plan: dict) -> str:
-        reasons: List[str] = []
-        plan_type = str(plan.get("plan_type", "") or "")
-        if plan_type == "adaptive":
-            reasons.append("학습된 창 타깃과 fallback 결합")
-        elif plan_type == "learned_only":
-            reasons.append("과거 성공 데스크톱 워크플로우 우선")
-        elif plan_type == "fallback_only":
-            reasons.append("기본 fallback 워크플로우")
-        if plan.get("expected_window"):
-            reasons.append("대상 창 대기/포커스 가능")
-        return " | ".join(reasons[:3])
+        return describe_desktop_plan_reason(plan)
 
     def _workflow_succeeded(self, summary: str) -> bool:
-        normalized = (summary or "").strip().lower()
-        if not normalized:
-            return False
-        if "실패:" in normalized or "오류:" in normalized or "error" in normalized:
-            return False
-        return "성공:" in normalized or "downloaded:" in normalized or "download complete:" in normalized
+        return workflow_succeeded(summary)
 
     def resolve_window_target(self, goal_hint: str, fallback: str = "") -> str:
         key = self._normalize_goal_hint(goal_hint)
@@ -1238,55 +1161,22 @@ class AutomationHelpers:
             logger.warning(f"desktop workflow history save failed: {e}")
 
     def _normalize_goal_hint(self, goal_hint: str) -> str:
-        normalized = re.sub(r"\s+", " ", (goal_hint or "").strip().lower())
-        return re.sub(r"[^a-z0-9가-힣 _-]", "", normalized)[:80]
+        return normalize_goal_hint(goal_hint)
 
     def _tokenize_goal_hint(self, goal_hint: str) -> set[str]:
-        tokens = set()
-        for token in re.findall(r"[a-z0-9가-힣]+", (goal_hint or "").lower()):
-            normalized = self._normalize_similarity_token(token)
-            if len(normalized) >= 2:
-                tokens.add(normalized)
-        return tokens
+        return tokenize_goal_hint(goal_hint)
 
     def _normalize_similarity_token(self, token: str) -> str:
-        normalized = token.strip().lower()
-        for suffix in ("에서", "에게", "으로", "로", "까지", "부터", "하고", "후", "전", "에", "을", "를", "은", "는", "이", "가", "와", "과", "도", "만"):
-            if normalized.endswith(suffix) and len(normalized) > len(suffix) + 1:
-                return normalized[: -len(suffix)]
-        return normalized
+        return normalize_similarity_token(token)
 
     def _token_overlap_score(self, left: set[str], right: set[str]) -> float:
-        if not left or not right:
-            return 0.0
-        overlap = 0
-        for token in left:
-            if any(token == candidate or token in candidate or candidate in token for candidate in right):
-                overlap += 1
-        return overlap / max(len(left), len(right))
+        return token_overlap_score(left, right)
 
     def _find_similar_goal_key(self, key: str, mapping: dict) -> str:
-        if not key or not mapping:
-            return ""
-        target_tokens = self._tokenize_goal_hint(key)
-        best_key = ""
-        best_score = 0.0
-        for candidate in mapping:
-            candidate_tokens = self._tokenize_goal_hint(candidate)
-            if not target_tokens or not candidate_tokens:
-                continue
-            score = self._token_overlap_score(target_tokens, candidate_tokens)
-            if score > best_score:
-                best_score = score
-                best_key = candidate
-        return best_key if best_score >= 0.34 else ""
+        return find_similar_goal_key(key, mapping)
 
     def _should_remember_desktop_workflow(self, action_results: List[str]) -> bool:
-        return (
-            bool(action_results)
-            and any(item.startswith("성공:") for item in action_results)
-            and not any(item.startswith(("실패:", "오류:")) for item in action_results)
-        )
+        return should_remember_desktop_workflow(action_results)
 
     def _wait_for_image_visible(self, image_path: str, timeout: float = 10.0, confidence: float = 0.8) -> bool:
         if not image_path:
@@ -1299,62 +1189,19 @@ class AutomationHelpers:
         return False
 
     def _merge_action_sequences(self, learned_actions: List[dict], fallback_actions: List[dict]) -> List[dict]:
-        merged: List[dict] = []
-        seen: set[str] = set()
-        for action in [*(learned_actions or []), *(fallback_actions or [])]:
-            if not isinstance(action, dict):
-                continue
-            fingerprint = self._fingerprint_action(action)
-            if fingerprint in seen:
-                continue
-            seen.add(fingerprint)
-            merged.append({str(k): v for k, v in action.items()})
-        return merged
+        return merge_action_sequences(learned_actions, fallback_actions)
 
     def _fingerprint_action(self, action: dict) -> str:
-        act_type = str(action.get("type", "")).strip().lower()
-        target = (
-            str(action.get("window", ""))
-            or str(action.get("url", ""))
-            or str(action.get("path", ""))
-            or str(action.get("image_path", ""))
-            or str(action.get("text", ""))[:40]
-            or ",".join(map(str, action.get("keys", [])))
-        )
-        return f"{act_type}|{target.strip().lower()}"
+        return fingerprint_action(action)
 
     def _describe_action_plan(self, kind: str, goal_hint: str, actions: List[dict], reused: bool) -> str:
-        action_types = [str(action.get("type", "")).strip() for action in actions if isinstance(action, dict)]
-        action_text = ", ".join(action_types[:5])
-        reused_text = "reused" if reused else "fallback"
-        return f"{kind}:{reused_text}:{goal_hint} [{action_text}]"
+        return describe_action_plan(kind, goal_hint, actions, reused)
 
     def _augment_browser_plan_with_state(self, actions: List[dict], browser_state: dict, domain: str) -> List[dict]:
-        augmented = list(actions or [])
-        current_url = str((browser_state or {}).get("current_url", "") or "")
-        current_title = str((browser_state or {}).get("title", "") or "")
-        last_summary = str((browser_state or {}).get("last_action_summary", "") or "")
-
-        if domain and not self._has_action_type(augmented, "wait_url"):
-            augmented.insert(0, {"type": "wait_url", "contains": domain, "timeout": 10.0})
-        if current_title and not self._has_action_type(augmented, "read_title"):
-            augmented.append({"type": "read_title"})
-        if current_url and not self._has_action_type(augmented, "read_url"):
-            augmented.append({"type": "read_url"})
-        if last_summary and "성공:" in last_summary and not self._has_action_type(augmented, "read_links"):
-            augmented.append({"type": "read_links", "selector": "a", "limit": 5})
-        return self._merge_action_sequences([], augmented)
+        return augment_browser_plan_with_state(actions, browser_state, domain)
 
     def _augment_desktop_plan_with_state(self, actions: List[dict], expected_window: str) -> List[dict]:
-        augmented = list(actions or [])
-        if expected_window and not self._has_action_type(augmented, "wait_window"):
-            augmented.insert(0, {"type": "wait_window", "window": expected_window, "timeout": 10.0})
-        if expected_window and not self._has_action_type(augmented, "focus"):
-            augmented.insert(1 if augmented else 0, {"type": "focus", "window": expected_window})
-        if not self._has_action_type(augmented, "wait"):
-            augmented.append({"type": "wait", "seconds": 0.5})
-        return self._merge_action_sequences([], augmented)
+        return augment_desktop_plan_with_state(actions, expected_window)
 
     def _has_action_type(self, actions: List[dict], action_type: str) -> bool:
-        target = (action_type or "").strip().lower()
-        return any(str(action.get("type", "")).strip().lower() == target for action in actions if isinstance(action, dict))
+        return has_action_type(actions, action_type)
