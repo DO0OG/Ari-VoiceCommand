@@ -5,6 +5,7 @@ import base64
 import io
 import logging
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -17,6 +18,9 @@ class STTProvider:
 
     def transcribe(self, audio_data) -> Optional[str]:
         raise NotImplementedError
+
+    def is_healthy(self) -> bool:
+        return True
 
 
 class GoogleSTTProvider(STTProvider):
@@ -49,56 +53,138 @@ class WhisperSTTProvider(STTProvider):
     """
 
     _WORKER = os.path.join(os.path.dirname(__file__), "_whisper_worker.py")
+    _STARTUP_TIMEOUT_SECONDS = 30.0
+    _TRANSCRIBE_TIMEOUT_SECONDS = 20.0
 
     def __init__(self, model_size: str = "small", device: str = "auto", compute_type: str = "int8"):
-        actual_device = _resolve_device(device)
-        logging.info(f"[WhisperSTT] 워커 시작: {model_size} / {actual_device} / {compute_type}")
+        self._model_size = model_size
+        self._device = device
+        self._compute_type = compute_type
+        self._lock = threading.Lock()
+        self._proc: Optional[subprocess.Popen] = None
+        self._start_worker()
 
+    def transcribe(self, audio_data) -> Optional[str]:
+        try:
+            wav_bytes = audio_data.get_wav_data()
+            b64 = base64.b64encode(wav_bytes).decode("ascii")
+        except Exception as exc:
+            logging.error("[WhisperSTT] 오디오 직렬화 실패: %s", exc)
+            return None
+
+        with self._lock:
+            if not self._ensure_worker_locked():
+                return None
+            try:
+                assert self._proc is not None and self._proc.stdin is not None and self._proc.stdout is not None
+                self._proc.stdin.write((b64 + "\n").encode("ascii"))
+                self._proc.stdin.flush()
+                line = self._read_process_line(self._proc.stdout, self._TRANSCRIBE_TIMEOUT_SECONDS)
+                if line is None:
+                    logging.error("[WhisperSTT] 전사 응답 timeout — 워커를 재시작합니다.")
+                    self._restart_worker_locked("transcribe timeout")
+                    return None
+                line = line.strip()
+                if not line or line == "__NONE__":
+                    return None
+                return line
+            except Exception as exc:
+                logging.error("[WhisperSTT] 전사 실패: %s", exc)
+                self._restart_worker_locked("transcribe failure")
+                return None
+
+    def is_healthy(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    def __del__(self):
+        try:
+            with self._lock:
+                self._terminate_worker_locked()
+        except Exception as exc:
+            logging.debug("[WhisperSTT] 워커 종료 중 오류 (무시): %s", exc)
+
+    def _start_worker(self) -> None:
+        actual_device = _resolve_device(self._device)
+        logging.info("[WhisperSTT] 워커 시작: %s / %s / %s", self._model_size, actual_device, self._compute_type)
         env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
-        # _WORKER는 패키지 내부 고정 경로이며 사용자 입력을 받지 않는다.
         self._proc = subprocess.Popen(  # nosemgrep
-            [sys.executable, self._WORKER, model_size, actual_device, compute_type],  # nosemgrep
+            [sys.executable, self._WORKER, self._model_size, actual_device, self._compute_type],  # nosemgrep
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
         )
-
-        # 워커가 모델 로드를 완료하고 "READY"를 보낼 때까지 대기
-        ready_line = self._proc.stdout.readline().decode("utf-8", errors="replace").strip()
+        ready_line = self._read_process_line(self._proc.stdout, self._STARTUP_TIMEOUT_SECONDS) if self._proc.stdout else None
         if ready_line != "READY":
-            stderr_out = self._proc.stderr.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"[WhisperSTT] 워커 초기화 실패:\n{stderr_out}")
-
-        self._lock = threading.Lock()
+            stderr_out = self._read_stderr_snapshot()
+            self._terminate_worker_locked()
+            reason = stderr_out or "READY 신호를 받지 못했습니다."
+            raise RuntimeError(f"[WhisperSTT] 워커 초기화 실패:\n{reason}")
         logging.info("[WhisperSTT] 워커 준비 완료")
 
-    def transcribe(self, audio_data) -> Optional[str]:
-        if self._proc.poll() is not None:
-            logging.error("[WhisperSTT] 워커 프로세스가 종료됨")
-            return None
-        try:
-            wav_bytes = audio_data.get_wav_data()
-            b64 = base64.b64encode(wav_bytes).decode("ascii")
-            with self._lock:
-                self._proc.stdin.write((b64 + "\n").encode())
-                self._proc.stdin.flush()
-                line = self._proc.stdout.readline().decode("utf-8", errors="replace").strip()
-            if not line or line == "__NONE__":
-                return None
-            return line
-        except Exception as exc:
-            logging.error(f"[WhisperSTT] 전사 실패: {exc}")
-            return None
+    def _ensure_worker_locked(self) -> bool:
+        if self.is_healthy():
+            return True
+        logging.warning("[WhisperSTT] 비정상 워커 감지 — 재시작합니다.")
+        return self._restart_worker_locked("worker unhealthy")
 
-    def __del__(self):
+    def _restart_worker_locked(self, reason: str) -> bool:
+        logging.warning("[WhisperSTT] 워커 재시작: %s", reason)
+        self._terminate_worker_locked()
         try:
-            if self._proc and self._proc.poll() is None:
-                self._proc.stdin.write(b"QUIT\n")
-                self._proc.stdin.flush()
-                self._proc.wait(timeout=3)
+            self._start_worker()
+            return True
         except Exception as exc:
-            logging.debug("[WhisperSTT] 워커 종료 중 오류 (무시): %s", exc)
+            logging.error("[WhisperSTT] 워커 재시작 실패: %s", exc)
+            return False
+
+    def _terminate_worker_locked(self) -> None:
+        proc = self._proc
+        self._proc = None
+        if proc is None:
+            return
+        try:
+            if proc.poll() is None and proc.stdin is not None:
+                proc.stdin.write(b"QUIT\n")
+                proc.stdin.flush()
+                proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.terminate()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+    def _read_stderr_snapshot(self) -> str:
+        try:
+            if self._proc is None or self._proc.stderr is None:
+                return ""
+            return self._proc.stderr.read().decode("utf-8", errors="replace").strip()
+        except Exception:
+            return ""
+
+    def _read_process_line(self, stream, timeout_seconds: float) -> Optional[str]:
+        if stream is None:
+            return None
+        result_queue: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=1)
+
+        def _reader() -> None:
+            try:
+                result_queue.put(stream.readline())
+            except Exception:
+                result_queue.put(None)
+
+        threading.Thread(target=_reader, daemon=True).start()
+        try:
+            raw = result_queue.get(timeout=max(float(timeout_seconds or 0.0), 0.1))
+        except queue.Empty:
+            return None
+        if raw is None:
+            return None
+        return raw.decode("utf-8", errors="replace").strip()
 
 
 def _resolve_device(device: str) -> str:

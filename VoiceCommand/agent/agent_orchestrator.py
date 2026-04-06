@@ -431,6 +431,7 @@ class AgentOrchestrator:
 # ── 싱글턴 팩토리 ──────────────────────────────────────────────────────────────
 
 _orchestrator: Optional[AgentOrchestrator] = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_orchestrator(
@@ -439,9 +440,11 @@ def get_orchestrator(
 ) -> AgentOrchestrator:
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = AgentOrchestrator(
-            get_executor(tts_func), get_planner(), tts_func, progress_callback
-        )
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = AgentOrchestrator(
+                    get_executor(tts_func), get_planner(), tts_func, progress_callback
+                )
     else:
         if tts_func:
             _orchestrator.tts = tts_func

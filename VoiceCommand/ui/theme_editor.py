@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """
 테마 팔레트 편집 위젯.
 """
+
+from __future__ import annotations
 
 import json
 from datetime import datetime

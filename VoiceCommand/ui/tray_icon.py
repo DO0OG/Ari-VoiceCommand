@@ -1,3 +1,5 @@
+"""시스템 트레이 메뉴와 설정 대화상자 진입점을 제공하는 UI 래퍼."""
+
 import logging
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog

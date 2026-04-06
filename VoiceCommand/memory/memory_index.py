@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List
@@ -93,10 +94,13 @@ class MemoryIndex:
 
 
 _index: MemoryIndex | None = None
+_index_lock = threading.Lock()
 
 
 def get_memory_index() -> MemoryIndex:
     global _index
     if _index is None:
-        _index = MemoryIndex()
+        with _index_lock:
+            if _index is None:
+                _index = MemoryIndex()
     return _index

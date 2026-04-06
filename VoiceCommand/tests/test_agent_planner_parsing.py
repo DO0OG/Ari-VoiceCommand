@@ -1,5 +1,6 @@
 import os
 import sys
+import types
 import unittest
 from unittest.mock import patch
 
@@ -66,6 +67,48 @@ class _RoleFallbackProvider:
 
 
 class AgentPlannerParsingTests(unittest.TestCase):
+    def test_strategy_memory_helpers_return_context_and_failure_hints(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        fake_module = types.ModuleType("agent.strategy_memory")
+
+        class _FakeStrategyMemory:
+            def get_relevant_context(self, goal):
+                return f"context:{goal}"
+
+            def recent_failures(self, goal):
+                return [f"{goal}-실패1", f"{goal}-실패2"]
+
+        fake_module.get_strategy_memory = lambda: _FakeStrategyMemory()
+
+        with patch.dict(sys.modules, {"agent.strategy_memory": fake_module}):
+            self.assertEqual(planner._get_strategy_context("목표"), "context:목표")
+            self.assertEqual(planner._get_failure_hints("목표"), "- 목표-실패1\n- 목표-실패2")
+
+    def test_memory_helpers_fail_closed_when_optional_modules_raise(self):
+        planner = AgentPlanner(DummyLLMProvider())
+        strategy_module = types.ModuleType("agent.strategy_memory")
+        episode_module = types.ModuleType("agent.episode_memory")
+
+        def _raise_strategy():
+            raise RuntimeError("strategy unavailable")
+
+        def _raise_episode():
+            raise RuntimeError("episode unavailable")
+
+        strategy_module.get_strategy_memory = _raise_strategy
+        episode_module.get_episode_memory = _raise_episode
+
+        with patch.dict(
+            sys.modules,
+            {
+                "agent.strategy_memory": strategy_module,
+                "agent.episode_memory": episode_module,
+            },
+        ):
+            self.assertEqual(planner._get_strategy_context("목표"), "")
+            self.assertEqual(planner._get_failure_hints("목표"), "")
+            self.assertEqual(planner._get_episode_failure_patterns("목표"), "")
+
     def test_parse_array_recovers_first_complete_item_from_truncated_response(self):
         planner = AgentPlanner(DummyLLMProvider())
         raw = """```json

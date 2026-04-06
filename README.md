@@ -154,11 +154,12 @@
 - `agent/automation_plan_utils.py`를 추가해 브라우저/데스크톱 adaptive·resilient 계획 조립, dedupe, 정렬 로직을 공통 유틸리티로 정리했습니다.
 - `agent/assistant_text_utils.py`를 추가해 `LLMProvider`와 `AICommand`가 공유하던 목표 해석·도구 응답 정리 로직을 공통화했습니다.
 - `agent_planner.py`와 `automation_helpers.py`는 기존 공개 동작을 유지하면서 핵심 본체가 더 짧고 검토하기 쉬운 구조로 정리되었습니다.
+- `agent_planner.py`의 전략/에피소드 메모리 접근 경로는 공통 helper로 정리되어, 반복되던 중첩 `try/except` 없이 fail-closed 동작을 유지합니다.
 - `ExecutionEngine`의 조건식 평가는 `agent/condition_evaluator.py`로 분리되어, 안전한 AST 평가 책임과 실행 엔진 본체가 분리되었습니다.
 - `condition_evaluator.py`는 `len`, `str`, `int`, `float`, `bool`, `dict.get()`만 허용하며, 평가 실패는 계속 fail-closed(`False`)로 처리됩니다.
 - `LLMProvider`의 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어, 플러그인 도구 등록과 기본 도구 스키마 관리 경계가 더 명확해졌습니다.
 - 프런트엔드 개발 산출물(`market/web/node_modules`, `.next`, `tsconfig.tsbuildinfo`, `.vercel`)은 Git 추적 대상에서 제외되며, 실제 소스 파일만 반영되도록 ignore 규칙을 보강했습니다.
-- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **290 tests + smoke** 입니다.
+- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **301 tests + smoke** 입니다.
 
 ### 최근 자율 저장소 작업 안정화 메모 (2026-04-05)
 
@@ -166,7 +167,7 @@
 - 저장소 작업 보고서는 실행 사용자 기준 Desktop `Ari Reports`에 저장하고, CI 전용/특정 사용자 절대 경로에 의존하지 않도록 정리했습니다.
 - 개발 플래너/오케스트레이터는 `VoiceCommand/{agent,core,ui,plugins,tests}` + `docs` 범위 밖 경로 선택, `py_compile`만으로 끝내는 약한 검증, `tests/` 루트 경로, 가짜 성공/OCR 기반 성공 판정을 거부하도록 강화했습니다.
 - `validate_repo.py --compile-only`는 `__pycache__` 대신 임시 위치로 컴파일해 로컬 환경 락/권한 문제에도 더 안정적으로 동작합니다.
-- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 290개 기준으로 유지 중입니다.
+- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 301개 기준으로 유지 중입니다.
 - **영향 테스트 자동 선별**: `_infer_relevant_tests`가 goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=` 항목으로 LLM에게 우선 제시. 테스트 목록도 첫 5개 샘플 대신 전체 목록(`all=`) 표시로 전환.
 - **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. 루트 런타임 파일은 정리하고, 개발용 상태는 `.ari_runtime/` 아래로만 유지합니다.
 
@@ -184,6 +185,20 @@
 - **채팅 말풍선 폭 제한**: `ui/text_interface.py`의 채팅 말풍선 최대 폭을 뷰포트 기준으로 다시 계산해 긴 메시지도 패널 바깥으로 밀려나지 않도록 조정.
 - **예약 작업 UI 줄바꿈 보강**: `ui/scheduler_panel.py`, `ui/scheduled_tasks_dialog.py`에서 긴 작업명/설명/일정 텍스트가 줄바꿈되고 가로 스크롤 없이 읽히도록 정리.
 - **회귀 테스트 추가**: `test_text_interface.py`, `test_validate_repo.py`를 보강해 채팅 말풍선 폭 제한, 예약 작업 라벨 줄바꿈, 검증 대상 포함 여부를 고정.
+
+### 최근 업데이트 (2026-04-06) — agent_planner 예외 처리 중복 1차 정리
+
+- **중복 helper 정리**: `agent_planner.py`의 전략/에피소드 메모리 접근 경로를 `_with_strategy_memory`, `_with_episode_memory` helper로 통합해 중첩 `try/except`를 제거했습니다.
+- **fail-closed 동작 유지**: 선택적 메모리 모듈이 없거나 accessor가 예외를 내도 기존처럼 빈 문자열을 반환하도록 동작을 고정했습니다.
+- **회귀 테스트 보강**: `test_agent_planner_parsing.py`에 전략 문맥/실패 힌트 포맷과 optional module 예외 시 fail-closed 동작을 추가로 검증했습니다.
+
+### 최근 업데이트 (2026-04-06) — 런타임 안정성·검증 범위·타입/문서 품질 정리
+
+- **싱글톤 스레드 안전성 보강**: `agent_orchestrator`, `autonomous_executor`, `plugin_loader`, `strategy_memory`, `skill_library`, `web_tools` 등 주요 팩토리 getter에 생성 락을 추가해 동시 초기화 경쟁을 줄였습니다.
+- **STT 복구성 강화**: `core/stt_provider.py`의 Whisper 워커는 startup/transcribe timeout을 감지하고 자동 재시작하며, `simple_wake.py`와 `threads.py`는 비정상 STT 인스턴스를 감지하면 provider를 새로 만듭니다.
+- **예외 처리 보강**: `automation_helpers.py`, `autonomous_executor.py`에서 브라우저/데스크톱 워크플로우 준비 단계와 실행 상태 스냅샷, 문서 저장/백업 실패를 fail-closed 결과로 돌려주도록 정리했습니다.
+- **검증 범위 확대**: `validate_repo.py`는 최근 분리된 planner/automation/STT/resource 관련 모듈과 추가 서비스·TTS 모듈까지 compile 대상에 포함합니다.
+- **회귀 테스트 추가**: `test_singleton_factories.py`, `test_stt_provider.py`, `test_automation_helpers.py`, `test_autonomous_executor.py`, `test_validate_repo.py`를 보강해 현재 기준 전체 테스트 수는 **301개**입니다.
 
 ### 최근 업데이트 (2026-04-05) — 런타임 설정/마켓플레이스 안정성 보강
 

@@ -1,3 +1,5 @@
+"""전역 오디오 입력/출력 리소스를 공유하는 락 및 PyAudio 싱글톤."""
+
 import logging
 import threading
 

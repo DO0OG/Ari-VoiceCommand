@@ -1,6 +1,8 @@
 """성공 전략 few-shot 주입."""
 from __future__ import annotations
 
+import threading
+
 
 class FewShotInjector:
     MAX_EXAMPLES = 3
@@ -29,10 +31,13 @@ class FewShotInjector:
 
 
 _injector: FewShotInjector | None = None
+_injector_lock = threading.Lock()
 
 
 def get_few_shot_injector() -> FewShotInjector:
     global _injector
     if _injector is None:
-        _injector = FewShotInjector()
+        with _injector_lock:
+            if _injector is None:
+                _injector = FewShotInjector()
     return _injector

@@ -270,10 +270,13 @@ class SkillOptimizer:
 
 
 _optimizer: SkillOptimizer | None = None
+_optimizer_lock = threading.Lock()
 
 
 def get_skill_optimizer() -> SkillOptimizer:
     global _optimizer
     if _optimizer is None:
-        _optimizer = SkillOptimizer()
+        with _optimizer_lock:
+            if _optimizer is None:
+                _optimizer = SkillOptimizer()
     return _optimizer

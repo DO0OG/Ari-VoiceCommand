@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -2141,39 +2142,42 @@ class AgentPlanner:
 
     # ── 내부 ──────────────────────────────────────────────────────────────────
 
-    def _get_strategy_context(self, goal: str) -> str:
-        """전략 기억에서 유사 과거 경험 조회 (실패 무시)"""
+    def _with_strategy_memory(self, callback, default):
         try:
             from agent.strategy_memory import get_strategy_memory
-            return get_strategy_memory().get_relevant_context(goal)
+            return callback(get_strategy_memory())
         except Exception:
-            try:
-                from agent.strategy_memory import get_strategy_memory
-                return get_strategy_memory().get_relevant_context(goal)
-            except Exception:
-                return ""
+            return default
+
+    def _with_episode_memory(self, callback, default):
+        try:
+            from agent.episode_memory import get_episode_memory
+            return callback(get_episode_memory())
+        except Exception:
+            return default
+
+    def _get_strategy_context(self, goal: str) -> str:
+        """전략 기억에서 유사 과거 경험 조회 (실패 무시)"""
+        return self._with_strategy_memory(
+            lambda memory: memory.get_relevant_context(goal),
+            "",
+        )
 
     def _get_failure_hints(self, goal: str) -> str:
         """최근 실패 패턴 요약 문자열 반환"""
-        try:
-            from agent.strategy_memory import get_strategy_memory
-            failures = get_strategy_memory().recent_failures(goal)
-            return "\n".join(f"- {f}" for f in failures) if failures else ""
-        except Exception:
-            try:
-                from agent.strategy_memory import get_strategy_memory
-                failures = get_strategy_memory().recent_failures(goal)
-                return "\n".join(f"- {f}" for f in failures) if failures else ""
-            except Exception:
-                return ""
+        return self._with_strategy_memory(
+            lambda memory: self._format_failure_items(memory.recent_failures(goal)),
+            "",
+        )
 
     def _get_episode_failure_patterns(self, goal: str) -> str:
-        try:
-            from agent.episode_memory import get_episode_memory
-            failures = get_episode_memory().get_failure_patterns(goal, limit=3)
-            return "\n".join(f"- {item}" for item in failures) if failures else ""
-        except Exception:
-            return ""
+        return self._with_episode_memory(
+            lambda memory: self._format_failure_items(memory.get_failure_patterns(goal, limit=3)),
+            "",
+        )
+
+    def _format_failure_items(self, items) -> str:
+        return "\n".join(f"- {item}" for item in items) if items else ""
 
     def _call_llm(self, prompt: str, model: str = "", client_override=None, provider_override: str = "", role_hint: str = "planner") -> str:
         """대화 히스토리와 독립적으로 LLM 호출. model이 없으면 planner_model 사용."""
@@ -2562,14 +2566,14 @@ class AgentPlanner:
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 
 _planner: Optional[AgentPlanner] = None
+_planner_lock = threading.Lock()
 
 
 def get_planner() -> AgentPlanner:
     global _planner
     if _planner is None:
-        try:
-            from agent.llm_provider import get_llm_provider
-        except Exception:
-            from agent.llm_provider import get_llm_provider
-        _planner = AgentPlanner(get_llm_provider())
+        with _planner_lock:
+            if _planner is None:
+                from agent.llm_provider import get_llm_provider
+                _planner = AgentPlanner(get_llm_provider())
     return _planner

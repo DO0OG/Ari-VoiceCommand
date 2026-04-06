@@ -183,10 +183,13 @@ class ConfirmationManager:
 
 
 _manager_instance: Optional[ConfirmationManager] = None
+_manager_lock = threading.Lock()
 
 
 def get_confirmation_manager() -> ConfirmationManager:
     global _manager_instance
     if _manager_instance is None:
-        _manager_instance = ConfirmationManager()
+        with _manager_lock:
+            if _manager_instance is None:
+                _manager_instance = ConfirmationManager()
     return _manager_instance

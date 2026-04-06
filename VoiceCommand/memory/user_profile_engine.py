@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Dict, List
@@ -104,10 +105,13 @@ class UserProfileEngine:
 
 
 _engine: UserProfileEngine | None = None
+_engine_lock = threading.Lock()
 
 
 def get_user_profile_engine() -> UserProfileEngine:
     global _engine
     if _engine is None:
-        _engine = UserProfileEngine()
+        with _engine_lock:
+            if _engine is None:
+                _engine = UserProfileEngine()
     return _engine

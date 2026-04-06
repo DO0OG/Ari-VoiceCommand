@@ -148,10 +148,13 @@ class LearningMetrics:
 
 
 _metrics: LearningMetrics | None = None
+_metrics_lock = threading.Lock()
 
 
 def get_learning_metrics() -> LearningMetrics:
     global _metrics
     if _metrics is None:
-        _metrics = LearningMetrics()
+        with _metrics_lock:
+            if _metrics is None:
+                _metrics = LearningMetrics()
     return _metrics

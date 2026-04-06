@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 
 
 @dataclass
@@ -37,10 +38,13 @@ class LLMRouter:
 
 
 _router: LLMRouter | None = None
+_router_lock = threading.Lock()
 
 
 def get_llm_router() -> LLMRouter:
     global _router
     if _router is None:
-        _router = LLMRouter()
+        with _router_lock:
+            if _router is None:
+                _router = LLMRouter()
     return _router

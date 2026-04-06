@@ -9,7 +9,7 @@ import webbrowser
 import logging
 import json
 import shutil
-from typing import Optional, List, Any
+from typing import Optional, List
 
 from agent.automation_plan_utils import (
     action_plan_cache_key,
@@ -234,13 +234,13 @@ class AutomationHelpers:
                 break
         return titles
 
-    def find_window(self, title_substring: str) -> Optional[Any]:
+    def find_window(self, title_substring: str) -> Optional[object]:
         """제목에 특정 문자열이 포함된 창 객체를 찾습니다."""
         gw = self._get_pygetwindow()
         titles = gw.getWindowsWithTitle(title_substring)
         return titles[0] if titles else None
 
-    def find_windows(self, title_substring: str, limit: int = 5) -> List[Any]:
+    def find_windows(self, title_substring: str, limit: int = 5) -> List[object]:
         """제목에 특정 문자열이 포함된 창 목록을 반환합니다."""
         gw = self._get_pygetwindow()
         return list(gw.getWindowsWithTitle(title_substring))[:limit]
@@ -343,9 +343,10 @@ class AutomationHelpers:
         if headless:
             options.add_argument("--headless=new")
         options.add_argument("--disable-blink-features=AutomationControlled")
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        driver = None
         
         try:
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
             driver.get(url)
             wait = WebDriverWait(driver, 20)
             password_selector = password_selector or "input[type='password']"
@@ -364,9 +365,14 @@ class AutomationHelpers:
                 time.sleep(2)  # 로그인 처리 대기
 
             return driver.current_url
+        except Exception as exc:
+            raise RuntimeError(f"브라우저 로그인 자동화 실패: {exc}") from exc
         finally:
-            if headless:
-                driver.quit()
+            if headless and driver is not None:
+                try:
+                    driver.quit()
+                except Exception as exc:
+                    logger.debug("browser_login 정리 실패: %s", exc)
 
     def get_browser_state(self) -> dict:
         """공유 스마트 브라우저의 현재 상태를 읽기 전용으로 반환합니다."""
@@ -644,9 +650,13 @@ class AutomationHelpers:
             from services.web_tools import get_smart_browser
         except Exception:
             from services.web_tools import get_smart_browser
-        browser = get_smart_browser(headless=headless)
-        summary = browser.navigate_and_action(url, actions, goal_hint=goal_hint)
-        return {"summary": summary, "state": browser.get_state()}
+        try:
+            browser = get_smart_browser(headless=headless)
+            summary = browser.navigate_and_action(url, actions, goal_hint=goal_hint)
+            return {"summary": summary, "state": browser.get_state()}
+        except Exception as exc:
+            logger.warning("run_browser_actions 실패: %s", exc)
+            return {"summary": f"실패: browser workflow ({exc})", "state": {}}
 
     def run_adaptive_browser_workflow(
         self,
@@ -796,13 +806,16 @@ class AutomationHelpers:
         actions = actions or self.get_desktop_workflow_plan(goal_hint)
         opened = ""
         window_title = ""
-        if app_target:
-            opened = self.launch_app(app_target)
-        if expected_window:
-            window_title = self.wait_for_window(expected_window, timeout=timeout, goal_hint=goal_hint)
-            self.focus_window(expected_window, goal_hint=goal_hint)
-
         action_results: List[str] = []
+        try:
+            if app_target:
+                opened = self.launch_app(app_target)
+            if expected_window:
+                window_title = self.wait_for_window(expected_window, timeout=timeout, goal_hint=goal_hint)
+                self.focus_window(expected_window, goal_hint=goal_hint)
+        except Exception as exc:
+            action_results.append(f"오류: setup ({str(exc)[:60]})")
+
         for action in actions:
             try:
                 action_results.append(

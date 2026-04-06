@@ -1,3 +1,5 @@
+"""코어 런타임 상태와 시스템 정보를 조회하는 유틸리티."""
+
 import sys
 import os
 import time

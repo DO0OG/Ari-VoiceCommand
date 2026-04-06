@@ -4,6 +4,7 @@ AI가 생성한 코드/명령/URL의 위험 수준을 분류합니다.
 패턴은 모듈 로드 시 한 번만 컴파일됩니다.
 """
 import re
+import threading
 from enum import Enum
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -236,10 +237,13 @@ class SafetyChecker:
 
 
 _checker_instance: "SafetyChecker | None" = None
+_checker_lock = threading.Lock()
 
 
 def get_safety_checker() -> SafetyChecker:
     global _checker_instance
     if _checker_instance is None:
-        _checker_instance = SafetyChecker()
+        with _checker_lock:
+            if _checker_instance is None:
+                _checker_instance = SafetyChecker()
     return _checker_instance

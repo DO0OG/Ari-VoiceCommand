@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """
 FACT 신뢰도 업데이트 엔진.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import logging

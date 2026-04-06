@@ -6,11 +6,13 @@ import json
 import os
 import logging
 import re
+import threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 _context_manager: Optional["UserContextManager"] = None
+_context_manager_lock = threading.Lock()
 
 
 _MAX_FACTS = 150
@@ -455,5 +457,7 @@ def get_context_manager() -> UserContextManager:
     """앱 전역에서 공유하는 사용자 컨텍스트 매니저 반환."""
     global _context_manager
     if _context_manager is None:
-        _context_manager = UserContextManager()
+        with _context_manager_lock:
+            if _context_manager is None:
+                _context_manager = UserContextManager()
     return _context_manager

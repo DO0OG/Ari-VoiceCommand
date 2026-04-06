@@ -417,6 +417,38 @@ class AutomationHelpersTests(unittest.TestCase):
             self.assertGreater(plans[0]["score"], plans[-1]["score"])
             self.assertIn("fallback", plans[0]["selection_reason"])
 
+    def test_run_browser_actions_returns_failure_summary_when_browser_raises(self):
+        helper = AutomationHelpers()
+
+        class _BrokenBrowser:
+            def navigate_and_action(self, url, actions, goal_hint=""):
+                raise RuntimeError("browser down")
+
+            def get_state(self):
+                return {"unexpected": True}
+
+        with patch("services.web_tools.get_smart_browser", return_value=_BrokenBrowser()):
+            result = helper.run_browser_actions("https://example.com", [{"type": "click"}])
+
+        self.assertIn("실패: browser workflow", result["summary"])
+        self.assertEqual(result["state"], {})
+
+    def test_run_desktop_workflow_captures_setup_failure_in_action_results(self):
+        helper = AutomationHelpers()
+        helper.launch_app = lambda target: (_ for _ in ()).throw(RuntimeError("launch failed"))
+        helper.get_desktop_state = lambda: {"state": "ok"}
+
+        result = helper.run_desktop_workflow(
+            goal_hint="메모장 열기",
+            app_target="notepad",
+            expected_window="메모장",
+            actions=[],
+        )
+
+        self.assertTrue(result["actions"])
+        self.assertIn("오류: setup", result["actions"][0])
+        self.assertEqual(result["state"], {"state": "ok"})
+
 
 if __name__ == "__main__":
     unittest.main()

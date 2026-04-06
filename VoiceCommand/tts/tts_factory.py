@@ -1,3 +1,5 @@
+"""설정 기반으로 TTS 제공자를 생성하고 서명을 계산하는 팩토리."""
+
 import logging
 from core.config_manager import ConfigManager
 

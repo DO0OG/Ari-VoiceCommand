@@ -1,3 +1,5 @@
+"""예약 작업 목록을 표 형태로 확인하고 취소하는 다이얼로그."""
+
 from __future__ import annotations
 
 from datetime import datetime

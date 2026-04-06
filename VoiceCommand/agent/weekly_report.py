@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import threading
 
 
 class WeeklyReport:
@@ -95,10 +96,13 @@ class WeeklyReport:
 
 
 _weekly_report: WeeklyReport | None = None
+_weekly_report_lock = threading.Lock()
 
 
 def get_weekly_report() -> WeeklyReport:
     global _weekly_report
     if _weekly_report is None:
-        _weekly_report = WeeklyReport()
+        with _weekly_report_lock:
+            if _weekly_report is None:
+                _weekly_report = WeeklyReport()
     return _weekly_report

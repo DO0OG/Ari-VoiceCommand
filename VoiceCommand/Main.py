@@ -1,3 +1,5 @@
+"""Ari 데스크톱 애플리케이션의 Qt 진입점."""
+
 import sys
 import os
 import logging

@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -191,6 +192,52 @@ class AutonomousExecutorTests(unittest.TestCase):
         self.assertIn("browser_title=New Title", summary)
         self.assertIn("closed_windows=메모장", summary)
         self.assertIn("removed_paths=C:\\temp\\old.txt", summary)
+
+    def test_run_python_returns_failed_result_when_safety_check_raises(self):
+        executor = AutonomousExecutor()
+        executor._capture_runtime_state = lambda: {}
+        executor._attach_state_snapshot = lambda result, state_before: None
+        executor._record_history = lambda result: None
+        executor._safety = SimpleNamespace(check_python=lambda code: (_ for _ in ()).throw(RuntimeError("boom")))
+
+        result = executor.run_python("print('x')")
+
+        self.assertFalse(result.success)
+        self.assertIn("boom", result.error)
+
+    def test_get_runtime_state_falls_back_when_automation_helpers_raise(self):
+        executor = AutonomousExecutor()
+        executor._automation.get_browser_state = lambda: (_ for _ in ()).throw(RuntimeError("browser fail"))
+        executor._automation.get_active_window_title = lambda: (_ for _ in ()).throw(RuntimeError("window fail"))
+        executor._automation.list_open_windows = lambda: (_ for _ in ()).throw(RuntimeError("list fail"))
+        executor._automation.get_desktop_state = lambda: (_ for _ in ()).throw(RuntimeError("desktop fail"))
+        executor._automation.get_learned_strategies = lambda: (_ for _ in ()).throw(RuntimeError("strategy fail"))
+        executor._automation.get_learned_strategy_summary = lambda: (_ for _ in ()).throw(RuntimeError("summary fail"))
+        executor._automation.get_planning_snapshot = lambda: (_ for _ in ()).throw(RuntimeError("planning fail"))
+        executor._automation.get_planning_snapshot_summary = lambda: (_ for _ in ()).throw(RuntimeError("planning summary fail"))
+        executor._automation.get_execution_policy = lambda: (_ for _ in ()).throw(RuntimeError("policy fail"))
+        executor._automation.get_execution_policy_summary = lambda: (_ for _ in ()).throw(RuntimeError("policy summary fail"))
+
+        state = executor.get_runtime_state()
+
+        self.assertEqual(state["browser_state"], {})
+        self.assertEqual(state["active_window_title"], "")
+        self.assertEqual(state["open_window_titles"], [])
+        self.assertEqual(state["desktop_state"], {})
+        self.assertEqual(state["learned_strategies"], {})
+        self.assertEqual(state["learned_strategy_summary"], "")
+        self.assertEqual(state["planning_snapshot"], {})
+        self.assertEqual(state["planning_snapshot_summary"], "")
+        self.assertEqual(state["execution_policy"], {})
+        self.assertEqual(state["execution_policy_summary"], "")
+
+    def test_save_document_wraps_backup_errors(self):
+        executor = AutonomousExecutor()
+        executor._backup_file_if_exists = lambda path: (_ for _ in ()).throw(RuntimeError("backup fail"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(RuntimeError):
+                executor._save_document(tmp, "report", "content", preferred_format="txt")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import threading
 from typing import List
 
 _TAG_KEYWORDS = {
@@ -103,10 +104,13 @@ class PlannerFeedbackLoop:
 
 
 _feedback_loop: PlannerFeedbackLoop | None = None
+_feedback_loop_lock = threading.Lock()
 
 
 def get_planner_feedback_loop() -> PlannerFeedbackLoop:
     global _feedback_loop
     if _feedback_loop is None:
-        _feedback_loop = PlannerFeedbackLoop()
+        with _feedback_loop_lock:
+            if _feedback_loop is None:
+                _feedback_loop = PlannerFeedbackLoop()
     return _feedback_loop

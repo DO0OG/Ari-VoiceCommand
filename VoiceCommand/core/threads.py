@@ -1,3 +1,5 @@
+"""음성 인식, TTS, 명령 실행을 담당하는 Qt 작업 스레드 모음."""
+
 import logging
 import time
 import secrets
@@ -62,7 +64,13 @@ class VoiceRecognitionThread(QThread):
             settings.get("whisper_device", "auto"),
             settings.get("whisper_compute_type", "int8"),
         )
-        if signature != self._stt_signature:
+        needs_refresh = signature != self._stt_signature
+        if not needs_refresh and self._stt is not None and hasattr(self._stt, "is_healthy"):
+            try:
+                needs_refresh = not bool(self._stt.is_healthy())
+            except Exception:
+                needs_refresh = True
+        if needs_refresh:
             self._stt_signature = signature
             self._stt = create_stt_provider(settings)
             logging.info("[VoiceRecognitionThread] STT 프로바이더 갱신: %s", signature[0])

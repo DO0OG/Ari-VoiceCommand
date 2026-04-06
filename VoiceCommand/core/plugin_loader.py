@@ -12,13 +12,14 @@ import logging
 import os
 import shutil
 import sys
+import threading
 import unicodedata
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import FunctionType
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Callable, Dict, List, Optional, Tuple, cast
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,16 @@ logger = logging.getLogger(__name__)
 PLUGIN_API_VERSION = "1.0"
 _COMPATIBLE_API_VERSIONS = {"1.0"}
 
+MenuActionCallback = Callable[[], None]
+MenuRegistrar = Callable[[str, MenuActionCallback], object]
+CommandRegistrar = Callable[[object], object]
+ToolRegistrar = Callable[[dict[str, object], Callable[[dict[str, object]], Optional[str]]], object]
+CharacterPackRegistrar = Callable[[str, object], object]
+SandboxRunner = Callable[[str, int], object]
+CharacterMenuToggle = Callable[[bool], object]
 
-def _get_unregister_character_pack(widget: Any) -> Optional[Callable[[str], None]]:
+
+def _get_unregister_character_pack(widget: object) -> Optional[Callable[[str], None]]:
     candidate = getattr(widget, "unregister_character_pack", None)
     if callable(candidate):
         return cast(Callable[[str], None], candidate)
@@ -36,16 +45,16 @@ def _get_unregister_character_pack(widget: Any) -> Optional[Callable[[str], None
 
 @dataclass
 class PluginContext:
-    app: Any = None
-    tray_icon: Any = None
-    character_widget: Any = None
-    text_interface: Any = None
-    register_menu_action: Any = None
-    register_command: Any = None
-    register_tool: Any = None
-    register_character_pack: Any = None
-    run_sandboxed: Any = None
-    set_character_menu_enabled: Any = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
+    app: object = None
+    tray_icon: object = None
+    character_widget: object = None
+    text_interface: object = None
+    register_menu_action: Optional[MenuRegistrar] = None
+    register_command: Optional[CommandRegistrar] = None
+    register_tool: Optional[ToolRegistrar] = None
+    register_character_pack: Optional[CharacterPackRegistrar] = None
+    run_sandboxed: Optional[SandboxRunner] = None
+    set_character_menu_enabled: Optional[CharacterMenuToggle] = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
 
 
 @dataclass
@@ -60,10 +69,10 @@ class PluginInfo:
     enabled: bool = True
     loaded: bool = False
     error: str = ""
-    exports: Dict[str, Any] = field(default_factory=dict)
+    exports: Dict[str, object] = field(default_factory=dict)
     api_version: str = "1.0"
-    registered_menu_actions: List[Any] = field(default_factory=list)
-    registered_commands: List[Any] = field(default_factory=list)
+    registered_menu_actions: List[object] = field(default_factory=list)
+    registered_commands: List[object] = field(default_factory=list)
     registered_tools: List[str] = field(default_factory=list)
     registered_character_packs: List[str] = field(default_factory=list)
     character_menu_disabled: bool = False  # 이 플러그인이 캐릭터 우클릭 메뉴를 비활성화했는지
@@ -107,7 +116,7 @@ class PluginManager:
         stem = os.path.splitext(os.path.basename(plugin_path))[0]
         return os.path.join(self._plugin_runtime_dir(), f"{stem}_{digest}")
 
-    def _zip_metadata(self, path: str) -> Dict[str, Any]:
+    def _zip_metadata(self, path: str) -> dict[str, object]:
         with zipfile.ZipFile(path) as archive:
             with archive.open("plugin.json") as handle:
                 return json.loads(handle.read().decode("utf-8"))
@@ -369,7 +378,7 @@ class PluginManager:
         plugin.sys_path_entry = extract_dir
         return module_path, extract_dir
 
-    def _invoke_register(self, register: FunctionType, context: PluginContext) -> Any:
+    def _invoke_register(self, register: FunctionType, context: PluginContext) -> object:
         return register(context)
 
     def _wrap_context(self, context: PluginContext, plugin: PluginInfo) -> PluginContext:
@@ -458,10 +467,13 @@ class PluginManager:
 
 
 _plugin_manager: Optional[PluginManager] = None
+_plugin_manager_lock = threading.Lock()
 
 
 def get_plugin_manager() -> PluginManager:
     global _plugin_manager
     if _plugin_manager is None:
-        _plugin_manager = PluginManager()
+        with _plugin_manager_lock:
+            if _plugin_manager is None:
+                _plugin_manager = PluginManager()
     return _plugin_manager
