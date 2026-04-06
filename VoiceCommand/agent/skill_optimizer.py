@@ -17,7 +17,6 @@ import os
 import re
 import tempfile
 import threading
-import threading
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
