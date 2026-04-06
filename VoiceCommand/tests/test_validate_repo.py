@@ -28,8 +28,18 @@ class ValidateRepoTests(unittest.TestCase):
         self.assertIn("agent/execution_analysis.py", payload["compile_targets"])
         self.assertIn("agent/safety_checker.py", payload["compile_targets"])
         self.assertIn("services/web_tools.py", payload["compile_targets"])
+        self.assertIn("ui/character_widget.py", payload["compile_targets"])
         self.assertIn("ui/theme.py", payload["compile_targets"])
         self.assertIn("ui/theme_runtime.py", payload["compile_targets"])
+        self.assertIn("ui/settings_llm_page.py", payload["compile_targets"])
+        self.assertIn("ui/settings_plugin_page.py", payload["compile_targets"])
+        self.assertIn("ui/settings_tts_page.py", payload["compile_targets"])
+        self.assertIn("ui/scheduled_tasks_dialog.py", payload["compile_targets"])
+        self.assertIn("ui/speech_bubble.py", payload["compile_targets"])
+        self.assertIn("ui/stt_settings_dialog.py", payload["compile_targets"])
+        self.assertIn("ui/local_installers.py", payload["compile_targets"])
+        self.assertIn("ui/marketplace_browser.py", payload["compile_targets"])
+        self.assertIn("ui/tray_icon.py", payload["compile_targets"])
         self.assertEqual(payload["unit_tests"], "tests/test_*.py")
 
     def test_run_compile_writes_pyc_to_temp_location(self):

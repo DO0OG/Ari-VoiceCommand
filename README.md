@@ -158,7 +158,7 @@
 - `condition_evaluator.py`는 `len`, `str`, `int`, `float`, `bool`, `dict.get()`만 허용하며, 평가 실패는 계속 fail-closed(`False`)로 처리됩니다.
 - `LLMProvider`의 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어, 플러그인 도구 등록과 기본 도구 스키마 관리 경계가 더 명확해졌습니다.
 - 프런트엔드 개발 산출물(`market/web/node_modules`, `.next`, `tsconfig.tsbuildinfo`, `.vercel`)은 Git 추적 대상에서 제외되며, 실제 소스 파일만 반영되도록 ignore 규칙을 보강했습니다.
-- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **286 tests + smoke** 입니다.
+- 현재 전체 검증 기준은 `validate_repo.py` 실행 시 **290 tests + smoke** 입니다.
 
 ### 최근 자율 저장소 작업 안정화 메모 (2026-04-05)
 
@@ -166,7 +166,7 @@
 - 저장소 작업 보고서는 실행 사용자 기준 Desktop `Ari Reports`에 저장하고, CI 전용/특정 사용자 절대 경로에 의존하지 않도록 정리했습니다.
 - 개발 플래너/오케스트레이터는 `VoiceCommand/{agent,core,ui,plugins,tests}` + `docs` 범위 밖 경로 선택, `py_compile`만으로 끝내는 약한 검증, `tests/` 루트 경로, 가짜 성공/OCR 기반 성공 판정을 거부하도록 강화했습니다.
 - `validate_repo.py --compile-only`는 `__pycache__` 대신 임시 위치로 컴파일해 로컬 환경 락/권한 문제에도 더 안정적으로 동작합니다.
-- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 286개 기준으로 유지 중입니다.
+- **핵심 버그 수정**: `_execute_plan`에서 step 출력을 300자로 자르던 문제를 개발 목표 시 2000자로 확장. 이로 인해 bootstrap의 repo scan(~1900자)·테스트 목록(~800자) JSON이 잘려 LLM이 저장소 구조를 파악하지 못하던 근본 원인 해결. 현재 전체 테스트는 290개 기준으로 유지 중입니다.
 - **영향 테스트 자동 선별**: `_infer_relevant_tests`가 goal에서 `.py` 파일명을 추출해 관련 테스트를 `relevant=` 항목으로 LLM에게 우선 제시. 테스트 목록도 첫 5개 샘플 대신 전체 목록(`all=`) 표시로 전환.
 - **에피소드 메모리 정리**: `prune_old_failures(max_age_days=30)`으로 30일 이상 된 실패 에피소드를 실행 후 자동 정리. 루트 런타임 파일은 정리하고, 개발용 상태는 `.ari_runtime/` 아래로만 유지합니다.
 
@@ -178,6 +178,12 @@
 - **조건 평가 모듈 분리**: `ExecutionEngine` 내부에 있던 안전 AST 조건 평가 로직을 `agent/condition_evaluator.py`로 분리.
 - **회귀 테스트 보강**: `test_condition_evaluator.py`, `test_execution_engine.py`에 허용된 함수 호출과 fail-closed 동작 검증 추가.
 - **문서 최신화**: README 최근 업데이트, 아키텍처 흐름, 내부 문서(`CLAUDE.md`, `SESSION_CONTEXT.md`)를 현재 구조에 맞게 갱신.
+
+### 최근 업데이트 (2026-04-06) — 텍스트 채팅·예약 작업 UI 레이아웃 안정화
+
+- **채팅 말풍선 폭 제한**: `ui/text_interface.py`의 채팅 말풍선 최대 폭을 뷰포트 기준으로 다시 계산해 긴 메시지도 패널 바깥으로 밀려나지 않도록 조정.
+- **예약 작업 UI 줄바꿈 보강**: `ui/scheduler_panel.py`, `ui/scheduled_tasks_dialog.py`에서 긴 작업명/설명/일정 텍스트가 줄바꿈되고 가로 스크롤 없이 읽히도록 정리.
+- **회귀 테스트 추가**: `test_text_interface.py`, `test_validate_repo.py`를 보강해 채팅 말풍선 폭 제한, 예약 작업 라벨 줄바꿈, 검증 대상 포함 여부를 고정.
 
 ### 최근 업데이트 (2026-04-05) — 런타임 설정/마켓플레이스 안정성 보강
 

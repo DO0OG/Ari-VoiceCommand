@@ -32,6 +32,9 @@ class ScheduledTasksDialog(QDialog):
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._table.setWordWrap(True)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self._table)
@@ -62,6 +65,7 @@ class ScheduledTasksDialog(QDialog):
             self._table.setItem(row, 1, QTableWidgetItem(scheduled_text))
             self._table.setItem(row, 2, QTableWidgetItem(_format_remaining(remaining_seconds)))
             self._table.item(row, 0).setData(Qt.UserRole, task.task_id)
+        self._table.resizeRowsToContents()
         self._btn_cancel_task.setEnabled(bool(tasks))
 
     def _cancel_selected(self):

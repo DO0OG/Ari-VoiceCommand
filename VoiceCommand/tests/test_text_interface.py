@@ -2,12 +2,19 @@ import os
 import sys
 import unittest
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QFrame, QLabel
+
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from ui.text_interface import TextInterface
+from agent.proactive_scheduler import ScheduledTask
+from ui.scheduler_panel import SchedulerPanel, TaskRow
+from ui.text_interface import ChatWidget, TextInterface
 
 
 class _DummyChatWidget:
@@ -36,6 +43,10 @@ class _DummyTextInterface:
 
 
 class TextInterfaceStreamingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
     def _make_interface(self):
         spoken = []
         interface = _DummyTextInterface()
@@ -72,6 +83,54 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         self.assertEqual(interface.chat_widget.history[0]["message"], "전체 응답")
         self.assertEqual(interface._stream_tts_buffer, "")
         self.assertFalse(interface._stream_tts_spoken)
+
+    def test_chat_widget_limits_bubble_width_to_viewport(self):
+        widget = ChatWidget()
+        widget.resize(360, 300)
+        widget.add_message("긴 응답 " * 30, is_user=False)
+        self._app.processEvents()
+
+        row_widget = widget.layout().itemAt(0).widget()
+        row_layout = row_widget.layout()
+        bubble = next(
+            item.widget()
+            for index in range(row_layout.count())
+            if (item := row_layout.itemAt(index)).widget() and isinstance(item.widget(), QFrame)
+        )
+
+        self.assertLessEqual(bubble.maximumWidth(), widget.width())
+        self.assertLess(bubble.maximumWidth(), widget.width())
+
+    def test_chat_widget_preserves_message_timestamp_across_rerender(self):
+        widget = ChatWidget()
+        widget.resize(360, 300)
+        widget.add_message("안녕하세요", is_user=False, timestamp="09:30:00")
+        widget.render_history()
+
+        labels = widget.findChildren(QLabel)
+        self.assertEqual(widget.history[0]["timestamp"], "09:30:00")
+        self.assertIn("09:30:00", [label.text() for label in labels])
+
+    def test_scheduler_task_row_wraps_long_text_labels(self):
+        task = ScheduledTask(
+            task_id="task-1",
+            name="매우 긴 예약 작업 이름 " * 4,
+            goal="예약 작업 설명이 길어서 여러 줄로 자연스럽게 줄바꿈되어야 합니다. " * 4,
+            schedule_expr="매주 수요일 오후 11시 45분마다 아주 긴 설명이 붙는 스케줄",
+            next_run="2026-04-06T23:45:00",
+            last_run="2026-04-05T23:45:00",
+            last_result="이전 실행 결과도 길어서 오른쪽으로 밀리지 않고 영역 안에서 줄바꿈되어야 합니다. " * 2,
+        )
+        row = TaskRow(task)
+        labels = row.findChildren(QLabel)
+
+        self.assertGreaterEqual(len(labels), 4)
+        self.assertTrue(all(label.wordWrap() for label in labels))
+
+    def test_scheduler_panel_disables_horizontal_scrollbar(self):
+        panel = SchedulerPanel(scheduler=None)
+
+        self.assertEqual(panel._scroll.horizontalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
 
 
 if __name__ == "__main__":
