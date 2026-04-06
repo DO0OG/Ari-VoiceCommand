@@ -47,6 +47,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
         self.original_game_mode = voicecommand._state.game_mode
         self.original_indicator = voicecommand._state.listening_indicator_active
         self.original_indicator_text = voicecommand._state.listening_indicator_text
+        self.original_tts_resume_guard_until = voicecommand._state.tts_resume_guard_until
         self.original_tts_thread = voicecommand._state.tts_thread
 
         voicecommand._state.character_widget = _FakeWidget()
@@ -54,6 +55,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
         voicecommand._state.game_mode = False
         voicecommand._state.listening_indicator_active = False
         voicecommand._state.listening_indicator_text = "말씀해주세요"
+        voicecommand._state.tts_resume_guard_until = 0.0
         voicecommand._state.tts_thread = None
 
     def tearDown(self):
@@ -62,6 +64,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
         voicecommand._state.game_mode = self.original_game_mode
         voicecommand._state.listening_indicator_active = self.original_indicator
         voicecommand._state.listening_indicator_text = self.original_indicator_text
+        voicecommand._state.tts_resume_guard_until = self.original_tts_resume_guard_until
         voicecommand._state.tts_thread = self.original_tts_thread
 
     def test_set_listening_indicator_shows_prompt_bubble(self):
@@ -75,7 +78,9 @@ class VoiceCommandBubbleTests(unittest.TestCase):
     def test_tts_finish_keeps_listening_bubble_visible_when_waiting_for_stt(self):
         voicecommand._state.listening_indicator_active = True
 
-        with patch("core.VoiceCommand.is_tts_playing", return_value=False):
+        with patch("core.VoiceCommand.is_tts_playing", return_value=False), patch(
+            "core.VoiceCommand.time.monotonic", return_value=100.0
+        ):
             voicecommand._handle_tts_playback_finished()
 
         self.assertEqual(
@@ -83,6 +88,13 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             ("말씀해주세요", 0),
         )
         self.assertEqual(voicecommand._state.character_widget.hide_calls, 0)
+        self.assertEqual(voicecommand._state.tts_resume_guard_until, 101.2)
+
+    def test_should_pause_wake_detection_during_resume_guard(self):
+        voicecommand._state.tts_resume_guard_until = 101.2
+
+        self.assertTrue(voicecommand.should_pause_wake_detection(now=100.5))
+        self.assertFalse(voicecommand.should_pause_wake_detection(now=101.2))
 
     def test_enable_game_mode_reconnects_playback_finished_signal(self):
         with patch("core.config_manager.ConfigManager.load_settings", return_value={}):

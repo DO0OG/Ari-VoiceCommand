@@ -42,8 +42,10 @@ class AppState:
         self.last_bubble_signature = ("", 0.0)
         self.listening_indicator_active = False
         self.listening_indicator_text = "말씀해주세요"
+        self.tts_resume_guard_until = 0.0
 
 _state = AppState()
+_TTS_WAKE_GUARD_SECONDS = 1.2
 
 
 class SharedMicrophone(sr.Microphone):
@@ -233,8 +235,17 @@ def set_listening_indicator(active: bool, text: str | None = None) -> None:
         _state.character_widget.hide_speech_bubble()
 
 
+def extend_tts_resume_guard(duration: float = _TTS_WAKE_GUARD_SECONDS) -> None:
+    """TTS 직후 웨이크워드 감지 보호 구간을 연장한다."""
+    _state.tts_resume_guard_until = max(
+        _state.tts_resume_guard_until,
+        time.monotonic() + max(0.0, duration),
+    )
+
+
 def _handle_tts_playback_finished() -> None:
     """TTS 종료 후 현재 상태에 맞게 말풍선을 정리한다."""
+    extend_tts_resume_guard()
     if is_tts_playing():
         return
 
@@ -304,6 +315,14 @@ def is_tts_playing() -> bool:
     if _state.fish_tts and getattr(_state.fish_tts, 'is_playing', False):
         return True
     return False
+
+
+def should_pause_wake_detection(now: float | None = None) -> bool:
+    """TTS 재생 중이거나 직후 짧은 보호 구간이면 웨이크워드 감지를 멈춘다."""
+    if is_tts_playing():
+        return True
+    current = time.monotonic() if now is None else now
+    return current < _state.tts_resume_guard_until
 
 
 def execute_command(command):

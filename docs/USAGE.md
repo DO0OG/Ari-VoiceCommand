@@ -139,6 +139,8 @@ pip install elevenlabs
 - 짧은 응답(15자 이하)은 ODE 3스텝으로 자동 전환되어 약 200ms 더 빠릅니다.
 - TTS 품질/지연을 바꾸려면 엔진 설정을 조정하고, 테마 변경과는 별개로 보시면 됩니다.
 - 텍스트 채팅 UI에서는 스트리밍 응답 중 문장 경계가 감지되면 전체 응답 완료 전에도 TTS가 먼저 시작될 수 있습니다.
+- 너무 짧은 앞문장은 바로 따로 읽지 않고, 인접한 다음 문장과 한 번에 묶어 재생해 불필요한 합성 호출 수를 줄입니다.
+- 웨이크워드 대기는 TTS 재생 중뿐 아니라 재생 직후 짧은 보호 구간에도 잠시 멈춰, 스피커 에코를 호출어로 오인식하는 문제를 줄입니다.
 - `reference.wav` 경로 우선순위는 다음과 같습니다.
   소스/테스트 실행: `VoiceCommand/.ari_runtime/reference.wav` → `VoiceCommand/reference.wav`
   빌드된 exe 실행: `%AppData%/Ari/reference.wav` → 번들된 `reference.wav`
