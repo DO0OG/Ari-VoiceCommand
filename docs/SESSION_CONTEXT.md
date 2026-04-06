@@ -114,6 +114,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `planner_client`, `execution_client` 역할별 분리
 - `ResponseCache`는 `agent/response_cache.py`로 분리되었고 `RLock`으로 보호됩니다. 캐시 키는 질문 원문뿐 아니라 모델/프롬프트 구성을 함께 반영합니다.
 - 정적 도구 스키마는 `agent/tool_schemas.py`로 분리되어 플러그인 도구와 합쳐집니다.
+- `assistant_text_utils.py`를 통해 AICommand와 공유하는 goal 해석·tool artifact 정리 로직을 재사용합니다.
 
 ### `agent/condition_evaluator.py`
 - ExecutionEngine step `condition` 평가를 위한 안전 AST 평가 전담 모듈
@@ -163,6 +164,7 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `ExecutionEngine`: 조건식 로직을 위 모듈에 위임하고 fail-closed 동작 유지
 - `planner_json_utils.py`: AgentPlanner JSON 응답 복구 로직을 별도 모듈로 분리
 - `automation_plan_utils.py`: AutomationHelpers adaptive/resilient 계획 조립 로직을 별도 모듈로 분리
+- `assistant_text_utils.py`: LLMProvider/AICommand 공통 goal 해석·응답 정리 로직을 별도 모듈로 분리
 
 ### 문서 / 검증
 - README 최근 업데이트와 아키텍처 설명을 최신 구조에 맞게 갱신

@@ -7,6 +7,13 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
+
+from agent.assistant_text_utils import (
+    clean_tool_artifact_text,
+    contains_specific_goal_markers,
+    is_generic_agent_explanation,
+    resolve_agent_task_goal,
+)
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 
@@ -605,74 +612,18 @@ class AICommand(BaseCommand):
         return ""
 
     def _is_generic_agent_explanation(self, text: str) -> bool:
-        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
-        if not normalized:
-            return True
-        generic_phrases = (
-            "복합 작업으로 판단되어 단계별 실행으로 전환할게요",
-            "복합 작업을 실행할게요",
-            "진행할게요",
-            "처리할게요",
-            "작업을 진행합니다",
-        )
-        return any(phrase in normalized for phrase in generic_phrases)
+        return is_generic_agent_explanation(text)
 
     def _contains_specific_goal_markers(self, text: str) -> bool:
-        normalized = (text or "").strip().lower()
-        if not normalized:
-            return False
-        return any(marker in normalized for marker in (
-            "'", '"', ".md", ".txt", ".pdf",
-            "summary.md", "report.md", "바탕화면", "desktop", "폴더", "folder",
-            "창 제목", "열린 창",
-        ))
+        return contains_specific_goal_markers(text)
 
     def _resolve_agent_task_goal(self, args: dict) -> str:
         goal = str(args.get("goal", "") or "").strip()
         explanation = str(args.get("explanation", "") or "").strip()
-        if not goal:
-            return explanation
-        if not explanation or explanation == goal:
-            return goal
-        if self._is_generic_agent_explanation(explanation):
-            return goal
-
-        goal_lower = goal.lower()
-        explanation_lower = explanation.lower()
-        if (
-            len(explanation) >= len(goal) + 12
-            or (
-                self._contains_specific_goal_markers(explanation)
-                and not self._contains_specific_goal_markers(goal)
-            )
-        ):
-            return explanation
-        looks_like_short_label = (
-            len(goal) <= 40
-            and len(explanation) >= len(goal) + 20
-            and goal_lower not in explanation_lower
-        )
-        if looks_like_short_label:
-            return explanation
-        if len(explanation) > len(goal) and goal_lower in explanation_lower:
-            return explanation
-        return goal
+        return resolve_agent_task_goal(goal, explanation)
 
     def _sanitize_user_facing_text(self, message: Optional[str]) -> str:
-        text = (message or "").strip()
-        if not text:
-            return ""
-        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
-        text = re.sub(r'<function[^>]*>.*?</function>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<tool_call[^>]*>.*?</tool_call>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\[[^\n]*\]', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b\s*[:=]\s*\{[^\n]*\}', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'\b(?:tool_call|tool_calls|function_call|tool_result)\b', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'(?<=\s)[\]\}\)]+(?=\s|$)', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        if len(text) <= 1:
-            return ""
-        return text
+        return clean_tool_artifact_text(message or "", discard_short_text=True)
 
     def _emit_user_message(self, message: Optional[str]) -> None:
         cleaned = self._sanitize_user_facing_text(message)
