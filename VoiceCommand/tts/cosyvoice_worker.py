@@ -195,20 +195,10 @@ def main():
     def _warmup():
         try:
             ctrl("INFO:백그라운드 GPU warmup 시작 (torch.compile 초회 컴파일 포함)...")
-            # inference_zero_shot이 내부적으로 spk2info를 업데이트할 수 있으므로
-            # 워밍업 전 화자 특징 캐시를 저장하고 완료 후 복원한다.
-            # 미복원 시 첫 실제 발화가 워밍업 텍스트("네.")에 오염된 특징으로
-            # 합성되어 로봇 음성/피치 고정/잡음 등 음질 저하가 발생한다.
-            import copy
-            saved_spk_info = copy.deepcopy(frontend.spk2info.get(SPK_ID)) if SPK_ID else None
-            try:
-                with _inference_lock:
-                    with torch.inference_mode():
-                        for _ in make_gen("네.", stream=True):
-                            pass
-            finally:
-                if saved_spk_info is not None:
-                    frontend.spk2info[SPK_ID] = saved_spk_info
+            with _inference_lock:
+                with torch.inference_mode():
+                    for _ in make_gen("네.", stream=True):
+                        pass
             ctrl("INFO:백그라운드 GPU warmup 완료")
         except Exception as e:
             ctrl(f"INFO:백그라운드 warmup 실패 ({e})")
