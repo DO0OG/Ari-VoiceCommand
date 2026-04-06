@@ -30,7 +30,13 @@ class SimpleWakeWord:
             settings.get("whisper_device", "auto"),
             settings.get("whisper_compute_type", "int8"),
         )
-        if signature != self._provider_signature:
+        needs_refresh = signature != self._provider_signature
+        if not needs_refresh and self._stt is not None and hasattr(self._stt, "is_healthy"):
+            try:
+                needs_refresh = not bool(self._stt.is_healthy())
+            except Exception:
+                needs_refresh = True
+        if needs_refresh:
             self._provider_signature = signature
             self._stt = create_stt_provider(settings)
             self._calibrated = False

@@ -3,6 +3,7 @@
 """
 import os
 import logging
+import threading
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QRect, QPoint
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase, QPolygon
@@ -10,6 +11,7 @@ from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase, 
 from ui import theme as theme_module
 
 _font_family = None  # 전역 폰트 패밀리 이름 캐시
+_font_family_lock = threading.Lock()
 
 
 def register_fonts():
@@ -18,26 +20,30 @@ def register_fonts():
     if _font_family is not None:
         return _font_family
 
-    try:
-        from core.resource_manager import ResourceManager
-        font_path = ResourceManager.get_bundle_path("DNFBitBitv2.ttf")
-    except Exception:
-        font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "DNFBitBitv2.ttf")
+    with _font_family_lock:
+        if _font_family is not None:
+            return _font_family
 
-    if os.path.exists(font_path):
-        font_id = QFontDatabase.addApplicationFont(font_path)
-        if font_id != -1:
-            families = QFontDatabase.applicationFontFamilies(font_id)
-            if families:
-                _font_family = families[0]
-                logging.info(f"말풍선 폰트 로드 완료: {_font_family}")
-    else:
-        logging.warning(f"말풍선 폰트 파일을 찾지 못했습니다: {font_path}")
-    
-    if _font_family is None:
-        _font_family = "맑은 고딕"
-        logging.warning("말풍선 폰트를 기본값(맑은 고딕)으로 사용합니다.")
-    
+        try:
+            from core.resource_manager import ResourceManager
+            font_path = ResourceManager.get_bundle_path("DNFBitBitv2.ttf")
+        except Exception:
+            font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "DNFBitBitv2.ttf")
+
+        if os.path.exists(font_path):
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id != -1:
+                families = QFontDatabase.applicationFontFamilies(font_id)
+                if families:
+                    _font_family = families[0]
+                    logging.info(f"말풍선 폰트 로드 완료: {_font_family}")
+        else:
+            logging.warning(f"말풍선 폰트 파일을 찾지 못했습니다: {font_path}")
+
+        if _font_family is None:
+            _font_family = "맑은 고딕"
+            logging.warning("말풍선 폰트를 기본값(맑은 고딕)으로 사용합니다.")
+
     return _font_family
 
 

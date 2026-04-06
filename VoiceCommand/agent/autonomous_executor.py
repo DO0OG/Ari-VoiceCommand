@@ -173,6 +173,7 @@ class AutonomousExecutor:
 
         start = time.monotonic()
         state_before = self._capture_runtime_state()
+        result = ExecutionResult(success=False, code_or_cmd=code)
         try:
             report = self._safety.check_python(code)
             logging.info(f"[Executor] Python 안전 검사: {report.level.value} — {report.summary_kr}")
@@ -194,6 +195,9 @@ class AutonomousExecutor:
                     self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
 
             result = self._do_run_python(code, extra_globals=extra_globals)
+        except Exception as exc:
+            logging.error("[Executor] Python 실행 준비 실패: %s", exc, exc_info=True)
+            result = ExecutionResult(success=False, error=str(exc), code_or_cmd=code)
         finally:
             duration_ms = int((time.monotonic() - start) * 1000)
             self._python_slots.release()
@@ -210,6 +214,7 @@ class AutonomousExecutor:
 
         start = time.monotonic()
         state_before = self._capture_runtime_state()
+        result = ExecutionResult(success=False, code_or_cmd=command)
         try:
             report = self._safety.check_shell(command)
             logging.info(f"[Executor] Shell 안전 검사: {report.level.value} — {report.summary_kr}")
@@ -231,6 +236,9 @@ class AutonomousExecutor:
                     self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
 
             result = self._do_run_shell(command)
+        except Exception as exc:
+            logging.error("[Executor] Shell 실행 준비 실패: %s", exc, exc_info=True)
+            result = ExecutionResult(success=False, error=str(exc), code_or_cmd=command)
         finally:
             duration_ms = int((time.monotonic() - start) * 1000)
             self._shell_slots.release()
@@ -330,6 +338,30 @@ class AutonomousExecutor:
             desktop_state = self._automation.get_desktop_state()
         except Exception:
             desktop_state = {}
+        try:
+            learned_strategies = self._automation.get_learned_strategies()
+        except Exception:
+            learned_strategies = {}
+        try:
+            learned_summary = self._automation.get_learned_strategy_summary()
+        except Exception:
+            learned_summary = ""
+        try:
+            planning_snapshot = self._automation.get_planning_snapshot()
+        except Exception:
+            planning_snapshot = {}
+        try:
+            planning_summary = self._automation.get_planning_snapshot_summary()
+        except Exception:
+            planning_summary = ""
+        try:
+            execution_policy = self._automation.get_execution_policy()
+        except Exception:
+            execution_policy = {}
+        try:
+            execution_policy_summary = self._automation.get_execution_policy_summary()
+        except Exception:
+            execution_policy_summary = ""
 
         last = self.get_last_execution()
         return {
@@ -337,12 +369,12 @@ class AutonomousExecutor:
             "open_window_titles": open_windows,
             "browser_state": browser_state,
             "desktop_state": desktop_state,
-            "learned_strategies": self._automation.get_learned_strategies(),
-            "learned_strategy_summary": self._automation.get_learned_strategy_summary(),
-            "planning_snapshot": self._automation.get_planning_snapshot(),
-            "planning_snapshot_summary": self._automation.get_planning_snapshot_summary(),
-            "execution_policy": self._automation.get_execution_policy(),
-            "execution_policy_summary": self._automation.get_execution_policy_summary(),
+            "learned_strategies": learned_strategies,
+            "learned_strategy_summary": learned_summary,
+            "planning_snapshot": planning_snapshot,
+            "planning_snapshot_summary": planning_summary,
+            "execution_policy": execution_policy,
+            "execution_policy_summary": execution_policy_summary,
             "last_execution_success": getattr(last, "success", None),
             "last_execution_output": (getattr(last, "output", "") or "")[:300],
             "last_execution_error": (getattr(last, "error", "") or "")[:300],
@@ -563,40 +595,46 @@ class AutonomousExecutor:
         preferred_format: str = "auto",
         title: str = "",
     ) -> str:
-        os.makedirs(directory, exist_ok=True)
-        doc_format = self._choose_document_format(content, preferred_format=preferred_format, title=title)
-        safe_base = re.sub(r'[^A-Za-z0-9._-]+', '_', base_name).strip("._") or "document"
-        path = os.path.join(directory, f"{safe_base}.{doc_format}")
-        self._backup_file_if_exists(path)
+        try:
+            os.makedirs(directory, exist_ok=True)
+            doc_format = self._choose_document_format(content, preferred_format=preferred_format, title=title)
+            safe_base = re.sub(r'[^A-Za-z0-9._-]+', '_', base_name).strip("._") or "document"
+            path = os.path.join(directory, f"{safe_base}.{doc_format}")
+            self._backup_file_if_exists(path)
 
-        if doc_format == "pdf":
-            self._write_simple_pdf(path, content, title=title)
-        elif doc_format == "md":
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-        else:
-            plain = re.sub(r'^\s*#+\s*', '', content, flags=re.MULTILINE)
-            plain = re.sub(r'^\s*[-*]\s+', '- ', plain, flags=re.MULTILINE)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(plain)
-        return path
+            if doc_format == "pdf":
+                self._write_simple_pdf(path, content, title=title)
+            elif doc_format == "md":
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            else:
+                plain = re.sub(r'^\s*#+\s*', '', content, flags=re.MULTILINE)
+                plain = re.sub(r'^\s*[-*]\s+', '- ', plain, flags=re.MULTILINE)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(plain)
+            return path
+        except Exception as exc:
+            raise RuntimeError(f"문서 저장 실패: {exc}") from exc
 
     def _backup_file_if_exists(self, path: str) -> None:
         normalized = os.path.abspath(path)
         if not os.path.isfile(normalized):
             return
-        backup_dir = os.path.join(os.path.dirname(normalized), ".ari_backups")
-        os.makedirs(backup_dir, exist_ok=True)
-        stem = os.path.basename(normalized)
-        timestamp = str(int(time.time() * 1000))
-        backup_path = os.path.join(backup_dir, f"{timestamp}_{stem}")
-        shutil.copy2(normalized, backup_path)
-        self._backup_history.append({
-            "target_path": normalized,
-            "backup_path": backup_path,
-        })
-        if len(self._backup_history) > self._MAX_BACKUP_HISTORY:
-            self._backup_history = self._backup_history[-self._MAX_BACKUP_HISTORY:]
+        try:
+            backup_dir = os.path.join(os.path.dirname(normalized), ".ari_backups")
+            os.makedirs(backup_dir, exist_ok=True)
+            stem = os.path.basename(normalized)
+            timestamp = str(int(time.time() * 1000))
+            backup_path = os.path.join(backup_dir, f"{timestamp}_{stem}")
+            shutil.copy2(normalized, backup_path)
+            self._backup_history.append({
+                "target_path": normalized,
+                "backup_path": backup_path,
+            })
+            if len(self._backup_history) > self._MAX_BACKUP_HISTORY:
+                self._backup_history = self._backup_history[-self._MAX_BACKUP_HISTORY:]
+        except Exception as exc:
+            raise RuntimeError(f"백업 생성 실패: {exc}") from exc
 
     def _can_write_pdf(self) -> bool:
         try:
@@ -1022,13 +1060,16 @@ except Exception:
 # ── 싱글톤 ──────────────────────────────────────────────────────────────────────
 
 _instance: Optional[AutonomousExecutor] = None
+_instance_lock = threading.Lock()
 
 
 def get_executor(tts_func: Optional[Callable] = None) -> AutonomousExecutor:
     """싱글톤 패턴으로 실행기 반환"""
     global _instance
     if _instance is None:
-        _instance = AutonomousExecutor(tts_func)
+        with _instance_lock:
+            if _instance is None:
+                _instance = AutonomousExecutor(tts_func)
     elif tts_func:
         _instance.tts_wrapper = tts_func
     return _instance

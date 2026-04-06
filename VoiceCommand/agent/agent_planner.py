@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -2565,11 +2566,14 @@ class AgentPlanner:
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 
 _planner: Optional[AgentPlanner] = None
+_planner_lock = threading.Lock()
 
 
 def get_planner() -> AgentPlanner:
     global _planner
     if _planner is None:
-        from agent.llm_provider import get_llm_provider
-        _planner = AgentPlanner(get_llm_provider())
+        with _planner_lock:
+            if _planner is None:
+                from agent.llm_provider import get_llm_provider
+                _planner = AgentPlanner(get_llm_provider())
     return _planner

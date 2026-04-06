@@ -1,16 +1,18 @@
-from __future__ import annotations
-
 """
 화면 또는 지정 영역에서 텍스트를 추출하는 경량 OCR 헬퍼.
 """
 
+from __future__ import annotations
+
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 
 log = logging.getLogger(__name__)
 
 _reader = None
+_reader_lock = threading.Lock()
 _warned_unavailable = False
 
 
@@ -36,11 +38,13 @@ def _get_easyocr_reader():
     if easyocr is None:
         return None
     if _reader is None:
-        try:
-            _reader = easyocr.Reader(["ko", "en"], gpu=False)
-        except Exception as exc:
-            log.warning("[OCR] easyocr 초기화 실패: %s", exc)
-            return None
+        with _reader_lock:
+            if _reader is None:
+                try:
+                    _reader = easyocr.Reader(["ko", "en"], gpu=False)
+                except Exception as exc:
+                    log.warning("[OCR] easyocr 초기화 실패: %s", exc)
+                    return None
     return _reader
 
 

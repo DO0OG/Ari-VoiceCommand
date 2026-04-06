@@ -650,6 +650,7 @@ class LLMProvider:
 # ── 싱글톤 팩토리 ──────────────────────────────────────────────────────────────
 
 _instance: LLMProvider | None = None
+_instance_lock = threading.Lock()
 
 _KEY_MAP = {
     "groq": "groq_api_key", "openai": "openai_api_key", "anthropic": "anthropic_api_key",
@@ -661,37 +662,40 @@ _KEY_MAP = {
 def get_llm_provider() -> LLMProvider:
     global _instance
     if _instance is None:
-        try:
-            from core.config_manager import ConfigManager
-            s = ConfigManager.load_settings()
-        except Exception: s = {}
-        provider = s.get("llm_provider", "groq")
-        api_key = "ollama" if provider == "ollama" else s.get(_KEY_MAP.get(provider, ""), "")
-        planner_provider = s.get("llm_planner_provider", "") or provider
-        execution_provider = s.get("llm_execution_provider", "") or provider
-        planner_api_key = (
-            "ollama" if planner_provider == "ollama"
-            else s.get(_KEY_MAP.get(planner_provider, ""), "")
-        ) if planner_provider != provider else ""
-        execution_api_key = (
-            "ollama" if execution_provider == "ollama"
-            else s.get(_KEY_MAP.get(execution_provider, ""), "")
-        ) if execution_provider != provider else ""
-        _instance = LLMProvider(
-            provider=provider, api_key=api_key,
-            model=s.get("llm_model", ""),
-            planner_model=s.get("llm_planner_model", ""),
-            execution_model=s.get("llm_execution_model", ""),
-            planner_provider=planner_provider if planner_provider != provider else "",
-            execution_provider=execution_provider if execution_provider != provider else "",
-            planner_api_key=planner_api_key,
-            execution_api_key=execution_api_key,
-            system_prompt=s.get("system_prompt", ""),
-            personality=s.get("personality", ""),
-            scenario=s.get("scenario", ""),
-            history_instruction=s.get("history_instruction", ""),
-            router_enabled=s.get("llm_router_enabled", False),
-        )
+        with _instance_lock:
+            if _instance is None:
+                try:
+                    from core.config_manager import ConfigManager
+                    s = ConfigManager.load_settings()
+                except Exception:
+                    s = {}
+                provider = s.get("llm_provider", "groq")
+                api_key = "ollama" if provider == "ollama" else s.get(_KEY_MAP.get(provider, ""), "")
+                planner_provider = s.get("llm_planner_provider", "") or provider
+                execution_provider = s.get("llm_execution_provider", "") or provider
+                planner_api_key = (
+                    "ollama" if planner_provider == "ollama"
+                    else s.get(_KEY_MAP.get(planner_provider, ""), "")
+                ) if planner_provider != provider else ""
+                execution_api_key = (
+                    "ollama" if execution_provider == "ollama"
+                    else s.get(_KEY_MAP.get(execution_provider, ""), "")
+                ) if execution_provider != provider else ""
+                _instance = LLMProvider(
+                    provider=provider, api_key=api_key,
+                    model=s.get("llm_model", ""),
+                    planner_model=s.get("llm_planner_model", ""),
+                    execution_model=s.get("llm_execution_model", ""),
+                    planner_provider=planner_provider if planner_provider != provider else "",
+                    execution_provider=execution_provider if execution_provider != provider else "",
+                    planner_api_key=planner_api_key,
+                    execution_api_key=execution_api_key,
+                    system_prompt=s.get("system_prompt", ""),
+                    personality=s.get("personality", ""),
+                    scenario=s.get("scenario", ""),
+                    history_instruction=s.get("history_instruction", ""),
+                    router_enabled=s.get("llm_router_enabled", False),
+                )
     return _instance
 
 def reset_llm_provider():

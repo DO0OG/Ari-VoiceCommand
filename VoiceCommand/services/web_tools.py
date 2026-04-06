@@ -7,6 +7,7 @@ import logging
 import os
 import json
 import time
+import threading
 import urllib.parse
 import urllib.request
 from typing import Optional, List, Dict, Any
@@ -583,9 +584,12 @@ class SmartBrowser:
 
 # 싱글톤 브라우저 (필요 시 사용)
 _browser_instance: Optional[SmartBrowser] = None
+_browser_instance_lock = threading.Lock()
 
 def get_smart_browser(headless=False) -> SmartBrowser:
     global _browser_instance
     if _browser_instance is None:
-        _browser_instance = SmartBrowser(headless=headless)
+        with _browser_instance_lock:
+            if _browser_instance is None:
+                _browser_instance = SmartBrowser(headless=headless)
     return _browser_instance

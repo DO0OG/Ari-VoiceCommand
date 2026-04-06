@@ -1,10 +1,12 @@
+"""애플리케이션 전역 상태와 음성/TTS 오케스트레이션 헬퍼."""
+
 import logging
 import os
 import sys
 import time
 import threading
 from collections import deque
-from typing import Any, Tuple
+from typing import Tuple
 import speech_recognition as sr
 
 # SSL 인증서 경로 설정 (PyInstaller 환경)
@@ -54,11 +56,11 @@ class SharedMicrophone(sr.Microphone):
 
 # ── 초기화 및 설정 ───────────────────────────────────────────────────────────
 
-def set_tts_thread(thread: Any) -> None:
+def set_tts_thread(thread: object) -> None:
     _state.tts_thread = thread
 
 
-def set_ai_assistant(assistant: Any) -> None:
+def set_ai_assistant(assistant: object) -> None:
     _state.ai_assistant = assistant
     if _state.command_registry:
         from commands.ai_command import AICommand
@@ -72,7 +74,7 @@ def set_ai_assistant(assistant: Any) -> None:
                 break
 
 
-def set_character_widget(widget: Any) -> None:
+def set_character_widget(widget: object) -> None:
     _state.character_widget = widget
     
     # 오케스트레이터 생각 중 상태 연결

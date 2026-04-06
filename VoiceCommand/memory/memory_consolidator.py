@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import threading
 
 
 class MemoryConsolidator:
@@ -66,10 +67,13 @@ class MemoryConsolidator:
 
 
 _consolidator: MemoryConsolidator | None = None
+_consolidator_lock = threading.Lock()
 
 
 def get_memory_consolidator() -> MemoryConsolidator:
     global _consolidator
     if _consolidator is None:
-        _consolidator = MemoryConsolidator()
+        with _consolidator_lock:
+            if _consolidator is None:
+                _consolidator = MemoryConsolidator()
     return _consolidator

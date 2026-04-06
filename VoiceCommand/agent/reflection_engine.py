@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import List
 
@@ -162,10 +163,13 @@ class ReflectionEngine:
 
 
 _engine: ReflectionEngine | None = None
+_engine_lock = threading.Lock()
 
 
 def get_reflection_engine() -> ReflectionEngine:
     global _engine
     if _engine is None:
-        _engine = ReflectionEngine()
+        with _engine_lock:
+            if _engine is None:
+                _engine = ReflectionEngine()
     return _engine

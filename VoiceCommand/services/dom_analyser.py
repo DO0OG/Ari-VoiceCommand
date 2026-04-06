@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """
 Selenium 드라이버의 DOM 상태를 분석하고 다음 액션을 제안한다.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from urllib.parse import urlparse

@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """
 전략 기억 검색용 텍스트 임베딩 모듈.
 """
+
+from __future__ import annotations
 
 import hashlib
 import importlib
@@ -172,19 +172,25 @@ class CrossEncoderReranker:
 
 _embedder: Optional[Embedder] = None
 _reranker: Optional[CrossEncoderReranker] = None
+_embedder_lock = threading.Lock()
+_reranker_lock = threading.Lock()
 
 
 def get_embedder() -> Embedder:
     global _embedder
     if _embedder is None:
-        _embedder = Embedder()
+        with _embedder_lock:
+            if _embedder is None:
+                _embedder = Embedder()
     return _embedder
 
 
 def get_reranker() -> CrossEncoderReranker:
     global _reranker
     if _reranker is None:
-        _reranker = CrossEncoderReranker()
+        with _reranker_lock:
+            if _reranker is None:
+                _reranker = CrossEncoderReranker()
     return _reranker
 
 

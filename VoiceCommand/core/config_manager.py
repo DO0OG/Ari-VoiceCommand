@@ -4,7 +4,7 @@ import logging
 import os
 import threading
 import shutil
-from typing import Any, Dict, Optional
+from typing import Optional, cast
 
 from core.settings_schema import (
     DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
@@ -21,15 +21,17 @@ def _settings_path() -> str:
 class ConfigManager:
     """설정 파일 관리 클래스"""
 
+    SettingsDict = dict[str, object]
+
     SETTINGS_FILE = SETTINGS_FILENAME
     SETTINGS_TEMPLATE_FILE = SETTINGS_TEMPLATE_FILENAME
     DEFAULT_SETTINGS = SETTINGS_DEFAULTS
-    _cached_settings: Optional[Dict[str, Any]] = None
+    _cached_settings: Optional[SettingsDict] = None
     # RLock: set_value → load_settings → save_settings 재진입 허용
     _lock: threading.RLock = threading.RLock()
 
     @classmethod
-    def load_settings(cls) -> Dict[str, Any]:
+    def load_settings(cls) -> SettingsDict:
         """설정 파일 로드. 캐시 적중 시 락 없이 반환(읽기 전용 사용 권장)."""
         if cls._cached_settings is not None:
             return dict(cls._cached_settings)
@@ -40,7 +42,7 @@ class ConfigManager:
             path = _settings_path()
             try:
                 with open(path, "r", encoding="utf-8") as f:
-                    settings = json.load(f)
+                    settings = cast(ConfigManager.SettingsDict, json.load(f))
                 logging.info("설정 파일을 로드했습니다.")
                 cls._cached_settings = {**cls.DEFAULT_SETTINGS, **settings}
             except FileNotFoundError:
@@ -54,7 +56,7 @@ class ConfigManager:
             return dict(cls._cached_settings)
 
     @classmethod
-    def _restore_default_settings(cls, dest_path: str) -> Dict[str, Any]:
+    def _restore_default_settings(cls, dest_path: str) -> SettingsDict:
         from core.resource_manager import ResourceManager
 
         template_src = ResourceManager.get_bundle_path(cls.SETTINGS_TEMPLATE_FILE)
@@ -64,13 +66,13 @@ class ConfigManager:
                 shutil.copy2(template_src, dest_path)
                 logging.info("설정 템플릿을 사용자 런타임 경로로 복사했습니다.")
                 with open(dest_path, "r", encoding="utf-8") as f:
-                    return {**cls.DEFAULT_SETTINGS, **json.load(f)}
+                    return {**cls.DEFAULT_SETTINGS, **cast(ConfigManager.SettingsDict, json.load(f))}
             except Exception as e:
                 logging.warning(f"설정 템플릿 복사 실패: {e}")
         return cls.DEFAULT_SETTINGS.copy()
 
     @classmethod
-    def save_settings(cls, settings: Dict[str, Any]) -> bool:
+    def save_settings(cls, settings: SettingsDict) -> bool:
         """설정 파일 저장"""
         with cls._lock:
             path = _settings_path()
@@ -86,15 +88,15 @@ class ConfigManager:
                 return False
 
     @classmethod
-    def get_value(cls, key: str, default: Any = None) -> Any:
+    def get_value(cls, key: str, default: object = None) -> object:
         return cls.load_settings().get(key, default)
 
     @classmethod
-    def get(cls, key: str, default: Any = None) -> Any:
+    def get(cls, key: str, default: object = None) -> object:
         return cls.get_value(key, default)
 
     @classmethod
-    def set_value(cls, key: str, value: Any) -> bool:
+    def set_value(cls, key: str, value: object) -> bool:
         settings = dict(cls.load_settings())
         settings[key] = value
         return cls.save_settings(settings)

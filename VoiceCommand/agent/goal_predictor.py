@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import List
@@ -82,10 +83,13 @@ class GoalPredictor:
 
 
 _predictor: GoalPredictor | None = None
+_predictor_lock = threading.Lock()
 
 
 def get_goal_predictor() -> GoalPredictor:
     global _predictor
     if _predictor is None:
-        _predictor = GoalPredictor()
+        with _predictor_lock:
+            if _predictor is None:
+                _predictor = GoalPredictor()
     return _predictor

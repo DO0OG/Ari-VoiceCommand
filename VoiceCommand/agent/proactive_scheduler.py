@@ -644,11 +644,14 @@ class ProactiveScheduler:
             logging.debug(f"[Scheduler] EpisodeMemory 기록 실패: {exc}")
 
 _instance: Optional[ProactiveScheduler] = None
+_instance_lock = threading.Lock()
 
 def get_scheduler(tts_func: Optional[Callable] = None) -> ProactiveScheduler:
     global _instance
     if _instance is None:
-        _instance = ProactiveScheduler(tts_func)
+        with _instance_lock:
+            if _instance is None:
+                _instance = ProactiveScheduler(tts_func)
     elif tts_func:
         _instance.tts = tts_func
     return _instance

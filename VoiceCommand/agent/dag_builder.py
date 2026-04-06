@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """
 ActionStep 목록으로부터 실행 DAG와 병렬 그룹을 계산한다.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import os

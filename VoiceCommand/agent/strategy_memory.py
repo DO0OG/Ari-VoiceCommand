@@ -469,11 +469,14 @@ class StrategyMemory:
 
 
 _instance: Optional[StrategyMemory] = None
+_instance_lock = threading.Lock()
 
 def get_strategy_memory() -> StrategyMemory:
     global _instance
     if _instance is None:
-        _instance = StrategyMemory()
+        with _instance_lock:
+            if _instance is None:
+                _instance = StrategyMemory()
     return _instance
 
 

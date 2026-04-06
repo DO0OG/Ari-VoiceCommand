@@ -1,7 +1,10 @@
+"""실행 결과를 휴리스틱·OCR·코드·LLM로 다단계 검증하는 엔진."""
+
 import json
 import logging
 import os
 import re
+import threading
 import time
 from datetime import datetime
 from dataclasses import dataclass
@@ -723,11 +726,14 @@ class RealVerifier:
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────
 
 _verifier: Optional[RealVerifier] = None
+_verifier_lock = threading.Lock()
 
 def get_real_verifier() -> RealVerifier:
     global _verifier
     if _verifier is None:
-        from agent.llm_provider import get_llm_provider
-        from agent.autonomous_executor import get_executor
-        _verifier = RealVerifier(get_llm_provider(), get_executor())
+        with _verifier_lock:
+            if _verifier is None:
+                from agent.llm_provider import get_llm_provider
+                from agent.autonomous_executor import get_executor
+                _verifier = RealVerifier(get_llm_provider(), get_executor())
     return _verifier

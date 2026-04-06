@@ -4,7 +4,7 @@
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
 ## Last Updated: 2026-04-06
-## 상태: agent_planner 예외 처리 중복 1차 정리 반영 중 · 런타임 상태 분리 완료 · 290/290 테스트 통과
+## 상태: 품질 잔여 항목 대규모 정리 반영 완료 · 런타임 상태 분리 완료 · 301/301 테스트 통과
 
 ---
 
@@ -139,6 +139,14 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - JSON 응답 복구와 균형 괄호 추출 로직은 `agent/planner_json_utils.py`로 분리
 - 전략/에피소드 메모리 접근 helper를 `_with_strategy_memory`, `_with_episode_memory`로 통일해 중첩 `try/except` 없이 fail-closed 동작 유지
 
+### `core/stt_provider.py`
+- `WhisperSTTProvider`는 READY 신호와 전사 응답을 timeout 기반으로 읽고, 워커 hang/종료 시 자동 재시작
+- `audio/simple_wake.py`, `core/threads.py`는 같은 설정 서명이어도 unhealthy provider를 감지하면 STT 인스턴스를 재생성
+
+### 싱글톤 팩토리 상태
+- `agent_orchestrator`, `agent_planner`, `autonomous_executor`, `embedder`, `llm_provider`, `proactive_scheduler`, `real_verifier`, `skill_library`, `strategy_memory`, `plugin_loader`, `memory_*`, `web_tools` 주요 getter에 생성 락 추가
+- `test_singleton_factories.py`로 주요 lock-protected getter의 동시 초기화 회귀를 검증
+
 ### `memory/conversation_history.py`
 - 슬라이딩 요약: `MAX_ACTIVE=20`, `COMPRESS_UNIT=5`, `MAX_SUMMARIES=5`
 - `_summarize_chunk()`는 단순 truncation 대신 문장 경계 우선 요약을 사용하고, 종료 시 `flush()`로 debounce 저장을 강제 반영할 수 있습니다.
@@ -176,7 +184,9 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - `test_text_interface.py`에 채팅 말풍선 폭 제한·예약 작업 라벨 줄바꿈 회귀 테스트 추가
 - `test_validate_repo.py`에 UI 파일 검증 대상 포함 여부 확인 추가
 - `test_agent_planner_parsing.py`에 strategy/episode memory helper 정상 경로와 fail-closed 회귀 테스트 추가
-- 전체 검증 기준: `290/290` + smoke pass
+- `test_singleton_factories.py`, `test_stt_provider.py` 추가
+- `test_automation_helpers.py`, `test_autonomous_executor.py`, `test_validate_repo.py`에 런타임 안정성 회귀 케이스 추가
+- 전체 검증 기준: `301/301` + smoke pass
 
 ---
 

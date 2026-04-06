@@ -351,12 +351,15 @@ class SkillLibrary:
 
 
 _skill_library: SkillLibrary | None = None
+_skill_library_lock = threading.Lock()
 
 
 def get_skill_library() -> SkillLibrary:
     global _skill_library
     if _skill_library is None:
-        _skill_library = SkillLibrary()
+        with _skill_library_lock:
+            if _skill_library is None:
+                _skill_library = SkillLibrary()
     return _skill_library
 
 
