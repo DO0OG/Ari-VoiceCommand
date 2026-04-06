@@ -4,7 +4,7 @@
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
 ## Last Updated: 2026-04-06
-## 상태: 플래너/자동화 유틸 모듈 분리 반영 완료 · 런타임 상태 분리 완료 · 286/286 테스트 통과
+## 상태: 텍스트 채팅·예약 작업 UI 레이아웃 안정화 반영 완료 · 런타임 상태 분리 완료 · 290/290 테스트 통과
 
 ---
 
@@ -154,6 +154,8 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ### `ui/scheduler_panel.py`
 - Qt 시그널 연결 제거 → `QTimer` 5초 폴링 방식으로 교체
 - `task.name` 표시: fallback → `task.goal[:30]`
+- 긴 작업명/설명/최근 실행 결과 라벨이 패널 안에서 줄바꿈되도록 `wordWrap`/`QSizePolicy` 보강
+- 스크롤 영역 가로 스크롤바를 비활성화해 긴 텍스트가 패널을 밀어내지 않도록 유지
 
 ---
 
@@ -170,7 +172,9 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 - README 최근 업데이트와 아키텍처 설명을 최신 구조에 맞게 갱신
 - `test_condition_evaluator.py` 추가, `test_execution_engine.py` 확장
 - `test_planner_json_utils.py`, `test_automation_plan_utils.py` 추가
-- 전체 검증 기준: `286/286` + smoke pass
+- `test_text_interface.py`에 채팅 말풍선 폭 제한·예약 작업 라벨 줄바꿈 회귀 테스트 추가
+- `test_validate_repo.py`에 UI 파일 검증 대상 포함 여부 확인 추가
+- 전체 검증 기준: `290/290` + smoke pass
 
 ---
 
