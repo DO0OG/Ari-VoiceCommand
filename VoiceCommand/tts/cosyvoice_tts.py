@@ -261,6 +261,9 @@ class CosyVoiceTTS(QObject):
 
         self._clear_pcm_state()
 
+        # 첫 청크가 버퍼에 채워진 뒤 스트림을 시작하기 위한 이벤트
+        _first_chunk_ready = threading.Event()
+
         def pipe_reader():
             first = True
             try:
@@ -274,9 +277,6 @@ class CosyVoiceTTS(QObject):
                     data = self._read_exact(size)
                     if not data:
                         break
-                    if first:
-                        logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
-                        first = False
                     max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
                     while not self._stopping:
                         with self._pcm_lock:
@@ -284,16 +284,24 @@ class CosyVoiceTTS(QObject):
                                 self._pcm_buffer.append(data)
                                 break
                         time.sleep(0.01)
+                    if first:
+                        logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
+                        _first_chunk_ready.set()
+                        first = False
             except Exception as e:
                 if not self._stopping:
                     logging.debug(f"pipe_reader 오류: {e}")
             finally:
                 self._pcm_done.set()
+                _first_chunk_ready.set()  # 데이터 없이 종료된 경우 블록 해제
 
         reader_t = threading.Thread(target=pipe_reader, daemon=True)
         reader_t.start()
 
         pa_stream = self._ensure_stream()
+        # 빈 버퍼로 스트림을 시작하면 하드웨어 초기화 구간에 무음이 재생돼
+        # 첫 문장 음질이 저하되므로 첫 청크 수신 후 시작한다
+        _first_chunk_ready.wait(timeout=60)
         if not pa_stream.is_active():
             pa_stream.start_stream()
 
