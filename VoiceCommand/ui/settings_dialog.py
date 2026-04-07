@@ -277,9 +277,11 @@ class SettingsDialog(QDialog):
 
     def _open_log_folder(self):
         import os
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
         log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Ari", "logs")
         os.makedirs(log_dir, exist_ok=True)
-        os.startfile(log_dir)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
 
     def _open_stt_settings(self):
         from ui.stt_settings_dialog import STTSettingsDialog
