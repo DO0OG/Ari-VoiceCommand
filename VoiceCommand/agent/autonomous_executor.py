@@ -510,7 +510,7 @@ class AutonomousExecutor:
                 action_desc, report, self.tts_wrapper
             )
         except Exception as e:
-            logging.error(f"[Executor] 확인 다이얼로그 오류: {e}")
+            logging.error("[Executor] 확인 다이얼로그 오류: %s", e)
             return False
 
     def _record_history(self, result: ExecutionResult):
@@ -1041,7 +1041,7 @@ except Exception:
             if path and os.path.exists(path):
                 os.unlink(path)
         except OSError as e:
-            logging.debug(f"[Executor] 임시 파일 삭제 실패: {e}")
+            logging.debug("[Executor] 임시 파일 삭제 실패: %s", e)
 
     def _get_module_dir(self) -> str:
         return os.path.dirname(os.path.dirname(__file__))

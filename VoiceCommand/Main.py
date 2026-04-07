@@ -332,7 +332,7 @@ def main():
             if not tool_name or ai_command is None:
                 return
             if tool_name in ai_command._dispatch:
-                logging.warning(f"[PluginLoader] 중복 도구 등록 거부: {tool_name}")
+                logging.warning("[PluginLoader] 중복 도구 등록 거부: %s", tool_name)
                 return
             get_llm_provider().register_plugin_tool(schema)
             ai_command.register_plugin_tool_handler(tool_name, handler)
@@ -362,16 +362,16 @@ def main():
             plugin_flush_timer.timeout.connect(plugin_watcher.flush)
             plugin_flush_timer.start(1000)
         except Exception as exc:
-            logging.error(f"플러그인 감시 시작 실패: {exc}")
+            logging.error("플러그인 감시 시작 실패: %s", exc)
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용
-        logging.info(f"Application exited with code: {exit_code}")
+        logging.info("Application exited with code: %s", exit_code)
 
     except KeyboardInterrupt:
         logging.info("프로그램 종료")
     except Exception as e:
-        logging.error(f"예외 발생: {str(e)}", exc_info=True)
+        logging.error("예외 발생: %s", e, exc_info=True)
     finally:
         logging.info("=== 앱 종료 시작 ===")
         flush_runtime_state()
