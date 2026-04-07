@@ -50,7 +50,7 @@ Ari is not just another voice recognition tool. It is a powerful **Autonomous Ag
 
 Ari becomes smarter with every interaction.
 
-### Autonomous Success Rate (as of v4.0)
+### Autonomous Success Rate
 | Task Category | Initial Success | Post-Learning |
 | :--- | :---: | :---: |
 | **File/System Control** | 85% | **98%** |

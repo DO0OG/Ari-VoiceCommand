@@ -17,17 +17,18 @@ from ui.common import create_muted_label
 
 # ── 제공자 정의 ────────────────────────────────────────────────────────────────
 
-LLM_PROVIDERS = [
-    # (표시 이름,          data 키,       settings 키,          placeholder)
-    (_("Groq (Llama 3.3, 무료)"), "groq",       "groq_api_key",       _("https://console.groq.com 에서 무료 발급")),
-    (_("OpenAI (GPT-4o)"),        "openai",     "openai_api_key",     _("https://platform.openai.com/api-keys")),
-    (_("Anthropic (Claude)"),     "anthropic",  "anthropic_api_key",  _("https://console.anthropic.com")),
-    (_("Mistral AI"),             "mistral",    "mistral_api_key",    _("https://console.mistral.ai")),
-    (_("Google Gemini"),          "gemini",     "gemini_api_key",     _("https://aistudio.google.com/app/apikey")),
-    (_("OpenRouter (멀티모델)"),   "openrouter",   "openrouter_api_key",  _("https://openrouter.ai/keys")),
-    (_("NVIDIA NIM"),             "nvidia_nim",   "nvidia_nim_api_key",  _("https://build.nvidia.com 에서 nvapi- 키 발급")),
-    (_("Ollama (로컬 LLM)"),      "ollama",       "",                    _("Ollama 설치 후 사용 가능 — API 키 불필요")),
-]
+def _llm_providers():
+    # (표시 이름, data 키, settings 키, placeholder)
+    return [
+        (_("Groq (Llama 3.3, 무료)"), "groq",       "groq_api_key",       _("https://console.groq.com 에서 무료 발급")),
+        (_("OpenAI (GPT-4o)"),        "openai",     "openai_api_key",     _("https://platform.openai.com/api-keys")),
+        (_("Anthropic (Claude)"),     "anthropic",  "anthropic_api_key",  _("https://console.anthropic.com")),
+        (_("Mistral AI"),             "mistral",    "mistral_api_key",    _("https://console.mistral.ai")),
+        (_("Google Gemini"),          "gemini",     "gemini_api_key",     _("https://aistudio.google.com/app/apikey")),
+        (_("OpenRouter (멀티모델)"),   "openrouter",   "openrouter_api_key",  _("https://openrouter.ai/keys")),
+        (_("NVIDIA NIM"),             "nvidia_nim",   "nvidia_nim_api_key",  _("https://build.nvidia.com 에서 nvapi- 키 발급")),
+        (_("Ollama (로컬 LLM)"),      "ollama",       "",                    _("Ollama 설치 후 사용 가능 — API 키 불필요")),
+    ]
 
 
 # ── API 검증 스레드 ────────────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ class _LLMSettingsPage(QWidget):
 
         llm_vbox.addWidget(QLabel(_("제공자 선택:")))
         self.llm_provider_combo = QComboBox()
-        for label, data, _key, _ph in LLM_PROVIDERS:
+        for label, data, _key, _ph in _llm_providers():
             self.llm_provider_combo.addItem(label, data)
         self._set_combo(self.llm_provider_combo, self._settings.get("llm_provider", "groq"))
         self.llm_provider_combo.currentIndexChanged.connect(self._on_llm_changed)
@@ -184,7 +185,7 @@ class _LLMSettingsPage(QWidget):
         api_vbox.addWidget(create_muted_label(
             _("사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요.")
         ))
-        for _label, data, key, placeholder in LLM_PROVIDERS:
+        for _label, data, key, placeholder in _llm_providers():
             from agent.llm_provider import _PROVIDER_CONFIG
             default_model = _PROVIDER_CONFIG.get(data, {}).get("default_model", "")
 
@@ -237,7 +238,7 @@ class _LLMSettingsPage(QWidget):
     def _make_role_provider_combo(self, current_value: str) -> QComboBox:
         combo = QComboBox()
         combo.addItem(_("(기본 제공자와 동일)"), "")
-        for label, data, _key, _ph in LLM_PROVIDERS:
+        for label, data, _key, _ph in _llm_providers():
             combo.addItem(label, data)
         self._set_combo(combo, current_value)
         return combo
@@ -317,7 +318,7 @@ class _LLMSettingsPage(QWidget):
     def get_values(self) -> dict:
         """현재 LLM 설정 값을 dict로 반환."""
         llm_keys = {}
-        for _label, data, settings_key, _ph in LLM_PROVIDERS:
+        for _label, data, settings_key, _ph in _llm_providers():
             inp = self._llm_key_inputs.get(data)
             if inp and settings_key:
                 llm_keys[settings_key] = inp.text().strip()

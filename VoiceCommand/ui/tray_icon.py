@@ -184,3 +184,14 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.character_action.setText(_("캐릭터 숨기기"))
         else:
             self.character_action.setText(_("캐릭터 표시"))
+
+    def refresh_language(self) -> None:
+        """언어 변경 시 트레이 메뉴 텍스트를 즉시 갱신한다."""
+        self.chat_action.setText(_("💬 텍스트 대화"))
+        self.game_mode_action.setText(_("🎮 게임 모드 (GPU 절약)"))
+        self.smart_mode_action.setText(_("스마트 어시스턴트 모드"))
+        self.mouse_reaction_action.setText(_("마우스 반응"))
+        self.settings_action.setText(_("설정"))
+        self.scheduled_tasks_action.setText(_("예약 작업 관리"))
+        self.exit_action.setText(_("종료"))
+        self.update_character_menu_text()

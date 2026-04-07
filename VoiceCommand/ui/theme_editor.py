@@ -17,13 +17,14 @@ from PySide6.QtWidgets import (
 from ui import theme
 from i18n.translator import _
 
-COLOR_GROUPS = {
-    _("주요 색상"): ["primary", "primary_dark", "accent", "success", "warning", "danger", "muted"],
-    _("텍스트"): ["text_primary", "text_secondary", "text_panel"],
-    _("배경"): ["bg_main", "bg_panel", "bg_white", "bg_input", "bg_chat_user", "bg_chat_aari"],
-    _("테두리"): ["border_light", "border_div", "border_input", "border_card"],
-    _("기타"): ["titlebar", "bg_suggestion", "bg_chip_primary", "bg_chip_warn"],
-}
+def _color_groups():
+    return {
+        _("주요 색상"): ["primary", "primary_dark", "accent", "success", "warning", "danger", "muted"],
+        _("텍스트"): ["text_primary", "text_secondary", "text_panel"],
+        _("배경"): ["bg_main", "bg_panel", "bg_white", "bg_input", "bg_chat_user", "bg_chat_aari"],
+        _("테두리"): ["border_light", "border_div", "border_input", "border_card"],
+        _("기타"): ["titlebar", "bg_suggestion", "bg_chip_primary", "bg_chip_warn"],
+    }
 HEX_ONLY_KEYS = {"bg_main", "bg_panel", "bg_suggestion", "bg_status", "bg_dashboard"}
 
 
@@ -110,7 +111,7 @@ class ThemeEditorWidget(QWidget):
         scroll.setMaximumHeight(400)
         scroll_body = QWidget()
         scroll_layout = QVBoxLayout(scroll_body)
-        for group_name, keys in COLOR_GROUPS.items():
+        for group_name, keys in _color_groups().items():
             box = QGroupBox(group_name)
             grid = QGridLayout(box)
             for row, key in enumerate(keys):

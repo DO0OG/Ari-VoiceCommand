@@ -279,7 +279,8 @@ class SettingsDialog(QDialog):
         import os
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
-        log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Ari", "logs")
+        from core.resource_manager import ResourceManager
+        log_dir = ResourceManager.get_writable_path("logs")
         os.makedirs(log_dir, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
 
@@ -291,8 +292,8 @@ class SettingsDialog(QDialog):
     def _show_theme_hint(self):
         QMessageBox.information(
             self,
-            "테마 폴더",
-            f"테마 JSON 파일은 아래 폴더에서 직접 수정할 수 있습니다.\n\n{theme_dir()}\n\n저장 후 설정창에서 다시 적용하면 열린 UI에 즉시 반영됩니다.",
+            _("테마 폴더"),
+            _("테마 JSON 파일은 아래 폴더에서 직접 수정할 수 있습니다.\n\n{path}\n\n저장 후 설정창에서 다시 적용하면 열린 UI에 즉시 반영됩니다.").format(path=theme_dir()),
         )
 
     def _refresh_theme_preview(self):
@@ -306,7 +307,7 @@ class SettingsDialog(QDialog):
             f"QFrame {{ background: {panel}; border: 1px solid {primary}; border-radius: 10px; }}"
             f"QLabel {{ color: {text}; }}"
         )
-        self.theme_preview_title.setText(f"{palette.name} 미리보기")
+        self.theme_preview_title.setText(_("{name} 미리보기").format(name=palette.name))
         self.theme_preview_colors.setText(
             f"Primary {primary} | Accent {accent} | Font {palette.font_family}"
         )
@@ -391,14 +392,13 @@ class SettingsDialog(QDialog):
         if self.theme_settings_changed():
             QMessageBox.information(
                 self,
-                "테마 저장",
-                "테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다.",
+                _("테마 저장"),
+                _("테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다."),
             )
 
         selected_lang = self.lang_combo.currentData()
         if selected_lang != get_language():
             set_language(selected_lang)
-            QMessageBox.information(self, _("언어 변경"), _("언어 설정이 저장됐어요. 재시작 후 적용됩니다."))
 
         self.accept()
 

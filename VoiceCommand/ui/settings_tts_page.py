@@ -22,13 +22,14 @@ from ui.local_installers import (
 
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
 
-TTS_MODES = [
-    (_("Fish Audio (API)"),    "fish"),
-    (_("로컬 (CosyVoice3)"),   "local"),
-    (_("OpenAI TTS"),          "openai_tts"),
-    (_("ElevenLabs"),          "elevenlabs"),
-    (_("Edge TTS (무료)"),     "edge"),
-]
+def _tts_modes():
+    return [
+        (_("Fish Audio (API)"),    "fish"),
+        (_("로컬 (CosyVoice3)"),   "local"),
+        (_("OpenAI TTS"),          "openai_tts"),
+        (_("ElevenLabs"),          "elevenlabs"),
+        (_("Edge TTS (무료)"),     "edge"),
+    ]
 
 
 class _TTSSettingsPage(QWidget):
@@ -68,7 +69,7 @@ class _TTSSettingsPage(QWidget):
 
         tts_vbox.addWidget(QLabel(_("TTS 엔진 선택:")))
         self.tts_mode_combo = QComboBox()
-        for label, data in TTS_MODES:
+        for label, data in _tts_modes():
             self.tts_mode_combo.addItem(label, data)
         self._set_combo(self.tts_mode_combo, self._settings.get("tts_mode", "fish"))
         self.tts_mode_combo.currentIndexChanged.connect(self._on_tts_changed)
@@ -190,7 +191,7 @@ class _TTSSettingsPage(QWidget):
 
     def _on_tts_changed(self):
         selected = self.tts_mode_combo.currentData()
-        for key in [d for _, d in TTS_MODES]:
+        for key in [d for _, d in _tts_modes()]:
             grp = self._tts_groups.get(key)
             if grp:
                 grp.setVisible(key == selected)

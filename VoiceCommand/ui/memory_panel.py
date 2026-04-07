@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from i18n.translator import _
 from ui.common import (
     FloatingPanel, clear_layout, create_input_field,
     create_section_label, create_muted_label, show_temp_status,
@@ -92,8 +93,8 @@ class _BioTab(QWidget):
         self._fields: dict = {}
 
         for label, field_key, placeholder in [
-            ("이름", "name", "사용자 이름"),
-            ("위치", "location", "도시 또는 지역"),
+            (_("이름"), "name", _("사용자 이름")),
+            (_("위치"), "location", _("도시 또는 지역")),
         ]:
             row = QHBoxLayout()
             lbl = QLabel(label)
@@ -106,17 +107,17 @@ class _BioTab(QWidget):
             lay.addLayout(row)
             self._fields[field_key] = inp
 
-        lay.addWidget(create_section_label("관심사 (쉼표로 구분)"))
-        self._interests = create_input_field("예: 음악, 영화, 독서")
+        lay.addWidget(create_section_label(_("관심사 (쉼표로 구분)")))
+        self._interests = create_input_field(_("예: 음악, 영화, 독서"))
         self._interests.setText(", ".join(bio.get("interests", [])))
         lay.addWidget(self._interests)
 
-        lay.addWidget(create_section_label("메모 (쉼표로 구분)"))
-        self._memos = create_input_field("예: 고양이 좋아함, 야행성")
+        lay.addWidget(create_section_label(_("메모 (쉼표로 구분)")))
+        self._memos = create_input_field(_("예: 고양이 좋아함, 야행성"))
         self._memos.setText(", ".join(bio.get("memos", [])))
         lay.addWidget(self._memos)
 
-        save_btn = QPushButton("저장")
+        save_btn = QPushButton(_("저장"))
         save_btn.setFixedHeight(34)
         save_btn.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL, QFont.Bold))
         save_btn.setCursor(Qt.PointingHandCursor)
@@ -141,9 +142,9 @@ class _BioTab(QWidget):
             self._ctx.context["user_bio"]["interests"] = interests
             self._ctx.context["user_bio"]["memos"]     = memos
             self._ctx.save_context()
-            show_temp_status(self._status, "✅ 저장 완료")
+            show_temp_status(self._status, _("✅ 저장 완료"))
         except Exception as e:
-            show_temp_status(self._status, f"⚠️ 저장 실패: {e}")
+            show_temp_status(self._status, _("⚠️ 저장 실패: {error}").format(error=e))
 
 
 # ── 탭: 사실 (Facts) ─────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ class _FactsTab(QWidget):
         clear_layout(self._inner)
         facts = self._ctx.context.get("facts", {}) if self._ctx else {}
         if not facts:
-            self._inner.addWidget(create_muted_label("아직 저장된 사실이 없습니다."))
+            self._inner.addWidget(create_muted_label(_("아직 저장된 사실이 없습니다.")))
             return
         sorted_facts = sorted(
             facts.items(),
@@ -224,7 +225,7 @@ class _StatsTab(QWidget):
         ctx = self._ctx.context if self._ctx else {}
 
         # 자주 쓰는 명령어
-        lay.addWidget(create_section_label("자주 쓰는 명령어"))
+        lay.addWidget(create_section_label(_("자주 쓰는 명령어")))
         cmd_freq = sorted(ctx.get("command_frequency", {}).items(), key=lambda x: x[1], reverse=True)[:8]
         if cmd_freq:
             grid = QGridLayout()
@@ -240,10 +241,10 @@ class _StatsTab(QWidget):
                 grid.addWidget(chip, i // 3, i % 3)
             lay.addLayout(grid)
         else:
-            lay.addWidget(create_muted_label("기록 없음"))
+            lay.addWidget(create_muted_label(_("기록 없음")))
 
         # 대화 주제
-        lay.addWidget(create_section_label("대화 주제"))
+        lay.addWidget(create_section_label(_("대화 주제")))
         topics = sorted(ctx.get("conversation_topics", {}).items(), key=lambda x: x[1], reverse=True)[:10]
         if topics:
             topic_grid = QGridLayout()
@@ -261,10 +262,10 @@ class _StatsTab(QWidget):
                 topic_grid.addWidget(chip, i // 2, i % 2)
             lay.addLayout(topic_grid)
         else:
-            lay.addWidget(create_muted_label("기록 없음"))
+            lay.addWidget(create_muted_label(_("기록 없음")))
 
         # 선호도
-        lay.addWidget(create_section_label("선호도"))
+        lay.addWidget(create_section_label(_("선호도")))
         prefs = ctx.get("preferences", {})
         if prefs:
             for cat, vals in list(prefs.items())[:6]:
@@ -276,7 +277,7 @@ class _StatsTab(QWidget):
                 row_lbl.setStyleSheet("color: #444;")
                 lay.addWidget(row_lbl)
         else:
-            lay.addWidget(create_muted_label("기록 없음"))
+            lay.addWidget(create_muted_label(_("기록 없음")))
 
         lay.addStretch()
 
@@ -300,9 +301,9 @@ class MemoryPanel(FloatingPanel):
         self._facts_tab = _FactsTab(self._ctx)
         self._stats_tab = _StatsTab(self._ctx)
 
-        tabs.addTab(self._bio_tab,   "기본 정보")
-        tabs.addTab(self._facts_tab, "사실 (Facts)")
-        tabs.addTab(self._stats_tab, "통계")
+        tabs.addTab(self._bio_tab,   _("기본 정보"))
+        tabs.addTab(self._facts_tab, _("사실 (Facts)"))
+        tabs.addTab(self._stats_tab, _("통계"))
 
         self.content_layout.addWidget(tabs)
 

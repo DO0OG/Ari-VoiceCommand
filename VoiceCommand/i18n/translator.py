@@ -28,8 +28,31 @@ _SUPPORTED = {"ko", "en", "ja"}
 _current_lang: str = _DEFAULT_LANG
 _translation: Optional[gettext.GNUTranslations] = None
 _lock = threading.RLock()
+_language_change_callbacks: list = []
 
 logger = logging.getLogger(__name__)
+
+
+def on_language_changed(callback) -> None:
+    """언어 변경 시 호출될 콜백을 등록한다."""
+    if callback not in _language_change_callbacks:
+        _language_change_callbacks.append(callback)
+
+
+def remove_language_changed_callback(callback) -> None:
+    """등록된 언어 변경 콜백을 제거한다."""
+    try:
+        _language_change_callbacks.remove(callback)
+    except ValueError:
+        pass
+
+
+def _notify_language_changed() -> None:
+    for cb in _language_change_callbacks:
+        try:
+            cb()
+        except Exception as e:
+            logger.warning("[i18n] language change callback error: %s", e)
 
 
 def _load(lang: str) -> gettext.GNUTranslations:
@@ -63,7 +86,7 @@ def init(lang: Optional[str] = None) -> None:
 
 
 def set_language(lang: str) -> None:
-    """런타임 언어 전환. UI 반영은 재시작 필요."""
+    """런타임 언어 전환. 등록된 콜백을 통해 UI 핫로드."""
     if lang not in _SUPPORTED:
         logger.warning("[i18n] Unsupported language: %s", lang)
         return
@@ -75,6 +98,7 @@ def set_language(lang: str) -> None:
         builtins.__dict__["_"] = gettext_func
         builtins.__dict__["ngettext"] = ngettext_func
     logger.info("[i18n] Language changed: %s", lang)
+    _notify_language_changed()
 
 
 def get_language() -> str:

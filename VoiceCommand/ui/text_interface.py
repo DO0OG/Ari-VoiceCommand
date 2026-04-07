@@ -132,7 +132,7 @@ class ChatWidget(QFrame):
             if pure_text:
                 display_message = f"{emoji} {pure_text}".strip() if emoji else pure_text
 
-        sender_name  = "나" if is_user else "아리"
+        sender_name  = _("나") if is_user else _("아리")
         sender_color = COLOR_PRIMARY if is_user else COLOR_ACCENT
         bg_color     = COLOR_BG_CHAT_USER if is_user else COLOR_BG_CHAT_AARI
         corner_style = "border-top-right-radius: 0px;" if is_user else "border-top-left-radius: 0px;"
@@ -435,7 +435,7 @@ class TextInterfaceThread(QThread):
             self.response_ready.emit(str(response))
         except Exception as e:
             logger.error(f"텍스트 처리 오류: {e}")
-            self.response_ready.emit(f"오류가 발생했습니다: {e}")
+            self.response_ready.emit(_("오류가 발생했습니다: {error}").format(error=e))
         finally:
             self._detach_progress_callback()
 
@@ -467,7 +467,7 @@ class TextInterfaceThread(QThread):
             return response
         if hasattr(self.ai_assistant, "chat"):
             return self._invoke_with_optional_stream(self.ai_assistant.chat, self.query)
-        return "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
+        return _("죄송합니다. AI 응답 엔진을 초기화할 수 없습니다.")
 
     def _attach_progress_callback(self) -> None:
         try:
@@ -710,7 +710,7 @@ class TextInterface(QMainWindow):
             self.processing_thread.finished.connect(lambda: self._set_ui_enabled(True))
             self.processing_thread.start()
         else:
-            self._handle_response("AI 엔진이 연결되지 않았습니다.")
+            self._handle_response(_("AI 엔진이 연결되지 않았습니다."))
             self._set_ui_enabled(True)
 
     def _send_suggestion(self, goal: str) -> None:
