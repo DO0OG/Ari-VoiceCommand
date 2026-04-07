@@ -102,8 +102,10 @@ class SkillOptimizer:
         steps = self._parse_json_steps(response)
         if steps and len(steps) < len(skill.steps):
             logger.info(
-                f"[SkillOptimizer] '{skill.name}' 스텝 압축: "
-                f"{len(skill.steps)} → {len(steps)}개"
+                "[SkillOptimizer] '%s' 스텝 압축: %s → %s개",
+                skill.name,
+                len(skill.steps),
+                len(steps),
             )
             return steps
         return None
