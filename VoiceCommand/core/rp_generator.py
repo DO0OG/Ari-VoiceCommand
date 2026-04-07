@@ -22,18 +22,41 @@ class RPGenerator:
 
     def build_system_prompt(self, base_prompt: str) -> str:
         """캐릭터 설정을 시스템 프롬프트에 녹여서 반환."""
-        parts = [base_prompt.strip() if base_prompt else "당신은 한국어 AI 어시스턴트 아리입니다."]
+        try:
+            from i18n.translator import get_language
+            lang = get_language()
+        except Exception:
+            lang = "ko"
+        _BASE_PROMPT = {
+            "ko": "당신은 한국어 AI 어시스턴트 아리입니다.",
+            "en": "You are Ari, an AI assistant.",
+            "ja": "あなたはAIアシスタントのAriです。",
+        }
+        _EMOTION_INSTRUCTION = {
+            "ko": (
+                "[감정 표현]\n"
+                "응답 맨 앞에 감정 태그를 자연스럽게 붙이세요. 사용할 수 있는 예: "
+                "(기쁨) (슬픔) (화남) (놀람) (평온) (수줍) (기대) (진지) (걱정)"
+            ),
+            "en": (
+                "[Emotion Tags]\n"
+                "Start your response with an emotion tag naturally. "
+                "Examples: (joy) (sad) (angry) (surprised) (calm) (shy) (excited) (serious) (worried)"
+            ),
+            "ja": (
+                "[感情タグ]\n"
+                "返答の先頭に感情タグを自然につけてください。"
+                "例: (喜び) (悲しみ) (怒り) (驚き) (穏やか) (恥ずかしい) (期待) (真剣) (心配)"
+            ),
+        }
+        parts = [base_prompt.strip() if base_prompt else _BASE_PROMPT.get(lang, _BASE_PROMPT["ko"])]
         if self.personality:
             parts.append(f"[캐릭터 성격]\n{self.personality.strip()}")
         if self.scenario:
             parts.append(f"[현재 상황]\n{self.scenario.strip()}")
         if self.history_instruction:
             parts.append(f"[대화 방식]\n{self.history_instruction.strip()}")
-        parts.append(
-            "[감정 표현]\n"
-            "응답 맨 앞에 감정 태그를 자연스럽게 붙이세요. 사용할 수 있는 예: "
-            "(기쁨) (슬픔) (화남) (놀람) (평온) (수줍) (기대) (진지) (걱정)"
-        )
+        parts.append(_EMOTION_INSTRUCTION.get(lang, _EMOTION_INSTRUCTION["ko"]))
         return "\n\n".join(part for part in parts if part)
 
     def generate(self, text: str) -> str:
