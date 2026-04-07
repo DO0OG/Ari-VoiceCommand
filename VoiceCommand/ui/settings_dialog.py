@@ -277,10 +277,9 @@ class SettingsDialog(QDialog):
 
     def _open_log_folder(self):
         import os
-        import subprocess
         log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Ari", "logs")
         os.makedirs(log_dir, exist_ok=True)
-        subprocess.Popen(["explorer", log_dir])
+        os.startfile(log_dir)
 
     def _open_stt_settings(self):
         from ui.stt_settings_dialog import STTSettingsDialog
