@@ -8,7 +8,7 @@ from datetime import datetime
 import warnings
 
 # i18n 최우선 초기화 — 다른 모듈이 _() 를 사용하기 전에 호출
-from i18n.translator import init as i18n_init
+from i18n.translator import init as i18n_init, _, on_language_changed
 i18n_init()
 
 # torch + faster-whisper(CTranslate2/MKL)가 libiomp5md.dll을 중복 초기화하는
@@ -126,17 +126,17 @@ def check_cosyvoice_first_run(app):
         return  # 이미 물어봤거나 설치됨
 
     msg = QMessageBox()
-    msg.setWindowTitle("CosyVoice3 로컬 TTS")
+    msg.setWindowTitle(_("CosyVoice3 로컬 TTS"))
     msg.setText(
-        "로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n"
-        "• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n"
-        "• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n"
-        "나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요."
+        _("로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n"
+          "• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n"
+          "• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n"
+          "나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요.")
     )
     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg.setDefaultButton(QMessageBox.No)
-    msg.button(QMessageBox.Yes).setText("설치")
-    msg.button(QMessageBox.No).setText("나중에")
+    msg.button(QMessageBox.Yes).setText(_("설치"))
+    msg.button(QMessageBox.No).setText(_("나중에"))
 
     # 플래그 파일 생성 (다시 묻지 않음)
     with open(FLAG_FILE, "w"):
@@ -145,8 +145,8 @@ def check_cosyvoice_first_run(app):
     if msg.exec() == QMessageBox.Yes:
         import threading
 
-        progress = QProgressDialog("CosyVoice3 설치 중...\n콘솔 창에서 진행 상황을 확인하세요.", None, 0, 0)
-        progress.setWindowTitle("설치 중")
+        progress = QProgressDialog(_("CosyVoice3 설치 중...\n콘솔 창에서 진행 상황을 확인하세요."), None, 0, 0)
+        progress.setWindowTitle(_("설치 중"))
         progress.setWindowModality(Qt.ApplicationModal)
         progress.setMinimumDuration(0)
         progress.show()
@@ -184,14 +184,14 @@ def check_cosyvoice_first_run(app):
         if install_error["message"]:
             QMessageBox.warning(
                 None,
-                "설치 실패",
-                f"CosyVoice3 설치 중 오류가 발생했습니다.\n{install_error['message']}",
+                _("설치 실패"),
+                _("CosyVoice3 설치 중 오류가 발생했습니다.\n{error}").format(error=install_error["message"]),
             )
         else:
             QMessageBox.information(
                 None,
-                "설치 완료",
-                "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요.",
+                _("설치 완료"),
+                _("CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요."),
             )
 
 
@@ -327,6 +327,18 @@ def main():
             tray_icon.set_text_interface(text_interface)
             # 캐릭터 우클릭 메뉴를 트레이 메뉴와 공유 (플러그인 액션 포함)
             character.set_tray_menu(tray_icon.menu)
+
+        # 언어 핫로드 콜백 등록 — 설정에서 언어 변경 시 UI 즉시 갱신
+        _tray_ref = tray_icon
+        _text_ref = text_interface
+
+        def _on_language_changed():
+            if _tray_ref:
+                _tray_ref.refresh_language()
+            if _text_ref:
+                _text_ref.refresh_theme()
+
+        on_language_changed(_on_language_changed)
 
         cmd_registry = _state.command_registry
         ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)

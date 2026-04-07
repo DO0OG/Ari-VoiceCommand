@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
+from i18n.translator import _
 
 def _get_memory_file() -> str:
     try:
@@ -25,6 +26,7 @@ def _get_memory_file() -> str:
 _MEMORY_FILE = _get_memory_file()
 _MAX_RECORDS = 500
 
+# 태그 키워드는 검색을 위해 한국어 유지하되, 표시용은 번역
 _TAG_KEYWORDS: Dict[str, List[str]] = {
     "파일":    ["파일", "저장", "읽기", "쓰기", "삭제", "복사", "이동", "폴더", "디렉토리", "분석", "정리"],
     "웹":      ["API", "요청", "다운로드", "HTTP", "검색", "사이트", "인터넷", "크롬", "엣지", "브라우저"],
@@ -96,7 +98,7 @@ class StrategyMemory:
             lesson=lesson[:400],
             skill_id=skill_id[:80],
             user_feedback=user_feedback[:40],
-            few_shot_eligible=bool(few_shot_eligible),  # 호출자가 전달한 값 그대로 사용 — 자동 승격 없음
+            few_shot_eligible=bool(few_shot_eligible),
             duration_ms=duration_ms,
             timestamp=datetime.now().isoformat(),
             embedding=[],
@@ -128,37 +130,35 @@ class StrategyMemory:
             
             exact_phrase_bonus = 20 if rec.goal_summary and rec.goal_summary[:30] in goal else 0
             failure_hint_bonus = 8 if (not rec.success and rec.lesson) else 0
-            # 가중치 계산 (태그, 토큰 유사도, 성공 여부, 최신성)
             score = tag_overlap * 15 + token_score * 50 + ngram_score * 30
             score += exact_phrase_bonus + failure_hint_bonus
             if rec.success: score += 10
             
             recency = datetime.fromisoformat(rec.timestamp)
             days_diff = (datetime.now() - recency).days
-            score += max(0, 20 - days_diff) # 최근 20일 이내 기록 가산점
-            
+            score += max(0, 20 - days_diff)
             scored.append((score, rec))
 
         relevant = [rec for _, rec in sorted(scored, key=lambda x: x[0], reverse=True)[:3]]
         if not relevant: return ""
 
-        lines = ["## 과거 유사 사례 및 교훈 (Planning Guide):"]
+        lines = [_("## 과거 유사 사례 및 교훈 (Planning Guide):")]
         for rec in relevant:
-            status = "성공" if rec.success else "실패"
+            status = _("성공") if rec.success else _("실패")
             lines.append(f"- [{status}] {rec.goal_summary[:100]}")
             if rec.lesson:
-                lines.append(f"  💡 교훈: {rec.lesson}")
+                lines.append(_("  💡 교훈: {lesson}").format(lesson=rec.lesson))
             elif not rec.success and rec.error_summary:
-                lines.append(f"  ⚠️ 실패 이유: {rec.error_summary[:100]}")
+                lines.append(_("  ⚠️ 실패 이유: {error}").format(error=rec.error_summary[:100]))
             
             if rec.success and rec.steps_desc:
-                lines.append(f"  ✅ 추천 접근: {' -> '.join(rec.steps_desc[:3])}")
+                lines.append(_("  ✅ 추천 접근: {steps}").format(steps=' -> '.join(rec.steps_desc[:3])))
                 if rec.workflow_hints:
-                    lines.append(f"  🧭 재사용 힌트: {' | '.join(rec.workflow_hints[:2])}")
+                    lines.append(_("  🧭 재사용 힌트: {hints}").format(hints=' | '.join(rec.workflow_hints[:2])))
             elif not rec.success and rec.failure_kind:
-                lines.append(f"  🔎 실패 유형: {rec.failure_kind}")
+                lines.append(_("  🔎 실패 유형: {kind}").format(kind=rec.failure_kind))
         
-        lines.append("\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요.")
+        lines.append(_("\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."))
         return "\n".join(lines)
 
     def search_similar_records(self, goal: str, limit: int = 3) -> List[StrategyRecord]:
@@ -221,7 +221,7 @@ class StrategyMemory:
 
         failures = []
         for _, rec in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]:
-            reason = rec.lesson or rec.error_summary or rec.failure_kind or "실패 기록"
+            reason = rec.lesson or rec.error_summary or rec.failure_kind or _("실패 기록")
             failures.append(f"{rec.goal_summary[:80]} -> {reason[:120]}")
         return failures
 

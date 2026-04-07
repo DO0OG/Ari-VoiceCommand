@@ -23,6 +23,7 @@ from core.constants import (
 from audio.audio_manager import GlobalAudio
 from services.weather_service import WeatherService
 from services.timer_manager import TimerManager
+from i18n.translator import _
 
 class AppState:
     """앱 전체 가변 상태를 한 곳에서 관리하는 컨테이너."""
@@ -41,7 +42,7 @@ class AppState:
         self.saved_tts_mode = None
         self.last_bubble_signature = ("", 0.0)
         self.listening_indicator_active = False
-        self.listening_indicator_text = "말씀해주세요"
+        self.listening_indicator_text = _("말씀해주세요")
         self.tts_resume_guard_until = 0.0
 
 _state = AppState()
@@ -104,7 +105,7 @@ def start_tts_background():
                 if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
                     _state.fish_tts.wait_until_warmup_done()
                 _state.tts_init_event.set()
-                tts_wrapper("로딩이 완료되었습니다. 이제 대화할 수 있어요!")
+                tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
             except Exception as e:
                 logging.error(f"TTS 초기화 실패: {e}")
                 _state.tts_init_event.set()
@@ -390,9 +391,9 @@ def adjust_volume(change):
         curr = volume.GetMasterVolumeLevelScalar()
         new_v = max(0.0, min(1.0, curr + change))
         volume.SetMasterVolumeLevelScalar(new_v, None)
-        tts_wrapper(f"볼륨을 {int(new_v * 100)}%로 조절했습니다.")
+        tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
     except Exception:
-        tts_wrapper("볼륨 조절 실패")
+        tts_wrapper(_("볼륨 조절 실패"))
 
 from commands.command_registry import CommandRegistry
 _state.command_registry = CommandRegistry(
@@ -457,7 +458,7 @@ def disable_game_mode():
             initialize_tts()
             if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
                 _state.fish_tts.wait_until_warmup_done()
-            tts_wrapper("게임 모드 해제. CosyVoice로 복원되었습니다.")
+            tts_wrapper(_("게임 모드 해제. CosyVoice로 복원되었습니다."))
         except Exception as e:
             logging.error(f"TTS 복원 실패: {e}")
 

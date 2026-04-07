@@ -1,41 +1,1299 @@
-# Ari Voice Assistant — 日本語
 msgid ""
 msgstr ""
+"Project-Id-Version: Ari 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Language: ja\n"
 
 msgid "아리 설정"
 msgstr "Ariの設定"
 
+msgid "말씀해주세요"
+msgstr "お話しください"
+
+msgid "로딩이 완료되었습니다. 이제 대화할 수 있어요!"
+msgstr "読み込みが完了しました。お話しいただけます！"
+
+msgid "볼륨을 {volume}%로 조절했습니다."
+msgstr "音量を{volume}%に調整しました。"
+
+msgid "볼륨 조절 실패"
+msgstr "音量調整に失敗しました"
+
+msgid "게임 모드 ON. GPU 메모리 해제했습니다."
+msgstr "ゲームモードON。GPUメモリを解放しました。"
+
+msgid "게임 모드 OFF. TTS 복원 중..."
+msgstr "ゲームモードOFF。TTSを復元中..."
+
+msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
+msgstr "ゲームモード解除。CosyVoiceに復元されました。"
+
+msgid "유튜브를 열게요."
+msgstr "YouTubeを開きます。"
+
+msgid "{query} 유튜브에서 검색할게요."
+msgstr "{query}をYouTubeで検索します。"
+
+msgid "현재 시간은 {time}입니다."
+msgstr "現在の時刻は{time}です。"
+
+msgid "오전"
+msgstr "午前"
+
+msgid "오후"
+msgstr "午後"
+
+msgid "{am_pm} {hour}시 {minute}분"
+msgstr "{am_pm}{hour}時{minute}分"
+
+msgid "{am_pm} {hour}시"
+msgstr "{am_pm}{hour}時"
+
+msgid "타이머"
+msgstr "タイマー"
+
+msgid "알람"
+msgstr "アラーム"
+
+msgid "취소"
+msgstr "キャンセル"
+
+msgid "끄기"
+msgstr "オフ"
+
+msgid "중지"
+msgstr "停止"
+
+msgid "남은"
+msgstr "残り"
+
+msgid "얼마"
+msgstr "どのくらい"
+
+msgid "확인"
+msgstr "確認"
+
+msgid "현재 실행 중인 타이머가 없습니다."
+msgstr "現在実行中のタイマーはありません。"
+
+msgid "타이머 시간을 정확히 말씀해 주세요."
+msgstr "タイマーの時間を正確に指定してください。"
+
+msgid "{prefix} {mins}분 {secs}초 남았습니다."
+msgstr "{prefix}は残り{mins}分{secs}秒です。"
+
+msgid "{prefix} {mins}분 남았습니다."
+msgstr "{prefix}は残り{mins}分です。"
+
+msgid "{prefix} {secs}초 남았습니다."
+msgstr "{prefix}は残り{secs}秒です。"
+
+msgid "컴퓨터 꺼줘"
+msgstr "コンピューターを終了して"
+
+msgid "{time}에 컴퓨터를 종료할게요."
+msgstr "{time}にコンピューターを終了します。"
+
+msgid "컴퓨터를 종료합니다. 잠시만 기다려 주세요."
+msgstr "コンピューターを終了します。少々お待ちください。"
+
+msgid "종료 예약을 취소했습니다."
+msgstr "終了予約をキャンセルしました。"
+
+msgid "팔레트 편집"
+msgstr "パレット編集"
+
+msgid "선택"
+msgstr "選択"
+
+msgid "테마 이름"
+msgstr "テーマ名"
+
+msgid "테마로 저장"
+msgstr "テーマとして保存"
+
+msgid "프리셋 초기화"
+msgstr "プリセット初期化"
+
+msgid "JSON 직접 편집"
+msgstr "JSON直接編集"
+
+msgid "JSON 적용"
+msgstr "JSON適用"
+
+msgid "복사"
+msgstr "コピー"
+
+msgid "닫기"
+msgstr "閉じる"
+
+msgid "주요 색상"
+msgstr "主要色"
+
+msgid "텍스트"
+msgstr "テキスト"
+
+msgid "배경"
+msgstr "背景"
+
+msgid "테두리"
+msgstr "境界線"
+
+msgid "기타"
+msgstr "その他"
+
+msgid "이번 주 자기개선 리포트예요!"
+msgstr "今週の自己改善レポートです！"
+
+msgid "완료 작업 {total}건 (성공 {success}건, 성공률 {rate}%, 실패 {fail}건)"
+msgstr "完了したタスク{total}件（成功{success}件、成功率{rate}%、失敗{fail}件）"
+
+msgid "활성 스킬 {total}개 (컴파일 완료 {compiled}개)"
+msgstr "有効なスキル{total}個（コンパイル済み{compiled}個）"
+
+msgid "기억 중인 사실 {count}개"
+msgstr "記憶している事実{count}個"
+
+msgid "예약 작업 {total}건 처리 (성공 {success}건, 실패 {fail}건)"
+msgstr "予約タスク{total}件を処理（成功{success}件、失敗{fail}件）"
+
+msgid "반복 실패 패턴: "
+msgstr "繰り返される失敗パターン: "
+
+msgid "{kind} {count}회"
+msgstr "{kind} {count}回"
+
+msgid "학습 기여도: "
+msgstr "学習寄与度: "
+
+msgid "회귀 경고: "
+msgstr "回帰警告: "
+
+msgid "개선 제안: "
+msgstr "改善案: "
+
+msgid "실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요."
+msgstr "失敗率が高いです。複雑な目標をより小さなステップに分割してみてください。"
+
+msgid "신뢰도 낮은 스킬 {count}개 ({names})를 재학습하거나 비활성화하세요."
+msgstr "信頼度の低いスキル{count}個（{names}）を再学習または無効化してください。"
+
+msgid "반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요."
+msgstr "反復スキルがまだコンパイルされていません。よく使う作業を繰り返して最適化を促してください。"
+
+msgid "예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요."
+msgstr "予約タスクの失敗が蓄積しています。next_runと失敗原因を合わせて確認してください。"
+
+msgid "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다."
+msgstr "現在のユーザーの画面状態（タスクバーの位置、全画面モードかどうかなど）を確認します。"
+
+msgid "유튜브에서 음악이나 영상을 검색하여 재생합니다."
+msgstr "YouTubeで音楽や動画を検索して再生します。"
+
+msgid "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요."
+msgstr "通知用のカウントダウンタイマーを設定します。名前を指定すると複数のタイマーを同時に管理できます。タイマー終了時は通知のみで、追加の動作はありません。コンピュータの終了やファイルの保存などの遅延実行にはschedule_taskを使用してください。"
+
+msgid "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다."
+msgstr "進行中のタイマーをキャンセルします。名前がない場合は、最新のタイマーをキャンセルします。"
+
+msgid "현재 날씨 정보를 조회합니다."
+msgstr "現在の天気情報を取得します。"
+
+msgid "시스템 볼륨을 조절합니다."
+msgstr "システム音量を調節します。"
+
+msgid "현재 시간을 알려줍니다."
+msgstr "現在の時刻を教えます。"
+
+msgid "파이썬 코드로 자율 처리합니다."
+msgstr "Pythonコードで自律的に処理します。"
+
+msgid "CMD 명령어로 자율 처리합니다."
+msgstr "CMDコマンドで自律的に処理します。"
+
+msgid "복합 목표를 자율 에이전트 루프로 처리합니다."
+msgstr "複合目標を自律エージェントループで処理します。"
+
+msgid "인터넷 정보를 검색합니다."
+msgstr "インターネット情報を検索します。"
+
+msgid "웹 페이지 내용을 가져옵니다."
+msgstr "ウェブページの内容を取得します。"
+
+msgid "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다."
+msgstr "特定の時間にタスクを予約実行します。「N分/時間後」「N時に」などの時間表現とともに、コンピュータの終了やファイルの保存などの遅延実行要求に使用します。"
+
+msgid "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요."
+msgstr "コンピュータを即座に終了します。時間表現（例：「15分後」「午後11時」）が含まれる場合は、schedule_taskを使用してください。"
+
+msgid "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다."
+msgstr "現在予約されているタスク一覧を取得します。「予約されているタスクはある？」「スケジュールを確認して」などの要求に使用します。"
+
+msgid "예약된 작업을 ID로 취소합니다."
+msgstr "予約されたタスクをIDでキャンセルします。"
+
+msgid "## 과거 유사 사례 및 교훈 (Planning Guide):"
+msgstr "## 過去の類似事例および教訓 (Planning Guide):"
+
+msgid "  💡 교훈: {lesson}"
+msgstr "  💡 教訓: {lesson}"
+
+msgid "  ⚠️ 실패 이유: {error}"
+msgstr "  ⚠️ 失敗理由: {error}"
+
+msgid "  ✅ 추천 접근: {steps}"
+msgstr "  ✅ 推奨アプローチ: {steps}"
+
+msgid "  🧭 재사용 힌트: {hints}"
+msgstr "  🧭 再利用ヒント: {hints}"
+
+msgid "  🔎 실패 유형: {kind}"
+msgstr "  🔎 失敗タイプ: {kind}"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n※ 上記の事例を参考に、同じ間違いを避け、検証済みの方法を使用してください。"
+
+msgid "실패 기록"
+msgstr "失敗記録"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n※ 上記の事例を参考にして、同じ間違いを避け、実証済みの方法を使用してください。"
+
+msgid "'{model}' 모델 준비가 완료되었습니다."
+msgstr "'{model}' モデルの準備が完了しました。"
+
+msgid "'{name}' 저장됨"
+msgstr "'{name}' 保存済み"
+
+msgid "'{name}' 타이머"
+msgstr "'{name}' タイマー"
+
+msgid "'{task}' 작업을 취소하시겠습니까?"
+msgstr "'{task}' タスクをキャンセルしますか？"
+
+msgid "(기본 제공자와 동일)"
+msgstr "（デフォルトプロバイダーと同じ）"
+
+msgid "+ 작업 추가"
+msgstr "+ タスクを追加"
+
+msgid "AI (LLM) 엔진 설정"
+msgstr "AI（LLM）エンジン設定"
+
+msgid "AI 설정"
+msgstr "AI設定"
+
+msgid "AI 엔진이 연결되지 않았습니다."
+msgstr "AIエンジンが接続されていません。"
+
+msgid "AI에게 직접 전달할 시스템 지시문"
+msgstr "AIに直接渡すシステム指示"
+
+msgid "API Key (선택):"
+msgstr "API Key（任意）:"
+
+msgid "API Key:"
+msgstr "API Key:"
+
+msgid "Anthropic (Claude)"
+msgstr "Anthropic（Claude）"
+
+msgid "CosyVoice 설치"
+msgstr "CosyVoiceをインストール"
+
+msgid "CosyVoice 설치 경로 (비워두면 자동 감지):"
+msgstr "CosyVoiceインストールパス（空白の場合は自動検出）:"
+
+msgid "CosyVoice 설치 폴더 선택"
+msgstr "CosyVoiceインストールフォルダを選択"
+
+msgid "CosyVoice3 로컬 TTS"
+msgstr "CosyVoice3 ローカルTTS"
+
+msgid "CosyVoice3 설정 (로컬 GPU)"
+msgstr "CosyVoice3設定（ローカルGPU）"
+
+msgid "CosyVoice3 설치"
+msgstr "CosyVoice3をインストール"
+
+msgid "CosyVoice3 설치 중 오류가 발생했습니다.\n{error}"
+msgstr "CosyVoice3のインストール中にエラーが発生しました。\n{error}"
+
+msgid "CosyVoice3 설치 중...\n콘솔 창에서 진행 상황을 확인하세요."
+msgstr "CosyVoice3をインストール中...\nコンソールウィンドウで進行状況を確認してください。"
+
+msgid "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요."
+msgstr "CosyVoice3のインストールが完了しました。\n設定でTTSモードを「ローカル（CosyVoice3）」に変更してください。"
+
+msgid "CosyVoice3 설치를 진행 중입니다.\n의존성 및 모델 다운로드로 시간이 조금 걸릴 수 있습니다."
+msgstr "CosyVoice3のインストールを進行中です。\n依存関係とモデルのダウンロードのため、少し時間がかかる場合があります。"
+
+msgid "Edge TTS (무료)"
+msgstr "Edge TTS（無料）"
+
+msgid "Edge TTS 설정 (무료)"
+msgstr "Edge TTS設定（無料）"
+
+msgid "ElevenLabs"
+msgstr "ElevenLabs"
+
+msgid "ElevenLabs 설정"
+msgstr "ElevenLabs設定"
+
+msgid "Fish Audio (API)"
+msgstr "Fish Audio（API）"
+
+msgid "Fish Audio 설정"
+msgstr "Fish Audio設定"
+
+msgid "Google Gemini"
+msgstr "Google Gemini"
+
+msgid "Google STT (온라인)"
+msgstr "Google STT（オンライン）"
+
+msgid "Groq (Llama 3.3, 무료)"
+msgstr "Groq（Llama 3.3、無料）"
+
+msgid "Hyunsu (남성)"
+msgstr "Hyunsu（男性）"
+
+msgid "InJoon (남성)"
+msgstr "InJoon（男性）"
+
+msgid "JSON 형식 오류"
+msgstr "JSONフォーマットエラー"
+
+msgid "Mistral AI"
+msgstr "Mistral AI"
+
+msgid "NVIDIA NIM"
+msgstr "NVIDIA NIM"
+
+msgid "Ollama (로컬 LLM)"
+msgstr "Ollama（ローカルLLM）"
+
+msgid "Ollama 모델 폴더 선택"
+msgstr "Ollamaモデルフォルダを選択"
+
+msgid "Ollama 사용 시 API 키는 필요 없습니다. 서버 주소는 기본적으로 "
+msgstr "OllamaにはAPIキーは不要です。サーバーアドレスはデフォルトで "
+
+msgid "Ollama 서버 주소:"
+msgstr "Ollamaサーバーアドレス:"
+
+msgid "Ollama 설치"
+msgstr "Ollamaをインストール"
+
+msgid "Ollama 설치 경로 (선택):"
+msgstr "Ollamaインストールパス（任意）:"
+
+msgid "Ollama 설치 폴더 선택"
+msgstr "Ollamaインストールフォルダを選択"
+
+msgid "Ollama 설치 후 사용 가능 — API 키 불필요"
+msgstr "インストール後に使用可能 — APIキー不要"
+
+msgid "Ollama 설치/모델 받기"
+msgstr "Ollamaをインストール / モデルをダウンロード"
+
+msgid "Ollama 설치를 준비 중입니다.\n설치 창이 뜨면 진행하고, 모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Ollamaのインストールを準備中です。\nインストーラーが表示されたら進めてください。モデルのダウンロードはバックグラウンドで続きます。"
+
+msgid "Ollama를 설치하고, 사용할 모델을 함께 받아옵니다. "
+msgstr "Ollamaをインストールし、使用するモデルをダウンロードします。 "
+
+msgid "OpenAI (GPT-4o)"
+msgstr "OpenAI（GPT-4o）"
+
+msgid "OpenAI TTS"
+msgstr "OpenAI TTS"
+
+msgid "OpenAI TTS 설정"
+msgstr "OpenAI TTS設定"
+
+msgid "OpenRouter (멀티모델)"
+msgstr "OpenRouter（マルチモデル）"
+
+msgid "RP 설정"
+msgstr "RP設定"
+
+msgid "Reference ID:"
+msgstr "Reference ID:"
+
+msgid "Reference WAV 텍스트 (Cross-lingual 시 비움):"
+msgstr "Reference WAVテキスト（クロスリンガル時は空欄）:"
+
+msgid "STT 엔진"
+msgstr "STTエンジン"
+
+msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
+msgstr "STTエンジン、Whisper設定、マイク感度、ウェイクワードを設定します。"
+
+msgid "SunHi (여성)"
+msgstr "SunHi（女性）"
+
+msgid "TTS 설정"
+msgstr "TTS設定"
+
+msgid "TTS 엔진 선택:"
+msgstr "TTSエンジンを選択:"
+
+msgid "UI 테마 설정"
+msgstr "UIテーマ設定"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Voice ID:"
+msgstr "Voice ID:"
+
+msgid "Whisper (오프라인)"
+msgstr "Whisper（オフライン）"
+
+msgid "Whisper 다운로드"
+msgstr "Whisperをダウンロード"
+
+msgid "Whisper 설정"
+msgstr "Whisper設定"
+
+msgid "dict 형식 필요"
+msgstr "dict形式が必要"
+
+msgid "https://aistudio.google.com/app/apikey"
+msgstr "https://aistudio.google.com/app/apikey"
+
+msgid "https://build.nvidia.com 에서 nvapi- 키 발급"
+msgstr "https://build.nvidia.com でnvapi-キーを取得"
+
+msgid "https://console.anthropic.com"
+msgstr "https://console.anthropic.com"
+
+msgid "https://console.groq.com 에서 무료 발급"
+msgstr "https://console.groq.com で無料取得"
+
+msgid "https://console.mistral.ai"
+msgstr "https://console.mistral.ai"
+
+msgid "https://openrouter.ai/keys"
+msgstr "https://openrouter.ai/keys"
+
+msgid "https://platform.openai.com/api-keys"
+msgstr "https://platform.openai.com/api-keys"
+
+msgid "{ampm} {hour}시"
+msgstr "{ampm} {hour}時"
+
+msgid "{ampm} {hour}시 {minute}분"
+msgstr "{ampm} {hour}時{minute}分"
+
+msgid "{count}개 플러그인을 불러왔습니다."
+msgstr "{count}個のプラグインを読み込みました。"
+
+msgid "{name} ({version}) - {description}"
+msgstr "{name} ({version}) - {description}"
+
+msgid "{name} v{version} [{status}] ({count} installs)\n{desc}"
+msgstr "{name} v{version} [{status}] ({count}回インストール)\n{desc}"
+
+msgid "{name} 미리보기"
+msgstr "{name} プレビュー"
+
+msgid "{name} 설치 중..."
+msgstr "{name}をインストール中..."
+
+msgid "{name} 플러그인을 설치할까요?"
+msgstr "プラグイン'{name}'をインストールしますか？"
+
+msgid "{n}분"
+msgstr "{n}分"
+
+msgid "{n}시간"
+msgstr "{n}時間"
+
+msgid "{n}초"
+msgstr "{n}秒"
+
+msgid "{time}에 컴퓨터를 재시작할게요."
+msgstr "{time}にコンピューターを再起動します。"
+
+msgid "▶ 즉시 실행 요청됨"
+msgstr "▶ 即時実行をリクエスト"
+
+msgid "⚠ API Key를 입력하세요."
+msgstr "⚠ APIキーを入力してください。"
+
+msgid "⚠ pretrained_models 폴더가 없습니다. 경로를 확인하세요."
+msgstr "⚠ pretrained_modelsフォルダが見つかりません。パスを確認してください。"
+
+msgid "⚠️ 등록 실패: {error}"
+msgstr "⚠️ 登録失敗: {error}"
+
+msgid "⚠️ 스케줄러가 연결되지 않았습니다."
+msgstr "⚠️ スケジューラーが接続されていません。"
+
+msgid "⚠️ 이름·목표·스케줄을 모두 입력해주세요."
+msgstr "⚠️ 名前・目標・スケジュールをすべて入力してください。"
+
+msgid "⚠️ 저장 실패: {error}"
+msgstr "⚠️ 保存失敗: {error}"
+
+msgid "✅ '{name}' 등록 완료"
+msgstr "✅ '{name}' 登録完了"
+
+msgid "✅ 마지막: {time}  |  {result}"
+msgstr "✅ 最終: {time}  |  {result}"
+
+msgid "✅ 저장 완료"
+msgstr "✅ 保存完了"
+
+msgid "✓ CosyVoice3 설치 완료"
+msgstr "✓ CosyVoice3インストール完了"
+
+msgid "✓ Ollama 설치 완료 ({models})"
+msgstr "✓ Ollamaインストール完了（{models}）"
+
+msgid "✓ 감지됨: {path}"
+msgstr "✓ 検出済み: {path}"
+
+msgid "✓ 유효한 CosyVoice 경로"
+msgstr "✓ 有効なCosyVoiceパス"
+
+msgid "✗ CosyVoice3 설치 실패: {error}"
+msgstr "✗ CosyVoice3インストール失敗: {error}"
+
+msgid "✗ Ollama 설치 실패: {error}"
+msgstr "✗ Ollamaインストール失敗: {error}"
+
+msgid "✗ 자동 감지 실패 — 경로를 직접 입력하세요."
+msgstr "✗ 自動検出失敗 — パスを手動で入力してください。"
+
+msgid "검색"
+msgstr "検索"
+
+msgid "검색어"
+msgstr "検索キーワード"
+
+msgid "검색할 제목"
+msgstr "検索するタイトル"
+
+msgid "검증"
+msgstr "検証"
+
+msgid "검증 중..."
+msgstr "検証中..."
+
+msgid "검증 중... (기본 모델: {model})"
+msgstr "検証中...（デフォルトモデル: {model}）"
+
+msgid "결과 수"
+msgstr "結果数"
+
+msgid "곧 실행"
+msgstr "まもなく実行"
+
+msgid "관심사 (쉼표로 구분)"
+msgstr "興味（カンマ区切り）"
+
+msgid "권장 모델 선택:"
+msgstr "推奨モデルを選択:"
+
+msgid "글꼴 배율 (0.9 ~ 1.35):"
+msgstr "フォントスケール（0.9 ～ 1.35）:"
+
+msgid "글꼴 패밀리 재정의 (선택):"
+msgstr "フォントファミリーのオーバーライド（任意）:"
+
+msgid "기록 없음"
+msgstr "記録なし"
+
+msgid "기본 정보"
+msgstr "基本情報"
+
+msgid "기억 상태"
+msgstr "メモリ状態"
+
+msgid "기억 시스템을 불러오지 못했습니다."
+msgstr "メモリシステムを読み込めませんでした。"
+
+msgid "꺼"
+msgstr "オフ"
+
+msgid "끄"
+msgstr "オフにする"
+
+msgid "나"
+msgstr "私"
+
+msgid "나중에"
+msgstr "後で"
+
+msgid "날씨 정보를 가져오는 데 실패했습니다."
+msgstr "天気情報の取得に失敗しました。"
+
+msgid "남은 시간"
+msgstr "残り時間"
+
+msgid "다운로드 중..."
+msgstr "ダウンロード中..."
+
+msgid "다음 추천 "
+msgstr "次のおすすめ "
+
+msgid "대화 주제"
+msgstr "会話トピック"
+
+msgid "대화 지침:"
+msgstr "会話ガイドライン:"
+
+msgid "대화를 이어가면 이곳에 요약이 표시됩니다."
+msgstr "会話を続けると、ここに要約が表示されます。"
+
+msgid "도시 또는 지역"
+msgstr "都市または地域"
+
+msgid "뒤"
+msgstr "後"
+
+msgid "등록된 예약 작업이 없습니다."
+msgstr "予約タスクがありません。"
+
+msgid "로그 파일 폴더 열기"
+msgstr "ログフォルダを開く"
+
+msgid "로컬 (CosyVoice3)"
+msgstr "ローカル（CosyVoice3）"
+
+msgid "로컬 LLM 엔진 설치와 모델 다운로드를 한 번에 진행합니다."
+msgstr "ローカルLLMエンジンのインストールとモデルのダウンロードを一度に行います。"
+
+msgid "로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요."
+msgstr "ローカルTTSエンジンCosyVoice3をインストールしますか？\n\n• インストールする場合: 高品質の韓国語TTSが使用可能（GPU推奨、約2～5GB）\n• インストールしない場合: Fish Audio API TTSを使用（インターネット必要）\n\n後でインストールするにはinstall_cosyvoice.pyを直接実行してください。"
+
+msgid "로컬 TTS 엔진과 기본 모델을 설치하고 설정 경로를 자동으로 맞춥니다."
+msgstr "ローカルTTSエンジンとデフォルトモデルをインストールし、設定パスを自動的に設定します。"
+
+msgid "로컬 설치"
+msgstr "ローカルインストール"
+
+msgid "로컬에서 직접 실행할 엔진을 먼저 설치한 뒤, 아래 설정에서 경로와 모델을 조정할 수 있습니다."
+msgstr "ローカルで実行するエンジンを先にインストールしてから、以下の設定でパスとモデルを調整できます。"
+
+msgid "를 사용합니다."
+msgstr "を使用します。"
+
+msgid "마우스 반응"
+msgstr "マウス反応"
+
+msgid "마이크 감도"
+msgstr "マイク感度"
+
 msgid "마이크 입력 장치 선택:"
-msgstr "マイク入力デバイスの選択:"
+msgstr "マイク入力デバイスを選択:"
 
-msgid "시스템 기본 마이크"
-msgstr "システム既定のマイク"
+msgid "마켓플레이스"
+msgstr "マーケットプレイス"
 
-msgid "💬 텍스트 대화"
-msgstr "💬 テキストチャット"
+msgid "마켓플레이스 목록을 불러오는 중..."
+msgstr "マーケットプレイスのリストを読み込み中..."
+
+msgid "말하기 속도 (0.7 ~ 1.2):"
+msgstr "話速（0.7 ～ 1.2）:"
+
+msgid "메모 (쉼표로 구분)"
+msgstr "メモ（カンマ区切り）"
+
+msgid "메시지 입력..."
+msgstr "メッセージを入力..."
+
+msgid "명령"
+msgstr "コマンド"
+
+msgid "몇 시야"
+msgstr "何時ですか"
+
+msgid "모델 다운로드"
+msgstr "モデルをダウンロード"
+
+msgid "모델 설치 없음"
+msgstr "モデルのインストールなし"
+
+msgid "모델 없이 설치"
+msgstr "モデルなしでインストール"
+
+msgid "모델 이름 (비워두면 기본값):"
+msgstr "モデル名（空白の場合はデフォルト）:"
+
+msgid "모델 저장 경로 (선택):"
+msgstr "モデル保存パス（任意）:"
+
+msgid "모델 준비에 실패했습니다.\n{error}"
+msgstr "モデルの準備に失敗しました。\n{error}"
+
+msgid "모델 크기:"
+msgstr "モデルサイズ:"
+
+msgid "모델:"
+msgstr "モデル:"
+
+msgid "모델명 (기본: {model})"
+msgstr "モデル名（デフォルト: {model}）"
+
+msgid "모델은 여러 개 선택할 수 있고, 설치 후 바로 설정값에 반영됩니다."
+msgstr "複数のモデルを選択でき、インストール後すぐに設定値に反映されます。"
+
+msgid "목록 로드 실패: {message}"
+msgstr "リストの読み込みに失敗: {message}"
+
+msgid "목록 새로고침"
+msgstr "リストを更新"
+
+msgid "목소리 선택:"
+msgstr "音声を選択:"
+
+msgid "목소리:"
+msgstr "音声:"
+
+msgid "목표"
+msgstr "目標"
+
+msgid "목표 (예: 최신 뉴스를 요약해서 저장해줘)"
+msgstr "目標（例：最新ニュースを要約して保存してください）"
+
+msgid "미완료"
+msgstr "未完了"
+
+msgid "분"
+msgstr "分"
+
+msgid "분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다."
+msgstr "分析・計画と実行・修正のリクエストを区別し、役割別のプロバイダー・モデル設定を優先します。"
+
+msgid "비워두면 AI 설정을 따릅니다."
+msgstr "空白の場合はAI設定に従います。"
+
+msgid "비워두면 Ollama 기본 경로 사용"
+msgstr "空白の場合はOllamaのデフォルトパスを使用"
+
+msgid "비워두면 기본 모델 경로 사용"
+msgstr "空白の場合はデフォルトモデルパスを使用"
+
+msgid "비워두면 기본 모델과 동일"
+msgstr "空白の場合はデフォルトモデルと同じ"
+
+msgid "비워두면 테마 기본 글꼴 사용"
+msgstr "空白の場合はテーマのデフォルトフォントを使用"
+
+msgid "비활성화"
+msgstr "無効"
+
+msgid "사실 (Facts)"
+msgstr "事実（Facts）"
+
+msgid "사용자 이름"
+msgstr "ユーザー名"
+
+msgid "사용자 플러그인"
+msgstr "ユーザープラグイン"
+
+msgid "사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요."
+msgstr "使用するプロバイダーのAPIキーとモデル名を入力し、[検証]で接続を確認してください。"
+
+msgid "삭제"
+msgstr "削除"
+
+msgid "새 웨이크워드를 입력하세요:"
+msgstr "新しいウェイクワードを入力してください:"
+
+msgid "새 작업 추가"
+msgstr "新しいタスクを追加"
+
+msgid "새로 고침"
+msgstr "更新"
+
+msgid "선택 작업 취소"
+msgstr "選択したタスクをキャンセル"
+
+msgid "선택 플러그인 설치"
+msgstr "選択したプラグインをインストール"
+
+msgid "선택한 모델이 없습니다. Ollama 프로그램만 설치할까요?"
+msgstr "モデルが選択されていません。Ollamaプログラムのみインストールしますか？"
+
+msgid "선택한 플러그인의 ID를 찾지 못했습니다."
+msgstr "選択したプラグインのIDが見つかりませんでした。"
+
+msgid "선호 "
+msgstr "好み "
+
+msgid "선호도"
+msgstr "好み"
+
+msgid "설명"
+msgstr "説明"
+
+msgid "설명 없음"
+msgstr "説明なし"
 
 msgid "설정"
 msgstr "設定"
 
-msgid "종료"
-msgstr "終了"
+msgid "설정창 안에서 플러그인을 검색하고 바로 설치할 수 있습니다."
+msgstr "設定ウィンドウ内でプラグインを検索してすぐにインストールできます。"
+
+msgid "설치"
+msgstr "インストール"
+
+msgid "설치 가능"
+msgstr "インストール可能"
+
+msgid "설치 실패"
+msgstr "インストール失敗"
+
+msgid "설치 완료"
+msgstr "インストール完了"
+
+msgid "설치 중"
+msgstr "インストール中"
+
+msgid "설치됨"
+msgstr "インストール済み"
+
+msgid "설치할 플러그인을 먼저 선택하세요."
+msgstr "インストールするプラグインを先に選択してください。"
+
+msgid "성격:"
+msgstr "性格:"
+
+msgid "성공"
+msgstr "成功"
+
+msgid "속도 (예: +0%, -10%):"
+msgstr "速度（例: +0%, -10%）:"
+
+msgid "스마트 어시스턴트 모드"
+msgstr "スマートアシスタントモード"
+
+msgid "스마트 어시스턴트 모드가 {status}되었습니다."
+msgstr "スマートアシスタントモードが{status}されました。"
+
+msgid "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
+msgstr "スケジュール（例: 毎日09:00  /  毎週月曜日09:00  /  30分ごと）"
+
+msgid "스피커 출력 장치:"
+msgstr "スピーカー出力デバイス:"
+
+msgid "시"
+msgstr "時"
+
+msgid "시간"
+msgstr "時間"
+
+msgid "시간 표현"
+msgstr "時間表現"
+
+msgid "시나리오:"
+msgstr "シナリオ:"
+
+msgid "시도 {count}회"
+msgstr "試行{count}回"
+
+msgid "시스템"
+msgstr "システム"
+
+msgid "시스템 기본 마이크"
+msgstr "システムデフォルトマイク"
+
+msgid "시스템 재시작 명령 실행에 실패했습니다."
+msgstr "システム再起動コマンドの実行に失敗しました。"
+
+msgid "시스템 재시작 예약에 실패했습니다."
+msgstr "システム再起動の予約に失敗しました。"
+
+msgid "시스템 종료"
+msgstr "システムシャットダウン"
+
+msgid "시스템 종료 명령 실행에 실패했습니다."
+msgstr "システムシャットダウンコマンドの実行に失敗しました。"
+
+msgid "시스템 종료 예약에 실패했습니다."
+msgstr "システムシャットダウンの予約に失敗しました。"
+
+msgid "시스템 프롬프트:"
+msgstr "システムプロンプト:"
+
+msgid "실패"
+msgstr "失敗"
+
+msgid "실행 예정 시각"
+msgstr "実行予定時刻"
+
+msgid "실행/수정 모델 (선택):"
+msgstr "実行・修正モデル（任意）:"
+
+msgid "실행/수정 제공자 (선택):"
+msgstr "実行・修正プロバイダー（任意）:"
 
 msgid "실행을 취소했습니다."
 msgstr "実行をキャンセルしました。"
 
-msgid "코드 실행 시간이 너무 길어 중단했습니다."
-msgstr "コードの実行時間が長すぎたため、停止しました。"
+msgid "아래 경로에 CosyVoice3를 설치할까요?\n\n{path}"
+msgstr "以下のパスにCosyVoice3をインストールしますか？\n\n{path}"
+
+msgid "아리"
+msgstr "アリ"
+
+msgid "아리의 기억 보기"
+msgstr "アリの記憶を見る"
+
+msgid "아직 저장된 사실이 없습니다."
+msgstr "まだ保存された事実はありません。"
+
+msgid "안 해"
+msgstr "しない"
+
+msgid "안녕하세요! 무엇을 도와드릴까요?"
+msgstr "こんにちは！何かお手伝いできますか？"
+
+msgid "언어 설정"
+msgstr "言語設定"
+
+msgid "에"
+msgstr "に"
+
+msgid "예) 상냥하고 귀여운 AI 비서"
+msgstr "例）親切で可愛いAIアシスタント"
+
+msgid "예) 주인님을 보좌하는 역할극"
+msgstr "例）主人を補佐するロールプレイ"
+
+msgid "예: 1.0"
+msgstr "例: 1.0"
+
+msgid "예: C:/CosyVoice"
+msgstr "例: C:/CosyVoice"
+
+msgid "예: gpt-4o, llama-3.3-70b-versatile..."
+msgstr "例: gpt-4o, llama-3.3-70b-versatile..."
+
+msgid "예: qwen2.5-coder:7b, mistral-small"
+msgstr "例: qwen2.5-coder:7b, mistral-small"
+
+msgid "예: 고양이 좋아함, 야행성"
+msgstr "例：猫が好き、夜型"
+
+msgid "예: 음악, 영화, 독서"
+msgstr "例：音楽、映画、読書"
+
+msgid "예약 작업 관리"
+msgstr "予約タスク管理"
+
+msgid "오디오 장치 설정"
+msgstr "オーディオデバイス設定"
+
+msgid "오류가 발생했습니다: {error}"
+msgstr "エラーが発生しました: {error}"
+
+msgid "완료"
+msgstr "完了"
+
+msgid "웨이크워드"
+msgstr "ウェイクワード"
+
+msgid "웨이크워드 목록"
+msgstr "ウェイクワードリスト"
+
+msgid "웨이크워드 추가"
+msgstr "ウェイクワードを追加"
+
+msgid "웨이크워드는 최소 1개 이상 필요합니다."
+msgstr "ウェイクワードは少なくとも1つ必要です。"
+
+msgid "웹 마켓플레이스 열기"
+msgstr "Webマーケットプレイスを開く"
+
+msgid "위치"
+msgstr "場所"
 
 msgid "위험한 파이썬 작업 감지: {matched}"
-msgstr "危険なPython操作を検出しました: {matched}"
+msgstr "危険なPython操作を検出: {matched}"
 
-msgid "언어 변경"
-msgstr "言語変更"
+msgid "음성 인식"
+msgstr "音声認識"
 
-msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
-msgstr "言語設定を保存しました。再起動後に適用されます。"
+msgid "음성 인식 설정"
+msgstr "音声認識設定"
 
-msgid "로그 파일 폴더 열기"
-msgstr "ログフォルダを開く"
+msgid "음성 인식 설정..."
+msgstr "音声認識設定..."
+
+msgid "음성 인식 엔진:"
+msgstr "音声認識エンジン:"
+
+msgid "음성 합성 (TTS) 설정"
+msgstr "音声合成（TTS）設定"
+
+msgid "이름"
+msgstr "名前"
+
+msgid "이름 없음"
+msgstr "名前なし"
+
+msgid "이전 대화를 참고할 때의 태도"
+msgstr "過去の会話を参照する際の態度"
+
+msgid "인터페이스 언어:"
+msgstr "インターフェース言語:"
+
+msgid "자동 감도 조정 사용"
+msgstr "自動感度調整を使用"
+
+msgid "자동 감지"
+msgstr "自動検出"
+
+msgid "자주 쓰는 명령어"
+msgstr "よく使うコマンド"
+
+msgid "작업 내용"
+msgstr "タスク内容"
+
+msgid "작업 유형별 자동 라우팅 사용"
+msgstr "タスク種別の自動ルーティングを使用"
+
+msgid "작업 이름 (예: 뉴스 요약)"
+msgstr "タスク名（例：ニュース要約）"
+
+msgid "작업 취소"
+msgstr "タスクをキャンセル"
+
+msgid "장치 설정"
+msgstr "デバイス設定"
+
+msgid "재계획 (시도 {count}회)"
+msgstr "再計画（試行{count}回）"
+
+msgid "재부팅"
+msgstr "再起動"
+
+msgid "재시작"
+msgstr "再起動"
+
+msgid "저장"
+msgstr "保存"
+
+msgid "전원"
+msgstr "電源"
+
+msgid "전원 꺼"
+msgstr "電源オフ"
+
+msgid "제공자 선택:"
+msgstr "プロバイダーを選択:"
+
+msgid "제공자별 API Key"
+msgstr "プロバイダー別APIキー"
+
+msgid "종료"
+msgstr "終了"
+
+msgid "종료 안 해"
+msgstr "シャットダウンしない"
+
+msgid "종료 취소"
+msgstr "シャットダウンをキャンセル"
+
+msgid "종료 취소 명령 실행에 실패했습니다."
+msgstr "シャットダウンキャンセルコマンドの実行に失敗しました。"
+
+msgid "종료 확인 여부 (항상 true)"
+msgstr "シャットダウン確認（常にtrue）"
+
+msgid "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
+msgstr "申し訳ありません。AI応答エンジンを初期化できません。"
+
+msgid "주세요"
+msgstr "ください"
+
+msgid "주제 "
+msgstr "トピック "
+
+msgid "줘"
+msgstr "ください"
+
+msgid "지금 실행"
+msgstr "今すぐ実行"
+
+msgid "찾아보기"
+msgstr "参照"
+
+msgid "초"
+msgstr "秒"
+
+msgid "추가"
+msgstr "追加"
+
+msgid "추가 모델명 (쉼표로 여러 개 입력 가능):"
+msgstr "追加モデル名（カンマ区切りで複数入力可）:"
+
+msgid "취소할 작업 ID (list_scheduled_tasks로 확인)"
+msgstr "キャンセルするタスクID（list_scheduled_tasksで確認）"
+
+msgid "취소할 타이머 이름 (선택)"
+msgstr "キャンセルするタイマー名（任意）"
+
+msgid "캐릭터 숨기기"
+msgstr "キャラクターを非表示"
+
+msgid "캐릭터 페르소나 설정"
+msgstr "キャラクターペルソナ設定"
+
+msgid "캐릭터 표시"
+msgstr "キャラクターを表示"
+
+msgid "컴퓨터"
+msgstr "コンピューター"
+
+msgid "컴퓨터 꺼 줘"
+msgstr "コンピューターをオフにして"
+
+msgid "컴퓨터 재시작"
+msgstr "コンピューターの再起動"
+
+msgid "컴퓨터 종료"
+msgstr "コンピューターのシャットダウン"
+
+msgid "컴퓨터 종료해줘"
+msgstr "コンピューターをシャットダウンして"
+
+msgid "컴퓨터를 재시작합니다. 잠시만 기다려 주세요."
+msgstr "コンピューターを再起動します。少々お待ちください。"
+
+msgid "코드"
+msgstr "コード"
+
+msgid "코드 실행 시간이 너무 길어 중단했습니다."
+msgstr "コードの実行時間が長すぎたため中断しました。"
+
+msgid "타이머 이름 (선택)"
+msgstr "タイマー名（任意）"
+
+msgid "테마 JSON 파일은 아래 폴더에서 직접 수정할 수 있습니다.\n\n{path}\n\n저장 후 설정창에서 다시 적용하면 열린 UI에 즉시 반영됩니다."
+msgstr "テーマJSONファイルは以下のフォルダで直接編集できます。\n\n{path}\n\n保存後、設定ウィンドウで再適用すると開いているUIにすぐに反映されます。"
+
+msgid "테마 미리보기"
+msgstr "テーマプレビュー"
+
+msgid "테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다."
+msgstr "テーマ設定が保存されました。\n開いているUIにはすぐに反映され、TTSやワーカーは再起動しません。"
+
+msgid "테마 저장"
+msgstr "テーマを保存"
+
+msgid "테마 저장 실패"
+msgstr "テーマの保存失敗"
+
+msgid "테마 저장 완료"
+msgstr "テーマ保存完了"
+
+msgid "테마 폴더"
+msgstr "テーマフォルダ"
+
+msgid "테마 폴더 안내"
+msgstr "テーマフォルダガイド"
+
+msgid "테마 프리셋:"
+msgstr "テーマプリセット:"
+
+msgid "통계"
+msgstr "統計"
+
+msgid "표시할 플러그인이 없습니다."
+msgstr "表示するプラグインがありません。"
+
+msgid "플래너 모델 (선택):"
+msgstr "プランナーモデル（任意）:"
+
+msgid "플래너 제공자 (선택):"
+msgstr "プランナープロバイダー（任意）:"
+
+msgid "플러그인"
+msgstr "プラグイン"
+
+msgid "플러그인 검색"
+msgstr "プラグインを検索"
+
+msgid "플러그인 목록 로드 실패: {error}"
+msgstr "プラグインリストの読み込みに失敗: {error}"
+
+msgid "플러그인 목록 새로고침"
+msgstr "プラグインリストを更新"
+
+msgid "플러그인 설치"
+msgstr "プラグインをインストール"
+
+msgid "플러그인 폴더"
+msgstr "プラグインフォルダ"
+
+msgid "플러그인 폴더 열기"
+msgstr "プラグインフォルダを開く"
+
+msgid "플러그인 폴더:"
+msgstr "プラグインフォルダ:"
+
+msgid "플러그인이 없습니다. sample_plugin.py를 복사해 시작할 수 있습니다."
+msgstr "プラグインがありません。sample_plugin.pyをコピーして始めることができます。"
+
+msgid "해달라"
+msgstr "してください"
+
+msgid "해줘"
+msgstr "して"
+
+msgid "현재 감도: {value}"
+msgstr "現在の感度: {value}"
+
+msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
+msgstr "システムの「デフォルト再生デバイス」を通じて音が出力されます。"
+
+msgid "현재 예약된 종료가 없거나 취소에 실패했습니다."
+msgstr "現在予約されたシャットダウンがないか、キャンセルに失敗しました。"
+
+msgid "확장"
+msgstr "拡張機能"
+
+msgid "활성화"
+msgstr "有効"
+
+msgid "활성화/비활성화"
+msgstr "有効/無効"
+
+msgid "후"
+msgstr "後"
+
+msgid "🎨 팔레트 직접 편집"
+msgstr "🎨 パレットを直接編集"
+
+msgid "🎮 게임 모드 (GPU 절약)"
+msgstr "🎮 ゲームモード（GPU節約）"
+
+msgid "💡 자주 쓰는 명령"
+msgstr "💡 よく使うコマンド"
+
+msgid "💬 아리와 대화하기"
+msgstr "💬 アリと会話する"
+
+msgid "💬 텍스트 대화"
+msgstr "💬 テキスト会話"
+
+msgid "🔍 검증 중..."
+msgstr "🔍 検証中..."
+
+msgid "🕐 {schedule}  →  다음 {next}"
+msgstr "🕐 {schedule}  →  次 {next}"
+
+msgid "🤖 계획 {count}단계"
+msgstr "🤖 計画 {count}ステップ"
+
+msgid "🤖 실행 중..."
+msgstr "🤖 実行中..."

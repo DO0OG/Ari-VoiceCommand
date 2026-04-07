@@ -202,6 +202,7 @@ nuitka_args = [
     # 데이터 자원 포함
     "--include-data-dir=images=images",
     "--include-data-dir=theme=theme",
+    "--include-data-dir=i18n/locales=i18n/locales",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",

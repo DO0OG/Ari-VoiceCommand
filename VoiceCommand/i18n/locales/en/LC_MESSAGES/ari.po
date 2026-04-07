@@ -1,41 +1,1299 @@
-# Ari Voice Assistant — English
 msgid ""
 msgstr ""
+"Project-Id-Version: Ari 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Language: en\n"
 
 msgid "아리 설정"
 msgstr "Ari Settings"
 
+msgid "말씀해주세요"
+msgstr "Please speak"
+
+msgid "로딩이 완료되었습니다. 이제 대화할 수 있어요!"
+msgstr "Loading complete. We can talk now!"
+
+msgid "볼륨을 {volume}%로 조절했습니다."
+msgstr "Volume adjusted to {volume}%."
+
+msgid "볼륨 조절 실패"
+msgstr "Failed to adjust volume"
+
+msgid "게임 모드 ON. GPU 메모리 해제했습니다."
+msgstr "Game Mode ON. GPU memory released."
+
+msgid "게임 모드 OFF. TTS 복원 중..."
+msgstr "Game Mode OFF. Restoring TTS..."
+
+msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
+msgstr "Game Mode disabled. Restored to CosyVoice."
+
+msgid "유튜브를 열게요."
+msgstr "Opening YouTube."
+
+msgid "{query} 유튜브에서 검색할게요."
+msgstr "Searching for {query} on YouTube."
+
+msgid "현재 시간은 {time}입니다."
+msgstr "The current time is {time}."
+
+msgid "오전"
+msgstr "AM"
+
+msgid "오후"
+msgstr "PM"
+
+msgid "{am_pm} {hour}시 {minute}분"
+msgstr "{hour}:{minute} {am_pm}"
+
+msgid "{am_pm} {hour}시"
+msgstr "{hour} o'clock {am_pm}"
+
+msgid "타이머"
+msgstr "Timer"
+
+msgid "알람"
+msgstr "Alarm"
+
+msgid "취소"
+msgstr "Cancel"
+
+msgid "끄기"
+msgstr "Off"
+
+msgid "중지"
+msgstr "Stop"
+
+msgid "남은"
+msgstr "Remaining"
+
+msgid "얼마"
+msgstr "How much"
+
+msgid "확인"
+msgstr "Check"
+
+msgid "현재 실행 중인 타이머가 없습니다."
+msgstr "There are no timers currently running."
+
+msgid "타이머 시간을 정확히 말씀해 주세요."
+msgstr "Please specify the timer duration clearly."
+
+msgid "{prefix} {mins}분 {secs}초 남았습니다."
+msgstr "{prefix} has {mins}m {secs}s remaining."
+
+msgid "{prefix} {mins}분 남았습니다."
+msgstr "{prefix} has {mins}m remaining."
+
+msgid "{prefix} {secs}초 남았습니다."
+msgstr "{prefix} has {secs}s remaining."
+
+msgid "컴퓨터 꺼줘"
+msgstr "Turn off computer"
+
+msgid "{time}에 컴퓨터를 종료할게요."
+msgstr "Shutting down the computer at {time}."
+
+msgid "컴퓨터를 종료합니다. 잠시만 기다려 주세요."
+msgstr "Shutting down the computer. Please wait a moment."
+
+msgid "종료 예약을 취소했습니다."
+msgstr "Shutdown reservation cancelled."
+
+msgid "팔레트 편집"
+msgstr "Palette Editor"
+
+msgid "선택"
+msgstr "Pick"
+
+msgid "테마 이름"
+msgstr "Theme Name"
+
+msgid "테마로 저장"
+msgstr "Save as Theme"
+
+msgid "프리셋 초기화"
+msgstr "Reset to Preset"
+
+msgid "JSON 직접 편집"
+msgstr "Direct JSON Edit"
+
+msgid "JSON 적용"
+msgstr "Apply JSON"
+
+msgid "복사"
+msgstr "Copy"
+
+msgid "닫기"
+msgstr "Close"
+
+msgid "주요 색상"
+msgstr "Core Colors"
+
+msgid "텍스트"
+msgstr "Text"
+
+msgid "배경"
+msgstr "Background"
+
+msgid "테두리"
+msgstr "Border"
+
+msgid "기타"
+msgstr "Others"
+
+msgid "이번 주 자기개선 리포트예요!"
+msgstr "Here is this week's self-improvement report!"
+
+msgid "완료 작업 {total}건 (성공 {success}건, 성공률 {rate}%, 실패 {fail}건)"
+msgstr "{total} tasks completed ({success} succeeded, {rate}% success rate, {fail} failed)"
+
+msgid "활성 스킬 {total}개 (컴파일 완료 {compiled}개)"
+msgstr "{total} active skills ({compiled} compiled)"
+
+msgid "기억 중인 사실 {count}개"
+msgstr "{count} facts remembered"
+
+msgid "예약 작업 {total}건 처리 (성공 {success}건, 실패 {fail}건)"
+msgstr "{total} scheduled tasks processed ({success} succeeded, {fail} failed)"
+
+msgid "반복 실패 패턴: "
+msgstr "Repeated failure patterns: "
+
+msgid "{kind} {count}회"
+msgstr "{kind} {count} times"
+
+msgid "학습 기여도: "
+msgstr "Learning lift: "
+
+msgid "회귀 경고: "
+msgstr "Regression alert: "
+
+msgid "개선 제안: "
+msgstr "Suggestions: "
+
+msgid "실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요."
+msgstr "High failure rate. Try breaking complex goals into smaller steps."
+
+msgid "신뢰도 낮은 스킬 {count}개 ({names})를 재학습하거나 비활성화하세요."
+msgstr "Re-learn or disable {count} low-confidence skills ({names})."
+
+msgid "반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요."
+msgstr "Repeated skills haven't been compiled yet. Induce optimization through repetition."
+
+msgid "예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요."
+msgstr "Scheduled task failures are accumulating. Check next_run and root causes."
+
+msgid "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다."
+msgstr "Checks the current screen state (taskbar position, fullscreen mode, etc.)."
+
+msgid "유튜브에서 음악이나 영상을 검색하여 재생합니다."
+msgstr "Searches for and plays music or videos on YouTube."
+
+msgid "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요."
+msgstr "Sets a countdown timer for notifications. Multiple timers can be managed if named. Only sounds an alarm upon completion. Use schedule_task for delayed actions like shutdown or file saving."
+
+msgid "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다."
+msgstr "Cancels a running timer. Cancels the most recent one if no name is given."
+
+msgid "현재 날씨 정보를 조회합니다."
+msgstr "Retrieves current weather information."
+
+msgid "시스템 볼륨을 조절합니다."
+msgstr "Adjusts the system volume."
+
+msgid "현재 시간을 알려줍니다."
+msgstr "Tells the current time."
+
+msgid "파이썬 코드로 자율 처리합니다."
+msgstr "Processes autonomously using Python code."
+
+msgid "CMD 명령어로 자율 처리합니다."
+msgstr "Processes autonomously using CMD commands."
+
+msgid "복합 목표를 자율 에이전트 루프로 처리합니다."
+msgstr "Processes complex goals using an autonomous agent loop."
+
+msgid "인터넷 정보를 검색합니다."
+msgstr "Searches for information on the internet."
+
+msgid "웹 페이지 내용을 가져옵니다."
+msgstr "Fetches content from a web page."
+
+msgid "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다."
+msgstr "Schedules a task at a specific time. Use with time expressions like 'in N minutes' or 'at N o'clock' for delayed requests."
+
+msgid "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요."
+msgstr "Shuts down the computer immediately. Use schedule_task if a time expression is included."
+
+msgid "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다."
+msgstr "Lists currently scheduled tasks. Use for requests like 'What's scheduled?' or 'Check my schedule'."
+
+msgid "예약된 작업을 ID로 취소합니다."
+msgstr "Cancels a scheduled task by its ID."
+
+msgid "## 과거 유사 사례 및 교훈 (Planning Guide):"
+msgstr "## Past Cases & Lessons (Planning Guide):"
+
+msgid "  💡 교훈: {lesson}"
+msgstr "  💡 Lesson: {lesson}"
+
+msgid "  ⚠️ 실패 이유: {error}"
+msgstr "  ⚠️ Reason: {error}"
+
+msgid "  ✅ 추천 접근: {steps}"
+msgstr "  ✅ Recommended Approach: {steps}"
+
+msgid "  🧭 재사용 힌트: {hints}"
+msgstr "  🧭 Reuse Hints: {hints}"
+
+msgid "  🔎 실패 유형: {kind}"
+msgstr "  🔎 Failure Type: {kind}"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n* Refer to above cases to avoid mistakes and use proven methods."
+
+msgid "실패 기록"
+msgstr "Failure Record"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n※ Refer to the above examples to avoid the same mistakes and use proven approaches."
+
+msgid "'{model}' 모델 준비가 완료되었습니다."
+msgstr "'{model}' model is ready."
+
+msgid "'{name}' 저장됨"
+msgstr "'{name}' saved"
+
+msgid "'{name}' 타이머"
+msgstr "'{name}' timer"
+
+msgid "'{task}' 작업을 취소하시겠습니까?"
+msgstr "Cancel task '{task}'?"
+
+msgid "(기본 제공자와 동일)"
+msgstr "(same as default provider)"
+
+msgid "+ 작업 추가"
+msgstr "+ Add task"
+
+msgid "AI (LLM) 엔진 설정"
+msgstr "AI (LLM) Engine Settings"
+
+msgid "AI 설정"
+msgstr "AI Settings"
+
+msgid "AI 엔진이 연결되지 않았습니다."
+msgstr "AI engine is not connected."
+
+msgid "AI에게 직접 전달할 시스템 지시문"
+msgstr "System instructions passed directly to the AI"
+
+msgid "API Key (선택):"
+msgstr "API Key (optional):"
+
+msgid "API Key:"
+msgstr "API Key:"
+
+msgid "Anthropic (Claude)"
+msgstr "Anthropic (Claude)"
+
+msgid "CosyVoice 설치"
+msgstr "Install CosyVoice"
+
+msgid "CosyVoice 설치 경로 (비워두면 자동 감지):"
+msgstr "CosyVoice install path (auto-detect if empty):"
+
+msgid "CosyVoice 설치 폴더 선택"
+msgstr "Select CosyVoice install folder"
+
+msgid "CosyVoice3 로컬 TTS"
+msgstr "CosyVoice3 Local TTS"
+
+msgid "CosyVoice3 설정 (로컬 GPU)"
+msgstr "CosyVoice3 Settings (Local GPU)"
+
+msgid "CosyVoice3 설치"
+msgstr "Install CosyVoice3"
+
+msgid "CosyVoice3 설치 중 오류가 발생했습니다.\n{error}"
+msgstr "An error occurred during CosyVoice3 installation.\n{error}"
+
+msgid "CosyVoice3 설치 중...\n콘솔 창에서 진행 상황을 확인하세요."
+msgstr "Installing CosyVoice3...\nCheck the console window for progress."
+
+msgid "CosyVoice3 설치가 완료되었습니다.\n설정에서 TTS 모드를 '로컬 (CosyVoice3)'으로 변경하세요."
+msgstr "CosyVoice3 installation complete.\nChange the TTS mode to 'Local (CosyVoice3)' in Settings."
+
+msgid "CosyVoice3 설치를 진행 중입니다.\n의존성 및 모델 다운로드로 시간이 조금 걸릴 수 있습니다."
+msgstr "CosyVoice3 installation in progress.\nThis may take some time due to dependency and model downloads."
+
+msgid "Edge TTS (무료)"
+msgstr "Edge TTS (Free)"
+
+msgid "Edge TTS 설정 (무료)"
+msgstr "Edge TTS Settings (Free)"
+
+msgid "ElevenLabs"
+msgstr "ElevenLabs"
+
+msgid "ElevenLabs 설정"
+msgstr "ElevenLabs Settings"
+
+msgid "Fish Audio (API)"
+msgstr "Fish Audio (API)"
+
+msgid "Fish Audio 설정"
+msgstr "Fish Audio Settings"
+
+msgid "Google Gemini"
+msgstr "Google Gemini"
+
+msgid "Google STT (온라인)"
+msgstr "Google STT (Online)"
+
+msgid "Groq (Llama 3.3, 무료)"
+msgstr "Groq (Llama 3.3, Free)"
+
+msgid "Hyunsu (남성)"
+msgstr "Hyunsu (Male)"
+
+msgid "InJoon (남성)"
+msgstr "InJoon (Male)"
+
+msgid "JSON 형식 오류"
+msgstr "JSON format error"
+
+msgid "Mistral AI"
+msgstr "Mistral AI"
+
+msgid "NVIDIA NIM"
+msgstr "NVIDIA NIM"
+
+msgid "Ollama (로컬 LLM)"
+msgstr "Ollama (Local LLM)"
+
+msgid "Ollama 모델 폴더 선택"
+msgstr "Select Ollama model folder"
+
+msgid "Ollama 사용 시 API 키는 필요 없습니다. 서버 주소는 기본적으로 "
+msgstr "No API key needed for Ollama. Server address defaults to "
+
+msgid "Ollama 서버 주소:"
+msgstr "Ollama server address:"
+
+msgid "Ollama 설치"
+msgstr "Install Ollama"
+
+msgid "Ollama 설치 경로 (선택):"
+msgstr "Ollama install path (optional):"
+
+msgid "Ollama 설치 폴더 선택"
+msgstr "Select Ollama install folder"
+
+msgid "Ollama 설치 후 사용 가능 — API 키 불필요"
+msgstr "Available after installation — no API key needed"
+
+msgid "Ollama 설치/모델 받기"
+msgstr "Install Ollama / Download models"
+
+msgid "Ollama 설치를 준비 중입니다.\n설치 창이 뜨면 진행하고, 모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Preparing Ollama installation.\nProceed when the installer appears; model download continues in the background."
+
+msgid "Ollama를 설치하고, 사용할 모델을 함께 받아옵니다. "
+msgstr "Installs Ollama and downloads the models you want to use. "
+
+msgid "OpenAI (GPT-4o)"
+msgstr "OpenAI (GPT-4o)"
+
+msgid "OpenAI TTS"
+msgstr "OpenAI TTS"
+
+msgid "OpenAI TTS 설정"
+msgstr "OpenAI TTS Settings"
+
+msgid "OpenRouter (멀티모델)"
+msgstr "OpenRouter (Multi-model)"
+
+msgid "RP 설정"
+msgstr "RP Settings"
+
+msgid "Reference ID:"
+msgstr "Reference ID:"
+
+msgid "Reference WAV 텍스트 (Cross-lingual 시 비움):"
+msgstr "Reference WAV text (leave empty for cross-lingual):"
+
+msgid "STT 엔진"
+msgstr "STT Engine"
+
+msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
+msgstr "Configure STT engine, Whisper settings, mic sensitivity, and wake words."
+
+msgid "SunHi (여성)"
+msgstr "SunHi (Female)"
+
+msgid "TTS 설정"
+msgstr "TTS Settings"
+
+msgid "TTS 엔진 선택:"
+msgstr "Select TTS engine:"
+
+msgid "UI 테마 설정"
+msgstr "UI Theme Settings"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Voice ID:"
+msgstr "Voice ID:"
+
+msgid "Whisper (오프라인)"
+msgstr "Whisper (Offline)"
+
+msgid "Whisper 다운로드"
+msgstr "Download Whisper"
+
+msgid "Whisper 설정"
+msgstr "Whisper Settings"
+
+msgid "dict 형식 필요"
+msgstr "dict format required"
+
+msgid "https://aistudio.google.com/app/apikey"
+msgstr "https://aistudio.google.com/app/apikey"
+
+msgid "https://build.nvidia.com 에서 nvapi- 키 발급"
+msgstr "Get nvapi- key at https://build.nvidia.com"
+
+msgid "https://console.anthropic.com"
+msgstr "https://console.anthropic.com"
+
+msgid "https://console.groq.com 에서 무료 발급"
+msgstr "Get free key at https://console.groq.com"
+
+msgid "https://console.mistral.ai"
+msgstr "https://console.mistral.ai"
+
+msgid "https://openrouter.ai/keys"
+msgstr "https://openrouter.ai/keys"
+
+msgid "https://platform.openai.com/api-keys"
+msgstr "https://platform.openai.com/api-keys"
+
+msgid "{ampm} {hour}시"
+msgstr "{ampm} {hour}:00"
+
+msgid "{ampm} {hour}시 {minute}분"
+msgstr "{ampm} {hour}:{minute}"
+
+msgid "{count}개 플러그인을 불러왔습니다."
+msgstr "Loaded {count} plugin(s)."
+
+msgid "{name} ({version}) - {description}"
+msgstr "{name} ({version}) - {description}"
+
+msgid "{name} v{version} [{status}] ({count} installs)\n{desc}"
+msgstr "{name} v{version} [{status}] ({count} installs)\n{desc}"
+
+msgid "{name} 미리보기"
+msgstr "{name} Preview"
+
+msgid "{name} 설치 중..."
+msgstr "Installing {name}..."
+
+msgid "{name} 플러그인을 설치할까요?"
+msgstr "Install plugin '{name}'?"
+
+msgid "{n}분"
+msgstr "{n} min"
+
+msgid "{n}시간"
+msgstr "{n} hr"
+
+msgid "{n}초"
+msgstr "{n} sec"
+
+msgid "{time}에 컴퓨터를 재시작할게요."
+msgstr "I'll restart the computer at {time}."
+
+msgid "▶ 즉시 실행 요청됨"
+msgstr "▶ Immediate run requested"
+
+msgid "⚠ API Key를 입력하세요."
+msgstr "⚠ Please enter an API Key."
+
+msgid "⚠ pretrained_models 폴더가 없습니다. 경로를 확인하세요."
+msgstr "⚠ pretrained_models folder not found. Check the path."
+
+msgid "⚠️ 등록 실패: {error}"
+msgstr "⚠️ Registration failed: {error}"
+
+msgid "⚠️ 스케줄러가 연결되지 않았습니다."
+msgstr "⚠️ Scheduler is not connected."
+
+msgid "⚠️ 이름·목표·스케줄을 모두 입력해주세요."
+msgstr "⚠️ Please fill in name, goal, and schedule."
+
+msgid "⚠️ 저장 실패: {error}"
+msgstr "⚠️ Save failed: {error}"
+
+msgid "✅ '{name}' 등록 완료"
+msgstr "✅ '{name}' registered"
+
+msgid "✅ 마지막: {time}  |  {result}"
+msgstr "✅ Last: {time}  |  {result}"
+
+msgid "✅ 저장 완료"
+msgstr "✅ Saved"
+
+msgid "✓ CosyVoice3 설치 완료"
+msgstr "✓ CosyVoice3 installed"
+
+msgid "✓ Ollama 설치 완료 ({models})"
+msgstr "✓ Ollama installed ({models})"
+
+msgid "✓ 감지됨: {path}"
+msgstr "✓ Detected: {path}"
+
+msgid "✓ 유효한 CosyVoice 경로"
+msgstr "✓ Valid CosyVoice path"
+
+msgid "✗ CosyVoice3 설치 실패: {error}"
+msgstr "✗ CosyVoice3 installation failed: {error}"
+
+msgid "✗ Ollama 설치 실패: {error}"
+msgstr "✗ Ollama installation failed: {error}"
+
+msgid "✗ 자동 감지 실패 — 경로를 직접 입력하세요."
+msgstr "✗ Auto-detection failed — enter the path manually."
+
+msgid "검색"
+msgstr "Search"
+
+msgid "검색어"
+msgstr "Search query"
+
+msgid "검색할 제목"
+msgstr "Title to search"
+
+msgid "검증"
+msgstr "Verify"
+
+msgid "검증 중..."
+msgstr "Verifying..."
+
+msgid "검증 중... (기본 모델: {model})"
+msgstr "Verifying... (default model: {model})"
+
+msgid "결과 수"
+msgstr "Number of results"
+
+msgid "곧 실행"
+msgstr "Soon"
+
+msgid "관심사 (쉼표로 구분)"
+msgstr "Interests (comma-separated)"
+
+msgid "권장 모델 선택:"
+msgstr "Select recommended model:"
+
+msgid "글꼴 배율 (0.9 ~ 1.35):"
+msgstr "Font scale (0.9 ~ 1.35):"
+
+msgid "글꼴 패밀리 재정의 (선택):"
+msgstr "Font family override (optional):"
+
+msgid "기록 없음"
+msgstr "No records"
+
+msgid "기본 정보"
+msgstr "Basic Info"
+
+msgid "기억 상태"
+msgstr "Memory Status"
+
+msgid "기억 시스템을 불러오지 못했습니다."
+msgstr "Failed to load memory system."
+
+msgid "꺼"
+msgstr "off"
+
+msgid "끄"
+msgstr "turn off"
+
+msgid "나"
+msgstr "Me"
+
+msgid "나중에"
+msgstr "Later"
+
+msgid "날씨 정보를 가져오는 데 실패했습니다."
+msgstr "Failed to retrieve weather information."
+
+msgid "남은 시간"
+msgstr "Time remaining"
+
+msgid "다운로드 중..."
+msgstr "Downloading..."
+
+msgid "다음 추천 "
+msgstr "Next recommendation "
+
+msgid "대화 주제"
+msgstr "Conversation topics"
+
+msgid "대화 지침:"
+msgstr "Conversation guidelines:"
+
+msgid "대화를 이어가면 이곳에 요약이 표시됩니다."
+msgstr "Continue the conversation to see a summary here."
+
+msgid "도시 또는 지역"
+msgstr "City or region"
+
+msgid "뒤"
+msgstr "later"
+
+msgid "등록된 예약 작업이 없습니다."
+msgstr "No scheduled tasks."
+
+msgid "로그 파일 폴더 열기"
+msgstr "Open log folder"
+
+msgid "로컬 (CosyVoice3)"
+msgstr "Local (CosyVoice3)"
+
+msgid "로컬 LLM 엔진 설치와 모델 다운로드를 한 번에 진행합니다."
+msgstr "Install a local LLM engine and download models in one step."
+
+msgid "로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요."
+msgstr "Install local TTS engine CosyVoice3?\n\n• If installed: High-quality TTS available (GPU recommended, ~2–5 GB)\n• If not: Fish Audio API TTS will be used (internet required)\n\nTo install later, run install_cosyvoice.py directly."
+
+msgid "로컬 TTS 엔진과 기본 모델을 설치하고 설정 경로를 자동으로 맞춥니다."
+msgstr "Installs the local TTS engine and default model, and sets the path automatically."
+
+msgid "로컬 설치"
+msgstr "Local Install"
+
+msgid "로컬에서 직접 실행할 엔진을 먼저 설치한 뒤, 아래 설정에서 경로와 모델을 조정할 수 있습니다."
+msgstr "Install the engine for local use first, then adjust the path and model in the settings below."
+
+msgid "를 사용합니다."
+msgstr " is used."
+
+msgid "마우스 반응"
+msgstr "Mouse reaction"
+
+msgid "마이크 감도"
+msgstr "Mic sensitivity"
+
 msgid "마이크 입력 장치 선택:"
-msgstr "Select Microphone Input:"
+msgstr "Select microphone input device:"
 
-msgid "시스템 기본 마이크"
-msgstr "System Default Microphone"
+msgid "마켓플레이스"
+msgstr "Marketplace"
 
-msgid "💬 텍스트 대화"
-msgstr "💬 Text Chat"
+msgid "마켓플레이스 목록을 불러오는 중..."
+msgstr "Loading marketplace listings..."
+
+msgid "말하기 속도 (0.7 ~ 1.2):"
+msgstr "Speech speed (0.7 ~ 1.2):"
+
+msgid "메모 (쉼표로 구분)"
+msgstr "Notes (comma-separated)"
+
+msgid "메시지 입력..."
+msgstr "Enter message..."
+
+msgid "명령"
+msgstr "command"
+
+msgid "몇 시야"
+msgstr "what time is it"
+
+msgid "모델 다운로드"
+msgstr "Download model"
+
+msgid "모델 설치 없음"
+msgstr "No model install"
+
+msgid "모델 없이 설치"
+msgstr "Install without model"
+
+msgid "모델 이름 (비워두면 기본값):"
+msgstr "Model name (default if empty):"
+
+msgid "모델 저장 경로 (선택):"
+msgstr "Model save path (optional):"
+
+msgid "모델 준비에 실패했습니다.\n{error}"
+msgstr "Model preparation failed.\n{error}"
+
+msgid "모델 크기:"
+msgstr "Model size:"
+
+msgid "모델:"
+msgstr "Model:"
+
+msgid "모델명 (기본: {model})"
+msgstr "Model name (default: {model})"
+
+msgid "모델은 여러 개 선택할 수 있고, 설치 후 바로 설정값에 반영됩니다."
+msgstr "You can select multiple models; they will be reflected in settings immediately after installation."
+
+msgid "목록 로드 실패: {message}"
+msgstr "Failed to load list: {message}"
+
+msgid "목록 새로고침"
+msgstr "Refresh list"
+
+msgid "목소리 선택:"
+msgstr "Select voice:"
+
+msgid "목소리:"
+msgstr "Voice:"
+
+msgid "목표"
+msgstr "Goal"
+
+msgid "목표 (예: 최신 뉴스를 요약해서 저장해줘)"
+msgstr "Goal (e.g., summarize and save the latest news)"
+
+msgid "미완료"
+msgstr "Incomplete"
+
+msgid "분"
+msgstr "min"
+
+msgid "분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다."
+msgstr "Separate analysis/planning from execution/correction and use role-specific provider/model settings."
+
+msgid "비워두면 AI 설정을 따릅니다."
+msgstr "Leave empty to follow AI settings."
+
+msgid "비워두면 Ollama 기본 경로 사용"
+msgstr "Leave empty to use the default Ollama path"
+
+msgid "비워두면 기본 모델 경로 사용"
+msgstr "Leave empty to use the default model path"
+
+msgid "비워두면 기본 모델과 동일"
+msgstr "Leave empty to use the same as the default model"
+
+msgid "비워두면 테마 기본 글꼴 사용"
+msgstr "Leave empty to use the theme default font"
+
+msgid "비활성화"
+msgstr "Disabled"
+
+msgid "사실 (Facts)"
+msgstr "Facts"
+
+msgid "사용자 이름"
+msgstr "Username"
+
+msgid "사용자 플러그인"
+msgstr "User plugins"
+
+msgid "사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요."
+msgstr "Enter the API Key and model name for your provider, then click [Verify] to check the connection."
+
+msgid "삭제"
+msgstr "Delete"
+
+msgid "새 웨이크워드를 입력하세요:"
+msgstr "Enter new wake word:"
+
+msgid "새 작업 추가"
+msgstr "Add new task"
+
+msgid "새로 고침"
+msgstr "Refresh"
+
+msgid "선택 작업 취소"
+msgstr "Cancel selected task"
+
+msgid "선택 플러그인 설치"
+msgstr "Install selected plugin"
+
+msgid "선택한 모델이 없습니다. Ollama 프로그램만 설치할까요?"
+msgstr "No model selected. Install Ollama only?"
+
+msgid "선택한 플러그인의 ID를 찾지 못했습니다."
+msgstr "Could not find the ID of the selected plugin."
+
+msgid "선호 "
+msgstr "preference "
+
+msgid "선호도"
+msgstr "Preferences"
+
+msgid "설명"
+msgstr "Description"
+
+msgid "설명 없음"
+msgstr "No description"
 
 msgid "설정"
 msgstr "Settings"
 
-msgid "종료"
-msgstr "Exit"
+msgid "설정창 안에서 플러그인을 검색하고 바로 설치할 수 있습니다."
+msgstr "You can search for and install plugins directly from within the settings window."
+
+msgid "설치"
+msgstr "Install"
+
+msgid "설치 가능"
+msgstr "Installable"
+
+msgid "설치 실패"
+msgstr "Installation failed"
+
+msgid "설치 완료"
+msgstr "Installation complete"
+
+msgid "설치 중"
+msgstr "Installing"
+
+msgid "설치됨"
+msgstr "Installed"
+
+msgid "설치할 플러그인을 먼저 선택하세요."
+msgstr "Please select a plugin to install first."
+
+msgid "성격:"
+msgstr "Personality:"
+
+msgid "성공"
+msgstr "Success"
+
+msgid "속도 (예: +0%, -10%):"
+msgstr "Speed (e.g., +0%, -10%):"
+
+msgid "스마트 어시스턴트 모드"
+msgstr "Smart assistant mode"
+
+msgid "스마트 어시스턴트 모드가 {status}되었습니다."
+msgstr "Smart assistant mode has been {status}."
+
+msgid "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
+msgstr "Schedule (e.g., daily 09:00  /  every Monday 09:00  /  every 30 minutes)"
+
+msgid "스피커 출력 장치:"
+msgstr "Speaker output device:"
+
+msgid "시"
+msgstr "hr"
+
+msgid "시간"
+msgstr "hour"
+
+msgid "시간 표현"
+msgstr "time expression"
+
+msgid "시나리오:"
+msgstr "Scenario:"
+
+msgid "시도 {count}회"
+msgstr "Attempt {count}"
+
+msgid "시스템"
+msgstr "system"
+
+msgid "시스템 기본 마이크"
+msgstr "System default microphone"
+
+msgid "시스템 재시작 명령 실행에 실패했습니다."
+msgstr "Failed to execute system restart command."
+
+msgid "시스템 재시작 예약에 실패했습니다."
+msgstr "Failed to schedule system restart."
+
+msgid "시스템 종료"
+msgstr "System shutdown"
+
+msgid "시스템 종료 명령 실행에 실패했습니다."
+msgstr "Failed to execute system shutdown command."
+
+msgid "시스템 종료 예약에 실패했습니다."
+msgstr "Failed to schedule system shutdown."
+
+msgid "시스템 프롬프트:"
+msgstr "System prompt:"
+
+msgid "실패"
+msgstr "Failed"
+
+msgid "실행 예정 시각"
+msgstr "Scheduled time"
+
+msgid "실행/수정 모델 (선택):"
+msgstr "Execution/correction model (optional):"
+
+msgid "실행/수정 제공자 (선택):"
+msgstr "Execution/correction provider (optional):"
 
 msgid "실행을 취소했습니다."
 msgstr "Execution cancelled."
 
-msgid "코드 실행 시간이 너무 길어 중단했습니다."
-msgstr "Code execution timed out and was stopped."
+msgid "아래 경로에 CosyVoice3를 설치할까요?\n\n{path}"
+msgstr "Install CosyVoice3 at the following path?\n\n{path}"
+
+msgid "아리"
+msgstr "Ari"
+
+msgid "아리의 기억 보기"
+msgstr "View Ari's memory"
+
+msgid "아직 저장된 사실이 없습니다."
+msgstr "No facts saved yet."
+
+msgid "안 해"
+msgstr "won't do"
+
+msgid "안녕하세요! 무엇을 도와드릴까요?"
+msgstr "Hello! How can I help you?"
+
+msgid "언어 설정"
+msgstr "Language Settings"
+
+msgid "에"
+msgstr "at"
+
+msgid "예) 상냥하고 귀여운 AI 비서"
+msgstr "e.g., Friendly and cute AI assistant"
+
+msgid "예) 주인님을 보좌하는 역할극"
+msgstr "e.g., Role-play as a servant assisting the master"
+
+msgid "예: 1.0"
+msgstr "e.g., 1.0"
+
+msgid "예: C:/CosyVoice"
+msgstr "e.g., C:/CosyVoice"
+
+msgid "예: gpt-4o, llama-3.3-70b-versatile..."
+msgstr "e.g., gpt-4o, llama-3.3-70b-versatile..."
+
+msgid "예: qwen2.5-coder:7b, mistral-small"
+msgstr "e.g., qwen2.5-coder:7b, mistral-small"
+
+msgid "예: 고양이 좋아함, 야행성"
+msgstr "e.g., likes cats, night owl"
+
+msgid "예: 음악, 영화, 독서"
+msgstr "e.g., music, movies, reading"
+
+msgid "예약 작업 관리"
+msgstr "Manage scheduled tasks"
+
+msgid "오디오 장치 설정"
+msgstr "Audio Device Settings"
+
+msgid "오류가 발생했습니다: {error}"
+msgstr "An error occurred: {error}"
+
+msgid "완료"
+msgstr "Done"
+
+msgid "웨이크워드"
+msgstr "Wake word"
+
+msgid "웨이크워드 목록"
+msgstr "Wake word list"
+
+msgid "웨이크워드 추가"
+msgstr "Add wake word"
+
+msgid "웨이크워드는 최소 1개 이상 필요합니다."
+msgstr "At least one wake word is required."
+
+msgid "웹 마켓플레이스 열기"
+msgstr "Open web marketplace"
+
+msgid "위치"
+msgstr "Location"
 
 msgid "위험한 파이썬 작업 감지: {matched}"
 msgstr "Dangerous Python operation detected: {matched}"
 
-msgid "언어 변경"
-msgstr "Language Changed"
+msgid "음성 인식"
+msgstr "Speech recognition"
 
-msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
-msgstr "Language setting saved. Please restart to apply."
+msgid "음성 인식 설정"
+msgstr "Speech recognition settings"
 
-msgid "로그 파일 폴더 열기"
-msgstr "Open Log Folder"
+msgid "음성 인식 설정..."
+msgstr "Speech recognition settings..."
+
+msgid "음성 인식 엔진:"
+msgstr "Speech recognition engine:"
+
+msgid "음성 합성 (TTS) 설정"
+msgstr "Text-to-Speech (TTS) Settings"
+
+msgid "이름"
+msgstr "Name"
+
+msgid "이름 없음"
+msgstr "No name"
+
+msgid "이전 대화를 참고할 때의 태도"
+msgstr "Attitude when referencing past conversations"
+
+msgid "인터페이스 언어:"
+msgstr "Interface language:"
+
+msgid "자동 감도 조정 사용"
+msgstr "Use automatic sensitivity adjustment"
+
+msgid "자동 감지"
+msgstr "Auto-detect"
+
+msgid "자주 쓰는 명령어"
+msgstr "Frequently used commands"
+
+msgid "작업 내용"
+msgstr "Task description"
+
+msgid "작업 유형별 자동 라우팅 사용"
+msgstr "Use automatic routing by task type"
+
+msgid "작업 이름 (예: 뉴스 요약)"
+msgstr "Task name (e.g., news summary)"
+
+msgid "작업 취소"
+msgstr "Cancel task"
+
+msgid "장치 설정"
+msgstr "Device Settings"
+
+msgid "재계획 (시도 {count}회)"
+msgstr "Replanning (attempt {count})"
+
+msgid "재부팅"
+msgstr "reboot"
+
+msgid "재시작"
+msgstr "restart"
+
+msgid "저장"
+msgstr "Save"
+
+msgid "전원"
+msgstr "power"
+
+msgid "전원 꺼"
+msgstr "power off"
+
+msgid "제공자 선택:"
+msgstr "Select provider:"
+
+msgid "제공자별 API Key"
+msgstr "API Key per provider"
+
+msgid "종료"
+msgstr "Exit"
+
+msgid "종료 안 해"
+msgstr "won't shut down"
+
+msgid "종료 취소"
+msgstr "Cancel shutdown"
+
+msgid "종료 취소 명령 실행에 실패했습니다."
+msgstr "Failed to execute shutdown cancel command."
+
+msgid "종료 확인 여부 (항상 true)"
+msgstr "Shutdown confirmation (always true)"
+
+msgid "죄송합니다. AI 응답 엔진을 초기화할 수 없습니다."
+msgstr "Sorry, unable to initialize the AI response engine."
+
+msgid "주세요"
+msgstr "please"
+
+msgid "주제 "
+msgstr "topic "
+
+msgid "줘"
+msgstr "give me"
+
+msgid "지금 실행"
+msgstr "Run now"
+
+msgid "찾아보기"
+msgstr "Browse"
+
+msgid "초"
+msgstr "sec"
+
+msgid "추가"
+msgstr "Add"
+
+msgid "추가 모델명 (쉼표로 여러 개 입력 가능):"
+msgstr "Additional model names (comma-separated):"
+
+msgid "취소할 작업 ID (list_scheduled_tasks로 확인)"
+msgstr "Task ID to cancel (check with list_scheduled_tasks)"
+
+msgid "취소할 타이머 이름 (선택)"
+msgstr "Timer name to cancel (optional)"
+
+msgid "캐릭터 숨기기"
+msgstr "Hide character"
+
+msgid "캐릭터 페르소나 설정"
+msgstr "Character persona settings"
+
+msgid "캐릭터 표시"
+msgstr "Show character"
+
+msgid "컴퓨터"
+msgstr "computer"
+
+msgid "컴퓨터 꺼 줘"
+msgstr "turn off the computer"
+
+msgid "컴퓨터 재시작"
+msgstr "Restart computer"
+
+msgid "컴퓨터 종료"
+msgstr "Shut down computer"
+
+msgid "컴퓨터 종료해줘"
+msgstr "shut down the computer"
+
+msgid "컴퓨터를 재시작합니다. 잠시만 기다려 주세요."
+msgstr "Restarting the computer. Please wait."
+
+msgid "코드"
+msgstr "code"
+
+msgid "코드 실행 시간이 너무 길어 중단했습니다."
+msgstr "Code execution time was too long and was stopped."
+
+msgid "타이머 이름 (선택)"
+msgstr "Timer name (optional)"
+
+msgid "테마 JSON 파일은 아래 폴더에서 직접 수정할 수 있습니다.\n\n{path}\n\n저장 후 설정창에서 다시 적용하면 열린 UI에 즉시 반영됩니다."
+msgstr "Theme JSON files can be edited directly in the folder below.\n\n{path}\n\nAfter saving, re-apply in the settings window to reflect changes in the open UI immediately."
+
+msgid "테마 미리보기"
+msgstr "Theme Preview"
+
+msgid "테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다."
+msgstr "Theme settings saved.\nOpen UIs are updated immediately; TTS and workers are not restarted."
+
+msgid "테마 저장"
+msgstr "Save Theme"
+
+msgid "테마 저장 실패"
+msgstr "Theme save failed"
+
+msgid "테마 저장 완료"
+msgstr "Theme saved"
+
+msgid "테마 폴더"
+msgstr "Theme folder"
+
+msgid "테마 폴더 안내"
+msgstr "Theme folder guide"
+
+msgid "테마 프리셋:"
+msgstr "Theme preset:"
+
+msgid "통계"
+msgstr "Statistics"
+
+msgid "표시할 플러그인이 없습니다."
+msgstr "No plugins to display."
+
+msgid "플래너 모델 (선택):"
+msgstr "Planner model (optional):"
+
+msgid "플래너 제공자 (선택):"
+msgstr "Planner provider (optional):"
+
+msgid "플러그인"
+msgstr "Plugins"
+
+msgid "플러그인 검색"
+msgstr "Search plugins"
+
+msgid "플러그인 목록 로드 실패: {error}"
+msgstr "Failed to load plugin list: {error}"
+
+msgid "플러그인 목록 새로고침"
+msgstr "Refresh plugin list"
+
+msgid "플러그인 설치"
+msgstr "Install plugin"
+
+msgid "플러그인 폴더"
+msgstr "Plugin folder"
+
+msgid "플러그인 폴더 열기"
+msgstr "Open plugin folder"
+
+msgid "플러그인 폴더:"
+msgstr "Plugin folder:"
+
+msgid "플러그인이 없습니다. sample_plugin.py를 복사해 시작할 수 있습니다."
+msgstr "No plugins found. You can start by copying sample_plugin.py."
+
+msgid "해달라"
+msgstr "please do"
+
+msgid "해줘"
+msgstr "do it"
+
+msgid "현재 감도: {value}"
+msgstr "Current sensitivity: {value}"
+
+msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
+msgstr "Sound is output through the system's default playback device."
+
+msgid "현재 예약된 종료가 없거나 취소에 실패했습니다."
+msgstr "No shutdown is currently scheduled, or cancellation failed."
+
+msgid "확장"
+msgstr "Extensions"
+
+msgid "활성화"
+msgstr "Enabled"
+
+msgid "활성화/비활성화"
+msgstr "Enable/Disable"
+
+msgid "후"
+msgstr "after"
+
+msgid "🎨 팔레트 직접 편집"
+msgstr "🎨 Edit palette directly"
+
+msgid "🎮 게임 모드 (GPU 절약)"
+msgstr "🎮 Game mode (save GPU)"
+
+msgid "💡 자주 쓰는 명령"
+msgstr "💡 Frequently used commands"
+
+msgid "💬 아리와 대화하기"
+msgstr "💬 Chat with Ari"
+
+msgid "💬 텍스트 대화"
+msgstr "💬 Text chat"
+
+msgid "🔍 검증 중..."
+msgstr "🔍 Verifying..."
+
+msgid "🕐 {schedule}  →  다음 {next}"
+msgstr "🕐 {schedule}  →  next {next}"
+
+msgid "🤖 계획 {count}단계"
+msgstr "🤖 Plan step {count}"
+
+msgid "🤖 실행 중..."
+msgstr "🤖 Running..."

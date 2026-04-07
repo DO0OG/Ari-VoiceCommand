@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QPushButton, QHBoxLayout, QHeaderView, QMessageBox,
 )
 
+from i18n.translator import _
+
 
 class ScheduledTasksDialog(QDialog):
     """예약 작업 목록 확인·취소 다이얼로그."""
@@ -17,7 +19,7 @@ class ScheduledTasksDialog(QDialog):
     def __init__(self, scheduler, parent=None):
         super().__init__(parent)
         self._scheduler = scheduler
-        self.setWindowTitle("예약 작업 관리")
+        self.setWindowTitle(_("예약 작업 관리"))
         self.resize(640, 420)
         self._build_ui()
         self._refresh()
@@ -30,7 +32,7 @@ class ScheduledTasksDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["작업 내용", "실행 예정 시각", "남은 시간"])
+        self._table.setHorizontalHeaderLabels([_("작업 내용"), _("실행 예정 시각"), _("남은 시간")])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
@@ -42,9 +44,9 @@ class ScheduledTasksDialog(QDialog):
         layout.addWidget(self._table)
 
         btn_layout = QHBoxLayout()
-        self._btn_cancel_task = QPushButton("선택 작업 취소")
+        self._btn_cancel_task = QPushButton(_("선택 작업 취소"))
         self._btn_cancel_task.clicked.connect(self._cancel_selected)
-        self._btn_refresh = QPushButton("새로 고침")
+        self._btn_refresh = QPushButton(_("새로 고침"))
         self._btn_refresh.clicked.connect(self._refresh)
         btn_layout.addWidget(self._btn_cancel_task)
         btn_layout.addStretch()
@@ -79,8 +81,8 @@ class ScheduledTasksDialog(QDialog):
         task_desc = task_item.text()
         reply = QMessageBox.question(
             self,
-            "작업 취소",
-            f"'{task_desc}' 작업을 취소하시겠습니까?",
+            _("작업 취소"),
+            _("'{task}' 작업을 취소하시겠습니까?").format(task=task_desc),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes and self._scheduler:
@@ -94,14 +96,14 @@ class ScheduledTasksDialog(QDialog):
 
 def _format_remaining(seconds: float) -> str:
     if seconds <= 0:
-        return "곧 실행"
+        return _("곧 실행")
     hours, rem = divmod(int(seconds), 3600)
     minutes, secs = divmod(rem, 60)
     parts = []
     if hours:
-        parts.append(f"{hours}시간")
+        parts.append(_("{n}시간").format(n=hours))
     if minutes:
-        parts.append(f"{minutes}분")
+        parts.append(_("{n}분").format(n=minutes))
     if secs:
-        parts.append(f"{secs}초")
-    return " ".join(parts) + " 후"
+        parts.append(_("{n}초").format(n=secs))
+    return " ".join(parts) + " " + _("후")

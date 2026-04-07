@@ -2,6 +2,7 @@
 from commands.base_command import BaseCommand
 from datetime import datetime
 import logging
+from i18n.translator import _
 
 
 class TimeCommand(BaseCommand):
@@ -11,11 +12,11 @@ class TimeCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        return "몇 시야" in text
+        return _("몇 시야") in text
 
     def execute(self, text: str) -> None:
         time_str = self.get_current_time()
-        response = f"현재 시간은 {time_str}입니다."
+        response = _("현재 시간은 {time}입니다.").format(time=time_str)
         self.tts_wrapper(response)
         logging.info(f"현재 시간 안내: {response}")
 
@@ -23,9 +24,11 @@ class TimeCommand(BaseCommand):
     def get_current_time():
         now = datetime.now()
         if now.hour < 12:
-            am_pm = "오전"
+            am_pm = _("오전")
             hour = now.hour
         else:
-            am_pm = "오후"
+            am_pm = _("오후")
             hour = now.hour - 12 if now.hour > 12 else 12
-        return f"{am_pm} {hour}시 {now.minute}분"
+        return _("{am_pm} {hour}시 {minute}분").format(
+            am_pm=am_pm, hour=hour, minute=now.minute
+        )

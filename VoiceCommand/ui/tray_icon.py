@@ -22,20 +22,20 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.chat_action = self.menu.addAction(_("💬 텍스트 대화"))
         self.chat_action.triggered.connect(self.open_text_interface)
 
-        self.character_action = self.menu.addAction("캐릭터 표시")
+        self.character_action = self.menu.addAction(_("캐릭터 표시"))
         self.character_action.triggered.connect(self.toggle_character)
 
         self.menu.addSeparator()
 
-        self.game_mode_action = self.menu.addAction("🎮 게임 모드 (GPU 절약)")
+        self.game_mode_action = self.menu.addAction(_("🎮 게임 모드 (GPU 절약)"))
         self.game_mode_action.setCheckable(True)
         self.game_mode_action.triggered.connect(self.toggle_game_mode)
 
-        self.smart_mode_action = self.menu.addAction("스마트 어시스턴트 모드")
+        self.smart_mode_action = self.menu.addAction(_("스마트 어시스턴트 모드"))
         self.smart_mode_action.setCheckable(True)
         self.smart_mode_action.triggered.connect(self.toggle_smart_mode)
 
-        self.mouse_reaction_action = self.menu.addAction("마우스 반응")
+        self.mouse_reaction_action = self.menu.addAction(_("마우스 반응"))
         self.mouse_reaction_action.setCheckable(True)
         self.mouse_reaction_action.triggered.connect(self.toggle_mouse_reaction)
 
@@ -45,7 +45,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.settings_action = self.menu.addAction(_("설정"))
         self.settings_action.triggered.connect(self.open_settings)
 
-        self.scheduled_tasks_action = self.menu.addAction("예약 작업 관리")
+        self.scheduled_tasks_action = self.menu.addAction(_("예약 작업 관리"))
         self.scheduled_tasks_action.triggered.connect(self.open_scheduled_tasks)
 
         self.menu.addSeparator()
@@ -82,11 +82,11 @@ class SystemTrayIcon(QSystemTrayIcon):
         if self.game_mode_action.isChecked():
             enable_game_mode()
             if self.character_widget:
-                self.character_widget.say("게임 모드 ON. GPU 메모리 해제했습니다.", duration=3000)
+                self.character_widget.say(_("게임 모드 ON. GPU 메모리 해제했습니다."), duration=3000)
         else:
             disable_game_mode()
             if self.character_widget:
-                self.character_widget.say("게임 모드 OFF. TTS 복원 중...", duration=3000)
+                self.character_widget.say(_("게임 모드 OFF. TTS 복원 중..."), duration=3000)
 
     def update_game_mode_status(self):
         from VoiceCommand import is_game_mode
@@ -95,10 +95,10 @@ class SystemTrayIcon(QSystemTrayIcon):
     def toggle_smart_mode(self):
         from VoiceCommand import learning_mode
         learning_mode['enabled'] = self.smart_mode_action.isChecked()
-        status = "활성화" if learning_mode['enabled'] else "비활성화"
+        status = _("활성화") if learning_mode['enabled'] else _("비활성화")
         logging.info(f"스마트 어시스턴트 모드 {status}")
         if self.character_widget:
-            message = f"스마트 어시스턴트 모드가 {status}되었습니다."
+            message = _("스마트 어시스턴트 모드가 {status}되었습니다.").format(status=status)
             self.character_widget.say(message, duration=3000)
 
     def update_smart_mode_status(self):
@@ -181,6 +181,17 @@ class SystemTrayIcon(QSystemTrayIcon):
 
     def update_character_menu_text(self):
         if self.character_widget and self.character_widget.isVisible():
-            self.character_action.setText("캐릭터 숨기기")
+            self.character_action.setText(_("캐릭터 숨기기"))
         else:
-            self.character_action.setText("캐릭터 표시")
+            self.character_action.setText(_("캐릭터 표시"))
+
+    def refresh_language(self) -> None:
+        """언어 변경 시 트레이 메뉴 텍스트를 즉시 갱신한다."""
+        self.chat_action.setText(_("💬 텍스트 대화"))
+        self.game_mode_action.setText(_("🎮 게임 모드 (GPU 절약)"))
+        self.smart_mode_action.setText(_("스마트 어시스턴트 모드"))
+        self.mouse_reaction_action.setText(_("마우스 반응"))
+        self.settings_action.setText(_("설정"))
+        self.scheduled_tasks_action.setText(_("예약 작업 관리"))
+        self.exit_action.setText(_("종료"))
+        self.update_character_menu_text()

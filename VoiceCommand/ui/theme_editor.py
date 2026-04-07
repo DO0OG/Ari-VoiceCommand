@@ -9,17 +9,22 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QColorDialog, QDialog, QGroupBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QColorDialog, QDialog, QGroupBox, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
+)
 
 from ui import theme
+from i18n.translator import _
 
-COLOR_GROUPS = {
-    "주요 색상": ["primary", "primary_dark", "accent", "success", "warning", "danger", "muted"],
-    "텍스트": ["text_primary", "text_secondary", "text_panel"],
-    "배경": ["bg_main", "bg_panel", "bg_white", "bg_input", "bg_chat_user", "bg_chat_aari"],
-    "테두리": ["border_light", "border_div", "border_input", "border_card"],
-    "기타": ["titlebar", "bg_suggestion", "bg_chip_primary", "bg_chip_warn"],
-}
+def _color_groups():
+    return {
+        _("주요 색상"): ["primary", "primary_dark", "accent", "success", "warning", "danger", "muted"],
+        _("텍스트"): ["text_primary", "text_secondary", "text_panel"],
+        _("배경"): ["bg_main", "bg_panel", "bg_white", "bg_input", "bg_chat_user", "bg_chat_aari"],
+        _("테두리"): ["border_light", "border_div", "border_input", "border_card"],
+        _("기타"): ["titlebar", "bg_suggestion", "bg_chip_primary", "bg_chip_warn"],
+    }
 HEX_ONLY_KEYS = {"bg_main", "bg_panel", "bg_suggestion", "bg_status", "bg_dashboard"}
 
 
@@ -32,7 +37,7 @@ class ColorSwatch(QWidget):
         self._swatch = QLabel()
         self._label = QLabel(color_key)
         self.value_input = QLineEdit(initial_value)
-        self._pick_btn = QPushButton("선택")
+        self._pick_btn = QPushButton(_("선택"))
         self._build_ui()
         self.set_value(initial_value)
 
@@ -89,12 +94,12 @@ class ThemeEditorWidget(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        palette_group = QGroupBox("팔레트 편집")
+        palette_group = QGroupBox(_("팔레트 편집"))
         palette_layout = QVBoxLayout(palette_group)
         top = QHBoxLayout()
-        self.name_input.setPlaceholderText("테마 이름")
-        save_btn = QPushButton("테마로 저장")
-        reset_btn = QPushButton("프리셋 초기화")
+        self.name_input.setPlaceholderText(_("테마 이름"))
+        save_btn = QPushButton(_("테마로 저장"))
+        reset_btn = QPushButton(_("프리셋 초기화"))
         save_btn.clicked.connect(self._on_save)
         reset_btn.clicked.connect(self._on_reset)
         top.addWidget(self.name_input, 1)
@@ -106,7 +111,7 @@ class ThemeEditorWidget(QWidget):
         scroll.setMaximumHeight(400)
         scroll_body = QWidget()
         scroll_layout = QVBoxLayout(scroll_body)
-        for group_name, keys in COLOR_GROUPS.items():
+        for group_name, keys in _color_groups().items():
             box = QGroupBox(group_name)
             grid = QGridLayout(box)
             for row, key in enumerate(keys):
@@ -119,13 +124,13 @@ class ThemeEditorWidget(QWidget):
         scroll.setWidget(scroll_body)
         palette_layout.addWidget(scroll)
         root.addWidget(palette_group)
-        json_group = QGroupBox("JSON 직접 편집")
+        json_group = QGroupBox(_("JSON 직접 편집"))
         json_layout = QVBoxLayout(json_group)
         self.json_edit.setFont(QFont("Consolas", 9))
         json_layout.addWidget(self.json_edit)
         buttons = QHBoxLayout()
-        parse_btn = QPushButton("JSON 적용")
-        copy_btn = QPushButton("복사")
+        parse_btn = QPushButton(_("JSON 적용"))
+        copy_btn = QPushButton(_("복사"))
         parse_btn.clicked.connect(self._on_parse_json)
         copy_btn.clicked.connect(lambda: self.json_edit.selectAll() or self.json_edit.copy())
         buttons.addWidget(parse_btn)
@@ -153,9 +158,9 @@ class ThemeEditorWidget(QWidget):
         try:
             parsed = json.loads(self.json_edit.toPlainText() or "{}")
             if not isinstance(parsed, dict):
-                raise ValueError("dict 형식 필요")
+                raise ValueError(_("dict 형식 필요"))
         except Exception:
-            QMessageBox.warning(self, "JSON 형식 오류", "JSON 형식 오류")
+            QMessageBox.warning(self, _("JSON 형식 오류"), _("JSON 형식 오류"))
             return
         self._load_colors({str(key): str(value) for key, value in parsed.items()})
         self.palette_changed.emit()
@@ -166,9 +171,9 @@ class ThemeEditorWidget(QWidget):
         try:
             theme.save_custom_theme(theme_key, name, self._colors, "")
         except Exception as exc:
-            QMessageBox.warning(self, "테마 저장 실패", str(exc))
+            QMessageBox.warning(self, _("테마 저장 실패"), str(exc))
             return
-        QMessageBox.information(self, "테마 저장 완료", f"'{name}' 저장됨")
+        QMessageBox.information(self, _("테마 저장 완료"), _("'{name}' 저장됨").format(name=name))
         self.theme_saved.emit(theme_key)
 
     def _on_reset(self):
@@ -191,7 +196,7 @@ class ThemeEditorDialog(QDialog):
 
     def __init__(self, initial_colors: dict[str, str], parent=None):
         super().__init__(parent)
-        self.setWindowTitle("팔레트 편집")
+        self.setWindowTitle(_("팔레트 편집"))
         self.setWindowFlags(Qt.Window)
         self.setMinimumSize(620, 720)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
@@ -204,7 +209,7 @@ class ThemeEditorDialog(QDialog):
         self.editor.theme_saved.connect(self.theme_saved)
         layout.addWidget(self.editor)
 
-        close_btn = QPushButton("닫기")
+        close_btn = QPushButton(_("닫기"))
         close_btn.clicked.connect(self.close)
         btn_row = QHBoxLayout()
         btn_row.addStretch()

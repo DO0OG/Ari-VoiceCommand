@@ -1,6 +1,7 @@
 """타이머 명령"""
-from commands.base_command import BaseCommand
 import re
+from commands.base_command import BaseCommand
+from i18n.translator import _
 
 
 class TimerCommand(BaseCommand):
@@ -12,43 +13,49 @@ class TimerCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        return "타이머" in text or "알람" in text
+        return _("타이머") in text or _("알람") in text
 
     def execute(self, text: str) -> None:
-        if "취소" in text or "끄기" in text or "중지" in text:
+        if any(keyword in text for keyword in (_("취소"), _("끄기"), _("중지"))):
             name = self._extract_timer_name(text)
             self.timer_manager.cancel_timer(name=name)
-        elif "남은" in text or "얼마" in text or "확인" in text:
+        elif any(keyword in text for keyword in (_("남은"), _("얼마"), _("확인"))):
             timers = self.timer_manager.list_timers()
             if not timers:
-                self.tts_wrapper("현재 실행 중인 타이머가 없습니다.")
+                self.tts_wrapper(_("현재 실행 중인 타이머가 없습니다."))
             else:
                 target = timers[-1]
                 name = target["name"]
                 remaining = target["remaining_seconds"]
                 mins = int(remaining // 60)
                 secs = int(remaining % 60)
-                prefix = "타이머" if name.startswith("타이머 ") else f"'{name}' 타이머"
+                
+                # 타이머 이름 처리 (번역된 접두사 사용)
+                prefix = _("타이머") if name.startswith("타이머 ") else _("'{name}' 타이머").format(name=name)
+                
                 if mins > 0 and secs > 0:
-                    self.tts_wrapper(f"{prefix} {mins}분 {secs}초 남았습니다.")
+                    self.tts_wrapper(_("{prefix} {mins}분 {secs}초 남았습니다.").format(prefix=prefix, mins=mins, secs=secs))
                 elif mins > 0:
-                    self.tts_wrapper(f"{prefix} {mins}분 남았습니다.")
+                    self.tts_wrapper(_("{prefix} {mins}분 남았습니다.").format(prefix=prefix, mins=mins))
                 else:
-                    self.tts_wrapper(f"{prefix} {secs}초 남았습니다.")
+                    self.tts_wrapper(_("{prefix} {secs}초 남았습니다.").format(prefix=prefix, secs=secs))
         else:
             minutes = self.timer_manager.parse_timer_command(text)
             if minutes is not None:
                 self.timer_manager.set_timer(minutes, name=self._extract_timer_name(text))
             else:
-                self.tts_wrapper("타이머 시간을 정확히 말씀해 주세요.")
+                self.tts_wrapper(_("타이머 시간을 정확히 말씀해 주세요."))
 
     @staticmethod
     def _extract_timer_name(text: str) -> str:
-        match = re.search(r'["\']([^"\']+)["\']\s*타이머', text)
+        # 정규식 패턴에서 '타이머'는 한국어 매칭을 위해 유지하되, 번역 가능하도록 보강 가능
+        match = re.search(r'["\']([^"\']+)["\']\s*' + _("타이머"), text)
         if match:
             return match.group(1).strip()
-        named_match = re.search(r'([가-힣a-zA-Z0-9 _-]+)\s*타이머', text)
+        named_match = re.search(r'([가-힣a-zA-Z0-9 _-]+)\s*' + _("타이머"), text)
         if not named_match:
             return ""
         candidate = named_match.group(1).strip()
-        return "" if any(token in candidate for token in ("취소", "남은", "얼마", "확인")) else candidate
+        # 제외 키워드들도 번역된 값으로 체크
+        exclude = (_("취소"), _("남은"), _("얼마"), _("확인"))
+        return "" if any(token in candidate for token in exclude) else candidate
