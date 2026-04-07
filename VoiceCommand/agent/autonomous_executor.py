@@ -25,6 +25,9 @@ _SENSITIVE_ENV_PREFIXES = (
     "OPENAI_", "GROQ_", "ANTHROPIC_", "SUPABASE_",
     "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_",
 )
+_SUBPROCESS_TIMEOUT_SECONDS = 30
+_PROCESS_KILL_WAIT_SECONDS = 5
+_PDF_BOTTOM_MARGIN_PX = 50
 
 
 def _build_child_env() -> dict:
@@ -408,7 +411,7 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
-            stdout, stderr = process.communicate(timeout=30)
+            stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
             output = (stdout or "").strip()
             error_output = (stderr or "").strip()
             if process.returncode != 0:
@@ -424,12 +427,15 @@ class AutonomousExecutor:
             if process:
                 process.kill()
                 try:
-                    process.communicate(timeout=5)
+                    process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
-            return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
+            return ExecutionResult(
+                success=False,
+                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+            )
         except Exception:
             err = traceback.format_exc()
             logging.error(f"[Executor] Python 오류:\n{err}")
@@ -458,7 +464,7 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
-            stdout, stderr = process.communicate(timeout=30)
+            stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
             if stdout:
                 logging.info(f"[Executor] Shell 출력:\n{stdout.strip()}")
             if stderr:
@@ -473,12 +479,15 @@ class AutonomousExecutor:
             if process:
                 process.kill()
                 try:
-                    process.communicate(timeout=5)
+                    process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
-            return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
+            return ExecutionResult(
+                success=False,
+                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+            )
         except Exception as e:
             logging.error(f"[Executor] Shell 오류: {e}")
             if self.tts_wrapper:
@@ -665,7 +674,7 @@ class AutonomousExecutor:
 
         c = canvas.Canvas(path, pagesize=A4)
         width, height = A4
-        y = height - 50
+        y = height - _PDF_BOTTOM_MARGIN_PX
         c.setFont(font_name, 16 if title else 11)
         if title:
             c.drawString(40, y, title[:80])
@@ -676,10 +685,10 @@ class AutonomousExecutor:
             line = raw_line.replace("\t", "    ")
             wrapped = textwrap.wrap(line, width=52) or [""]
             for segment in wrapped:
-                if y < 50:
+                if y < _PDF_BOTTOM_MARGIN_PX:
                     c.showPage()
                     c.setFont(font_name, 11)
-                    y = height - 50
+                    y = height - _PDF_BOTTOM_MARGIN_PX
                 c.drawString(40, y, segment)
                 y -= 16
         c.save()
@@ -842,7 +851,7 @@ def _write_simple_pdf(path: str, content: str, title: str = ""):
                 continue
     c = canvas.Canvas(path, pagesize=A4)
     width, height = A4
-    y = height - 50
+    y = height - {_PDF_BOTTOM_MARGIN_PX}
     c.setFont(font_name, 16 if title else 11)
     if title:
         c.drawString(40, y, title[:80])
@@ -852,10 +861,10 @@ def _write_simple_pdf(path: str, content: str, title: str = ""):
         line = raw_line.replace("\\t", "    ")
         wrapped = textwrap.wrap(line, width=52) or [""]
         for segment in wrapped:
-            if y < 50:
+            if y < {_PDF_BOTTOM_MARGIN_PX}:
                 c.showPage()
                 c.setFont(font_name, 11)
-                y = height - 50
+                y = height - {_PDF_BOTTOM_MARGIN_PX}
             c.drawString(40, y, segment)
             y -= 16
     c.save()
