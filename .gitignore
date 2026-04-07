@@ -192,3 +192,4 @@ VoiceCommand/.ari_runtime/
 collected.json
 package-lock.json
 AGENT_HANDOFF_*.md
+ARI_I18N_PLAN.md
