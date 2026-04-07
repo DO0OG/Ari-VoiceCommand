@@ -1,4 +1,4 @@
-# 🎙️ Ari — Next-Gen AI Voice Assistant
+# 🎙️ Ari — AI Voice Assistant
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />

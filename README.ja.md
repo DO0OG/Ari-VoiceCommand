@@ -1,4 +1,4 @@
-# 🎙️ Ari (アリ) — 次世代 AI 音声アシスタント
+# 🎙️ Ari (アリ) — AI Voice Assistant
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
