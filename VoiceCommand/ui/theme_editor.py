@@ -219,4 +219,7 @@ class ThemeEditorDialog(QDialog):
 
 
 if __name__ == "__main__":
-    print("ThemeEditorWidget module")
+    import logging
+
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug("ThemeEditorWidget module")

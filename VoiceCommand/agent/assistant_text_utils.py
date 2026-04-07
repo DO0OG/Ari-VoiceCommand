@@ -31,24 +31,55 @@ _SPECIFIC_GOAL_MARKERS = (
 
 def analyze_tool_request(user_message: str) -> dict:
     text = (user_message or "").strip()
-    force_tool = any(
+    lowered = text.lower()
+    multi_step = any(token in text for token in ("그리고", "해서", "한 뒤", "다음"))
+    preferred = None
+    intent = "conversation"
+    force_tool = False
+
+    if any(token in text for token in ("예약해줘", "예약", "스케줄 잡아", "알람", "타이머")):
+        intent = "schedule"
+        force_tool = True
+        if "취소" in text:
+            preferred = "cancel_timer" if "타이머" in text else "cancel_scheduled_task"
+        elif "목록" in text or "뭐 있어" in text or "확인" in text:
+            preferred = "list_scheduled_tasks"
+        else:
+            preferred = "set_timer" if "타이머" in text else "schedule_task"
+    elif any(token in text for token in ("검색해줘", "찾아줘", "수집해줘")):
+        intent = "web"
+        force_tool = True
+        preferred = "web_fetch" if "http://" in lowered or "https://" in lowered else "web_search"
+    elif any(token in text for token in ("기억해", "기억나", "저번에", "지난번", "메모해", "저장해 둔")):
+        intent = "memory"
+    elif any(
         token in text
         for token in (
             "화면 상태",
             "화면 확인",
-            "예약해줘",
-            "스케줄 잡아",
-            "검색해줘",
-            "찾아줘",
-            "수집해줘",
-            "보고서 만들",
-            "저장해줘",
+            "실행",
+            "열어",
             "만들어줘",
+            "삭제",
+            "이동",
+            "복사",
+            "저장해줘",
+            "재생해줘",
+            "볼륨",
+            "종료해줘",
+            "보고서 만들",
         )
-    )
-    multi_step = any(token in text for token in ("그리고", "해서", "한 뒤", "다음"))
-    preferred = "run_agent_task" if multi_step else None
+    ):
+        intent = "automation"
+        force_tool = True
+
+    if multi_step:
+        intent = "automation"
+        force_tool = True
+        preferred = "run_agent_task"
+
     return {
+        "intent": intent,
         "force_tool": force_tool,
         "has_action": "해줘" in text or "실행" in text,
         "preferred_tool": preferred,

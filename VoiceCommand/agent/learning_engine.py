@@ -49,7 +49,7 @@ class LearningEngine:
         t = threading.Thread(
             target=self._post_run_update_safe,
             args=(goal, run_result, duration_ms, policy_summary),
-            daemon=False,
+            daemon=True,
             name="AriPostRunUpdate",
         )
         self._post_run_thread = t

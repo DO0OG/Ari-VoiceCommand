@@ -5,6 +5,7 @@ Selenium 드라이버의 DOM 상태를 분석하고 다음 액션을 제안한�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from urllib.parse import urlparse
 
 
@@ -113,6 +114,7 @@ def suggest_next_actions(state: DomState | dict, goal_hint: str = "") -> list[di
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     sample = DomState(url="https://example.com", title="Example", domain="example.com", login_detected=False, logged_in=True)
-    print(sample)
-    print(suggest_next_actions(sample, "결과 읽어줘"))
+    logging.debug("%s", sample)
+    logging.debug("%s", suggest_next_actions(sample, "결과 읽어줘"))

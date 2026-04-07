@@ -222,7 +222,43 @@ class ExecutionEngine:
                 curr, fixed = f, True
             else:
                 break
+        self._auto_restore_failed_writes(curr, res)
         return res, att, fixed
+
+    def _auto_restore_failed_writes(
+        self,
+        step: ActionStep,
+        exec_result: ExecutionResult,
+    ) -> None:
+        if exec_result.success:
+            return
+        restore = getattr(self.executor, "restore_last_backup", None)
+        if not callable(restore):
+            return
+        targets = []
+        for target in getattr(step, "writes", None) or []:
+            if target and target not in targets:
+                targets.append(target)
+        if not targets:
+            return
+        restored_targets = []
+        for target in targets:
+            try:
+                restore(target)
+                restored_targets.append(target)
+            except Exception as exc:
+                logger.warning(
+                    "[ExecutionEngine] 자동 복구 실패 (%s): %s",
+                    target,
+                    exc,
+                )
+        if restored_targets:
+            logger.info(
+                "[ExecutionEngine] 파일 작업 실패 — 백업 자동 복구: %s",
+                ", ".join(restored_targets),
+            )
+            note = "자동 복구: " + ", ".join(restored_targets)
+            exec_result.output = f"{exec_result.output}\n{note}".strip()
 
     def _execute_parallel_group(
         self,

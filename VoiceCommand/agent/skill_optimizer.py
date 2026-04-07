@@ -79,7 +79,11 @@ class SkillOptimizer:
         response = self._call_llm(prompt)
         steps = self._parse_json_steps(response)
         if steps:
-            logger.info(f"[SkillOptimizer] '{skill.name}' 스텝 수정 완료 ({len(steps)}개)")
+            logger.info(
+                "[SkillOptimizer] '%s' 스텝 수정 완료 (%s개)",
+                skill.name,
+                len(steps),
+            )
         return steps
 
     def condense_steps(self, skill) -> Optional[List[dict]]:
@@ -98,8 +102,10 @@ class SkillOptimizer:
         steps = self._parse_json_steps(response)
         if steps and len(steps) < len(skill.steps):
             logger.info(
-                f"[SkillOptimizer] '{skill.name}' 스텝 압축: "
-                f"{len(skill.steps)} → {len(steps)}개"
+                "[SkillOptimizer] '%s' 스텝 압축: %s → %s개",
+                skill.name,
+                len(skill.steps),
+                len(steps),
             )
             return steps
         return None
@@ -123,7 +129,7 @@ class SkillOptimizer:
         )
         code = self._extract_code_block(self._call_llm(prompt))
         if self._validate_python(code):
-            logger.info(f"[SkillOptimizer] '{skill.name}' Python 컴파일 성공")
+            logger.info("[SkillOptimizer] '%s' Python 컴파일 성공", skill.name)
             return code
         return None
 
@@ -139,7 +145,7 @@ class SkillOptimizer:
         )
         new_code = self._extract_code_block(self._call_llm(prompt))
         if self._validate_python(new_code):
-            logger.info(f"[SkillOptimizer] '{skill.name}' 코드 수정 완료")
+            logger.info("[SkillOptimizer] '%s' 코드 수정 완료", skill.name)
             return new_code
         return None
 
@@ -234,13 +240,13 @@ class SkillOptimizer:
         if not code or "def run_skill" not in code:
             return False
         try:
-            from agent.safety_checker import SafetyChecker, DangerLevel
-            report = SafetyChecker().check_python(code)
+            from agent.safety_checker import DangerLevel, get_safety_checker
+            report = get_safety_checker().check_python(code)
             if report.level == DangerLevel.DANGEROUS:
-                logger.warning(f"[SkillOptimizer] 안전 검사 실패: {report.summary_kr}")
+                logger.warning("[SkillOptimizer] 안전 검사 실패: %s", report.summary_kr)
                 return False
         except Exception as exc:
-            logger.debug(f"[SkillOptimizer] 안전 검사기 사용 불가: {exc}")
+            logger.debug("[SkillOptimizer] 안전 검사기 사용 불가: %s", exc)
         try:
             tree = ast.parse(code)
             if not self._is_safe_module(tree):
@@ -248,7 +254,7 @@ class SkillOptimizer:
                 return False
             return True
         except SyntaxError as exc:
-            logger.debug(f"[SkillOptimizer] 문법 오류: {exc}")
+            logger.debug("[SkillOptimizer] 문법 오류: %s", exc)
             return False
 
     def _is_safe_module(self, tree: ast.Module) -> bool:

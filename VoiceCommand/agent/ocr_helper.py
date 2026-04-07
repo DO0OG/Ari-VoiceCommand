@@ -7,13 +7,13 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
-_reader = None
+_reader: Optional[Any] = None
 _reader_lock = threading.Lock()
-_warned_unavailable = False
+_warned_unavailable: bool = False
 
 
 def _try_import_easyocr():
@@ -130,6 +130,7 @@ def get_screen_text_snapshot() -> dict[str, str]:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     snapshot = get_screen_text_snapshot()
-    print(snapshot["timestamp"])
-    print(snapshot["raw_text"][:500])
+    logging.debug("%s", snapshot["timestamp"])
+    logging.debug("%s", snapshot["raw_text"][:500])

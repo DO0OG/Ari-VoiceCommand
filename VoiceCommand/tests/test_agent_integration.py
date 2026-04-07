@@ -533,6 +533,39 @@ class AgentIntegrationTests(unittest.TestCase):
         self.assertIn(("EpisodeMemory", True, True), recorded)
         self.assertIn(("SkillLibrary", False, True), recorded)
 
+    def test_prevalidate_steps_flags_empty_shell_and_dangerous_python(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        steps = [
+            ActionStep(step_id=1, step_type="shell", content="   ", description_kr="빈 명령"),
+            ActionStep(step_id=2, step_type="python", content="import os\nos.remove('x')", description_kr="위험 코드"),
+        ]
+
+        issues = orchestrator._prevalidate_steps(steps)
+
+        self.assertIn("빈 shell 명령 감지: 1", issues)
+        self.assertIn("위험 코드 감지: 2", issues)
+
+    def test_run_loop_replans_after_prevalidation_failure(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        invalid_steps = [
+            ActionStep(step_id=0, step_type="shell", content=" ", description_kr="잘못된 단계"),
+        ]
+        valid_steps = [
+            ActionStep(step_id=1, step_type="python", content="print('ok')", description_kr="정상 단계"),
+        ]
+
+        with patch.object(orchestrator, "_run_with_skill_if_available", return_value=None):
+            with patch.object(orchestrator.planner, "decompose", side_effect=[invalid_steps, valid_steps]) as decompose:
+                with patch.object(orchestrator.planner, "get_last_learning_signals", return_value={}):
+                    with patch.object(orchestrator, "_execute_plan", return_value=(True, [])):
+                        with patch.object(orchestrator._verify_engine, "verify", return_value=(True, "완료")):
+                            result = orchestrator._run_loop("간단한 목표")
+
+        self.assertTrue(result.achieved)
+        self.assertEqual(result.summary_kr, "완료")
+        self.assertEqual(result.total_iterations, 2)
+        self.assertEqual(decompose.call_count, 2)
+
     def test_chrome_url_goal_builds_desktop_workflow_template(self):
         planner = AgentPlanner(DummyLLMProvider())
         steps = planner._build_template_plan("크롬으로 https://example.com 열어줘")

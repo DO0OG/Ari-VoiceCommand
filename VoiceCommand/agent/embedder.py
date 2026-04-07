@@ -195,5 +195,6 @@ def get_reranker() -> CrossEncoderReranker:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     embedder = get_embedder()
-    print(embedder.backend, embedder.dim)
+    logging.debug("%s %s", embedder.backend, embedder.dim)

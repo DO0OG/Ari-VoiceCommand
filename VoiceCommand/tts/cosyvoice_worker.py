@@ -53,12 +53,20 @@ def ctrl(msg: str):
     print(msg, file=sys.stderr, flush=True)
 
 
+def _get_default_cosyvoice_dir() -> str:
+    try:
+        from core.config_manager import ConfigManager
+        return str(ConfigManager.get("cosyvoice_dir", "") or "")
+    except Exception:
+        return ""
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--reference-wav", required=True)
     parser.add_argument("--reference-text", default="")
-    parser.add_argument("--cosyvoice-dir", default=r"D:\Git\CosyVoice")
+    parser.add_argument("--cosyvoice-dir", default=_get_default_cosyvoice_dir())
     parser.add_argument("--speed", type=float, default=1.0)
     args = parser.parse_args()
 

@@ -12,6 +12,7 @@ if ROOT not in sys.path:
 
 from core.config_manager import ConfigManager
 from core.resource_manager import ResourceManager
+from core.settings_schema import DEFAULT_SETTINGS
 from agent.proactive_scheduler import ProactiveScheduler
 from agent import proactive_scheduler as proactive_scheduler_module
 
@@ -106,6 +107,66 @@ class RuntimeEnvironmentTests(unittest.TestCase):
 
                     second = ConfigManager.load_settings()
                     self.assertNotEqual(second["llm_provider"], "tampered")
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
+    def test_default_settings_enable_router_and_weekly_report(self):
+        self.assertTrue(DEFAULT_SETTINGS["llm_router_enabled"])
+        self.assertTrue(DEFAULT_SETTINGS["weekly_report_enabled"])
+
+    def test_save_settings_restores_defaults_for_type_mismatches(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+
+                    saved = ConfigManager.save_settings(
+                        {
+                            "llm_provider": "openai",
+                            "weekly_report_enabled": "yes",
+                            "stt_energy_threshold": True,
+                        }
+                    )
+                    settings = ConfigManager.load_settings()
+
+                self.assertTrue(saved)
+                self.assertEqual(settings["llm_provider"], "openai")
+                self.assertTrue(settings["weekly_report_enabled"])
+                self.assertEqual(settings["stt_energy_threshold"], 300)
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
+    def test_save_settings_preserves_unknown_custom_keys(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+
+                    saved = ConfigManager.save_settings(
+                        {
+                            "llm_provider": "groq",
+                            "custom_flag": {"enabled": True},
+                        }
+                    )
+                    settings = ConfigManager.load_settings()
+
+                self.assertTrue(saved)
+                self.assertEqual(settings["llm_provider"], "groq")
+                self.assertEqual(settings["custom_flag"], {"enabled": True})
         finally:
             if original_env is None:
                 os.environ.pop("ARI_APP_DATA_DIR", None)

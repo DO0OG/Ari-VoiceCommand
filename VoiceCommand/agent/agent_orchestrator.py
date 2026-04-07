@@ -210,6 +210,20 @@ class AgentOrchestrator:
             if not steps:
                 run_result.summary_kr = "계획 수립에 실패했습니다."
                 break
+            prevalidation_issues = self._prevalidate_steps(steps)
+            if prevalidation_issues:
+                reason = " | ".join(prevalidation_issues[:3])
+                logger.warning("[Orchestrator] 사전 검증 실패, 재계획: %s", reason)
+                with self._context_lock:
+                    context["이전_시도"] = reason
+                self._emit_progress(
+                    "replan",
+                    iteration=iteration,
+                    reason=reason,
+                )
+                if iteration >= self.MAX_PLAN_ITERATIONS - 1:
+                    run_result.summary_kr = f"사전 검증 실패: {reason}"
+                continue
 
             self._log_plan(steps)
             self._emit_progress(
@@ -397,6 +411,24 @@ class AgentOrchestrator:
 
     def _log_plan(self, steps: List[ActionStep]) -> None:
         logger.info("[Orchestrator] %d단계 계획 수립됨", len(steps))
+
+    def _prevalidate_steps(self, steps: List[ActionStep]) -> List[str]:
+        issues: List[str] = []
+        for step in steps:
+            if step.step_type == "shell" and not step.content.strip():
+                issues.append(f"빈 shell 명령 감지: {step.step_id}")
+                continue
+            if step.step_type != "python" or not step.content.strip():
+                continue
+            try:
+                from agent.safety_checker import DangerLevel, get_safety_checker
+
+                report = get_safety_checker().check_python(step.content)
+                if report.level == DangerLevel.DANGEROUS:
+                    issues.append(f"위험 코드 감지: {step.step_id}")
+            except Exception as exc:
+                logger.debug("[Orchestrator] 사전 검증 생략(step=%s): %s", step.step_id, exc)
+        return issues
 
     # ── 엔진 위임 proxy (테스트·외부 호환) ──────────────────────────────────────
 

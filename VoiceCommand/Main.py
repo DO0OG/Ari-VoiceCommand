@@ -59,11 +59,17 @@ icon_path = None
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
-if not os.path.exists(icon_path):
-    if sys.stdout is not None:
-        print(f"경고: 아이콘 파일을 찾을 수 없습니다: {icon_path}")
-    icon_path = None
+
+def _resolve_icon_path(log_missing: bool = False):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+    if os.path.exists(path):
+        return path
+    if log_missing:
+        logging.warning("아이콘 파일을 찾을 수 없습니다: %s", path)
+    return None
+
+
+icon_path = _resolve_icon_path()
 
 # 로그 설정
 _MAX_LOG_FILES = 10  # 보관할 최대 로그 파일 수
@@ -79,9 +85,9 @@ def _cleanup_old_logs(log_dir: str) -> None:
             try:
                 os.remove(os.path.join(log_dir, old))
             except OSError as e:
-                logging.debug(f"로그 파일 삭제 실패: {e}")
+                logging.debug("로그 파일 삭제 실패: %s", e)
     except OSError as e:
-        logging.debug(f"로그 디렉터리 읽기 실패: {e}")
+        logging.debug("로그 디렉터리 읽기 실패: %s", e)
 
 def setup_logging():
     from core.resource_manager import ResourceManager
@@ -149,7 +155,7 @@ def check_cosyvoice_first_run(app):
                 import install_cosyvoice
                 install_cosyvoice.install()
             except Exception as e:
-                logging.error(f"CosyVoice 설치 오류: {e}")
+                logging.error("CosyVoice 설치 오류: %s", e)
                 install_error["message"] = str(e)
             finally:
                 install_done.set()
@@ -216,7 +222,7 @@ def start_performance_warmups() -> None:
         from agent.embedder import get_embedder
         get_embedder().warmup_async()
     except Exception as exc:
-        logging.debug(f"임베더 워밍업 생략: {exc}")
+        logging.debug("임베더 워밍업 생략: %s", exc)
 
 
 def flush_runtime_state() -> None:
@@ -224,25 +230,25 @@ def flush_runtime_state() -> None:
         from agent.strategy_memory import flush_strategy_memory
         flush_strategy_memory()
     except Exception as exc:
-        logging.debug(f"StrategyMemory flush 생략: {exc}")
+        logging.debug("StrategyMemory flush 생략: %s", exc)
     try:
         from agent.episode_memory import flush_episode_memory
         flush_episode_memory()
     except Exception as exc:
-        logging.debug(f"EpisodeMemory flush 생략: {exc}")
+        logging.debug("EpisodeMemory flush 생략: %s", exc)
     try:
         from agent.skill_library import flush_skill_library
         flush_skill_library()
     except Exception as exc:
-        logging.debug(f"SkillLibrary flush 생략: {exc}")
+        logging.debug("SkillLibrary flush 생략: %s", exc)
     try:
         from memory.conversation_history import get_conversation_history
         get_conversation_history().flush()
     except Exception as exc:
-        logging.debug(f"ConversationHistory flush 생략: {exc}")
+        logging.debug("ConversationHistory flush 생략: %s", exc)
 
 def main():
-    global ai_assistant
+    global ai_assistant, icon_path
     ari_core = None
     character = None
     tray_icon = None
@@ -252,6 +258,7 @@ def main():
     plugin_flush_timer = None
     try:
         setup_logging()
+        icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
 
         # 리소스 추출
@@ -292,13 +299,13 @@ def main():
         try:
             register_background_learning_tasks(scheduler)
         except Exception as exc:
-            logging.debug(f"백그라운드 학습 작업 등록 생략: {exc}")
+            logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
 
         # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
         try:
             scheduler.check_missed_tasks_on_startup()
         except Exception as exc:
-            logging.debug(f"놓친 작업 확인 생략: {exc}")
+            logging.debug("놓친 작업 확인 생략: %s", exc)
 
         # 캐릭터 위젯 생성
         logging.info("캐릭터 위젯 생성 시작")
@@ -325,7 +332,7 @@ def main():
             if not tool_name or ai_command is None:
                 return
             if tool_name in ai_command._dispatch:
-                logging.warning(f"[PluginLoader] 중복 도구 등록 거부: {tool_name}")
+                logging.warning("[PluginLoader] 중복 도구 등록 거부: %s", tool_name)
                 return
             get_llm_provider().register_plugin_tool(schema)
             ai_command.register_plugin_tool_handler(tool_name, handler)
@@ -355,16 +362,16 @@ def main():
             plugin_flush_timer.timeout.connect(plugin_watcher.flush)
             plugin_flush_timer.start(1000)
         except Exception as exc:
-            logging.error(f"플러그인 감시 시작 실패: {exc}")
+            logging.error("플러그인 감시 시작 실패: %s", exc)
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용
-        logging.info(f"Application exited with code: {exit_code}")
+        logging.info("Application exited with code: %s", exit_code)
 
     except KeyboardInterrupt:
         logging.info("프로그램 종료")
     except Exception as e:
-        logging.error(f"예외 발생: {str(e)}", exc_info=True)
+        logging.error("예외 발생: %s", e, exc_info=True)
     finally:
         logging.info("=== 앱 종료 시작 ===")
         flush_runtime_state()

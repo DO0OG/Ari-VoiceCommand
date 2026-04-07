@@ -25,6 +25,9 @@ _SENSITIVE_ENV_PREFIXES = (
     "OPENAI_", "GROQ_", "ANTHROPIC_", "SUPABASE_",
     "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_",
 )
+_SUBPROCESS_TIMEOUT_SECONDS = 30
+_PROCESS_KILL_WAIT_SECONDS = 5
+_PDF_BOTTOM_MARGIN_PX = 50
 
 
 def _build_child_env() -> dict:
@@ -148,13 +151,13 @@ class AutonomousExecutor:
                 'batch_rename_files': batch_rename_files,
             })
         except ImportError as e:
-            logging.warning(f"[Executor] file_tools 로드 실패: {e}")
+            logging.warning("[Executor] file_tools 로드 실패: %s", e)
 
         try:
             import pyautogui
             self.execution_globals['pyautogui'] = pyautogui
         except ImportError as exc:
-            logging.debug(f"[Executor] pyautogui 로드 생략: {exc}")
+            logging.debug("[Executor] pyautogui 로드 생략: %s", exc)
         
         try:
             from services.web_tools import web_search, web_fetch, get_smart_browser
@@ -163,7 +166,7 @@ class AutonomousExecutor:
             self.execution_globals['get_browser'] = get_smart_browser
             self.execution_globals['get_browser_state_detailed'] = lambda: get_smart_browser().get_state(include_dom_analysis=True)
         except ImportError as exc:
-            logging.debug(f"[Executor] web_tools 로드 생략: {exc}")
+            logging.debug("[Executor] web_tools 로드 생략: %s", exc)
 
     # ── 공개 API ────────────────────────────────────────────────────────────────
 
@@ -176,7 +179,11 @@ class AutonomousExecutor:
         result = ExecutionResult(success=False, code_or_cmd=code)
         try:
             report = self._safety.check_python(code)
-            logging.info(f"[Executor] Python 안전 검사: {report.level.value} — {report.summary_kr}")
+            logging.info(
+                "[Executor] Python 안전 검사: %s — %s",
+                report.level.value,
+                report.summary_kr,
+            )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
@@ -217,7 +224,11 @@ class AutonomousExecutor:
         result = ExecutionResult(success=False, code_or_cmd=command)
         try:
             report = self._safety.check_shell(command)
-            logging.info(f"[Executor] Shell 안전 검사: {report.level.value} — {report.summary_kr}")
+            logging.info(
+                "[Executor] Shell 안전 검사: %s — %s",
+                report.level.value,
+                report.summary_kr,
+            )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
@@ -390,7 +401,7 @@ class AutonomousExecutor:
 
     def _do_run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
         code = self._normalize_python_code(code)
-        logging.info(f"[Executor] Python 실행:\n{code}")
+        logging.info("[Executor] Python 실행:\n%s", code)
         runner_path = ""
         process = None
         try:
@@ -408,31 +419,34 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
-            stdout, stderr = process.communicate(timeout=30)
+            stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
             output = (stdout or "").strip()
             error_output = (stderr or "").strip()
             if process.returncode != 0:
-                logging.error(f"[Executor] Python 오류:\n{error_output}")
+                logging.error("[Executor] Python 오류:\n%s", error_output)
                 if self.tts_wrapper:
                     self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
                 return ExecutionResult(success=False, error=error_output or "파이썬 실행 실패")
             if output:
-                logging.info(f"[Executor] Python 출력:\n{output}")
+                logging.info("[Executor] Python 출력:\n%s", output)
             return ExecutionResult(success=True, output=output)
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
             if process:
                 process.kill()
                 try:
-                    process.communicate(timeout=5)
+                    process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
-            return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
+            return ExecutionResult(
+                success=False,
+                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+            )
         except Exception:
             err = traceback.format_exc()
-            logging.error(f"[Executor] Python 오류:\n{err}")
+            logging.error("[Executor] Python 오류:\n%s", err)
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
             return ExecutionResult(success=False, error=err)
@@ -441,7 +455,7 @@ class AutonomousExecutor:
                 self._safe_unlink(runner_path)
 
     def _do_run_shell(self, command: str) -> ExecutionResult:
-        logging.info(f"[Executor] Shell 실행: {command}")
+        logging.info("[Executor] Shell 실행: %s", command)
         process = None
         try:
             shell_command = self._build_shell_command(command)
@@ -458,11 +472,11 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
-            stdout, stderr = process.communicate(timeout=30)
+            stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
             if stdout:
-                logging.info(f"[Executor] Shell 출력:\n{stdout.strip()}")
+                logging.info("[Executor] Shell 출력:\n%s", stdout.strip())
             if stderr:
-                logging.warning(f"[Executor] Shell 에러:\n{stderr.strip()}")
+                logging.warning("[Executor] Shell 에러:\n%s", stderr.strip())
             return ExecutionResult(
                 success=process.returncode == 0,
                 output=stdout.strip(),
@@ -473,14 +487,17 @@ class AutonomousExecutor:
             if process:
                 process.kill()
                 try:
-                    process.communicate(timeout=5)
+                    process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
-            return ExecutionResult(success=False, error="실행 시간 초과 (30초)")
+            return ExecutionResult(
+                success=False,
+                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+            )
         except Exception as e:
-            logging.error(f"[Executor] Shell 오류: {e}")
+            logging.error("[Executor] Shell 오류: %s", e)
             if self.tts_wrapper:
                 self.tts_wrapper("시스템 명령 실행 중 오류가 발생했습니다.")
             return ExecutionResult(success=False, error=str(e))
@@ -493,7 +510,7 @@ class AutonomousExecutor:
                 action_desc, report, self.tts_wrapper
             )
         except Exception as e:
-            logging.error(f"[Executor] 확인 다이얼로그 오류: {e}")
+            logging.error("[Executor] 확인 다이얼로그 오류: %s", e)
             return False
 
     def _record_history(self, result: ExecutionResult):
@@ -665,7 +682,7 @@ class AutonomousExecutor:
 
         c = canvas.Canvas(path, pagesize=A4)
         width, height = A4
-        y = height - 50
+        y = height - _PDF_BOTTOM_MARGIN_PX
         c.setFont(font_name, 16 if title else 11)
         if title:
             c.drawString(40, y, title[:80])
@@ -676,10 +693,10 @@ class AutonomousExecutor:
             line = raw_line.replace("\t", "    ")
             wrapped = textwrap.wrap(line, width=52) or [""]
             for segment in wrapped:
-                if y < 50:
+                if y < _PDF_BOTTOM_MARGIN_PX:
                     c.showPage()
                     c.setFont(font_name, 11)
-                    y = height - 50
+                    y = height - _PDF_BOTTOM_MARGIN_PX
                 c.drawString(40, y, segment)
                 y -= 16
         c.save()
@@ -842,7 +859,7 @@ def _write_simple_pdf(path: str, content: str, title: str = ""):
                 continue
     c = canvas.Canvas(path, pagesize=A4)
     width, height = A4
-    y = height - 50
+    y = height - {_PDF_BOTTOM_MARGIN_PX}
     c.setFont(font_name, 16 if title else 11)
     if title:
         c.drawString(40, y, title[:80])
@@ -852,10 +869,10 @@ def _write_simple_pdf(path: str, content: str, title: str = ""):
         line = raw_line.replace("\\t", "    ")
         wrapped = textwrap.wrap(line, width=52) or [""]
         for segment in wrapped:
-            if y < 50:
+            if y < {_PDF_BOTTOM_MARGIN_PX}:
                 c.showPage()
                 c.setFont(font_name, 11)
-                y = height - 50
+                y = height - {_PDF_BOTTOM_MARGIN_PX}
             c.drawString(40, y, segment)
             y -= 16
     c.save()
@@ -1024,7 +1041,7 @@ except Exception:
             if path and os.path.exists(path):
                 os.unlink(path)
         except OSError as e:
-            logging.debug(f"[Executor] 임시 파일 삭제 실패: {e}")
+            logging.debug("[Executor] 임시 파일 삭제 실패: %s", e)
 
     def _get_module_dir(self) -> str:
         return os.path.dirname(os.path.dirname(__file__))

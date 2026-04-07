@@ -205,6 +205,44 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("web_search", tool_names)
         self.assertIn("schedule_task", tool_names)
 
+    def test_analyze_request_marks_automation_and_memory_intents(self):
+        provider = LLMProvider()
+
+        automation = provider._analyze_request("바탕화면에 폴더 만들어줘")
+        memory = provider._analyze_request("저번에 내가 뭐라고 했는지 기억나?")
+
+        self.assertEqual(automation["intent"], "automation")
+        self.assertTrue(automation["force_tool"])
+        self.assertEqual(memory["intent"], "memory")
+        self.assertFalse(memory["force_tool"])
+
+    def test_select_tools_for_request_excludes_execution_tools_for_memory_intent(self):
+        provider = LLMProvider()
+
+        tools, tool_choice = provider._select_tools_for_request(
+            {"intent": "memory", "force_tool": False}
+        )
+        tool_names = {tool["function"]["name"] for tool in tools}
+
+        self.assertEqual(tool_choice, "auto")
+        self.assertNotIn("run_agent_task", tool_names)
+        self.assertNotIn("execute_python_code", tool_names)
+        self.assertNotIn("execute_shell_command", tool_names)
+        self.assertIn("web_search", tool_names)
+
+    def test_select_tools_for_request_prefers_schedule_tools(self):
+        provider = LLMProvider()
+
+        tools, tool_choice = provider._select_tools_for_request(
+            {"intent": "schedule", "force_tool": True}
+        )
+        tool_names = {tool["function"]["name"] for tool in tools}
+
+        self.assertEqual(tool_choice, "required")
+        self.assertIn("schedule_task", tool_names)
+        self.assertIn("set_timer", tool_names)
+        self.assertNotIn("run_agent_task", tool_names)
+
     def test_register_plugin_tool_updates_available_tools_without_mutating_core_tools(self):
         provider = LLMProvider()
         base_tool_names = {tool["function"]["name"] for tool in provider.get_available_tools()}
