@@ -3,15 +3,15 @@
 <div align="center">
   <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
   <p align="center">
-    <strong>Multilingual Voice AI Assistant for Windows</strong><br />
-    An autonomous execution agent that learns user patterns and evolves.
+    <strong>"Your Personal Autonomous Agent, Just One Word Away"</strong><br />
+    A multilingual voice AI assistant that understands, learns, and completes tasks on Windows.
   </p>
 
   <p align="center">
     <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white" alt="Python Version" />
     <img src="https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white" alt="Platform" />
-    <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
     <img src="https://img.shields.io/badge/i18n-KO%20%7C%20EN%20%7C%20JA-orange" alt="i18n" />
+    <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
   </p>
 
   <p align="center">
@@ -21,31 +21,46 @@
 
 ---
 
-## 🌟 Key Philosophy
+## ✨ What is Ari?
 
-Ari is more than just a voice recognition program; it is an **Intelligent Autonomous Agent** that understands your work style and automates repetitive tasks.
+Ari is not just another voice recognition tool. It is a powerful **Autonomous Agent** that resides on your desktop, capable of **planning and executing complex goals independently.**
 
-- **Autonomy:** Simply state your goal, and it will generate/execute Python/Shell code and self-fix errors.
-- **Personalization:** Learns your expertise and preferences through dialogue to provide optimized responses.
-- **Privacy:** Run LLM and TTS locally without an internet connection using Ollama and CosyVoice3.
+### 🤖 Core Features at a Glance
+
+| Feature | Description |
+| :--- | :--- |
+| **Autonomous Agent** | State your goal, and Ari writes and executes Python/Shell code, with built-in Self-Fixing capabilities. |
+| **Adaptive Learning** | Extracts successful patterns into 'Skills'. The more you use it, the faster it runs without LLM calls. |
+| **Visual Interaction** | Features a character widget that animates in real-time based on emotions and a sleek chat UI. |
+| **Personalized Memory** | Remembers user preferences and expertise from conversations and generates weekly reports. |
+| **Local Mode Support** | Run LLM and TTS in a secure environment without an internet connection using Ollama and CosyVoice3. |
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Highlights
 
-### 1. Intelligent Interaction
-- **Full Multilingual Support:** UI, System Prompts, and TTS are optimized for Korean, English, and Japanese.
-- **Emotion Engine:** Analyzes emotion tags in AI responses to animate the character in real-time.
-- **Hybrid Voice Engine:** Choose between Online (Google) and Offline (faster-whisper) STT as needed.
+- **Natural Dialogue:** Full support for Korean, English, and Japanese with language-optimized system prompts.
+- **Powerful Automation:** Browser DOM analysis, file system control, system volume, and power management.
+- **Extensible Ecosystem:** Dynamically add new commands and tools via the Plugin System and Marketplace.
+- **Intelligent Verification:** Verifies execution results directly on the screen using OCR Vision Verification.
 
-### 2. Autonomous Execution & Learning
-- **Agent Workflow:** Establishes execution plans for complex goals and executes them in parallel via DAG.
-- **Skill Library:** Automatically extracts successful patterns and compiles them into Python code for maximum performance.
-- **Vision Verification:** Combines OCR and LLM to verify execution results directly on the screen.
+---
 
-### 3. Powerful Extensibility
-- **Plugin System:** Provides hooks to dynamically add menus, commands, and LLM tools.
-- **Marketplace:** Search and install plugins made by other users directly within the settings window.
+## 📈 Performance & Learning Metrics
+
+Ari becomes smarter with every interaction.
+
+### Autonomous Success Rate (as of v4.0)
+| Task Category | Initial Success | Post-Learning |
+| :--- | :---: | :---: |
+| **File/System Control** | 85% | **98%** |
+| **Web Browsing/Search** | 65% | **88%** |
+| **Complex Workflow** | 40% | **75%** |
+
+### Self-Learning Progress Guide
+- **Step 1 (0-50 runs):** Exploration. Learns from failures and populates `StrategyMemory`.
+- **Step 2 (50-200 runs):** Optimization. Frequently used tasks are compiled into **Skills**.
+- **Step 3 (200+ runs):** Stability. Routine tasks are processed instantly without LLM intervention.
 
 ---
 
@@ -54,7 +69,7 @@ Ari is more than just a voice recognition program; it is an **Intelligent Autono
 ### Requirements
 - **OS:** Windows 10/11 (64-bit)
 - **Python:** 3.11
-- **Hardware:** 8GB+ RAM recommended (4GB+ GPU VRAM recommended for local models)
+- **Hardware:** 8GB+ RAM (4GB+ GPU VRAM recommended for local models)
 
 ### Installation & Run
 ```bash
@@ -69,26 +84,6 @@ pip install -r VoiceCommand/requirements.txt
 cd VoiceCommand
 py -3.11 Main.py
 ```
-
----
-
-## 📈 Performance & Learning Metrics
-
-Ari becomes faster and more accurate over time by leveraging its `SkillLibrary` and `StrategyMemory`.
-
-### Autonomous Success Rate (as of v4.0)
-| Task Category | Initial Success | Post-Learning | Key Improvement Factors |
-| :--- | :---: | :---: | :--- |
-| **File/System Control** | 85% | **98%** | Path auto-correction, Skill compilation |
-| **Web Browsing/Search** | 65% | **88%** | DOM analysis optimization, Self-reflection |
-| **Complex Workflow** | 40% | **75%** | Parallel DAG execution, Dynamic replanning |
-
-### Self-Learning Progress Guide
-> 💡 **Tip:** The agent analyzes the root cause of every failure and records it in the `StrategyMemory`, referencing it during the next attempt to increase the probability of success.
-
-- **0~50 Executions:** Exploration and data collection phase. Replanning may occur frequently.
-- **50~200 Executions:** Repetitive tasks begin to be extracted as **Skills**, drastically improving execution speed.
-- **200+ Executions:** Most routine commands are executed as optimized Python code, processed instantly without LLM calls.
 
 ---
 
