@@ -65,6 +65,17 @@ class _FakeAudioData:
         return b"wav-bytes"
 
 
+class _ExplodingProcess(_FakeProcess):
+    def wait(self, timeout=None):
+        raise RuntimeError("wait failed")
+
+    def terminate(self):
+        raise RuntimeError("terminate failed")
+
+    def kill(self):
+        raise RuntimeError("kill failed")
+
+
 class STTProviderTests(unittest.TestCase):
     def test_startup_timeout_raises_and_terminates_worker(self):
         fake_proc = _FakeProcess(stderr_payload=b"startup timeout")
@@ -119,6 +130,16 @@ class STTProviderTests(unittest.TestCase):
 
         self.assertIs(wake._stt, healthy)
         self.assertFalse(wake._calibrated)
+
+    def test_terminate_worker_logs_each_fallback_failure(self):
+        provider = WhisperSTTProvider.__new__(WhisperSTTProvider)
+        provider._proc = _ExplodingProcess()
+
+        with patch("core.stt_provider.logging.debug") as debug_log:
+            provider._terminate_worker_locked()
+
+        self.assertIsNone(provider._proc)
+        self.assertEqual(debug_log.call_count, 3)
 
 
 if __name__ == "__main__":

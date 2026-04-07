@@ -117,6 +117,35 @@ class RuntimeEnvironmentTests(unittest.TestCase):
         self.assertTrue(DEFAULT_SETTINGS["llm_router_enabled"])
         self.assertTrue(DEFAULT_SETTINGS["weekly_report_enabled"])
 
+    def test_save_settings_restores_defaults_for_type_mismatches(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+
+                    saved = ConfigManager.save_settings(
+                        {
+                            "llm_provider": "openai",
+                            "weekly_report_enabled": "yes",
+                            "stt_energy_threshold": True,
+                        }
+                    )
+                    settings = ConfigManager.load_settings()
+
+                self.assertTrue(saved)
+                self.assertEqual(settings["llm_provider"], "openai")
+                self.assertTrue(settings["weekly_report_enabled"])
+                self.assertEqual(settings["stt_energy_threshold"], 300)
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
     def test_missing_runtime_settings_bootstrap_from_template(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")
         try:

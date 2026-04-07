@@ -148,15 +148,17 @@ class WhisperSTTProvider(STTProvider):
                 proc.stdin.write(b"QUIT\n")
                 proc.stdin.flush()
                 proc.wait(timeout=3)
-        except Exception:
+        except Exception as exc:
+            logging.debug("[STT] 정상 종료 실패, terminate 시도: %s", exc)
             try:
                 proc.terminate()
                 proc.wait(timeout=3)
-            except Exception:
+            except Exception as terminate_exc:
+                logging.debug("[STT] terminate 실패, kill 시도: %s", terminate_exc)
                 try:
                     proc.kill()
-                except Exception:
-                    pass
+                except Exception as kill_exc:
+                    logging.debug("[STT] kill도 실패: %s", kill_exc)
 
     def _read_stderr_snapshot(self) -> str:
         try:

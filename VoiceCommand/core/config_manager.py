@@ -1,4 +1,5 @@
 """설정 관리 통합 모듈."""
+import copy
 import json
 import logging
 import os
@@ -77,15 +78,28 @@ class ConfigManager:
         with cls._lock:
             path = _settings_path()
             try:
+                normalized = cls._normalize_settings(settings)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=2, ensure_ascii=False)
+                    json.dump(normalized, f, indent=2, ensure_ascii=False)
                 logging.info("설정을 저장했습니다.")
-                cls._cached_settings = dict(settings)
+                cls._cached_settings = dict(normalized)
                 return True
             except Exception as e:
                 logging.error(f"설정 저장 실패: {e}")
                 return False
+
+    @classmethod
+    def _normalize_settings(cls, settings: SettingsDict) -> SettingsDict:
+        normalized = dict(settings)
+        for key, expected in cls.DEFAULT_SETTINGS.items():
+            if key not in normalized or expected is None:
+                continue
+            value = normalized[key]
+            if type(value) is not type(expected):
+                logging.warning("[ConfigManager] 타입 불일치 무시: %s=%r", key, value)
+                normalized[key] = copy.deepcopy(expected)
+        return normalized
 
     @classmethod
     def get_value(cls, key: str, default: object = None) -> object:
