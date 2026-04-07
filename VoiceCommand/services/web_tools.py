@@ -6,6 +6,7 @@ import html
 import logging
 import os
 import json
+import re
 import time
 import threading
 import urllib.parse

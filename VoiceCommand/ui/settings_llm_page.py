@@ -2,7 +2,6 @@
 LLM 제공자 설정 페이지 위젯
 """
 import importlib
-import logging
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,

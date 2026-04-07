@@ -1,7 +1,6 @@
 """
 플러그인 관리 설정 페이지 위젯 (확장 탭)
 """
-import logging
 import os
 
 from PySide6.QtWidgets import (

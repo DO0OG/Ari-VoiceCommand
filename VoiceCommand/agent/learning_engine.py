@@ -5,7 +5,7 @@
 """
 import logging
 import threading
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from agent.execution_analysis import extract_step_targets
 

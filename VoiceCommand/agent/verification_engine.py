@@ -7,7 +7,7 @@ import logging
 from typing import List, Optional, Tuple
 
 from agent.agent_planner import AgentPlanner
-from agent.autonomous_executor import ExecutionResult
+
 from agent.execution_analysis import is_read_only_step_content
 
 logger = logging.getLogger(__name__)
