@@ -277,7 +277,7 @@ class AgentPlannerParsingTests(unittest.TestCase):
         provider.client = provider.planner_client
         planner = AgentPlanner(provider)
 
-        with patch("agent.agent_planner.time.sleep", return_value=None):
+        with patch("agent.planner.agent_planner.time.sleep", return_value=None):
             raw = planner._call_llm("JSON only")
 
         self.assertIn('"description_kr":"단계 1"', raw)
@@ -299,7 +299,7 @@ class AgentPlannerParsingTests(unittest.TestCase):
         execution_client = _FakePlannerCompletionClient([])
         planner = AgentPlanner(_RoleFallbackProvider(planner_client, base_client, execution_client))
 
-        with patch("agent.agent_planner.time.sleep", return_value=None):
+        with patch("agent.planner.agent_planner.time.sleep", return_value=None):
             raw = planner._call_llm("JSON only", role_hint="planner")
 
         self.assertIn('"description_kr":"base fallback"', raw)
