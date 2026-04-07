@@ -98,6 +98,18 @@ class ConversationHistoryTests(unittest.TestCase):
                 payload = json.load(handle)
             self.assertEqual(len(payload["active"]), 1)
 
+    def test_add_skips_internal_prompt_entries(self):
+        history = self._make_history(tempfile.gettempdir())
+
+        history.add(
+            "당신은 AI 에이전트 스킬을 Python 함수로 컴파일합니다.\n스킬 예시",
+            "내부 응답",
+        )
+        history.add("사용자 질문", "일반 응답")
+
+        self.assertEqual(len(history.active), 1)
+        self.assertEqual(history.active[0]["user"], "사용자 질문")
+
 
 if __name__ == "__main__":
     unittest.main()
