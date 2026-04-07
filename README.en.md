@@ -1,53 +1,62 @@
-# Ari — AI Voice Assistant
+# 🎙️ Ari — Next-Gen AI Voice Assistant
 
-[한국어](./README.md) | [日本語](./README.ja.md) | **English**
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
+  <p align="center">
+    <strong>Multilingual Voice AI Assistant for Windows</strong><br />
+    An autonomous execution agent that learns user patterns and evolves.
+  </p>
 
-> Multilingual (Korean, English, Japanese) Voice AI Assistant for Windows.
-> Features Shimeji-style character widget + multiple LLM/TTS provider support.
-> Includes a self-improvement loop that learns user patterns and improves over time.
+  <p align="center">
+    <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white" alt="Python Version" />
+    <img src="https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white" alt="Platform" />
+    <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
+    <img src="https://img.shields.io/badge/i18n-KO%20%7C%20EN%20%7C%20JA-orange" alt="i18n" />
+  </p>
 
-- Character Model: [Jaratang](https://www.pixiv.net/users/78194943)
-
-![preview](https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd)
-
----
-
-## Key Features
-
-### 1. Interaction & Dialogue
-- **Wake Word**: Listens for a call sign with echo cancellation and normalization.
-- **Speech Recognition**: Online (Google STT) and Offline (faster-whisper).
-- **AI Chat**: Supports Groq, OpenAI, Anthropic, Mistral, Gemini, OpenRouter, NVIDIA NIM, and **Ollama (Local LLM)**.
-- **Role-based LLM**: Separate models for chat, planning, and execution/fixing.
-- **Multilingual Support**: Full UI and prompt optimization for Korean, English, and Japanese.
-- **TTS**: High-quality speech synthesis via Fish Audio, CosyVoice3 (Local), OpenAI, ElevenLabs, and Edge TTS.
-- **Emotion Engine**: AI-generated emotion tags like `(joy)` trigger character animations.
-
-### 2. Automation & Execution
-- **Autonomous Agent**: Generates and executes Python/Shell code with self-fixing capabilities.
-- **Multi-step Planning**: Plan → Execute → Verify loop with parallel DAG execution.
-- **Browser Automation**: Login analysis, DOM state tracking, and next-action suggestions.
-- **Vision Verification**: 4-stage verification using OCR and LLM.
-- **Smart Assistant Mode**: Automatically promotes complex requests to agent tasks.
-
-### 3. Learning & Memory
-- **Skill Library**: Automatically extracts and reuse successful patterns.
-- **Self-Improvement**: Compiles verified skills into Python code for instant execution.
-- **Memory System**: Long-term memory (FACT/BIO/PREF) with SQLite FTS5 search.
-- **User Profiling**: Learns user expertise and response style to personalize interactions.
-- **Weekly Report**: Automated summaries of success rates and newly learned skills.
+  <p align="center">
+    <a href="./README.md">한국어</a> | <a href="./README.ja.md">日本語</a> | <strong>English</strong>
+  </p>
+</div>
 
 ---
 
-## Quick Start
+## 🌟 Key Philosophy
+
+Ari is more than just a voice recognition program; it is an **Intelligent Autonomous Agent** that understands your work style and automates repetitive tasks.
+
+- **Autonomy:** Simply state your goal, and it will generate/execute Python/Shell code and self-fix errors.
+- **Personalization:** Learns your expertise and preferences through dialogue to provide optimized responses.
+- **Privacy:** Run LLM and TTS locally without an internet connection using Ollama and CosyVoice3.
+
+---
+
+## 🚀 Key Features
+
+### 1. Intelligent Interaction
+- **Full Multilingual Support:** UI, System Prompts, and TTS are optimized for Korean, English, and Japanese.
+- **Emotion Engine:** Analyzes emotion tags in AI responses to animate the character in real-time.
+- **Hybrid Voice Engine:** Choose between Online (Google) and Offline (faster-whisper) STT as needed.
+
+### 2. Autonomous Execution & Learning
+- **Agent Workflow:** Establishes execution plans for complex goals and executes them in parallel via DAG.
+- **Skill Library:** Automatically extracts successful patterns and compiles them into Python code for maximum performance.
+- **Vision Verification:** Combines OCR and LLM to verify execution results directly on the screen.
+
+### 3. Powerful Extensibility
+- **Plugin System:** Provides hooks to dynamically add menus, commands, and LLM tools.
+- **Marketplace:** Search and install plugins made by other users directly within the settings window.
+
+---
+
+## 🛠️ Quick Start
 
 ### Requirements
-- **Python**: 3.11
-- **OS**: Windows 10/11
-- **RAM**: 4 GB (8 GB+ recommended)
-- **GPU**: CUDA support recommended for Local TTS/LLM.
+- **OS:** Windows 10/11 (64-bit)
+- **Python:** 3.11
+- **Hardware:** 8GB+ RAM recommended (4GB+ GPU VRAM recommended for local models)
 
-### Installation
+### Installation & Run
 ```bash
 # 1. Clone repository
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
@@ -61,16 +70,36 @@ cd VoiceCommand
 py -3.11 Main.py
 ```
 
-### Language Settings
-To change the language:
-1. Right-click the tray icon and select **Settings**.
-2. Go to the **Device** tab.
-3. Select your language (English/Japanese/Korean) in the **Language** section.
-4. Click **Save** and restart the application.
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    A[User Speech] --> B{Wake Word}
+    B -- "Hey Ari" --> C[STT Engine]
+    C --> D[Command Registry]
+    D -- "Complex Goal" --> E[Autonomous Agent Loop]
+    E --> F[Planner / Executor]
+    F --> G[Verification / Learning]
+    G --> H[Strategy Memory / Skills]
+    D -- "Chat / Tool" --> I[LLM Provider]
+    I --> J[TTS Response]
+    H -.-> F
+```
 
 ---
 
-## Documentation
-- [Usage Guide](./docs/USAGE.md)
-- [Plugin Guide](./docs/PLUGIN_GUIDE.md)
-- [Character Image Guide](./docs/CHARACTER_IMAGES.md)
+## 📚 Documentation
+
+- 📖 **[Usage Guide](./docs/USAGE.md)**: Detailed settings and usage
+- 🔌 **[Plugin Development](./docs/PLUGIN_GUIDE.md)**: Add your own features
+- 🎨 **[Theme Customization](./docs/THEME_CUSTOMIZATION.md)**: Change UI design
+- 👩‍💻 **[Contributing](./docs/CONTRIBUTING.md)**: Guide for participating in the project
+
+---
+
+## ⚖️ License
+
+Copyright © 2026 [DO0OG (MAD_DOGGO)](https://github.com/DO0OG).
+This project is licensed under the **MIT License**.
