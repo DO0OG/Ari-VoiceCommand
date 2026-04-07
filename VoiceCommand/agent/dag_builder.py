@@ -5,6 +5,7 @@ ActionStep 목록으로부터 실행 DAG와 병렬 그룹을 계산한다.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 import re
 
@@ -99,4 +100,5 @@ def annotate_steps(steps: list, dag: list[DagNode], groups: dict[int, int]) -> l
 
 
 if __name__ == "__main__":
-    print("dag_builder ready")
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug("dag_builder ready")

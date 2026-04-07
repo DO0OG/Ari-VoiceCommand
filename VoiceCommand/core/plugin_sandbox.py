@@ -67,4 +67,5 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
 
 
 if __name__ == "__main__":
-    print(run_sandboxed("print(42)"))
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug("%s", run_sandboxed("print(42)"))
