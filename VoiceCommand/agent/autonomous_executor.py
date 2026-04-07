@@ -151,13 +151,13 @@ class AutonomousExecutor:
                 'batch_rename_files': batch_rename_files,
             })
         except ImportError as e:
-            logging.warning(f"[Executor] file_tools 로드 실패: {e}")
+            logging.warning("[Executor] file_tools 로드 실패: %s", e)
 
         try:
             import pyautogui
             self.execution_globals['pyautogui'] = pyautogui
         except ImportError as exc:
-            logging.debug(f"[Executor] pyautogui 로드 생략: {exc}")
+            logging.debug("[Executor] pyautogui 로드 생략: %s", exc)
         
         try:
             from services.web_tools import web_search, web_fetch, get_smart_browser
@@ -166,7 +166,7 @@ class AutonomousExecutor:
             self.execution_globals['get_browser'] = get_smart_browser
             self.execution_globals['get_browser_state_detailed'] = lambda: get_smart_browser().get_state(include_dom_analysis=True)
         except ImportError as exc:
-            logging.debug(f"[Executor] web_tools 로드 생략: {exc}")
+            logging.debug("[Executor] web_tools 로드 생략: %s", exc)
 
     # ── 공개 API ────────────────────────────────────────────────────────────────
 
@@ -179,7 +179,11 @@ class AutonomousExecutor:
         result = ExecutionResult(success=False, code_or_cmd=code)
         try:
             report = self._safety.check_python(code)
-            logging.info(f"[Executor] Python 안전 검사: {report.level.value} — {report.summary_kr}")
+            logging.info(
+                "[Executor] Python 안전 검사: %s — %s",
+                report.level.value,
+                report.summary_kr,
+            )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
@@ -220,7 +224,11 @@ class AutonomousExecutor:
         result = ExecutionResult(success=False, code_or_cmd=command)
         try:
             report = self._safety.check_shell(command)
-            logging.info(f"[Executor] Shell 안전 검사: {report.level.value} — {report.summary_kr}")
+            logging.info(
+                "[Executor] Shell 안전 검사: %s — %s",
+                report.level.value,
+                report.summary_kr,
+            )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:

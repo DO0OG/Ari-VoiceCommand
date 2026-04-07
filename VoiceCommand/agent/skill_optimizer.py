@@ -79,7 +79,11 @@ class SkillOptimizer:
         response = self._call_llm(prompt)
         steps = self._parse_json_steps(response)
         if steps:
-            logger.info(f"[SkillOptimizer] '{skill.name}' 스텝 수정 완료 ({len(steps)}개)")
+            logger.info(
+                "[SkillOptimizer] '%s' 스텝 수정 완료 (%s개)",
+                skill.name,
+                len(steps),
+            )
         return steps
 
     def condense_steps(self, skill) -> Optional[List[dict]]:
@@ -123,7 +127,7 @@ class SkillOptimizer:
         )
         code = self._extract_code_block(self._call_llm(prompt))
         if self._validate_python(code):
-            logger.info(f"[SkillOptimizer] '{skill.name}' Python 컴파일 성공")
+            logger.info("[SkillOptimizer] '%s' Python 컴파일 성공", skill.name)
             return code
         return None
 
@@ -139,7 +143,7 @@ class SkillOptimizer:
         )
         new_code = self._extract_code_block(self._call_llm(prompt))
         if self._validate_python(new_code):
-            logger.info(f"[SkillOptimizer] '{skill.name}' 코드 수정 완료")
+            logger.info("[SkillOptimizer] '%s' 코드 수정 완료", skill.name)
             return new_code
         return None
 
