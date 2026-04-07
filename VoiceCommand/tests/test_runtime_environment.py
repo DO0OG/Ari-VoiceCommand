@@ -146,6 +146,33 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             else:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_save_settings_preserves_unknown_custom_keys(self):
+        original_env = os.environ.get("ARI_APP_DATA_DIR")
+        try:
+            with tempfile.TemporaryDirectory() as project_root:
+                runtime_dir = os.path.join(project_root, ".ari_runtime")
+                os.environ["ARI_APP_DATA_DIR"] = runtime_dir
+                with patch.object(ResourceManager, "_project_root", return_value=project_root):
+                    ResourceManager.reset_cache()
+                    ConfigManager._cached_settings = None
+
+                    saved = ConfigManager.save_settings(
+                        {
+                            "llm_provider": "groq",
+                            "custom_flag": {"enabled": True},
+                        }
+                    )
+                    settings = ConfigManager.load_settings()
+
+                self.assertTrue(saved)
+                self.assertEqual(settings["llm_provider"], "groq")
+                self.assertEqual(settings["custom_flag"], {"enabled": True})
+        finally:
+            if original_env is None:
+                os.environ.pop("ARI_APP_DATA_DIR", None)
+            else:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
     def test_missing_runtime_settings_bootstrap_from_template(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")
         try:
