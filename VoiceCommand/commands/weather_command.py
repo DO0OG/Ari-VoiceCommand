@@ -1,6 +1,7 @@
 """날씨 명령"""
 from commands.base_command import BaseCommand
 import logging
+from i18n.translator import _
 
 
 class WeatherCommand(BaseCommand):
@@ -21,4 +22,4 @@ class WeatherCommand(BaseCommand):
             self.tts_wrapper(weather_info)
         except Exception as e:
             logging.error(f"날씨 정보 조회 중 오류 발생: {str(e)}")
-            self.tts_wrapper("날씨 정보를 가져오는 데 실패했습니다.")
+            self.tts_wrapper(_("날씨 정보를 가져오는 데 실패했습니다."))

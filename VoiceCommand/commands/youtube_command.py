@@ -3,6 +3,7 @@ import webbrowser
 import urllib.parse
 import logging
 from commands.base_command import BaseCommand
+from i18n.translator import _
 
 
 class YoutubeCommand(BaseCommand):
@@ -29,10 +30,10 @@ class YoutubeCommand(BaseCommand):
 
         if query:
             url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(query)
-            self.tts_wrapper(f"{query} 유튜브에서 검색할게요.")
+            self.tts_wrapper(_("{query} 유튜브에서 검색할게요.").format(query=query))
         else:
             url = "https://www.youtube.com"
-            self.tts_wrapper("유튜브를 열게요.")
+            self.tts_wrapper(_("유튜브를 열게요."))
 
         logging.info(f"유튜브 열기: {url}")
         webbrowser.open(url)

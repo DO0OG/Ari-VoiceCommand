@@ -1,161 +1,24 @@
-# Ari Voice Assistant — 日本語
 msgid ""
 msgstr ""
+"Project-Id-Version: Ari 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Language: ja\n"
 
 msgid "아리 설정"
 msgstr "Ariの設定"
 
-msgid "RP 설정"
-msgstr "RP設定"
+msgid "말씀해주세요"
+msgstr "お話しください"
 
-msgid "AI 설정"
-msgstr "AI設定"
+msgid "로딩이 완료되었습니다. 이제 대화할 수 있어요!"
+msgstr "読み込みが完了しました。お話しいただけます！"
 
-msgid "TTS 설정"
-msgstr "TTS設定"
+msgid "볼륨을 {volume}%로 조절했습니다."
+msgstr "音量を{volume}%に調整しました。"
 
-msgid "장치 설정"
-msgstr "デバイス設定"
-
-msgid "확장"
-msgstr "拡張"
-
-msgid "저장"
-msgstr "保存"
-
-msgid "취소"
-msgstr "キャンセル"
-
-msgid "캐릭터 페르소나 설정"
-msgstr "キャラクターペルソナ設定"
-
-msgid "성격:"
-msgstr "性格:"
-
-msgid "시나리오:"
-msgstr "シナリオ:"
-
-msgid "시스템 프롬프트:"
-msgstr "システムプロンプト:"
-
-msgid "대화 지침:"
-msgstr "対話指針:"
-
-msgid "예) 상냥하고 귀여운 AI 비서"
-msgstr "例) 優しくて可愛いAIアシスタント"
-
-msgid "예) 주인님을 보좌하는 역할극"
-msgstr "例) ご主人様を補佐するロールプレイ"
-
-msgid "AI에게 직접 전달할 시스템 지시문"
-msgstr "AIに直接伝えるシステム指示文"
-
-msgid "이전 대화를 참고할 때의 태도"
-msgstr "以前の会話を参照する際の態度"
-
-msgid "오디오 장치 설정"
-msgstr "オーディオデバイス設定"
-
-msgid "마이크 입력 장치 선택:"
-msgstr "マイク入力デバイスの選択:"
-
-msgid "시스템 기본 마이크"
-msgstr "システム既定のマイク"
-
-msgid "스피커 출력 장치:"
-msgstr "スピーカー出力デバイス:"
-
-msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-msgstr "現在のシステムの「既定の再生デバイス」から音が出力されます。"
-
-msgid "음성 인식"
-msgstr "音声認識"
-
-msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
-msgstr "STTエンジン、Whisper、マイク感度、ウェイクワードを設定します。"
-
-msgid "음성 인식 설정..."
-msgstr "音声認識設定..."
-
-msgid "UI 테마 설정"
-msgstr "UIテーマ設定"
-
-msgid "테마 프리셋:"
-msgstr "テーマプリセット:"
-
-msgid "글꼴 배율 (0.9 ~ 1.35):"
-msgstr "フォント倍率 (0.9 ~ 1.35):"
-
-msgid "예: 1.0"
-msgstr "例: 1.0"
-
-msgid "글꼴 패밀리 재정의 (선택):"
-msgstr "フォントファミリー上書き (任意):"
-
-msgid "비워두면 테마 기본 글꼴 사용"
-msgstr "空欄の場合はテーマ既定を使用"
-
-msgid "테마 미리보기"
-msgstr "テーマプレビュー"
-
-msgid "테마 폴더 안내"
-msgstr "テーマフォルダ案内"
-
-msgid "🎨 팔레트 직접 편집"
-msgstr "🎨 パレット直接編集"
-
-msgid "언어 설정"
-msgstr "言語設定"
-
-msgid "인터페이스 언어:"
-msgstr "インターフェース言語:"
-
-msgid "💬 텍스트 대화"
-msgstr "💬 テキストチャット"
-
-msgid "설정"
-msgstr "設定"
-
-msgid "종료"
-msgstr "終了"
-
-msgid "실행을 취소했습니다."
-msgstr "実行をキャンセルしました。"
-
-msgid "코드 실행 시간이 너무 길어 중단했습니다."
-msgstr "コードの実行時間が長すぎたため、停止しました。"
-
-msgid "위험한 파이썬 작업 감지: {matched}"
-msgstr "危険なPython操作を検出しました: {matched}"
-
-msgid "언어 변경"
-msgstr "言語変更"
-
-msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
-msgstr "言語設定を保存しました。再起動後に適用されます。"
-
-msgid "로그 파일 폴더 열기"
-msgstr "ログフォルダを開く"
-
-msgid "캐릭터 표시"
-msgstr "キャラクター表示"
-
-msgid "캐릭터 숨기기"
-msgstr "キャラクター非表示"
-
-msgid "🎮 게임 모드 (GPU 절약)"
-msgstr "🎮 ゲームモード (GPU節約)"
-
-msgid "스마트 어시스턴트 모드"
-msgstr "スマートアシスタントモード"
-
-msgid "마우스 반응"
-msgstr "マウス反応"
-
-msgid "예약 작업 관리"
-msgstr "予約タスク管理"
+msgid "볼륨 조절 실패"
+msgstr "音量調整に失敗しました"
 
 msgid "게임 모드 ON. GPU 메모리 해제했습니다."
 msgstr "ゲームモードON。GPUメモリを解放しました。"
@@ -163,11 +26,233 @@ msgstr "ゲームモードON。GPUメモリを解放しました。"
 msgid "게임 모드 OFF. TTS 복원 중..."
 msgstr "ゲームモードOFF。TTSを復元中..."
 
-msgid "활성화"
-msgstr "有効"
+msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
+msgstr "ゲームモード解除。CosyVoiceに復元されました。"
 
-msgid "비활성화"
-msgstr "無効"
+msgid "유튜브를 열게요."
+msgstr "YouTubeを開きます。"
 
-msgid "스마트 어시스턴트 모드가 {status}되었습니다."
-msgstr "スマートアシスタントモードが{status}になりました。"
+msgid "{query} 유튜브에서 검색할게요."
+msgstr "{query}をYouTubeで検索します。"
+
+msgid "현재 시간은 {time}입니다."
+msgstr "現在の時刻は{time}です。"
+
+msgid "오전"
+msgstr "午前"
+
+msgid "오후"
+msgstr "午後"
+
+msgid "{am_pm} {hour}시 {minute}분"
+msgstr "{am_pm}{hour}時{minute}分"
+
+msgid "{am_pm} {hour}시"
+msgstr "{am_pm}{hour}時"
+
+msgid "타이머"
+msgstr "タイマー"
+
+msgid "알람"
+msgstr "アラーム"
+
+msgid "취소"
+msgstr "キャンセル"
+
+msgid "끄기"
+msgstr "オフ"
+
+msgid "중지"
+msgstr "停止"
+
+msgid "남은"
+msgstr "残り"
+
+msgid "얼마"
+msgstr "どのくらい"
+
+msgid "확인"
+msgstr "確認"
+
+msgid "현재 실행 중인 타이머가 없습니다."
+msgstr "現在実行中のタイマーはありません。"
+
+msgid "타이머 시간을 정확히 말씀해 주세요."
+msgstr "タイマーの時間を正確に指定してください。"
+
+msgid "{prefix} {mins}분 {secs}초 남았습니다."
+msgstr "{prefix}は残り{mins}分{secs}秒です。"
+
+msgid "{prefix} {mins}분 남았습니다."
+msgstr "{prefix}は残り{mins}分です。"
+
+msgid "{prefix} {secs}초 남았습니다."
+msgstr "{prefix}は残り{secs}秒です。"
+
+msgid "컴퓨터 꺼줘"
+msgstr "コンピューターを終了して"
+
+msgid "{time}에 컴퓨터를 종료할게요."
+msgstr "{time}にコンピューターを終了します。"
+
+msgid "컴퓨터를 종료합니다. 잠시만 기다려 주세요."
+msgstr "コンピューターを終了します。少々お待ちください。"
+
+msgid "종료 예약을 취소했습니다."
+msgstr "終了予約をキャンセルしました。"
+
+msgid "팔레트 편집"
+msgstr "パレット編集"
+
+msgid "선택"
+msgstr "選択"
+
+msgid "테마 이름"
+msgstr "テーマ名"
+
+msgid "테마로 저장"
+msgstr "テーマとして保存"
+
+msgid "프리셋 초기화"
+msgstr "プリセット初期化"
+
+msgid "JSON 직접 편집"
+msgstr "JSON直接編集"
+
+msgid "JSON 적용"
+msgstr "JSON適用"
+
+msgid "복사"
+msgstr "コピー"
+
+msgid "닫기"
+msgstr "閉じる"
+
+msgid "주요 색상"
+msgstr "主要色"
+
+msgid "텍스트"
+msgstr "テキスト"
+
+msgid "배경"
+msgstr "背景"
+
+msgid "테두리"
+msgstr "境界線"
+
+msgid "기타"
+msgstr "その他"
+
+msgid "이번 주 자기개선 리포트예요!"
+msgstr "今週の自己改善レポートです！"
+
+msgid "완료 작업 {total}건 (성공 {success}건, 성공률 {rate}%, 실패 {fail}건)"
+msgstr "完了したタスク{total}件（成功{success}件、成功率{rate}%、失敗{fail}件）"
+
+msgid "활성 스킬 {total}개 (컴파일 완료 {compiled}개)"
+msgstr "有効なスキル{total}個（コンパイル済み{compiled}個）"
+
+msgid "기억 중인 사실 {count}개"
+msgstr "記憶している事実{count}個"
+
+msgid "예약 작업 {total}건 처리 (성공 {success}건, 실패 {fail}건)"
+msgstr "予約タスク{total}件を処理（成功{success}件、失敗{fail}件）"
+
+msgid "반복 실패 패턴: "
+msgstr "繰り返される失敗パターン: "
+
+msgid "{kind} {count}회"
+msgstr "{kind} {count}回"
+
+msgid "학습 기여도: "
+msgstr "学習寄与度: "
+
+msgid "회귀 경고: "
+msgstr "回帰警告: "
+
+msgid "개선 제안: "
+msgstr "改善案: "
+
+msgid "실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요."
+msgstr "失敗率が高いです。複雑な目標をより小さなステップに分割してみてください。"
+
+msgid "신뢰도 낮은 스킬 {count}개 ({names})를 재학습하거나 비활성화하세요."
+msgstr "信頼度の低いスキル{count}個（{names}）を再学習または無効化してください。"
+
+msgid "반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요."
+msgstr "反復スキルがまだコンパイルされていません。よく使う作業を繰り返して最適化を促してください。"
+
+msgid "예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요."
+msgstr "予約タスクの失敗が蓄積しています。next_runと失敗原因を合わせて確認してください。"
+
+msgid "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다."
+msgstr "現在のユーザーの画面状態（タスクバーの位置、全画面モードかどうかなど）を確認します。"
+
+msgid "유튜브에서 음악이나 영상을 검색하여 재생합니다."
+msgstr "YouTubeで音楽や動画を検索して再生します。"
+
+msgid "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요."
+msgstr "通知用のカウントダウンタイマーを設定します。名前を指定すると複数のタイマーを同時に管理できます。タイマー終了時は通知のみで、追加の動作はありません。コンピュータの終了やファイルの保存などの遅延実行にはschedule_taskを使用してください。"
+
+msgid "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다."
+msgstr "進行中のタイマーをキャンセルします。名前がない場合は、最新のタイマーをキャンセルします。"
+
+msgid "현재 날씨 정보를 조회합니다."
+msgstr "現在の天気情報を取得します。"
+
+msgid "시스템 볼륨을 조절합니다."
+msgstr "システム音量を調節します。"
+
+msgid "현재 시간을 알려줍니다."
+msgstr "現在の時刻を教えます。"
+
+msgid "파이썬 코드로 자율 처리합니다."
+msgstr "Pythonコードで自律的に処理します。"
+
+msgid "CMD 명령어로 자율 처리합니다."
+msgstr "CMDコマンドで自律的に処理します。"
+
+msgid "복합 목표를 자율 에이전트 루프로 처리합니다."
+msgstr "複合目標を自律エージェントループで処理します。"
+
+msgid "인터넷 정보를 검색합니다."
+msgstr "インターネット情報を検索します。"
+
+msgid "웹 페이지 내용을 가져옵니다."
+msgstr "ウェブページの内容を取得します。"
+
+msgid "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다."
+msgstr "特定の時間にタスクを予約実行します。「N分/時間後」「N時に」などの時間表現とともに、コンピュータの終了やファイルの保存などの遅延実行要求に使用します。"
+
+msgid "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요."
+msgstr "コンピュータを即座に終了します。時間表現（例：「15分後」「午後11時」）が含まれる場合は、schedule_taskを使用してください。"
+
+msgid "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다."
+msgstr "現在予約されているタスク一覧を取得します。「予約されているタスクはある？」「スケジュールを確認して」などの要求に使用します。"
+
+msgid "예약된 작업을 ID로 취소합니다."
+msgstr "予約されたタスクをIDでキャンセルします。"
+
+msgid "## 과거 유사 사례 및 교훈 (Planning Guide):"
+msgstr "## 過去の類似事例および教訓 (Planning Guide):"
+
+msgid "  💡 교훈: {lesson}"
+msgstr "  💡 教訓: {lesson}"
+
+msgid "  ⚠️ 실패 이유: {error}"
+msgstr "  ⚠️ 失敗理由: {error}"
+
+msgid "  ✅ 추천 접근: {steps}"
+msgstr "  ✅ 推奨アプローチ: {steps}"
+
+msgid "  🧭 재사용 힌트: {hints}"
+msgstr "  🧭 再利用ヒント: {hints}"
+
+msgid "  🔎 실패 유형: {kind}"
+msgstr "  🔎 失敗タイプ: {kind}"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n※ 上記の事例を参考に、同じ間違いを避け、検証済みの方法を使用してください。"
+
+msgid "실패 기록"
+msgstr "失敗記録"

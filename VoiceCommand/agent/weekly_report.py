@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import threading
+from i18n.translator import _
 
 
 class WeeklyReport:
@@ -36,41 +37,49 @@ class WeeklyReport:
         task_fail = len(recent_task_runs) - task_success
 
         lines = [
-            "이번 주 자기개선 리포트예요!",
-            "완료 작업 %d건 (성공 %d건, 성공률 %d%%, 실패 %d건)" % (total, success_count, success_rate, fail_count),
-            "활성 스킬 %d개 (컴파일 완료 %d개)" % (len(skills), len(compiled_skills)),
-            "기억 중인 사실 %d개" % fact_count,
+            _("이번 주 자기개선 리포트예요!"),
+            _("완료 작업 {total}건 (성공 {success}건, 성공률 {rate}%, 실패 {fail}건)").format(
+                total=total, success=success_count, rate=success_rate, fail=fail_count
+            ),
+            _("활성 스킬 {total}개 (컴파일 완료 {compiled}개)").format(
+                total=len(skills), compiled=len(compiled_skills)
+            ),
+            _("기억 중인 사실 {count}개").format(count=fact_count),
         ]
         if recent_task_runs:
             lines.append(
-                "예약 작업 %d건 처리 (성공 %d건, 실패 %d건)"
-                % (len(recent_task_runs), task_success, task_fail)
+                _("예약 작업 {total}건 처리 (성공 {success}건, 실패 {fail}건)").format(
+                    total=len(recent_task_runs), success=task_success, fail=task_fail
+                )
             )
         if repeated_failures:
-            top_failures = ", ".join(f"{kind} {count}회" for kind, count in repeated_failures[:3])
-            lines.append("반복 실패 패턴: " + top_failures)
+            top_failures = ", ".join(_("{kind} {count}회").format(kind=kind, count=count) for kind, count in repeated_failures[:3])
+            lines.append(_("반복 실패 패턴: ") + top_failures)
+        
         metric_lines = learning_metrics.get_report_lines(limit=3)
         if metric_lines:
-            lines.append("학습 기여도: " + " / ".join(metric_lines))
+            lines.append(_("학습 기여도: ") + " / ".join(metric_lines))
+        
         regression_alert = regression_guard.check()
         if regression_alert:
-            lines.append("회귀 경고: " + regression_alert)
+            lines.append(_("회귀 경고: ") + regression_alert)
 
         suggestions = []
         if fail_count >= 3 and success_rate < 60:
-            suggestions.append("실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요.")
+            suggestions.append(_("실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요."))
         if low_confidence:
             suggestions.append(
-                "신뢰도 낮은 스킬 %d개 (%s)를 재학습하거나 비활성화하세요."
-                % (len(low_confidence), ", ".join(s.name for s in low_confidence[:3]))
+                _("신뢰도 낮은 스킬 {count}개 ({names})를 재학습하거나 비활성화하세요.").format(
+                    count=len(low_confidence), names=", ".join(s.name for s in low_confidence[:3])
+                )
             )
         if len(compiled_skills) == 0 and len(skills) >= 3:
-            suggestions.append("반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요.")
+            suggestions.append(_("반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요."))
         if recent_task_runs and task_fail >= 2:
-            suggestions.append("예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요.")
+            suggestions.append(_("예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요."))
 
         if suggestions:
-            lines.append("개선 제안: " + " / ".join(suggestions))
+            lines.append(_("개선 제안: ") + " / ".join(suggestions))
 
         return " ".join(lines)
 

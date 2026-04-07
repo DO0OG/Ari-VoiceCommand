@@ -1,161 +1,24 @@
-# Ari Voice Assistant — English
 msgid ""
 msgstr ""
+"Project-Id-Version: Ari 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Language: en\n"
 
 msgid "아리 설정"
 msgstr "Ari Settings"
 
-msgid "RP 설정"
-msgstr "RP"
+msgid "말씀해주세요"
+msgstr "Please speak"
 
-msgid "AI 설정"
-msgstr "AI"
+msgid "로딩이 완료되었습니다. 이제 대화할 수 있어요!"
+msgstr "Loading complete. We can talk now!"
 
-msgid "TTS 설정"
-msgstr "TTS"
+msgid "볼륨을 {volume}%로 조절했습니다."
+msgstr "Volume adjusted to {volume}%."
 
-msgid "장치 설정"
-msgstr "Device"
-
-msgid "확장"
-msgstr "Extensions"
-
-msgid "저장"
-msgstr "Save"
-
-msgid "취소"
-msgstr "Cancel"
-
-msgid "캐릭터 페르소나 설정"
-msgstr "Character Persona Settings"
-
-msgid "성격:"
-msgstr "Personality:"
-
-msgid "시나리오:"
-msgstr "Scenario:"
-
-msgid "시스템 프롬프트:"
-msgstr "System Prompt:"
-
-msgid "대화 지침:"
-msgstr "Dialogue Instruction:"
-
-msgid "예) 상냥하고 귀여운 AI 비서"
-msgstr "e.g. Kind and cute AI assistant"
-
-msgid "예) 주인님을 보좌하는 역할극"
-msgstr "e.g. Roleplay assisting the master"
-
-msgid "AI에게 직접 전달할 시스템 지시문"
-msgstr "System instructions delivered directly to the AI"
-
-msgid "이전 대화를 참고할 때의 태도"
-msgstr "Attitude when referring to previous conversations"
-
-msgid "오디오 장치 설정"
-msgstr "Audio Device Settings"
-
-msgid "마이크 입력 장치 선택:"
-msgstr "Select Microphone Input:"
-
-msgid "시스템 기본 마이크"
-msgstr "System Default Microphone"
-
-msgid "스피커 출력 장치:"
-msgstr "Speaker Output Device:"
-
-msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-msgstr "Sound is output through the system's 'Default Playback Device'."
-
-msgid "음성 인식"
-msgstr "Speech Recognition"
-
-msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
-msgstr "Configure STT engine, Whisper, mic sensitivity, and wake words."
-
-msgid "음성 인식 설정..."
-msgstr "Speech Settings..."
-
-msgid "UI 테마 설정"
-msgstr "UI Theme Settings"
-
-msgid "테마 프리셋:"
-msgstr "Theme Preset:"
-
-msgid "글꼴 배율 (0.9 ~ 1.35):"
-msgstr "Font Scale (0.9 ~ 1.35):"
-
-msgid "예: 1.0"
-msgstr "e.g. 1.0"
-
-msgid "글꼴 패밀리 재정의 (선택):"
-msgstr "Font Family Override (Optional):"
-
-msgid "비워두면 테마 기본 글꼴 사용"
-msgstr "Leave empty to use theme default"
-
-msgid "테마 미리보기"
-msgstr "Theme Preview"
-
-msgid "테마 폴더 안내"
-msgstr "Theme Folder Info"
-
-msgid "🎨 팔레트 직접 편집"
-msgstr "🎨 Edit Palette"
-
-msgid "언어 설정"
-msgstr "Language Settings"
-
-msgid "인터페이스 언어:"
-msgstr "Interface Language:"
-
-msgid "💬 텍스트 대화"
-msgstr "💬 Text Chat"
-
-msgid "설정"
-msgstr "Settings"
-
-msgid "종료"
-msgstr "Exit"
-
-msgid "실행을 취소했습니다."
-msgstr "Execution cancelled."
-
-msgid "코드 실행 시간이 너무 길어 중단했습니다."
-msgstr "Code execution timed out and was stopped."
-
-msgid "위험한 파이썬 작업 감지: {matched}"
-msgstr "Dangerous Python operation detected: {matched}"
-
-msgid "언어 변경"
-msgstr "Language Changed"
-
-msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
-msgstr "Language setting saved. Please restart to apply."
-
-msgid "로그 파일 폴더 열기"
-msgstr "Open Log Folder"
-
-msgid "캐릭터 표시"
-msgstr "Show Character"
-
-msgid "캐릭터 숨기기"
-msgstr "Hide Character"
-
-msgid "🎮 게임 모드 (GPU 절약)"
-msgstr "🎮 Game Mode (Save GPU)"
-
-msgid "스마트 어시스턴트 모드"
-msgstr "Smart Assistant Mode"
-
-msgid "마우스 반응"
-msgstr "Mouse Reaction"
-
-msgid "예약 작업 관리"
-msgstr "Scheduled Tasks"
+msgid "볼륨 조절 실패"
+msgstr "Failed to adjust volume"
 
 msgid "게임 모드 ON. GPU 메모리 해제했습니다."
 msgstr "Game Mode ON. GPU memory released."
@@ -163,11 +26,233 @@ msgstr "Game Mode ON. GPU memory released."
 msgid "게임 모드 OFF. TTS 복원 중..."
 msgstr "Game Mode OFF. Restoring TTS..."
 
-msgid "활성화"
-msgstr "Enabled"
+msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
+msgstr "Game Mode disabled. Restored to CosyVoice."
 
-msgid "비활성화"
-msgstr "Disabled"
+msgid "유튜브를 열게요."
+msgstr "Opening YouTube."
 
-msgid "스마트 어시스턴트 모드가 {status}되었습니다."
-msgstr "Smart Assistant Mode has been {status}."
+msgid "{query} 유튜브에서 검색할게요."
+msgstr "Searching for {query} on YouTube."
+
+msgid "현재 시간은 {time}입니다."
+msgstr "The current time is {time}."
+
+msgid "오전"
+msgstr "AM"
+
+msgid "오후"
+msgstr "PM"
+
+msgid "{am_pm} {hour}시 {minute}분"
+msgstr "{hour}:{minute} {am_pm}"
+
+msgid "{am_pm} {hour}시"
+msgstr "{hour} o'clock {am_pm}"
+
+msgid "타이머"
+msgstr "Timer"
+
+msgid "알람"
+msgstr "Alarm"
+
+msgid "취소"
+msgstr "Cancel"
+
+msgid "끄기"
+msgstr "Off"
+
+msgid "중지"
+msgstr "Stop"
+
+msgid "남은"
+msgstr "Remaining"
+
+msgid "얼마"
+msgstr "How much"
+
+msgid "확인"
+msgstr "Check"
+
+msgid "현재 실행 중인 타이머가 없습니다."
+msgstr "There are no timers currently running."
+
+msgid "타이머 시간을 정확히 말씀해 주세요."
+msgstr "Please specify the timer duration clearly."
+
+msgid "{prefix} {mins}분 {secs}초 남았습니다."
+msgstr "{prefix} has {mins}m {secs}s remaining."
+
+msgid "{prefix} {mins}분 남았습니다."
+msgstr "{prefix} has {mins}m remaining."
+
+msgid "{prefix} {secs}초 남았습니다."
+msgstr "{prefix} has {secs}s remaining."
+
+msgid "컴퓨터 꺼줘"
+msgstr "Turn off computer"
+
+msgid "{time}에 컴퓨터를 종료할게요."
+msgstr "Shutting down the computer at {time}."
+
+msgid "컴퓨터를 종료합니다. 잠시만 기다려 주세요."
+msgstr "Shutting down the computer. Please wait a moment."
+
+msgid "종료 예약을 취소했습니다."
+msgstr "Shutdown reservation cancelled."
+
+msgid "팔레트 편집"
+msgstr "Palette Editor"
+
+msgid "선택"
+msgstr "Pick"
+
+msgid "테마 이름"
+msgstr "Theme Name"
+
+msgid "테마로 저장"
+msgstr "Save as Theme"
+
+msgid "프리셋 초기화"
+msgstr "Reset to Preset"
+
+msgid "JSON 직접 편집"
+msgstr "Direct JSON Edit"
+
+msgid "JSON 적용"
+msgstr "Apply JSON"
+
+msgid "복사"
+msgstr "Copy"
+
+msgid "닫기"
+msgstr "Close"
+
+msgid "주요 색상"
+msgstr "Core Colors"
+
+msgid "텍스트"
+msgstr "Text"
+
+msgid "배경"
+msgstr "Background"
+
+msgid "테두리"
+msgstr "Border"
+
+msgid "기타"
+msgstr "Others"
+
+msgid "이번 주 자기개선 리포트예요!"
+msgstr "Here is this week's self-improvement report!"
+
+msgid "완료 작업 {total}건 (성공 {success}건, 성공률 {rate}%, 실패 {fail}건)"
+msgstr "{total} tasks completed ({success} succeeded, {rate}% success rate, {fail} failed)"
+
+msgid "활성 스킬 {total}개 (컴파일 완료 {compiled}개)"
+msgstr "{total} active skills ({compiled} compiled)"
+
+msgid "기억 중인 사실 {count}개"
+msgstr "{count} facts remembered"
+
+msgid "예약 작업 {total}건 처리 (성공 {success}건, 실패 {fail}건)"
+msgstr "{total} scheduled tasks processed ({success} succeeded, {fail} failed)"
+
+msgid "반복 실패 패턴: "
+msgstr "Repeated failure patterns: "
+
+msgid "{kind} {count}회"
+msgstr "{kind} {count} times"
+
+msgid "학습 기여도: "
+msgstr "Learning lift: "
+
+msgid "회귀 경고: "
+msgstr "Regression alert: "
+
+msgid "개선 제안: "
+msgstr "Suggestions: "
+
+msgid "실패율이 높습니다. 복잡한 목표를 더 작은 단계로 나눠보세요."
+msgstr "High failure rate. Try breaking complex goals into smaller steps."
+
+msgid "신뢰도 낮은 스킬 {count}개 ({names})를 재학습하거나 비활성화하세요."
+msgstr "Re-learn or disable {count} low-confidence skills ({names})."
+
+msgid "반복 스킬이 아직 컴파일되지 않았습니다. 자주 쓰는 작업을 반복해 최적화를 유도하세요."
+msgstr "Repeated skills haven't been compiled yet. Induce optimization through repetition."
+
+msgid "예약 작업 실패가 누적되고 있습니다. next_run과 실패 원인을 함께 점검하세요."
+msgstr "Scheduled task failures are accumulating. Check next_run and root causes."
+
+msgid "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다."
+msgstr "Checks the current screen state (taskbar position, fullscreen mode, etc.)."
+
+msgid "유튜브에서 음악이나 영상을 검색하여 재생합니다."
+msgstr "Searches for and plays music or videos on YouTube."
+
+msgid "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요."
+msgstr "Sets a countdown timer for notifications. Multiple timers can be managed if named. Only sounds an alarm upon completion. Use schedule_task for delayed actions like shutdown or file saving."
+
+msgid "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다."
+msgstr "Cancels a running timer. Cancels the most recent one if no name is given."
+
+msgid "현재 날씨 정보를 조회합니다."
+msgstr "Retrieves current weather information."
+
+msgid "시스템 볼륨을 조절합니다."
+msgstr "Adjusts the system volume."
+
+msgid "현재 시간을 알려줍니다."
+msgstr "Tells the current time."
+
+msgid "파이썬 코드로 자율 처리합니다."
+msgstr "Processes autonomously using Python code."
+
+msgid "CMD 명령어로 자율 처리합니다."
+msgstr "Processes autonomously using CMD commands."
+
+msgid "복합 목표를 자율 에이전트 루프로 처리합니다."
+msgstr "Processes complex goals using an autonomous agent loop."
+
+msgid "인터넷 정보를 검색합니다."
+msgstr "Searches for information on the internet."
+
+msgid "웹 페이지 내용을 가져옵니다."
+msgstr "Fetches content from a web page."
+
+msgid "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다."
+msgstr "Schedules a task at a specific time. Use with time expressions like 'in N minutes' or 'at N o'clock' for delayed requests."
+
+msgid "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요."
+msgstr "Shuts down the computer immediately. Use schedule_task if a time expression is included."
+
+msgid "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다."
+msgstr "Lists currently scheduled tasks. Use for requests like 'What's scheduled?' or 'Check my schedule'."
+
+msgid "예약된 작업을 ID로 취소합니다."
+msgstr "Cancels a scheduled task by its ID."
+
+msgid "## 과거 유사 사례 및 교훈 (Planning Guide):"
+msgstr "## Past Cases & Lessons (Planning Guide):"
+
+msgid "  💡 교훈: {lesson}"
+msgstr "  💡 Lesson: {lesson}"
+
+msgid "  ⚠️ 실패 이유: {error}"
+msgstr "  ⚠️ Reason: {error}"
+
+msgid "  ✅ 추천 접근: {steps}"
+msgstr "  ✅ Recommended Approach: {steps}"
+
+msgid "  🧭 재사용 힌트: {hints}"
+msgstr "  🧭 Reuse Hints: {hints}"
+
+msgid "  🔎 실패 유형: {kind}"
+msgstr "  🔎 Failure Type: {kind}"
+
+msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
+msgstr "\n* Refer to above cases to avoid mistakes and use proven methods."
+
+msgid "실패 기록"
+msgstr "Failure Record"
