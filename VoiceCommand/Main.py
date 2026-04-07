@@ -155,7 +155,7 @@ def check_cosyvoice_first_run(app):
                 import install_cosyvoice
                 install_cosyvoice.install()
             except Exception as e:
-                logging.error(f"CosyVoice 설치 오류: {e}")
+                logging.error("CosyVoice 설치 오류: %s", e)
                 install_error["message"] = str(e)
             finally:
                 install_done.set()
@@ -222,7 +222,7 @@ def start_performance_warmups() -> None:
         from agent.embedder import get_embedder
         get_embedder().warmup_async()
     except Exception as exc:
-        logging.debug(f"임베더 워밍업 생략: {exc}")
+        logging.debug("임베더 워밍업 생략: %s", exc)
 
 
 def flush_runtime_state() -> None:
@@ -230,22 +230,22 @@ def flush_runtime_state() -> None:
         from agent.strategy_memory import flush_strategy_memory
         flush_strategy_memory()
     except Exception as exc:
-        logging.debug(f"StrategyMemory flush 생략: {exc}")
+        logging.debug("StrategyMemory flush 생략: %s", exc)
     try:
         from agent.episode_memory import flush_episode_memory
         flush_episode_memory()
     except Exception as exc:
-        logging.debug(f"EpisodeMemory flush 생략: {exc}")
+        logging.debug("EpisodeMemory flush 생략: %s", exc)
     try:
         from agent.skill_library import flush_skill_library
         flush_skill_library()
     except Exception as exc:
-        logging.debug(f"SkillLibrary flush 생략: {exc}")
+        logging.debug("SkillLibrary flush 생략: %s", exc)
     try:
         from memory.conversation_history import get_conversation_history
         get_conversation_history().flush()
     except Exception as exc:
-        logging.debug(f"ConversationHistory flush 생략: {exc}")
+        logging.debug("ConversationHistory flush 생략: %s", exc)
 
 def main():
     global ai_assistant, icon_path
@@ -299,13 +299,13 @@ def main():
         try:
             register_background_learning_tasks(scheduler)
         except Exception as exc:
-            logging.debug(f"백그라운드 학습 작업 등록 생략: {exc}")
+            logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
 
         # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
         try:
             scheduler.check_missed_tasks_on_startup()
         except Exception as exc:
-            logging.debug(f"놓친 작업 확인 생략: {exc}")
+            logging.debug("놓친 작업 확인 생략: %s", exc)
 
         # 캐릭터 위젯 생성
         logging.info("캐릭터 위젯 생성 시작")

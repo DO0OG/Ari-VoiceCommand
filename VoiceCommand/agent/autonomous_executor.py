@@ -401,7 +401,7 @@ class AutonomousExecutor:
 
     def _do_run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
         code = self._normalize_python_code(code)
-        logging.info(f"[Executor] Python 실행:\n{code}")
+        logging.info("[Executor] Python 실행:\n%s", code)
         runner_path = ""
         process = None
         try:
@@ -423,12 +423,12 @@ class AutonomousExecutor:
             output = (stdout or "").strip()
             error_output = (stderr or "").strip()
             if process.returncode != 0:
-                logging.error(f"[Executor] Python 오류:\n{error_output}")
+                logging.error("[Executor] Python 오류:\n%s", error_output)
                 if self.tts_wrapper:
                     self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
                 return ExecutionResult(success=False, error=error_output or "파이썬 실행 실패")
             if output:
-                logging.info(f"[Executor] Python 출력:\n{output}")
+                logging.info("[Executor] Python 출력:\n%s", output)
             return ExecutionResult(success=True, output=output)
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
@@ -446,7 +446,7 @@ class AutonomousExecutor:
             )
         except Exception:
             err = traceback.format_exc()
-            logging.error(f"[Executor] Python 오류:\n{err}")
+            logging.error("[Executor] Python 오류:\n%s", err)
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
             return ExecutionResult(success=False, error=err)
@@ -455,7 +455,7 @@ class AutonomousExecutor:
                 self._safe_unlink(runner_path)
 
     def _do_run_shell(self, command: str) -> ExecutionResult:
-        logging.info(f"[Executor] Shell 실행: {command}")
+        logging.info("[Executor] Shell 실행: %s", command)
         process = None
         try:
             shell_command = self._build_shell_command(command)
@@ -474,9 +474,9 @@ class AutonomousExecutor:
             )
             stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
             if stdout:
-                logging.info(f"[Executor] Shell 출력:\n{stdout.strip()}")
+                logging.info("[Executor] Shell 출력:\n%s", stdout.strip())
             if stderr:
-                logging.warning(f"[Executor] Shell 에러:\n{stderr.strip()}")
+                logging.warning("[Executor] Shell 에러:\n%s", stderr.strip())
             return ExecutionResult(
                 success=process.returncode == 0,
                 output=stdout.strip(),
@@ -497,7 +497,7 @@ class AutonomousExecutor:
                 error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
             )
         except Exception as e:
-            logging.error(f"[Executor] Shell 오류: {e}")
+            logging.error("[Executor] Shell 오류: %s", e)
             if self.tts_wrapper:
                 self.tts_wrapper("시스템 명령 실행 중 오류가 발생했습니다.")
             return ExecutionResult(success=False, error=str(e))
