@@ -7,7 +7,7 @@ import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QComboBox, QGroupBox,
-    QScrollArea,
+    QScrollArea, QCheckBox,
 )
 from PySide6.QtCore import QThread, Signal
 
@@ -146,6 +146,13 @@ class _LLMSettingsPage(QWidget):
         self.ollama_url_input = QLineEdit(self._settings.get("ollama_base_url", "http://localhost:11434/v1"))
         self.ollama_url_input.setPlaceholderText("http://localhost:11434/v1")
         llm_vbox.addWidget(self.ollama_url_input)
+
+        self.llm_router_checkbox = QCheckBox("작업 유형별 자동 라우팅 사용")
+        self.llm_router_checkbox.setChecked(bool(self._settings.get("llm_router_enabled", True)))
+        self.llm_router_checkbox.setToolTip(
+            "분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다."
+        )
+        llm_vbox.addWidget(self.llm_router_checkbox)
 
         llm_vbox.addWidget(QLabel("플래너 제공자 (선택):"))
         self._role_provider_combos["llm_planner_provider"] = self._make_role_provider_combo(
@@ -318,6 +325,7 @@ class _LLMSettingsPage(QWidget):
         return {
             "llm_provider": self.llm_provider_combo.currentData(),
             "llm_model": self.llm_model_input.text().strip(),
+            "llm_router_enabled": self.llm_router_checkbox.isChecked(),
             "llm_planner_provider": self._role_provider_combos["llm_planner_provider"].currentData(),
             "llm_planner_model": self.llm_planner_model_input.text().strip(),
             "llm_execution_provider": self._role_provider_combos["llm_execution_provider"].currentData(),

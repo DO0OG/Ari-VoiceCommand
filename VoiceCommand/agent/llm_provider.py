@@ -18,7 +18,7 @@ from agent.assistant_text_utils import (
     resolve_agent_task_goal,
 )
 from agent.response_cache import ResponseCache, build_response_cache_key
-from agent.tool_schemas import build_available_tools
+from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
 _PROVIDER_CONFIG = {
     "groq": {
@@ -62,6 +62,38 @@ _TOOL_INSTRUCTION = (
     "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
     "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
 )
+
+_CORE_TOOL_NAMES = {
+    tool["function"]["name"]
+    for tool in CORE_TOOL_SCHEMAS
+}
+_TOOL_NAMES_BY_INTENT = {
+    "conversation": {
+        "get_weather",
+        "get_current_time",
+        "web_search",
+        "web_fetch",
+        "list_scheduled_tasks",
+    },
+    "memory": {
+        "get_weather",
+        "get_current_time",
+        "web_search",
+        "web_fetch",
+        "list_scheduled_tasks",
+    },
+    "web": {
+        "web_search",
+        "web_fetch",
+    },
+    "schedule": {
+        "set_timer",
+        "cancel_timer",
+        "schedule_task",
+        "list_scheduled_tasks",
+        "cancel_scheduled_task",
+    },
+}
 
 class LLMProvider:
     """단일 인터페이스로 여러 LLM 제공자를 지원하는 클래스."""
@@ -578,13 +610,26 @@ class LLMProvider:
                 stream_callback(chunk)
 
     def _analyze_request(self, user_message: str) -> dict:
-        return analyze_tool_request(user_message)
+        ctx = analyze_tool_request(user_message)
+        ctx.setdefault("intent", "conversation")
+        return ctx
 
     def _select_tools_for_request(self, ctx: dict):
         tools = self.get_available_tools()
         if ctx.get("preferred_tool"):
             filtered = [t for t in tools if t["function"]["name"] == ctx["preferred_tool"]]
-            if filtered: return filtered, {"type": "function", "function": {"name": ctx["preferred_tool"]}}
+            if filtered:
+                return filtered, {"type": "function", "function": {"name": ctx["preferred_tool"]}}
+
+        allowed_names = _TOOL_NAMES_BY_INTENT.get(ctx.get("intent", "conversation"))
+        if allowed_names:
+            filtered = []
+            for tool in tools:
+                name = tool["function"]["name"]
+                if name not in _CORE_TOOL_NAMES or name in allowed_names:
+                    filtered.append(tool)
+            if filtered:
+                tools = filtered
         return tools, "required" if ctx.get("force_tool") else "auto"
 
     def _normalize_tool_arguments(self, name, args, user_msg):
