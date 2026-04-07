@@ -85,9 +85,9 @@ def _cleanup_old_logs(log_dir: str) -> None:
             try:
                 os.remove(os.path.join(log_dir, old))
             except OSError as e:
-                logging.debug(f"로그 파일 삭제 실패: {e}")
+                logging.debug("로그 파일 삭제 실패: %s", e)
     except OSError as e:
-        logging.debug(f"로그 디렉터리 읽기 실패: {e}")
+        logging.debug("로그 디렉터리 읽기 실패: %s", e)
 
 def setup_logging():
     from core.resource_manager import ResourceManager

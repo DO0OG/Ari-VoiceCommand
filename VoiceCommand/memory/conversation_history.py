@@ -147,7 +147,7 @@ class ConversationHistory:
                 with open(self.file_path, "w", encoding="utf-8") as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                logging.error(f"대화 기록 저장 실패: {e}")
+                logging.error("대화 기록 저장 실패: %s", e)
 
     def load(self):
         with self._lock:
@@ -164,11 +164,15 @@ class ConversationHistory:
                     item for item in self.active
                     if not self._is_internal_entry(item.get("user", ""), item.get("ai", ""))
                 ][-self.MAX_ACTIVE:]
-                logging.info(f"대화 기록 로드: active={len(self.active)}, summaries={len(self.summaries)}")
+                logging.info(
+                    "대화 기록 로드: active=%s, summaries=%s",
+                    len(self.active),
+                    len(self.summaries),
+                )
             except FileNotFoundError:
                 logging.info("새 대화 기록 시작")
             except Exception as e:
-                logging.error(f"대화 기록 로드 실패: {e}")
+                logging.error("대화 기록 로드 실패: %s", e)
 
     def _schedule_save(self) -> None:
         with self._lock:

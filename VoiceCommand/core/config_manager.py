@@ -49,10 +49,10 @@ class ConfigManager:
             except FileNotFoundError:
                 cls._cached_settings = cls._restore_default_settings(path)
             except json.JSONDecodeError as e:
-                logging.error(f"설정 파일 파싱 오류: {e}")
+                logging.error("설정 파일 파싱 오류: %s", e)
                 cls._cached_settings = cls.DEFAULT_SETTINGS.copy()
             except Exception as e:
-                logging.error(f"설정 로드 중 예외 발생: {e}")
+                logging.error("설정 로드 중 예외 발생: %s", e)
                 cls._cached_settings = cls.DEFAULT_SETTINGS.copy()
             return dict(cls._cached_settings)
 
@@ -69,7 +69,7 @@ class ConfigManager:
                 with open(dest_path, "r", encoding="utf-8") as f:
                     return {**cls.DEFAULT_SETTINGS, **cast(ConfigManager.SettingsDict, json.load(f))}
             except Exception as e:
-                logging.warning(f"설정 템플릿 복사 실패: {e}")
+                logging.warning("설정 템플릿 복사 실패: %s", e)
         return cls.DEFAULT_SETTINGS.copy()
 
     @classmethod
@@ -86,7 +86,7 @@ class ConfigManager:
                 cls._cached_settings = dict(normalized)
                 return True
             except Exception as e:
-                logging.error(f"설정 저장 실패: {e}")
+                logging.error("설정 저장 실패: %s", e)
                 return False
 
     @classmethod
