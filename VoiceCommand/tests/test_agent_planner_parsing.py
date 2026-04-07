@@ -282,6 +282,10 @@ class AgentPlannerParsingTests(unittest.TestCase):
 
         self.assertIn('"description_kr":"단계 1"', raw)
         self.assertEqual(len(provider.planner_client.calls), 3)
+        self.assertEqual(
+            provider.planner_client.calls[1].get("response_format"),
+            {"type": "json_object"},
+        )
 
     def test_call_llm_falls_back_to_other_selected_model_after_planner_quota_exhaustion(self):
         planner_client = _FakePlannerCompletionClient([
@@ -300,6 +304,39 @@ class AgentPlannerParsingTests(unittest.TestCase):
 
         self.assertIn('"description_kr":"base fallback"', raw)
         self.assertEqual(len(base_client.calls), 1)
+
+    def test_call_llm_adds_json_response_format_for_groq(self):
+        provider = DummyLLMProvider()
+        provider.planner_model = "dummy"
+        provider.planner_provider = "groq"
+        provider.planner_client = _FakePlannerCompletionClient([
+            ('[{"step_type":"python","content":"print(1)","description_kr":"groq"}]', "stop"),
+        ])
+        provider.client = provider.planner_client
+        planner = AgentPlanner(provider)
+
+        raw = planner._call_llm("JSON only")
+
+        self.assertIn('"description_kr":"groq"', raw)
+        self.assertEqual(
+            provider.planner_client.calls[0].get("response_format"),
+            {"type": "json_object"},
+        )
+
+    def test_call_llm_skips_json_response_format_for_ollama(self):
+        provider = DummyLLMProvider()
+        provider.planner_model = "dummy"
+        provider.planner_provider = "ollama"
+        provider.planner_client = _FakePlannerCompletionClient([
+            ('[{"step_type":"python","content":"print(1)","description_kr":"ollama"}]', "stop"),
+        ])
+        provider.client = provider.planner_client
+        planner = AgentPlanner(provider)
+
+        raw = planner._call_llm("JSON only")
+
+        self.assertIn('"description_kr":"ollama"', raw)
+        self.assertNotIn("response_format", provider.planner_client.calls[0])
 
     def test_decompose_repository_goal_rejects_disallowed_repo_root_env_plan(self):
         provider = DummyLLMProvider()

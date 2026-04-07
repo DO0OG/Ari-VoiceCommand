@@ -2205,6 +2205,9 @@ class AgentPlanner:
                             text = " ".join(b.text for b in resp.content if b.type == "text")
                             finish_reason = str(getattr(resp, "stop_reason", "") or "")
                         else:
+                            extra_kwargs = {}
+                            if self._supports_json_response_format(provider):
+                                extra_kwargs["response_format"] = {"type": "json_object"}
                             resp = client.chat.completions.create(
                                 model=target_model,
                                 messages=[
@@ -2213,6 +2216,7 @@ class AgentPlanner:
                                 ],
                                 temperature=0.1,
                                 max_tokens=1000,
+                                **extra_kwargs,
                             )
                             choice = resp.choices[0]
                             text = choice.message.content or ""
@@ -2257,6 +2261,10 @@ class AgentPlanner:
                 logging.info("[Planner] LLM 응답이 잘려 이어받기를 시도합니다.")
                 time.sleep(0.5)
         return "".join(collected_parts).strip()
+
+    @staticmethod
+    def _supports_json_response_format(provider: str) -> bool:
+        return str(provider or "").strip().lower() in {"openai", "groq"}
 
     def _get_llm_candidates(self, role_hint: str, model: str, client_override, provider_override: str) -> List[tuple]:
         candidates: List[tuple] = []
