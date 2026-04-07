@@ -43,6 +43,15 @@ class VerificationEngineTests(unittest.TestCase):
             )
         )
 
+    def test_invalid_developer_validation_rejects_non_voicecommand_tests_path(self):
+        engine = VerificationEngine(_PlannerStub())
+
+        self.assertTrue(
+            engine._contains_invalid_developer_validation(
+                "pytest tests/test_llm_provider.py"
+            )
+        )
+
     def test_valid_developer_validation_accepts_validate_repo_and_unittest(self):
         engine = VerificationEngine(_PlannerStub())
 
