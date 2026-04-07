@@ -7,7 +7,7 @@ AgentPlanner가 이 믹스인을 상속하여 _build_template_plan() 및
 import json
 import os
 import re
-from typing import List
+from typing import Dict, List
 
 from agent.planner.action_step import ActionStep, GoalProfile
 

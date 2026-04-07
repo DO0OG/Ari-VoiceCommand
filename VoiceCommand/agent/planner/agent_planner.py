@@ -19,7 +19,7 @@ from agent.planner_json_utils import (
     recover_partial_array,
     recover_partial_object,
 )
-from agent.planner.action_step import ActionStep, GoalProfile
+from agent.planner.action_step import ActionStep
 from agent.planner.template_plans import TemplatePlansMixin
 
 _DEV_SCOPE_RE = re.compile(
