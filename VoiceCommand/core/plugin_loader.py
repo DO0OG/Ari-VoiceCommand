@@ -153,7 +153,7 @@ class PluginManager:
         from agent.safety_checker import DangerLevel, get_safety_checker
         report = get_safety_checker().check_python(source)
         if report.level == DangerLevel.DANGEROUS:
-            raise RuntimeError(f"플러그인 안전 검사 실패: {report.summary_kr}")
+            raise RuntimeError(f"플러그인 안전 검사 실패: {report.summary}")
 
     def _plugin_stub(self, path: str) -> PluginInfo:
         stem = os.path.splitext(os.path.basename(path))[0]

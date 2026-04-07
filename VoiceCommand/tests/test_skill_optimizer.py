@@ -20,7 +20,7 @@ class SkillOptimizerTests(unittest.TestCase):
         fake_checker = MagicMock()
         fake_checker.check_python.return_value = SimpleNamespace(
             level=DangerLevel.SAFE,
-            summary_kr="",
+            summary="",
         )
 
         with patch(

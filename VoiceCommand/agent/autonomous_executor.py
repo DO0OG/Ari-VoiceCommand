@@ -182,12 +182,12 @@ class AutonomousExecutor:
             logging.info(
                 "[Executor] Python 안전 검사: %s — %s",
                 report.level.value,
-                report.summary_kr,
+                report.summary,
             )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary_kr}")
+                    self.tts_wrapper(f"주의! {report.summary}")
                 confirmed = self._ask_confirmation(f"Python 코드 실행\n\n{code[:200]}", report)
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
@@ -199,7 +199,7 @@ class AutonomousExecutor:
 
             elif report.level == DangerLevel.CAUTION:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
+                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
             result = self._do_run_python(code, extra_globals=extra_globals)
         except Exception as exc:
@@ -227,12 +227,12 @@ class AutonomousExecutor:
             logging.info(
                 "[Executor] Shell 안전 검사: %s — %s",
                 report.level.value,
-                report.summary_kr,
+                report.summary,
             )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary_kr}")
+                    self.tts_wrapper(f"주의! {report.summary}")
                 confirmed = self._ask_confirmation(f"Shell 명령 실행\n\n{command}", report)
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
@@ -244,7 +244,7 @@ class AutonomousExecutor:
 
             elif report.level == DangerLevel.CAUTION:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
+                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
             result = self._do_run_shell(command)
         except Exception as exc:

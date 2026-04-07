@@ -369,7 +369,7 @@ class ExecutionEngine:
                 report = SafetyReport(
                     level=DangerLevel.CAUTION,
                     matched_patterns=["pip install %s" % pip_pkg],
-                    summary_kr=(
+                    summary=(
                         "'%s' 패키지를 설치합니다. 출처를 확인하세요." % pip_pkg
                     ),
                     category="package_install",

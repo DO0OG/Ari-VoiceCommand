@@ -35,7 +35,7 @@ class AgentRunResult:
     goal: str
     step_results: List[StepResult] = field(default_factory=list)
     achieved: bool = False
-    summary_kr: str = ""
+    summary: str = ""
     total_iterations: int = 0
     learning_components: Dict[str, bool] = field(default_factory=dict)
 
@@ -113,7 +113,7 @@ class AgentOrchestrator:
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
             logger.warning("[Orchestrator] 이미 에이전트가 실행 중입니다.")
-            return AgentRunResult(goal=goal, summary_kr="다른 작업이 진행 중입니다.")
+            return AgentRunResult(goal=goal, summary="다른 작업이 진행 중입니다.")
 
         start_time = time.time()
         self._set_thinking(True)
@@ -126,7 +126,7 @@ class AgentOrchestrator:
                 run_result.learning_components["ReflectionEngine"] = True
                 lesson = getattr(reflection, "lesson", "") or ""
                 if lesson:
-                    run_result.summary_kr += f"\n(교훈: {lesson})"
+                    run_result.summary += f"\n(교훈: {lesson})"
 
             duration = int((time.time() - start_time) * 1000)
             self._learn.schedule_post_run_update(goal, run_result, duration)
@@ -166,21 +166,21 @@ class AgentOrchestrator:
         try:
             from agent.goal_predictor import get_goal_predictor
             prediction = get_goal_predictor().warn_if_high_risk(goal)
-            if prediction.warning_kr:
+            if prediction.warning:
                 learning_components["GoalPredictor"] = True
                 with self._context_lock:
-                    context["goal_risk_warning"] = prediction.warning_kr[:300]
+                    context["goal_risk_warning"] = prediction.warning[:300]
                     if prediction.risk_factors:
                         context["goal_risk_factors"] = (
                             " | ".join(prediction.risk_factors[:3])[:300]
                         )
                 self._emit_progress(
                     "risk_warning",
-                    warning=prediction.warning_kr,
+                    warning=prediction.warning,
                     sample_size=prediction.sample_size,
                     success_rate=prediction.estimated_success_rate,
                 )
-                self._say(f"[진지] {prediction.warning_kr}")
+                self._say(f"[진지] {prediction.warning}")
         except Exception as exc:
             logger.debug("[Orchestrator] goal predictor 주입 생략: %s", exc)
 
@@ -208,7 +208,7 @@ class AgentOrchestrator:
                 learning_components, self.planner.get_last_learning_signals()
             )
             if not steps:
-                run_result.summary_kr = "계획 수립에 실패했습니다."
+                run_result.summary = "계획 수립에 실패했습니다."
                 break
             prevalidation_issues = self._prevalidate_steps(steps)
             if prevalidation_issues:
@@ -222,7 +222,7 @@ class AgentOrchestrator:
                     reason=reason,
                 )
                 if iteration >= self.MAX_PLAN_ITERATIONS - 1:
-                    run_result.summary_kr = f"사전 검증 실패: {reason}"
+                    run_result.summary = f"사전 검증 실패: {reason}"
                 continue
 
             self._log_plan(steps)
@@ -247,14 +247,14 @@ class AgentOrchestrator:
                 self._emit_progress("replan", iteration=iteration, reason=reason)
                 self._say("[진지] 접근 방법을 바꿔서 다시 시도합니다.")
                 if iteration >= self.MAX_PLAN_ITERATIONS - 1:
-                    run_result.summary_kr = f"실행 실패: {reason}"
+                    run_result.summary = f"실행 실패: {reason}"
                 continue
 
             # Layer 3: Verify
             self._emit_progress("verify_start")
             achieved, summary = self._verify_engine.verify(goal, step_results)
             run_result.achieved = achieved
-            run_result.summary_kr = summary
+            run_result.summary = summary
 
             if achieved:
                 self._emit_progress("achieved", summary=summary)
@@ -337,7 +337,7 @@ class AgentOrchestrator:
             if all_success:
                 achieved, summary = self._verify_engine.verify(goal, step_results)
                 result.achieved = achieved
-                result.summary_kr = summary
+                result.summary = summary
                 if achieved:
                     with self._context_lock:
                         context["skill_id"] = skill.skill_id
@@ -364,7 +364,7 @@ class AgentOrchestrator:
             result = AgentRunResult(goal=goal, total_iterations=1)
             if success:
                 result.achieved = True
-                result.summary_kr = output
+                result.summary = output
                 get_skill_library().record_feedback(skill.skill_id, positive=True)
                 logger.info("[Orchestrator] 컴파일 스킬 실행 성공: %s", skill.name)
                 return result

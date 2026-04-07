@@ -23,7 +23,7 @@ class _PlannerStub:
     def __init__(self, *, developer_goal=True, allowed=True, verify_result=None):
         self._developer_goal = developer_goal
         self._allowed = allowed
-        self.verify = MagicMock(return_value=verify_result or {"achieved": True, "summary_kr": "플래너 검증"})
+        self.verify = MagicMock(return_value=verify_result or {"achieved": True, "summary": "플래너 검증"})
 
     def is_developer_goal(self, goal: str) -> bool:
         return self._developer_goal
@@ -93,7 +93,7 @@ class VerificationEngineTests(unittest.TestCase):
     def test_verify_falls_back_to_planner_when_real_verifier_unavailable(self):
         planner = _PlannerStub(
             developer_goal=False,
-            verify_result={"achieved": True, "summary_kr": "플래너 폴백 성공"},
+            verify_result={"achieved": True, "summary": "플래너 폴백 성공"},
         )
         engine = VerificationEngine(planner)
 

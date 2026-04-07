@@ -29,7 +29,7 @@ class LearningQualityTests(unittest.TestCase):
             with patch("agent.strategy_memory.get_strategy_memory", return_value=memory):
                 result = predictor.warn_if_high_risk("브라우저 다운로드", limit=5)
 
-            self.assertTrue(result.warning_kr)
+            self.assertTrue(result.warning)
             self.assertEqual(result.sample_size, 3)
             self.assertTrue(any("timeout" in item for item in result.risk_factors))
 
@@ -45,9 +45,9 @@ class LearningQualityTests(unittest.TestCase):
             with patch("agent.strategy_memory.get_strategy_memory", return_value=memory):
                 result = predictor.warn_if_high_risk("브라우저 다운로드", limit=30)
 
-            self.assertTrue(result.warning_kr)
+            self.assertTrue(result.warning)
             self.assertEqual(result.sample_size, 19)
-            self.assertIn("반복", result.warning_kr)
+            self.assertIn("반복", result.warning)
 
     def test_reflection_engine_uses_llm_payload_when_available(self):
         engine = ReflectionEngine()

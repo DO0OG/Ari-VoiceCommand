@@ -17,8 +17,8 @@ class EpisodeMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "episode_memory.json")
             memory = EpisodeMemory(filepath=path)
-            memory.record(GoalEpisode(goal="메모장에 메모 저장", achieved=True, summary_kr="저장 성공", policy_summary="desktop=adaptive"))
-            memory.record(GoalEpisode(goal="브라우저 로그인 후 다운로드", achieved=False, summary_kr="다운로드 실패", failure_kind="timeout", policy_summary="browser=learned_only"))
+            memory.record(GoalEpisode(goal="메모장에 메모 저장", achieved=True, summary="저장 성공", policy_summary="desktop=adaptive"))
+            memory.record(GoalEpisode(goal="브라우저 로그인 후 다운로드", achieved=False, summary="다운로드 실패", failure_kind="timeout", policy_summary="browser=learned_only"))
 
             summary = memory.get_recent_summary(goal="브라우저 다운로드", limit=2)
 
@@ -29,7 +29,7 @@ class EpisodeMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "episode_memory.json")
             memory = EpisodeMemory(filepath=path)
-            memory.record(GoalEpisode(goal="report overwrite", achieved=False, summary_kr="복구 필요", failure_kind="overwrite"))
+            memory.record(GoalEpisode(goal="report overwrite", achieved=False, summary="복구 필요", failure_kind="overwrite"))
 
             guidance = memory.get_goal_guidance(goal="report overwrite", limit=1)
 
@@ -44,14 +44,14 @@ class EpisodeMemoryTests(unittest.TestCase):
                 GoalEpisode(
                     goal="VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
                     achieved=True,
-                    summary_kr="화면 OCR에서 목표 관련 텍스트를 확인했습니다. (10/10)",
+                    summary="화면 OCR에서 목표 관련 텍스트를 확인했습니다. (10/10)",
                 )
             )
             memory.record(
                 GoalEpisode(
                     goal="VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
                     achieved=False,
-                    summary_kr="저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다.",
+                    summary="저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다.",
                 )
             )
 
@@ -72,7 +72,7 @@ class EpisodeMemoryTests(unittest.TestCase):
                 GoalEpisode(
                     goal="VoiceCommand 저장소 전체 파악 후 코드 변경 및 검증 완료",
                     achieved=False,
-                    summary_kr="검증 실패",
+                    summary="검증 실패",
                     timestamp="2026-04-02T03:20:00",
                 )
             )
@@ -80,7 +80,7 @@ class EpisodeMemoryTests(unittest.TestCase):
                 GoalEpisode(
                     goal="바탕화면에 폴더 만들기, 창 제목 수집 및 분류, markdown 보고서 생성",
                     achieved=True,
-                    summary_kr="실제 경로가 확인되어 작업을 완료했습니다.",
+                    summary="실제 경로가 확인되어 작업을 완료했습니다.",
                     timestamp="2026-04-02T03:25:00",
                 )
             )
@@ -101,7 +101,7 @@ class EpisodeMemoryTests(unittest.TestCase):
                 GoalEpisode(
                     goal="브라우저 로그인 후 다운로드",
                     achieved=False,
-                    summary_kr="다운로드 실패",
+                    summary="다운로드 실패",
                     failure_kind="timeout",
                     target_domains=["example.com"],
                 )
@@ -110,7 +110,7 @@ class EpisodeMemoryTests(unittest.TestCase):
                 GoalEpisode(
                     goal="메모장에 메모 저장",
                     achieved=False,
-                    summary_kr="저장 실패",
+                    summary="저장 실패",
                     failure_kind="permission_denied",
                 )
             )
@@ -125,7 +125,7 @@ class EpisodeMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "episode_memory.json")
             memory = EpisodeMemory(filepath=path)
-            memory.record(GoalEpisode(goal="메모 저장", achieved=True, summary_kr="저장 성공"))
+            memory.record(GoalEpisode(goal="메모 저장", achieved=True, summary="저장 성공"))
 
             memory.flush()
 

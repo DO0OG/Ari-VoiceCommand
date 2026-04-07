@@ -235,7 +235,7 @@ _VERIFY_PROMPT = """\
 반드시 JSON 객체만 반환하세요:
 {{
   "achieved": true,
-  "summary_kr": "달성 여부 한국어 요약 (1~2문장)"
+  "summary": "달성 여부 한국어 요약 (1~2문장)"
 }}"""
 
 _REFLECT_PROMPT = """\
@@ -399,7 +399,7 @@ Criteria:
 Return JSON object only:
 {{
   "achieved": true,
-  "summary_kr": "1-2 sentence summary of whether goal was achieved"
+  "summary": "1-2 sentence summary of whether goal was achieved"
 }}"""
 
 _REFLECT_PROMPT_EN = """\
@@ -807,7 +807,7 @@ class AgentPlanner(TemplatePlansMixin):
                              role_hint="planner")
         self._write_trace("verify", goal, raw)
         data = self._parse_object(raw)
-        return data if data else {"achieved": False, "summary_kr": "검증 실패"}
+        return data if data else {"achieved": False, "summary": "검증 실패"}
 
     # ── 내부 ──────────────────────────────────────────────────────────────────
 

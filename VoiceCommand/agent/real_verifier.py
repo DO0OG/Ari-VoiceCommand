@@ -92,7 +92,7 @@ class VerificationResult:
     verified: bool
     method: str         # "code" | "llm" | "heuristic"
     evidence: str       # 실제 증거 텍스트
-    summary_kr: str
+    summary: str
 
 
 class RealVerifier:
@@ -146,7 +146,7 @@ class RealVerifier:
                     verified=False,
                     method="heuristic",
                     evidence=(exec_r.error or exec_r.output or "")[:200],
-                    summary_kr="일부 단계가 실패하여 목표를 달성하지 못했습니다.",
+                    summary="일부 단계가 실패하여 목표를 달성하지 못했습니다.",
                 )
             outputs.append((exec_r.output or "").strip())
             payload = self._parse_json_output(exec_r.output or "")
@@ -198,7 +198,7 @@ class RealVerifier:
                 verified=True,
                 method="heuristic",
                 evidence=existing_path_items[0],
-                summary_kr=f"실제 경로({os.path.basename(existing_path_items[0])})가 확인되어 작업을 완료했습니다.",
+                summary=f"실제 경로({os.path.basename(existing_path_items[0])})가 확인되어 작업을 완료했습니다.",
             )
 
         if describes_open_action(description_text):
@@ -216,7 +216,7 @@ class RealVerifier:
                     verified=True,
                     method="heuristic",
                     evidence=state_delta_match[:200],
-                    summary_kr="실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다.",
+                    summary="실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다.",
                 )
             lowered_title = active_title.lower()
             current_url = str(browser_state.get("current_url", "")).lower()
@@ -227,14 +227,14 @@ class RealVerifier:
                     verified=True,
                     method="heuristic",
                     evidence=evidence[:200],
-                    summary_kr="브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다.",
+                    summary="브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다.",
                 )
             if active_title:
                 return VerificationResult(
                     verified=True,
                     method="heuristic",
                     evidence=active_title[:200],
-                    summary_kr="활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다.",
+                    summary="활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다.",
                 )
             if open_window_titles:
                 domain_tokens = []
@@ -253,7 +253,7 @@ class RealVerifier:
                         verified=True,
                         method="heuristic",
                         evidence=matched_title[:200],
-                        summary_kr="열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다.",
+                        summary="열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다.",
                     )
                 goal_tokens = [token.lower() for token in re.findall(r"[A-Za-z가-힣0-9._-]+", description_text) if len(token) >= 2]
                 matched_title = next(
@@ -268,7 +268,7 @@ class RealVerifier:
                         verified=True,
                         method="heuristic",
                         evidence=matched_title[:200],
-                        summary_kr="열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다.",
+                        summary="열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다.",
                     )
 
         visible_image = next((path for path in image_candidates if is_image_visible(path)), "")
@@ -277,7 +277,7 @@ class RealVerifier:
                 verified=True,
                 method="heuristic",
                 evidence=visible_image[:200],
-                summary_kr="화면 이미지 인식을 통해 목표 상태를 확인했습니다.",
+                summary="화면 이미지 인식을 통해 목표 상태를 확인했습니다.",
             )
 
         if describes_open_action(goal):
@@ -287,7 +287,7 @@ class RealVerifier:
                     verified=True,
                     method="ocr_heuristic",
                     evidence=f"화면 상단에서 '{app_name}' 텍스트 확인됨",
-                    summary_kr=f"'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨",
+                    summary=f"'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨",
                 )
 
         for payload in workflow_payloads:
@@ -299,14 +299,14 @@ class RealVerifier:
                     verified=True,
                     method="heuristic",
                     evidence=opened_url[:200],
-                    summary_kr="워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다.",
+                    summary="워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다.",
                 )
             if window_title and any(isinstance(item, str) and item.startswith("성공:") for item in action_items):
                 return VerificationResult(
                     verified=True,
                     method="heuristic",
                     evidence=window_title[:200],
-                    summary_kr="워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다.",
+                    summary="워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다.",
                 )
 
         if browser_state.get("current_url") and browser_state.get("title"):
@@ -314,7 +314,7 @@ class RealVerifier:
                 verified=True,
                 method="heuristic",
                 evidence=f"{browser_state.get('title')} | {browser_state.get('current_url')}"[:200],
-                summary_kr="현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다.",
+                summary="현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다.",
             )
 
         last_action_summary = str(browser_state.get("last_action_summary", "") or "")
@@ -323,7 +323,7 @@ class RealVerifier:
                 verified=True,
                 method="heuristic",
                 evidence=last_action_summary[:200],
-                summary_kr="브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다.",
+                summary="브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다.",
             )
 
         return None
@@ -359,7 +359,7 @@ class RealVerifier:
                         verified=False,
                         method="developer",
                         evidence=(error or output)[:200],
-                        summary_kr="검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다.",
+                        summary="검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다.",
                     )
                 validation_outputs.append("\n".join(part for part in [description, output, error] if part).strip())
 
@@ -372,7 +372,7 @@ class RealVerifier:
                 verified=False,
                 method="developer",
                 evidence=validation_outputs[-1][:200],
-                summary_kr="검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다.",
+                summary="검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다.",
             )
 
         if any(token in joined for token in _DEVELOPER_SUCCESS_HINTS) or (
@@ -382,14 +382,14 @@ class RealVerifier:
                 verified=True,
                 method="developer",
                 evidence=validation_outputs[-1][:200],
-                summary_kr="코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다.",
+                summary="코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다.",
             )
 
         return VerificationResult(
             verified=False,
             method="developer",
             evidence=validation_outputs[-1][:200],
-            summary_kr="검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다.",
+            summary="검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다.",
         )
 
     def _extract_goal_folder_name(self, goal: str) -> str:
@@ -438,7 +438,7 @@ class RealVerifier:
             verified=True,
             method="ocr",
             evidence=evidence[:200],
-            summary_kr=f"화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({len(keywords_found)}/{len(expected_keywords)})",
+            summary=f"화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({len(keywords_found)}/{len(expected_keywords)})",
         )
 
     def _extract_expected_keywords(self, goal: str, step_results: list) -> list[str]:
@@ -689,7 +689,7 @@ class RealVerifier:
                 verified=verified,
                 method="code",
                 evidence=result.output.strip()[:200],
-                summary_kr=f"상태 검증 결과: {'성공' if verified else '미달성'}",
+                summary=f"상태 검증 결과: {'성공' if verified else '미달성'}",
             )
         except Exception as e:
             logging.error(f"[RealVerifier] 검증 실행 오류: {e}")
@@ -706,11 +706,11 @@ class RealVerifier:
                 verified=verdict.get("achieved", False),
                 method="llm",
                 evidence="",
-                summary_kr=verdict.get("summary_kr", "LLM 검증 실패"),
+                summary=verdict.get("summary", "LLM 검증 실패"),
             )
         except Exception as e:
             logging.error(f"[RealVerifier] LLM 검증 오류: {e}")
-            return VerificationResult(verified=False, method="llm", evidence="", summary_kr="검증 프로세스 오류")
+            return VerificationResult(verified=False, method="llm", evidence="", summary="검증 프로세스 오류")
 
     def _write_trace(self, goal: str, code: str):
         try:

@@ -343,7 +343,7 @@ class RealVerifierTests(unittest.TestCase):
 
         self.assertTrue(result.verified)
         self.assertEqual(result.method, "developer")
-        self.assertIn("검증 명령", result.summary_kr)
+        self.assertIn("검증 명령", result.summary)
 
     def test_developer_goal_treats_fail_output_as_failure(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
@@ -366,7 +366,7 @@ class RealVerifierTests(unittest.TestCase):
 
         self.assertFalse(result.verified)
         self.assertEqual(result.method, "developer")
-        self.assertIn("실패 신호", result.summary_kr)
+        self.assertIn("실패 신호", result.summary)
 
     def test_run_verification_rejects_mutating_code(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
@@ -388,7 +388,7 @@ class RealVerifierTests(unittest.TestCase):
                     verified=False,
                     method="llm",
                     evidence="",
-                    summary_kr="LLM 검증 실패",
+                    summary="LLM 검증 실패",
                 ),
             ):
                 result = verifier.verify(
