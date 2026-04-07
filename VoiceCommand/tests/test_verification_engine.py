@@ -34,6 +34,25 @@ class _PlannerStub:
 
 
 class VerificationEngineTests(unittest.TestCase):
+    def test_invalid_developer_validation_rejects_py_compile_only(self):
+        engine = VerificationEngine(_PlannerStub())
+
+        self.assertTrue(
+            engine._contains_invalid_developer_validation(
+                "py -3.11 -m py_compile VoiceCommand/agent/foo.py"
+            )
+        )
+
+    def test_valid_developer_validation_accepts_validate_repo_and_unittest(self):
+        engine = VerificationEngine(_PlannerStub())
+
+        self.assertTrue(
+            engine._is_valid_developer_validation_signal(
+                "py -3.11 VoiceCommand/validate_repo.py --compile-only\n"
+                "python -m unittest VoiceCommand.tests.test_llm_provider"
+            )
+        )
+
     def test_verify_developer_goal_requires_code_change_and_validation(self):
         engine = VerificationEngine(_PlannerStub())
 
