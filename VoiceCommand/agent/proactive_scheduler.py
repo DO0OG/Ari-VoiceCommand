@@ -382,7 +382,7 @@ class ProactiveScheduler:
 
         try:
             res = self._orchestrator_func(task.goal)
-            summary = getattr(res, "summary_kr", "작업 완료")
+            summary = getattr(res, "summary", "작업 완료")
             success = bool(getattr(res, "achieved", True))
             if self.tts:
                 self.tts(summary)
@@ -633,7 +633,7 @@ class ProactiveScheduler:
                 GoalEpisode(
                     goal=synthetic_goal,
                     achieved=bool(success),
-                    summary_kr=status_summary,
+                    summary=status_summary,
                     failure_kind=failure_kind,
                     duration_ms=duration_ms,
                     state_change_summary=f"task_type={task.task_type} | schedule={task.schedule_expr[:80]}",

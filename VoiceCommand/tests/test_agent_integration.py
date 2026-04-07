@@ -464,7 +464,7 @@ class AgentIntegrationTests(unittest.TestCase):
         run_result = AgentRunResult(
             goal="VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료",
             achieved=False,
-            summary_kr="저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다.",
+            summary="저장소 분석만 수행됐고 실제 코드 변경과 검증이 확인되지 않았습니다.",
             step_results=[],
         )
 
@@ -483,7 +483,7 @@ class AgentIntegrationTests(unittest.TestCase):
         failed_result = AgentRunResult(
             goal="브라우저 다운로드 자동화",
             achieved=False,
-            summary_kr="다운로드 실패",
+            summary="다운로드 실패",
             step_results=[
                 StepResult(
                     step=ActionStep(step_id=0, step_type="python", content="print('x')", description_kr="다운로드"),
@@ -504,7 +504,7 @@ class AgentIntegrationTests(unittest.TestCase):
                         with patch.object(orchestrator.planner, "reflect", side_effect=AssertionError("planner reflect should not be used")):
                             result = orchestrator.run("브라우저 다운로드 자동화")
 
-        self.assertIn("교훈", result.summary_kr)
+        self.assertIn("교훈", result.summary)
         self.assertEqual(record_strategy.call_args.kwargs.get("failure_kind_override"), "timeout")
 
     def test_run_records_learning_metrics_for_component_usage(self):
@@ -512,7 +512,7 @@ class AgentIntegrationTests(unittest.TestCase):
         run_result = AgentRunResult(
             goal="브라우저 다운로드 자동화",
             achieved=True,
-            summary_kr="완료",
+            summary="완료",
             learning_components={
                 "GoalPredictor": True,
                 "EpisodeMemory": True,
@@ -562,7 +562,7 @@ class AgentIntegrationTests(unittest.TestCase):
                             result = orchestrator._run_loop("간단한 목표")
 
         self.assertTrue(result.achieved)
-        self.assertEqual(result.summary_kr, "완료")
+        self.assertEqual(result.summary, "완료")
         self.assertEqual(result.total_iterations, 2)
         self.assertEqual(decompose.call_count, 2)
 

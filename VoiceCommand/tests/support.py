@@ -28,7 +28,7 @@ class DummyPlanner:
         return [ActionStep(step_id=1, step_type="shell", content="echo dummy", description_kr="Dummy Step")]
         
     def verify(self, goal, exec_results):
-        return {"achieved": True, "summary_kr": "Dummy verified"}
+        return {"achieved": True, "summary": "Dummy verified"}
 
 class DummyConfigManager:
     @staticmethod

@@ -56,12 +56,32 @@ _PROVIDER_CONFIG = {
     },
 }
 
-_TOOL_INSTRUCTION = (
-    "[도구 사용 지침]\n"
-    "- 사용자의 PC 동작 요청은 적절한 도구를 우선 호출하세요.\n"
-    "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
-    "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
-)
+def _get_tool_instruction() -> str:
+    try:
+        from i18n.translator import get_language
+        lang = get_language()
+    except Exception:
+        lang = "ko"
+    if lang == "en":
+        return (
+            "[Tool Usage Guidelines]\n"
+            "- Always respond in English.\n"
+            "- Use appropriate tools for PC control requests.\n"
+            "- Do not damage URLs, code, or English names in responses."
+        )
+    if lang == "ja":
+        return (
+            "[ツール使用ガイドライン]\n"
+            "- 常に日本語で回答してください。\n"
+            "- PC操作の要求には適切なツールを使用してください。\n"
+            "- URL・コード・英語の名称は変更しないでください。"
+        )
+    return (
+        "[도구 사용 지침]\n"
+        "- 사용자의 PC 동작 요청은 적절한 도구를 우선 호출하세요.\n"
+        "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
+        "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
+    )
 
 _CORE_TOOL_NAMES = {
     tool["function"]["name"]
@@ -654,8 +674,23 @@ class LLMProvider:
         return []
 
     def _build_system(self, include_context=False):
+        try:
+            from i18n.translator import get_language
+            lang = get_language()
+        except Exception:
+            lang = "ko"
+        _BASE_PROMPT = {
+            "ko": "당신은 한국어 AI 어시스턴트 아리입니다.",
+            "en": "You are Ari, an AI assistant.",
+            "ja": "あなたはAIアシスタントのAriです。",
+        }
+        _LANG_INSTRUCTION = {
+            "ko": "항상 한국어로 응답하세요.",
+            "en": "Always respond in English.",
+            "ja": "常に日本語で応答してください。",
+        }
         parts: List[str] = []
-        base_prompt = self.system_prompt or "당신은 한국어 AI 어시스턴트 아리입니다."
+        base_prompt = self.system_prompt or _BASE_PROMPT.get(lang, _BASE_PROMPT["ko"])
         if include_context:
             try:
                 from memory.user_profile_engine import get_user_profile_engine
@@ -681,8 +716,8 @@ class LLMProvider:
                     parts.append(f"[대화 컨텍스트]\n{context_prompt}")
             except Exception as e:
                 logging.debug(f"[LLM] 메모리 컨텍스트 주입 실패: {e}")
-        parts.append(_TOOL_INSTRUCTION)
-        parts.append("한국어 응답 필수. 감정 태그 (기쁨), (진지) 등을 자연스럽게 사용하세요.")
+        parts.append(_get_tool_instruction())
+        parts.append(_LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"]))
         return "\n\n".join(part for part in parts if part)
 
     def _clean_response(self, text):

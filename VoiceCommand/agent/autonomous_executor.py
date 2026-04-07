@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
+from i18n.translator import _
 
 # 자식 프로세스에 전달하지 않을 환경 변수 접두사 (API 키 등 민감 정보)
 _SENSITIVE_ENV_PREFIXES = (
@@ -182,24 +183,24 @@ class AutonomousExecutor:
             logging.info(
                 "[Executor] Python 안전 검사: %s — %s",
                 report.level.value,
-                report.summary_kr,
+                report.summary,
             )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary_kr}")
+                    self.tts_wrapper(f"주의! {report.summary}")
                 confirmed = self._ask_confirmation(f"Python 코드 실행\n\n{code[:200]}", report)
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
                     if self.tts_wrapper:
-                        self.tts_wrapper("실행을 취소했습니다.")
+                        self.tts_wrapper(_("실행을 취소했습니다."))
                     self._attach_state_snapshot(result, state_before)
                     self._record_history(result)
                     return result
 
             elif report.level == DangerLevel.CAUTION:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
+                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
             result = self._do_run_python(code, extra_globals=extra_globals)
         except Exception as exc:
@@ -227,24 +228,24 @@ class AutonomousExecutor:
             logging.info(
                 "[Executor] Shell 안전 검사: %s — %s",
                 report.level.value,
-                report.summary_kr,
+                report.summary,
             )
 
             if report.level == DangerLevel.DANGEROUS:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary_kr}")
+                    self.tts_wrapper(f"주의! {report.summary}")
                 confirmed = self._ask_confirmation(f"Shell 명령 실행\n\n{command}", report)
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
                     if self.tts_wrapper:
-                        self.tts_wrapper("실행을 취소했습니다.")
+                        self.tts_wrapper(_("실행을 취소했습니다."))
                     self._attach_state_snapshot(result, state_before)
                     self._record_history(result)
                     return result
 
             elif report.level == DangerLevel.CAUTION:
                 if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary_kr}. 실행합니다.")
+                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
             result = self._do_run_shell(command)
         except Exception as exc:
@@ -439,7 +440,7 @@ class AutonomousExecutor:
                 except Exception:
                     pass
             if self.tts_wrapper:
-                self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
+                self.tts_wrapper(_("코드 실행 시간이 너무 길어 중단했습니다."))
             return ExecutionResult(
                 success=False,
                 error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",

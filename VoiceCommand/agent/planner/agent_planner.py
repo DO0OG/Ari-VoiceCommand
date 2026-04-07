@@ -235,7 +235,7 @@ _VERIFY_PROMPT = """\
 반드시 JSON 객체만 반환하세요:
 {{
   "achieved": true,
-  "summary_kr": "달성 여부 한국어 요약 (1~2문장)"
+  "summary": "달성 여부 한국어 요약 (1~2문장)"
 }}"""
 
 _REFLECT_PROMPT = """\
@@ -259,6 +259,201 @@ _REFLECT_PROMPT = """\
   "lesson": "다음 시도를 위한 핵심 교훈"
 }}"""
 
+_DECOMPOSE_PROMPT_EN = """\
+Return an execution plan as a JSON array to achieve the following goal.
+
+Goal: {goal}
+{context_block}
+Rules:
+- step_type: "python" (Python code), "shell" (CMD/PowerShell), "think" (analysis, no content)
+- Simple tasks need only one step
+- Write immediately executable code
+- Use multi-line code for compound statements (with/for/if/try), not semicolons
+- Previous step outputs are available as step_outputs dict (keys: "step_0_output", etc.)
+- Set condition for steps that depend on previous results
+- on_failure: "abort", "skip", or "continue"
+- Windows desktop path: use 'desktop_path' variable directly in Python code
+- Always ensure directories exist: os.makedirs(path, exist_ok=True)
+- Use web_search(query) and web_fetch(url) instead of external APIs
+- Use save_document(directory, base_name, content) for saving documents
+- No YOUR_API_KEY or paid external API dependencies
+- Return JSON array only
+
+Output format:
+[
+  {{
+    "step_type": "python",
+    "content": "code to execute",
+    "description_kr": "step description",
+    "expected_output": "expected result",
+    "condition": "",
+    "on_failure": "abort"
+  }}
+]"""
+
+_DEVELOPER_DECOMPOSE_PROMPT_EN = """\
+Return an execution plan as a JSON array to achieve the following repository development goal.
+
+Goal: {goal}
+{context_block}
+Rules:
+- step_type: "python", "shell", or "think" only
+- Return at most 4 steps
+- shell steps use PowerShell commands
+- shell commands assume repo root as working directory
+- python steps can use repo_root and module_dir variables directly
+- Keep content short and executable; do not paste entire file contents
+- Previous step outputs available as step_outputs dict
+- If no scan results yet, focus on information gathering only
+- If scan results available, select one improvement task and modify one file at a time
+- Limit target to VoiceCommand/agent, core, ui, plugins, tests, docs, validate_repo.py
+- Use repo_root and module_dir for paths, do not hardcode
+- Validation step must include: py -3.11 VoiceCommand\\validate_repo.py --compile-only
+- No py_compile, no tests/ root path, no && chaining
+- Return JSON array only
+
+Output format:
+[
+  {{
+    "step_type": "shell",
+    "content": "PowerShell command",
+    "description_kr": "step description",
+    "expected_output": "expected result",
+    "condition": "",
+    "on_failure": "abort"
+  }}
+]
+"""
+
+_DEVELOPER_RETRY_PROMPT_EN = """\
+Repository scan is complete. Return a 2-step plan as a JSON array to modify actual code.
+
+Goal: {goal}
+{context_block}
+Rules:
+- Do NOT include any scan/listing steps. They are already done.
+- Return exactly 2 steps: [code_edit, validation]
+- code_edit step: select one actual file from context and modify it using open(path,'w') or path.write_text()
+  Write real Python/shell code. No placeholders like print('edit one file').
+- Target files must be within: VoiceCommand/agent, core, ui, plugins, tests, docs
+- Validation step must include: py -3.11 VoiceCommand\\validate_repo.py --compile-only
+- No py_compile, no tests/ root path, no &&, no full repo re-scan
+- step_type: "python" or "shell" only
+- python steps can use repo_root, module_dir, step_outputs directly
+- content must be executable code, max 6 lines
+- Return JSON array only
+
+Bad example (forbidden):
+[{{"step_type":"python","content":"print('edit one file')","description_kr":"file edit"}}]
+
+Good example:
+[
+  {{"step_type":"python","content":"import os\\npath = os.path.join(repo_root,'VoiceCommand','agent','skill_library.py')\\ntext = open(path,'r',encoding='utf-8').read()\\ntext = text.replace('old_pattern','new_pattern',1)\\nopen(path,'w',encoding='utf-8').write(text)\\nprint('done')", "description_kr":"Modify skill_library.py pattern","expected_output":"done"}},
+  {{"step_type":"shell","content":"py -3.11 VoiceCommand\\\\validate_repo.py --compile-only; py -3.11 -m unittest VoiceCommand.tests.test_skill_library","description_kr":"Validate and run affected tests","expected_output":"compile-only checks passed"}}
+]
+"""
+
+_FIX_PROMPT_EN = """\
+The following code/command failed with an error. Return the fixed version as JSON.
+
+Original code:
+{content}
+
+Error message:
+{error}
+
+Goal: {goal}
+{context_block}
+Fix guidelines:
+- Analyze the root cause and fix it fundamentally
+- Do not retry the same approach
+- Windows desktop path: use 'desktop_path' variable directly in Python code
+- For repo/code tasks, use repo_root and module_dir; do not guess Desktop path
+- Do not hardcode paths or executable locations; use runtime discovery or provided helpers
+- Use web_search / web_fetch for web access; no YOUR_API_KEY placeholders
+- Use save_document(...) helper for saving documents when possible
+- Use compound statements (with/for/if/try) on multiple lines, not semicolons
+- Return JSON object only
+
+Output format:
+{{
+  "step_type": "python",
+  "content": "fixed code",
+  "description_kr": "reason for fix",
+  "expected_output": "expected result"
+}}"""
+
+_VERIFY_PROMPT_EN = """\
+Evaluate whether the following execution results achieved the goal.
+
+Goal: {goal}
+
+Execution results:
+{results_summary}
+
+Criteria:
+- For system state changes (file/folder creation), set achieved=true only when outputs contain no errors
+- If any step output contains error messages, exceptions, or "failed", set achieved=false
+- When uncertain, set achieved=false
+
+Return JSON object only:
+{{
+  "achieved": true,
+  "summary": "1-2 sentence summary of whether goal was achieved"
+}}"""
+
+_REFLECT_PROMPT_EN = """\
+The agent ultimately failed to achieve the goal. Analyze the failure and write a 'lesson' for the next attempt as JSON.
+
+Goal: {goal}
+
+Execution history summary:
+{history_summary}
+
+Writing rules:
+- Describe the root cause of failure (e.g., missing library, permission issue, logic error)
+- Specify approaches that must be avoided in the next attempt
+- Summarize the recommended alternative approach in one sentence
+- Return JSON object only
+
+Output format:
+{{
+  "reason": "root cause of failure",
+  "avoid": "what to avoid",
+  "lesson": "key lesson for the next attempt"
+}}"""
+
+
+def _get_lang() -> str:
+    try:
+        from i18n.translator import get_language
+        return get_language()
+    except Exception:
+        return "ko"
+
+
+def _get_decompose_prompt() -> str:
+    return _DECOMPOSE_PROMPT_EN if _get_lang() != "ko" else _DECOMPOSE_PROMPT
+
+
+def _get_developer_decompose_prompt() -> str:
+    return _DEVELOPER_DECOMPOSE_PROMPT_EN if _get_lang() != "ko" else _DEVELOPER_DECOMPOSE_PROMPT
+
+
+def _get_developer_retry_prompt() -> str:
+    return _DEVELOPER_RETRY_PROMPT_EN if _get_lang() != "ko" else _DEVELOPER_RETRY_PROMPT
+
+
+def _get_fix_prompt() -> str:
+    return _FIX_PROMPT_EN if _get_lang() != "ko" else _FIX_PROMPT
+
+
+def _get_verify_prompt() -> str:
+    return _VERIFY_PROMPT_EN if _get_lang() != "ko" else _VERIFY_PROMPT
+
+
+def _get_reflect_prompt() -> str:
+    return _REFLECT_PROMPT_EN if _get_lang() != "ko" else _REFLECT_PROMPT
 
 
 class AgentPlanner(TemplatePlansMixin):
@@ -270,7 +465,7 @@ class AgentPlanner(TemplatePlansMixin):
 
     def reflect(self, goal: str, history_summary: str) -> Dict[str, str]:
         """실패 원인 분석 및 교훈 도출 (planner_model 사용)"""
-        prompt = _REFLECT_PROMPT.format(goal=goal, history_summary=history_summary)
+        prompt = _get_reflect_prompt().format(goal=goal, history_summary=history_summary)
         try:
             resp = self._call_llm(prompt, model=self.llm.planner_model,
                                   client_override=self.llm.planner_client,
@@ -338,7 +533,7 @@ class AgentPlanner(TemplatePlansMixin):
                 signals["PlannerFeedback"] = True
                 ctx_block = feedback_hints + "\n" + ctx_block
 
-        prompt_template = _DEVELOPER_DECOMPOSE_PROMPT if is_dev_goal else _DECOMPOSE_PROMPT
+        prompt_template = _get_developer_decompose_prompt() if is_dev_goal else _get_decompose_prompt()
         prompt = prompt_template.format(goal=goal, context_block=ctx_block)
         raw = self._call_llm(prompt, model=self.llm.planner_model,
                              client_override=self.llm.planner_client,
@@ -395,7 +590,7 @@ class AgentPlanner(TemplatePlansMixin):
             return []
         # 재시도 시 컨텍스트를 최소화 — 실패 힌트/긴 로그 제외하고 순수 개발 컨텍스트만 사용
         retry_ctx = self._fmt_developer_context(context, goal=goal)
-        retry_prompt = _DEVELOPER_RETRY_PROMPT.format(goal=goal, context_block=retry_ctx)
+        retry_prompt = _get_developer_retry_prompt().format(goal=goal, context_block=retry_ctx)
         retry_raw = self._call_llm(
             retry_prompt,
             model=self.llm.planner_model,
@@ -505,7 +700,7 @@ class AgentPlanner(TemplatePlansMixin):
         if failure_hints:
             ctx_block += f"\n## 이전 실패 패턴 (반복 금지):\n{failure_hints}\n"
 
-        prompt = _FIX_PROMPT.format(
+        prompt = _get_fix_prompt().format(
             content=step.content,
             error=error[:500],
             goal=goal,
@@ -605,14 +800,14 @@ class AgentPlanner(TemplatePlansMixin):
             out = r.output[:150] if r.output else (r.error[:150] if r.error else "없음")
             lines.append(f"  단계 {i+1} [{status}]: {out}")
         results_summary = "\n".join(lines)
-        prompt = _VERIFY_PROMPT.format(goal=goal, results_summary=results_summary)
+        prompt = _get_verify_prompt().format(goal=goal, results_summary=results_summary)
         raw = self._call_llm(prompt, model=self.llm.planner_model,
                              client_override=self.llm.planner_client,
                              provider_override=self.llm.planner_provider,
                              role_hint="planner")
         self._write_trace("verify", goal, raw)
         data = self._parse_object(raw)
-        return data if data else {"achieved": False, "summary_kr": "검증 실패"}
+        return data if data else {"achieved": False, "summary": "검증 실패"}
 
     # ── 내부 ──────────────────────────────────────────────────────────────────
 

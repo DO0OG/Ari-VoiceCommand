@@ -5,7 +5,7 @@
 """
 import logging
 import threading
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from agent.execution_analysis import extract_step_targets
 
@@ -127,7 +127,7 @@ class LearningEngine:
                 goal=goal,
                 steps=[sr.step for sr in run_result.step_results],
                 success=run_result.achieved,
-                error="" if run_result.achieved else run_result.summary_kr,
+                error="" if run_result.achieved else run_result.summary,
                 duration_ms=duration,
                 failure_kind=fk,
                 lesson=lesson,
@@ -221,7 +221,7 @@ class LearningEngine:
                 GoalEpisode(
                     goal=goal,
                     achieved=run_result.achieved,
-                    summary_kr=run_result.summary_kr,
+                    summary=run_result.summary,
                     failure_kind=next(
                         (
                             sr.failure_kind

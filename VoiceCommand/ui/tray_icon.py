@@ -4,6 +4,7 @@ import logging
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
 from ui.settings_dialog import SettingsDialog
+from i18n.translator import _
 
 class SystemTrayIcon(QSystemTrayIcon):
     def __init__(self, icon, parent=None):
@@ -18,7 +19,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self._apply_menu_theme()
         self.setContextMenu(self.menu)
 
-        self.chat_action = self.menu.addAction("💬 텍스트 대화")
+        self.chat_action = self.menu.addAction(_("💬 텍스트 대화"))
         self.chat_action.triggered.connect(self.open_text_interface)
 
         self.character_action = self.menu.addAction("캐릭터 표시")
@@ -41,7 +42,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self._plugin_separator = self.menu.addSeparator()
         self._plugin_actions: list = []
 
-        self.settings_action = self.menu.addAction("설정")
+        self.settings_action = self.menu.addAction(_("설정"))
         self.settings_action.triggered.connect(self.open_settings)
 
         self.scheduled_tasks_action = self.menu.addAction("예약 작업 관리")
@@ -49,7 +50,7 @@ class SystemTrayIcon(QSystemTrayIcon):
 
         self.menu.addSeparator()
 
-        self.exit_action = self.menu.addAction("종료")
+        self.exit_action = self.menu.addAction(_("종료"))
         self.exit_action.triggered.connect(self.exit)
 
         self.menu.aboutToShow.connect(self.update_character_menu_text)

@@ -499,7 +499,7 @@ class AICommand(BaseCommand):
                 f"- Goal: {goal}",
                 f"- Status: {'success' if run.achieved else 'failure'}",
                 f"- Iterations: {run.total_iterations}",
-                f"- Summary: {self._shorten_user_summary(run.summary_kr, limit=200)}",
+                f"- Summary: {self._shorten_user_summary(run.summary, limit=200)}",
             ]
             if saved_path:
                 lines.append(f"- Task artifact: {saved_path}")
@@ -570,9 +570,9 @@ class AICommand(BaseCommand):
                 file_name = saved_path.rsplit("\\", 1)[-1]
                 message = f"작업 완료. {folder_name} 폴더에 {file_name}를 저장했습니다."
             else:
-                message = f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary_kr)}"
+                message = f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary)}"
         else:
-            message = f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary_kr)}"
+            message = f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary)}"
         if report_path:
             message += f" 실행 보고서는 {self._describe_report_location(report_path)}에 저장했습니다."
         return message

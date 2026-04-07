@@ -7,6 +7,10 @@ import faulthandler
 from datetime import datetime
 import warnings
 
+# i18n 최우선 초기화 — 다른 모듈이 _() 를 사용하기 전에 호출
+from i18n.translator import init as i18n_init
+i18n_init()
+
 # torch + faster-whisper(CTranslate2/MKL)가 libiomp5md.dll을 중복 초기화하는
 # OMP Error #15를 억제한다. 두 라이브러리가 같은 프로세스에 공존하는 경우
 # 발생하는 알려진 Windows 환경 충돌이며, 이 플래그로 안전하게 계속 실행된다.

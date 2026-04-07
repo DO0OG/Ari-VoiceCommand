@@ -1,0 +1,41 @@
+# Ari Voice Assistant — 日本語
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja\n"
+
+msgid "아리 설정"
+msgstr "Ariの設定"
+
+msgid "마이크 입력 장치 선택:"
+msgstr "マイク入力デバイスの選択:"
+
+msgid "시스템 기본 마이크"
+msgstr "システム既定のマイク"
+
+msgid "💬 텍스트 대화"
+msgstr "💬 テキストチャット"
+
+msgid "설정"
+msgstr "設定"
+
+msgid "종료"
+msgstr "終了"
+
+msgid "실행을 취소했습니다."
+msgstr "実行をキャンセルしました。"
+
+msgid "코드 실행 시간이 너무 길어 중단했습니다."
+msgstr "コードの実行時間が長すぎたため、停止しました。"
+
+msgid "위험한 파이썬 작업 감지: {matched}"
+msgstr "危険なPython操作を検出しました: {matched}"
+
+msgid "언어 변경"
+msgstr "言語変更"
+
+msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
+msgstr "言語設定を保存しました。再起動後に適用されます。"
+
+msgid "로그 파일 폴더 열기"
+msgstr "ログフォルダを開く"

@@ -73,7 +73,7 @@ class ConfirmationDialog(QDialog):
             layout.addWidget(pattern_label)
 
         # 요약
-        summary_label = QLabel(f"<i>{report.summary_kr}</i>")
+        summary_label = QLabel(f"<i>{report.summary}</i>")
         summary_label.setStyleSheet("color: #555;")
         layout.addWidget(summary_label)
 
@@ -163,7 +163,7 @@ class ConfirmationManager:
         """
         if tts_func:
             try:
-                tts_func(f"위험한 작업이 감지됐어요. {report.summary_kr}. 실행할까요?")
+                tts_func(f"위험한 작업이 감지됐어요. {report.summary}. 실행할까요?")
             except Exception as e:
                 logging.debug(f"확인 안내 TTS 실패: {e}")
 

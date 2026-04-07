@@ -44,7 +44,7 @@ _INSTANCE: EpisodeMemory | None = None
 class GoalEpisode:
     goal: str
     achieved: bool
-    summary_kr: str
+    summary: str
     failure_kind: str = ""
     duration_ms: int = 0
     target_domains: List[str] = field(default_factory=list)
@@ -66,10 +66,10 @@ class EpisodeMemory:
         self._load()
 
     def record(self, episode: GoalEpisode) -> None:
-        summary_kr = (episode.summary_kr or "")[:300]
+        summary = (episode.summary or "")[:300]
         similarity_text = self._build_similarity_text(
             goal=(episode.goal or "")[:200],
-            summary_kr=summary_kr,
+            summary=summary,
             target_domains=episode.target_domains or [],
             target_windows=episode.target_windows or [],
             target_paths=episode.target_paths or [],
@@ -79,7 +79,7 @@ class EpisodeMemory:
         item = GoalEpisode(
             goal=(episode.goal or "")[:200],
             achieved=bool(episode.achieved),
-            summary_kr=summary_kr,
+            summary=summary,
             failure_kind=(episode.failure_kind or "")[:80],
             duration_ms=int(episode.duration_ms or 0),
             target_domains=list(dict.fromkeys(episode.target_domains or []))[:5],
@@ -151,7 +151,7 @@ class EpisodeMemory:
             score = self._score_episode(domain, episode, goal_embedding=goal_embedding)
             if normalized in (episode.goal or "").lower():
                 score += 0.2
-            if normalized in (episode.summary_kr or "").lower():
+            if normalized in (episode.summary or "").lower():
                 score += 0.15
             if any(normalized in value.lower() for value in (episode.target_domains or [])):
                 score += 0.2
@@ -161,7 +161,7 @@ class EpisodeMemory:
                 score += 0.1
             if score <= 0:
                 continue
-            reason = episode.failure_kind or episode.summary_kr or "실패 기록"
+            reason = episode.failure_kind or episode.summary or "실패 기록"
             scored.append((score, episode.timestamp or "", f"{episode.goal[:80]} -> {reason[:120]}"))
 
         patterns: List[str] = []
@@ -179,7 +179,7 @@ class EpisodeMemory:
     def _is_suspicious_developer_success(self, episode: GoalEpisode) -> bool:
         if not episode.achieved or not self._looks_like_developer_goal(episode.goal):
             return False
-        summary = (episode.summary_kr or "").lower()
+        summary = (episode.summary or "").lower()
         if "화면 ocr" in summary:
             return True
         if "실제 경로(documents)" in summary:
@@ -227,7 +227,7 @@ class EpisodeMemory:
                 if not episode.embedding:
                     episode.embedding = self._compute_embedding(self._build_similarity_text(
                         goal=episode.goal,
-                        summary_kr=episode.summary_kr,
+                        summary=episode.summary,
                         target_domains=episode.target_domains,
                         target_windows=episode.target_windows,
                         target_paths=episode.target_paths,
@@ -251,7 +251,7 @@ class EpisodeMemory:
     def _build_similarity_text(
         self,
         goal: str,
-        summary_kr: str,
+        summary: str,
         target_domains: List[str],
         target_windows: List[str],
         target_paths: List[str],
@@ -261,7 +261,7 @@ class EpisodeMemory:
         return " ".join(
             part for part in [
                 goal,
-                summary_kr,
+                summary,
                 " ".join(target_domains or []),
                 " ".join(target_windows or []),
                 " ".join(target_paths or []),
@@ -275,7 +275,7 @@ class EpisodeMemory:
         goal_text = str(goal or "")
         episode_text = self._build_similarity_text(
             goal=episode.goal,
-            summary_kr=episode.summary_kr,
+            summary=episode.summary,
             target_domains=episode.target_domains,
             target_windows=episode.target_windows,
             target_paths=episode.target_paths,

@@ -7,7 +7,7 @@ import logging
 from typing import List, Optional, Tuple
 
 from agent.agent_planner import AgentPlanner
-from agent.autonomous_executor import ExecutionResult
+
 from agent.execution_analysis import is_read_only_step_content
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class VerificationEngine:
         try:
             from agent.real_verifier import get_real_verifier
             v = get_real_verifier().verify(goal, step_results)
-            return v.verified, v.summary_kr
+            return v.verified, v.summary
         except Exception as exc:
             logger.debug("[VerificationEngine] RealVerifier 폴백: %s", exc)
         if any(not sr.exec_result.success for sr in step_results):
@@ -50,7 +50,7 @@ class VerificationEngine:
         verdict = self.planner.verify(
             goal, [sr.exec_result for sr in step_results]
         )
-        return verdict.get("achieved", False), verdict.get("summary_kr", "검증 실패")
+        return verdict.get("achieved", False), verdict.get("summary", "검증 실패")
 
     # ── 내부 메서드 ────────────────────────────────────────────────────────────
 

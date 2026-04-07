@@ -14,11 +14,11 @@ class PredictionResult:
     risk_factors: List[str] = field(default_factory=list)
     sample_size: int = 0
     supporting_goals: List[str] = field(default_factory=list)
-    warning_kr: str = ""
+    warning: str = ""
 
     @property
     def is_high_risk(self) -> bool:
-        return bool(self.warning_kr)
+        return bool(self.warning)
 
 
 class GoalPredictor:
@@ -78,7 +78,7 @@ class GoalPredictor:
         if warning and top_risk:
             warning = f"{warning} 특히 {top_risk} 위험이 자주 보였습니다."
 
-        result.warning_kr = warning
+        result.warning = warning
         return result
 
 

@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple
 
+from i18n.translator import _
+
 
 class DangerLevel(Enum):
     SAFE = "safe"
@@ -21,7 +23,7 @@ class DangerLevel(Enum):
 class SafetyReport:
     level: DangerLevel
     matched_patterns: List[str] = field(default_factory=list)
-    summary_kr: str = ""
+    summary: str = ""
     category: str = "general"
 
 
@@ -106,7 +108,7 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary_kr=f"위험한 파이썬 작업 감지: {', '.join(matched)}",
+                summary=_("위험한 파이썬 작업 감지: {matched}", matched=", ".join(matched)),
                 category="web" if "로그인" in "".join(matched) else ("file_system" if "삭제" in "".join(matched) else "system")
             )
             self._python_cache[code] = report
@@ -118,12 +120,12 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
                 matched_patterns=caution,
-                summary_kr=f"주의가 필요한 파이썬 작업: {', '.join(caution)}",
+                summary=f"주의가 필요한 파이썬 작업: {', '.join(caution)}",
                 category="automation" if "GUI" in "".join(caution) else "file_system"
             )
             self._python_cache[code] = report
             return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 코드입니다.")
+        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 코드입니다.")
         self._python_cache[code] = report
         return self._clone_report(report)
 
@@ -135,7 +137,7 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary_kr=f"위험한 시스템 명령 감지: {', '.join(matched)}",
+                summary=f"위험한 시스템 명령 감지: {', '.join(matched)}",
                 category="system"
             )
             self._shell_cache[command] = report
@@ -145,12 +147,12 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
                 matched_patterns=caution,
-                summary_kr=f"주의가 필요한 명령: {', '.join(caution)}",
+                summary=f"주의가 필요한 명령: {', '.join(caution)}",
                 category="system"
             )
             self._shell_cache[command] = report
             return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 명령입니다.")
+        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 명령입니다.")
         self._shell_cache[command] = report
         return self._clone_report(report)
 
@@ -164,7 +166,7 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=blocked,
-                summary_kr=f"민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({', '.join(blocked)}).",
+                summary=f"민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({', '.join(blocked)}).",
                 category="web"
             )
             self._url_cache[url] = report
@@ -174,7 +176,7 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary_kr=f"민감한 페이지 접근 감지 ({', '.join(matched)}). 자동화 시 보안 위험이 있습니다.",
+                summary=f"민감한 페이지 접근 감지 ({', '.join(matched)}). 자동화 시 보안 위험이 있습니다.",
                 category="web"
             )
             self._url_cache[url] = report
@@ -182,16 +184,16 @@ class SafetyChecker:
         if not url_lower.startswith("https://"):
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
-                summary_kr="암호화되지 않은(HTTP) 사이트 접근입니다.",
+                summary="암호화되지 않은(HTTP) 사이트 접근입니다.",
                 category="web"
             )
             self._url_cache[url] = report
             return self._clone_report(report)
         if any(keyword in url_lower for keyword in _TRUSTED_SITE_KEYWORDS):
-            report = SafetyReport(level=DangerLevel.SAFE, summary_kr="신뢰 정책에 포함된 사이트입니다.", category="web")
+            report = SafetyReport(level=DangerLevel.SAFE, summary="신뢰 정책에 포함된 사이트입니다.", category="web")
             self._url_cache[url] = report
             return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary_kr="안전한 URL입니다.")
+        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 URL입니다.")
         self._url_cache[url] = report
         return self._clone_report(report)
 
@@ -209,19 +211,19 @@ class SafetyChecker:
         if any(blocked in normalized for blocked in _BLOCKED_APPS):
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
-                summary_kr=f"위험 앱 정책에 의해 차단된 대상입니다: {app_name}",
+                summary=f"위험 앱 정책에 의해 차단된 대상입니다: {app_name}",
                 category="app"
             )
             self._app_cache[app_name] = report
             return self._clone_report(report)
         if any(allowed in app_lower for allowed in _ALWAYS_ALLOWED_APPS):
-            report = SafetyReport(level=DangerLevel.SAFE, summary_kr="신뢰할 수 있는 앱입니다.")
+            report = SafetyReport(level=DangerLevel.SAFE, summary="신뢰할 수 있는 앱입니다.")
             self._app_cache[app_name] = report
             return self._clone_report(report)
         
         report = SafetyReport(
             level=DangerLevel.CAUTION,
-            summary_kr=f"알 수 없는 외부 앱({app_name}) 실행 시도입니다.",
+            summary=f"알 수 없는 외부 앱({app_name}) 실행 시도입니다.",
             category="app"
         )
         self._app_cache[app_name] = report
@@ -231,7 +233,7 @@ class SafetyChecker:
         return SafetyReport(
             level=report.level,
             matched_patterns=list(report.matched_patterns),
-            summary_kr=report.summary_kr,
+            summary=report.summary,
             category=report.category,
         )
 

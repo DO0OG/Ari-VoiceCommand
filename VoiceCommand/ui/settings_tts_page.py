@@ -1,7 +1,6 @@
 """
 TTS 설정 페이지 위젯
 """
-import logging
 import os
 
 from PySide6.QtWidgets import (

@@ -176,7 +176,7 @@ class AICommandTests(unittest.TestCase):
         run_result = AgentRunResult(
             goal="VoiceCommand 저장소 개선",
             achieved=True,
-            summary_kr="코드 변경과 검증을 완료했습니다.",
+            summary="코드 변경과 검증을 완료했습니다.",
             total_iterations=1,
             step_results=[
                 SimpleNamespace(
@@ -226,7 +226,7 @@ class AICommandTests(unittest.TestCase):
         run_result = AgentRunResult(
             goal="VoiceCommand 저장소 개선",
             achieved=True,
-            summary_kr="완료",
+            summary="완료",
             total_iterations=1,
             step_results=[
                 SimpleNamespace(
