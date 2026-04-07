@@ -55,6 +55,33 @@ class ConversationHistory:
     def _summarize_chunk(self, items: List[Dict[str, str]]) -> str:
         if not items:
             return ""
+        fallback = self._fallback_summarize(items)
+        if not fallback:
+            return ""
+        try:
+            from agent.llm_provider import get_llm_provider
+
+            transcript = "\n".join(
+                f"사용자: {(item.get('user') or '').strip()}\n아리: {(item.get('ai') or '').strip()}"
+                for item in items
+                if (item.get("user") or "").strip() or (item.get("ai") or "").strip()
+            ).strip()
+            if not transcript:
+                return fallback
+            summary = get_llm_provider().chat(
+                "다음 대화를 핵심만 2문장으로 요약하세요. "
+                "불필요한 수식어 없이 한국어로만 답하고, 가능하면 사용자의 요청과 아리의 핵심 응답을 함께 보존하세요.\n\n"
+                f"{transcript}",
+                include_context=False,
+                save_history=False,
+            )
+            cleaned = str(summary or "").strip()
+            return cleaned or fallback
+        except Exception as exc:
+            logging.debug("대화 요약 LLM 폴백 사용: %s", exc)
+            return fallback
+
+    def _fallback_summarize(self, items: List[Dict[str, str]]) -> str:
         parts = []
         for item in items:
             user = (item.get("user") or "").strip()
