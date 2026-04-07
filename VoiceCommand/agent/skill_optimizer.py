@@ -234,13 +234,13 @@ class SkillOptimizer:
         if not code or "def run_skill" not in code:
             return False
         try:
-            from agent.safety_checker import SafetyChecker, DangerLevel
-            report = SafetyChecker().check_python(code)
+            from agent.safety_checker import DangerLevel, get_safety_checker
+            report = get_safety_checker().check_python(code)
             if report.level == DangerLevel.DANGEROUS:
-                logger.warning(f"[SkillOptimizer] 안전 검사 실패: {report.summary_kr}")
+                logger.warning("[SkillOptimizer] 안전 검사 실패: %s", report.summary_kr)
                 return False
         except Exception as exc:
-            logger.debug(f"[SkillOptimizer] 안전 검사기 사용 불가: {exc}")
+            logger.debug("[SkillOptimizer] 안전 검사기 사용 불가: %s", exc)
         try:
             tree = ast.parse(code)
             if not self._is_safe_module(tree):
@@ -248,7 +248,7 @@ class SkillOptimizer:
                 return False
             return True
         except SyntaxError as exc:
-            logger.debug(f"[SkillOptimizer] 문법 오류: {exc}")
+            logger.debug("[SkillOptimizer] 문법 오류: %s", exc)
             return False
 
     def _is_safe_module(self, tree: ast.Module) -> bool:

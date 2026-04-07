@@ -12,6 +12,7 @@ if ROOT not in sys.path:
 
 from core.config_manager import ConfigManager
 from core.resource_manager import ResourceManager
+from core.settings_schema import DEFAULT_SETTINGS
 from agent.proactive_scheduler import ProactiveScheduler
 from agent import proactive_scheduler as proactive_scheduler_module
 
@@ -111,6 +112,10 @@ class RuntimeEnvironmentTests(unittest.TestCase):
                 os.environ.pop("ARI_APP_DATA_DIR", None)
             else:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
+
+    def test_default_settings_enable_router_and_weekly_report(self):
+        self.assertTrue(DEFAULT_SETTINGS["llm_router_enabled"])
+        self.assertTrue(DEFAULT_SETTINGS["weekly_report_enabled"])
 
     def test_missing_runtime_settings_bootstrap_from_template(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")

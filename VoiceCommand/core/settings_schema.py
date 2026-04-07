@@ -76,5 +76,5 @@ DEFAULT_SETTINGS = {
     "skill_library_enabled": True,       # SkillLibrary 성공 패턴 자동 추출
     "reflection_engine_enabled": True,   # ReflectionEngine 실패 자동 반성
     "memory_consolidation_days": 14,     # MemoryConsolidator 압축 기준 (일)
-    "weekly_report_enabled": False,      # 주간 자기개선 리포트 (ProactiveScheduler 등록)
+    "weekly_report_enabled": True,       # 주간 자기개선 리포트 (ProactiveScheduler 등록)
 }

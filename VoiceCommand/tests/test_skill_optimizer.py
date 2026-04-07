@@ -2,6 +2,8 @@ import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -9,9 +11,31 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from agent.skill_optimizer import SkillOptimizer
+from agent.safety_checker import DangerLevel
 
 
 class SkillOptimizerTests(unittest.TestCase):
+    def test_validate_python_uses_singleton_safety_checker(self):
+        optimizer = SkillOptimizer()
+        fake_checker = MagicMock()
+        fake_checker.check_python.return_value = SimpleNamespace(
+            level=DangerLevel.SAFE,
+            summary_kr="",
+        )
+
+        with patch(
+            "agent.safety_checker.get_safety_checker",
+            return_value=fake_checker,
+        ) as get_checker:
+            success = optimizer._validate_python(
+                "def run_skill(goal: str) -> str:\n"
+                "    return goal\n",
+            )
+
+        self.assertTrue(success)
+        get_checker.assert_called_once_with()
+        fake_checker.check_python.assert_called_once()
+
     def test_run_compiled_rechecks_code_before_execution(self):
         optimizer = SkillOptimizer()
         with tempfile.TemporaryDirectory() as tmp:

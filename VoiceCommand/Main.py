@@ -59,11 +59,17 @@ icon_path = None
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
-if not os.path.exists(icon_path):
-    if sys.stdout is not None:
-        print(f"경고: 아이콘 파일을 찾을 수 없습니다: {icon_path}")
-    icon_path = None
+
+def _resolve_icon_path(log_missing: bool = False):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+    if os.path.exists(path):
+        return path
+    if log_missing:
+        logging.warning("아이콘 파일을 찾을 수 없습니다: %s", path)
+    return None
+
+
+icon_path = _resolve_icon_path()
 
 # 로그 설정
 _MAX_LOG_FILES = 10  # 보관할 최대 로그 파일 수
@@ -242,7 +248,7 @@ def flush_runtime_state() -> None:
         logging.debug(f"ConversationHistory flush 생략: {exc}")
 
 def main():
-    global ai_assistant
+    global ai_assistant, icon_path
     ari_core = None
     character = None
     tray_icon = None
@@ -252,6 +258,7 @@ def main():
     plugin_flush_timer = None
     try:
         setup_logging()
+        icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
 
         # 리소스 추출
