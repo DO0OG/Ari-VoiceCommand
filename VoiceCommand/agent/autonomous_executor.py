@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
+from i18n.translator import _
 
 # 자식 프로세스에 전달하지 않을 환경 변수 접두사 (API 키 등 민감 정보)
 _SENSITIVE_ENV_PREFIXES = (
@@ -192,7 +193,7 @@ class AutonomousExecutor:
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
                     if self.tts_wrapper:
-                        self.tts_wrapper("실행을 취소했습니다.")
+                        self.tts_wrapper(_("실행을 취소했습니다."))
                     self._attach_state_snapshot(result, state_before)
                     self._record_history(result)
                     return result
@@ -237,7 +238,7 @@ class AutonomousExecutor:
                 if not confirmed:
                     result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
                     if self.tts_wrapper:
-                        self.tts_wrapper("실행을 취소했습니다.")
+                        self.tts_wrapper(_("실행을 취소했습니다."))
                     self._attach_state_snapshot(result, state_before)
                     self._record_history(result)
                     return result
@@ -439,7 +440,7 @@ class AutonomousExecutor:
                 except Exception:
                     pass
             if self.tts_wrapper:
-                self.tts_wrapper("코드 실행 시간이 너무 길어 중단했습니다.")
+                self.tts_wrapper(_("코드 실행 시간이 너무 길어 중단했습니다."))
             return ExecutionResult(
                 success=False,
                 error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",

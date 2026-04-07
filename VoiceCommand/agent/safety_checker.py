@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple
 
+from i18n.translator import _
+
 
 class DangerLevel(Enum):
     SAFE = "safe"
@@ -106,7 +108,7 @@ class SafetyChecker:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary=f"위험한 파이썬 작업 감지: {', '.join(matched)}",
+                summary=_("위험한 파이썬 작업 감지: {matched}", matched=", ".join(matched)),
                 category="web" if "로그인" in "".join(matched) else ("file_system" if "삭제" in "".join(matched) else "system")
             )
             self._python_cache[code] = report
