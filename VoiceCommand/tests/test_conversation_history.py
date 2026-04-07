@@ -110,6 +110,36 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertEqual(len(history.active), 1)
         self.assertEqual(history.active[0]["user"], "사용자 질문")
 
+    def test_load_filters_persisted_internal_prompt_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "conversation_history.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(
+                    {
+                        "active": [
+                            {
+                                "timestamp": "2026-04-07T00:00:00",
+                                "user": "당신은 AI 에이전트 스킬을 Python 함수로 컴파일합니다.\n내부 테스트",
+                                "ai": "내부 응답",
+                            },
+                            {
+                                "timestamp": "2026-04-07T00:00:01",
+                                "user": "실사용 질문",
+                                "ai": "실사용 응답",
+                            },
+                        ],
+                        "summaries": [],
+                    },
+                    handle,
+                    ensure_ascii=False,
+                )
+
+            history = self._make_history(tmp)
+            history.load()
+
+            self.assertEqual(len(history.active), 1)
+            self.assertEqual(history.active[0]["user"], "실사용 질문")
+
 
 if __name__ == "__main__":
     unittest.main()
