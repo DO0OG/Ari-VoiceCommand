@@ -112,4 +112,5 @@ def update_source_weight(source: str, was_correct: bool) -> float:
 
 
 if __name__ == "__main__":
-    print(compute_reinforcement(0.5, "user", 3))
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug("%s", compute_reinforcement(0.5, "user", 3))
