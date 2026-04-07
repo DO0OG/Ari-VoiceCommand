@@ -3,15 +3,16 @@
 이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-04-06
-## 상태: 품질 잔여 항목 대규모 정리 반영 완료 · 런타임 상태 분리 완료 · 301/301 테스트 통과
+## Last Updated: 2026-04-07
+## 상태: UI/TTS 다국어 지원(i18n) 최종 완료 · ko/en/ja 지원 · 301/301 테스트 통과
 
 ---
 
 ## 1. 프로젝트 개요
 
-"아리(Ari)"는 Windows 전용 한국어 음성 AI 어시스턴트입니다.
+"아리(Ari)"는 Windows 전용 다국어(한국어·영어·일본어) 음성 AI 어시스턴트입니다.
 - 웨이크워드 "아리야" 감지 → 음성 인식 → 명령 실행 → TTS 응답
+- 언어 설정에 따라 UI, 시스템 프롬프트, TTS 음성 자동 전환
 - LLM: Groq / OpenAI / Anthropic / Mistral / Gemini / OpenRouter / NVIDIA NIM / **Ollama (로컬)**
 - TTS: Fish Audio / CosyVoice3 (로컬) / OpenAI TTS / ElevenLabs / Edge TTS
 - UI: PySide6 시스템 트레이 + 캐릭터 애니메이션 (Shimeji 스타일)
@@ -21,6 +22,7 @@
 
 | 디렉터리 | 내용 |
 |----------|------|
+| `VoiceCommand/i18n/` | gettext 기반 국제화 번역 엔진 및 로케일 파일 (.po, .mo) |
 | `VoiceCommand/agent/` | 자율 실행 엔진 + 자기개선 루프 (LLMRouter, SkillLibrary, ReflectionEngine, PlannerFeedback, FewShot, GoalPredictor, LearningMetrics, RegressionGuard, WeeklyReport) |
 | `VoiceCommand/commands/` | BaseCommand 구현체 (priority 기반 디스패치) + MemoryCommand |
 | `VoiceCommand/core/` | 앱 런타임 핵심 (AppState, ConfigManager, threads) |
@@ -170,7 +172,18 @@ shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 
 ---
 
-## 6. 2026-04-06 주요 변경사항
+## 6. 2026-04-07 주요 변경사항
+
+### 국제화 (i18n) 최종 완료
+- `i18n/translator.py`: gettext 기반 번역 엔진 구현. `_()` 함수 제공.
+- `SettingsDialog`: 언어 선택 UI(ko/en/ja) 추가 및 전체 탭/버튼 번역 적용.
+- `TextInterface`: 채팅창 메시지, 상태 패널, 대시보드 전체 번역 적용.
+- `settings_schema.py`: 언어별 기본 Edge TTS 음성 매핑(`_TTS_VOICE_BY_LANG`) 및 자동 전환 로직 추가.
+- `scripts/compile_po.py`: .po 파일을 .mo 바이너리로 컴파일하는 도구 구현.
+- `README.md`: 한국어, 영어, 일본어 3개 국어 버전으로 확장.
+- `build_exe.py`: `.mo` 번역 파일들이 EXE에 포함되도록 데이터 디렉터리 설정 보강.
+
+## 7. 2026-04-06 주요 변경사항
 
 ### 실행 엔진 / 구조 분리
 - `condition_evaluator.py`: ExecutionEngine step 조건 평가를 별도 모듈로 분리
