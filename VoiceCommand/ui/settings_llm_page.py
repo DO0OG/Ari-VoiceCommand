@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QThread, Signal
 
 from core.config_manager import ConfigManager
+from i18n.translator import _
 from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
 from ui.common import create_muted_label
 
@@ -18,14 +19,14 @@ from ui.common import create_muted_label
 
 LLM_PROVIDERS = [
     # (표시 이름,          data 키,       settings 키,          placeholder)
-    ("Groq (Llama 3.3, 무료)", "groq",       "groq_api_key",       "https://console.groq.com 에서 무료 발급"),
-    ("OpenAI (GPT-4o)",        "openai",     "openai_api_key",     "https://platform.openai.com/api-keys"),
-    ("Anthropic (Claude)",     "anthropic",  "anthropic_api_key",  "https://console.anthropic.com"),
-    ("Mistral AI",             "mistral",    "mistral_api_key",    "https://console.mistral.ai"),
-    ("Google Gemini",          "gemini",     "gemini_api_key",     "https://aistudio.google.com/app/apikey"),
-    ("OpenRouter (멀티모델)",   "openrouter",   "openrouter_api_key",  "https://openrouter.ai/keys"),
-    ("NVIDIA NIM",             "nvidia_nim",   "nvidia_nim_api_key",  "https://build.nvidia.com 에서 nvapi- 키 발급"),
-    ("Ollama (로컬 LLM)",      "ollama",       "",                    "Ollama 설치 후 사용 가능 — API 키 불필요"),
+    (_("Groq (Llama 3.3, 무료)"), "groq",       "groq_api_key",       _("https://console.groq.com 에서 무료 발급")),
+    (_("OpenAI (GPT-4o)"),        "openai",     "openai_api_key",     _("https://platform.openai.com/api-keys")),
+    (_("Anthropic (Claude)"),     "anthropic",  "anthropic_api_key",  _("https://console.anthropic.com")),
+    (_("Mistral AI"),             "mistral",    "mistral_api_key",    _("https://console.mistral.ai")),
+    (_("Google Gemini"),          "gemini",     "gemini_api_key",     _("https://aistudio.google.com/app/apikey")),
+    (_("OpenRouter (멀티모델)"),   "openrouter",   "openrouter_api_key",  _("https://openrouter.ai/keys")),
+    (_("NVIDIA NIM"),             "nvidia_nim",   "nvidia_nim_api_key",  _("https://build.nvidia.com 에서 nvapi- 키 발급")),
+    (_("Ollama (로컬 LLM)"),      "ollama",       "",                    _("Ollama 설치 후 사용 가능 — API 키 불필요")),
 ]
 
 
@@ -120,10 +121,10 @@ class _LLMSettingsPage(QWidget):
         vbox.setSpacing(15)
 
         # AI (LLM) 설정 그룹
-        llm_group = QGroupBox("AI (LLM) 엔진 설정")
+        llm_group = QGroupBox(_("AI (LLM) 엔진 설정"))
         llm_vbox = QVBoxLayout(llm_group)
 
-        llm_vbox.addWidget(QLabel("제공자 선택:"))
+        llm_vbox.addWidget(QLabel(_("제공자 선택:")))
         self.llm_provider_combo = QComboBox()
         for label, data, _key, _ph in LLM_PROVIDERS:
             self.llm_provider_combo.addItem(label, data)
@@ -131,57 +132,57 @@ class _LLMSettingsPage(QWidget):
         self.llm_provider_combo.currentIndexChanged.connect(self._on_llm_changed)
         llm_vbox.addWidget(self.llm_provider_combo)
 
-        llm_vbox.addWidget(QLabel("모델 이름 (비워두면 기본값):"))
+        llm_vbox.addWidget(QLabel(_("모델 이름 (비워두면 기본값):")))
         self.llm_model_input = QLineEdit(self._settings.get("llm_model", ""))
-        self.llm_model_input.setPlaceholderText("예: gpt-4o, llama-3.3-70b-versatile...")
+        self.llm_model_input.setPlaceholderText(_("예: gpt-4o, llama-3.3-70b-versatile..."))
         llm_vbox.addWidget(self.llm_model_input)
 
         self.ollama_hint_label = create_muted_label(
-            "Ollama 사용 시 API 키는 필요 없습니다. 서버 주소는 기본적으로 "
-            "http://localhost:11434/v1 를 사용합니다."
+            _("Ollama 사용 시 API 키는 필요 없습니다. 서버 주소는 기본적으로 ") +
+            "http://localhost:11434/v1 " + _("를 사용합니다.")
         )
         llm_vbox.addWidget(self.ollama_hint_label)
-        llm_vbox.addWidget(QLabel("Ollama 서버 주소:"))
+        llm_vbox.addWidget(QLabel(_("Ollama 서버 주소:")))
         self.ollama_url_input = QLineEdit(self._settings.get("ollama_base_url", "http://localhost:11434/v1"))
         self.ollama_url_input.setPlaceholderText("http://localhost:11434/v1")
         llm_vbox.addWidget(self.ollama_url_input)
 
-        self.llm_router_checkbox = QCheckBox("작업 유형별 자동 라우팅 사용")
+        self.llm_router_checkbox = QCheckBox(_("작업 유형별 자동 라우팅 사용"))
         self.llm_router_checkbox.setChecked(bool(self._settings.get("llm_router_enabled", True)))
         self.llm_router_checkbox.setToolTip(
-            "분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다."
+            _("분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다.")
         )
         llm_vbox.addWidget(self.llm_router_checkbox)
 
-        llm_vbox.addWidget(QLabel("플래너 제공자 (선택):"))
+        llm_vbox.addWidget(QLabel(_("플래너 제공자 (선택):")))
         self._role_provider_combos["llm_planner_provider"] = self._make_role_provider_combo(
             self._settings.get("llm_planner_provider", "")
         )
         llm_vbox.addWidget(self._role_provider_combos["llm_planner_provider"])
 
-        llm_vbox.addWidget(QLabel("플래너 모델 (선택):"))
+        llm_vbox.addWidget(QLabel(_("플래너 모델 (선택):")))
         self.llm_planner_model_input = QLineEdit(self._settings.get("llm_planner_model", ""))
-        self.llm_planner_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
+        self.llm_planner_model_input.setPlaceholderText(_("비워두면 기본 모델과 동일"))
         llm_vbox.addWidget(self.llm_planner_model_input)
 
-        llm_vbox.addWidget(QLabel("실행/수정 제공자 (선택):"))
+        llm_vbox.addWidget(QLabel(_("실행/수정 제공자 (선택):")))
         self._role_provider_combos["llm_execution_provider"] = self._make_role_provider_combo(
             self._settings.get("llm_execution_provider", "")
         )
         llm_vbox.addWidget(self._role_provider_combos["llm_execution_provider"])
 
-        llm_vbox.addWidget(QLabel("실행/수정 모델 (선택):"))
+        llm_vbox.addWidget(QLabel(_("실행/수정 모델 (선택):")))
         self.llm_execution_model_input = QLineEdit(self._settings.get("llm_execution_model", ""))
-        self.llm_execution_model_input.setPlaceholderText("비워두면 기본 모델과 동일")
+        self.llm_execution_model_input.setPlaceholderText(_("비워두면 기본 모델과 동일"))
         llm_vbox.addWidget(self.llm_execution_model_input)
 
         vbox.addWidget(llm_group)
 
         # 제공자별 API Key 그룹
-        api_group = QGroupBox("제공자별 API Key")
+        api_group = QGroupBox(_("제공자별 API Key"))
         api_vbox = QVBoxLayout(api_group)
         api_vbox.addWidget(create_muted_label(
-            "사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요."
+            _("사용할 제공자의 API Key와 모델명을 입력한 뒤 [검증]으로 연결을 확인하세요.")
         ))
         for _label, data, key, placeholder in LLM_PROVIDERS:
             from agent.llm_provider import _PROVIDER_CONFIG
@@ -195,7 +196,7 @@ class _LLMSettingsPage(QWidget):
             key_inp.setPlaceholderText(placeholder)
             key_inp.setEchoMode(QLineEdit.EchoMode.Password)
             key_row.addWidget(key_inp)
-            validate_btn = QPushButton("검증")
+            validate_btn = QPushButton(_("검증"))
             validate_btn.setFixedWidth(54)
             validate_btn.setStyleSheet(secondary_btn_style())
             key_row.addWidget(validate_btn)
@@ -205,7 +206,7 @@ class _LLMSettingsPage(QWidget):
             model_row = QHBoxLayout()
             prefilled_model = self._get_model_for_provider(data)
             model_inp = QLineEdit(prefilled_model)
-            model_inp.setPlaceholderText(f"모델명 (기본: {default_model})")
+            model_inp.setPlaceholderText(_("모델명 (기본: {model})").format(model=default_model))
             model_row.addWidget(model_inp)
             status_lbl = QLabel("")
             status_lbl.setWordWrap(True)
@@ -235,7 +236,7 @@ class _LLMSettingsPage(QWidget):
 
     def _make_role_provider_combo(self, current_value: str) -> QComboBox:
         combo = QComboBox()
-        combo.addItem("(기본 제공자와 동일)", "")
+        combo.addItem(_("(기본 제공자와 동일)"), "")
         for label, data, _key, _ph in LLM_PROVIDERS:
             combo.addItem(label, data)
         self._set_combo(combo, current_value)
@@ -268,7 +269,7 @@ class _LLMSettingsPage(QWidget):
         api_key = self._llm_key_inputs[provider].text().strip()
         lbl = self._validate_labels[provider]
         if provider != "ollama" and not api_key:
-            lbl.setText("⚠ API Key를 입력하세요.")
+            lbl.setText(_("⚠ API Key를 입력하세요."))
             lbl.setStyleSheet("color: #e67e22;")
             return
         if provider == "ollama":
@@ -278,9 +279,9 @@ class _LLMSettingsPage(QWidget):
         if not model:
             from agent.llm_provider import _PROVIDER_CONFIG
             model = _PROVIDER_CONFIG.get(provider, {}).get("default_model", "")
-            lbl.setText(f"검증 중... (기본 모델: {model})")
+            lbl.setText(_("검증 중... (기본 모델: {model})").format(model=model))
         else:
-            lbl.setText("검증 중...")
+            lbl.setText(_("검증 중..."))
         lbl.setStyleSheet("color: #888;")
 
         old = self._validator_threads.get(provider)

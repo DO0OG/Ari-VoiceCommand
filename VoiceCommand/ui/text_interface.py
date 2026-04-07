@@ -56,6 +56,7 @@ from ui.theme import (
     SCROLLBAR_STYLE, CHAT_INPUT_STYLE,
 )
 from ui import theme as theme_module
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ class ExecutionDashboardPanel(QFrame):
         outer.setSpacing(4)
 
         header = QHBoxLayout()
-        self._title_lbl = QLabel("🤖 실행 중...")
+        self._title_lbl = QLabel(_("🤖 실행 중..."))
         self._title_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL + 1, QFont.Bold))
         self._title_lbl.setStyleSheet(f"color: {COLOR_PRIMARY};")
         header.addWidget(self._title_lbl)
@@ -239,8 +240,8 @@ class ExecutionDashboardPanel(QFrame):
             self._steps.clear()
             steps     = kwargs.get("steps", [])
             iteration = kwargs.get("iteration", 0)
-            self._title_lbl.setText(f"🤖 계획 {len(steps)}단계")
-            self._iter_lbl.setText(f"시도 {iteration + 1}회")
+            self._title_lbl.setText(_("🤖 계획 {count}단계").format(count=len(steps)))
+            self._iter_lbl.setText(_("시도 {count}회").format(count=iteration + 1))
             for s in steps:
                 self._steps[s["id"]] = {"desc": s["desc"], "type": s["type"], "status": "pending"}
             self._rebuild_steps()
@@ -263,12 +264,12 @@ class ExecutionDashboardPanel(QFrame):
                 self._rebuild_steps()
 
         elif event_type == "verify_start":
-            self._title_lbl.setText("🔍 검증 중...")
+            self._title_lbl.setText(_("🔍 검증 중..."))
 
         elif event_type in ("achieved", "failed", "not_achieved"):
             summary = kwargs.get("summary", "")
             icon    = "✅" if event_type == "achieved" else "⚠️"
-            label   = "완료" if event_type == "achieved" else "미완료"
+            label   = _("완료") if event_type == "achieved" else _("미완료")
             self._title_lbl.setText(f"{icon} {label}")
             self._summary_lbl.setText(summary[:120])
             if event_type == "achieved":
@@ -277,7 +278,7 @@ class ExecutionDashboardPanel(QFrame):
         elif event_type == "replan":
             iteration = kwargs.get("iteration", 0)
             reason    = kwargs.get("reason", "")
-            self._iter_lbl.setText(f"재계획 (시도 {iteration + 2}회)")
+            self._iter_lbl.setText(_("재계획 (시도 {count}회)").format(count=iteration + 2))
             self._summary_lbl.setText(f"♻️ {reason[:80]}")
             self._steps.clear()
             self._rebuild_steps()
@@ -301,7 +302,7 @@ class ExecutionDashboardPanel(QFrame):
     def reset(self) -> None:
         self._steps.clear()
         self._rebuild_steps()
-        self._title_lbl.setText("🤖 실행 중...")
+        self._title_lbl.setText(_("🤖 실행 중..."))
         self._iter_lbl.setText("")
         self._summary_lbl.setText("")
         self.hide()
@@ -344,7 +345,7 @@ class ProactiveSuggestionBar(QFrame):
         lay.setContentsMargins(12, 6, 12, 6)
         lay.setSpacing(2)
 
-        hint_lbl = QLabel("💡 자주 쓰는 명령")
+        hint_lbl = QLabel(_("💡 자주 쓰는 명령"))
         hint_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
         hint_lbl.setStyleSheet(f"color: {COLOR_MUTED};")
         lay.addWidget(hint_lbl)
@@ -508,10 +509,10 @@ class TitleBar(PanelTitleBar):
     memory_btn_clicked    = Signal()
 
     def __init__(self, parent: QMainWindow):
-        super().__init__("💬 아리와 대화하기", parent)
+        super().__init__(_("💬 아리와 대화하기"), parent)
         # 닫기 버튼과 함께 타이틀 바에 포함될 아이콘 버튼
-        self.add_button("📅", "예약 작업 관리",    self.scheduler_btn_clicked.emit)
-        self.add_button("🧠", "아리의 기억 보기",  self.memory_btn_clicked.emit)
+        self.add_button("📅", _("예약 작업 관리"),    self.scheduler_btn_clicked.emit)
+        self.add_button("🧠", _("아리의 기억 보기"),  self.memory_btn_clicked.emit)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -594,7 +595,7 @@ class TextInterface(QMainWindow):
         status_lay.setContentsMargins(16, 8, 16, 8)
         status_lay.setSpacing(3)
 
-        status_title = QLabel("기억 상태")
+        status_title = QLabel(_("기억 상태"))
         status_title.setFont(QFont(FONT_KO, FONT_SIZE_SMALL + 1, QFont.Bold))
         status_title.setStyleSheet("color: #375a7f;")
         status_lay.addWidget(status_title)
@@ -638,7 +639,7 @@ class TextInterface(QMainWindow):
         input_lay.setSpacing(10)
 
         self.input_field = QLineEdit()
-        self.input_field.setPlaceholderText("메시지 입력...")
+        self.input_field.setPlaceholderText(_("메시지 입력..."))
         self.input_field.setFont(QFont(FONT_KO, FONT_SIZE_LARGE))
         self.input_field.setStyleSheet(CHAT_INPUT_STYLE)
         self.input_field.returnPressed.connect(self.send_message)
@@ -658,7 +659,7 @@ class TextInterface(QMainWindow):
         bg_lay.addWidget(input_frame)
 
         # 초기 메시지 + 타이머
-        self.chat_widget.add_message("안녕하세요! 무엇을 도와드릴까요?", is_user=False)
+        self.chat_widget.add_message(_("안녕하세요! 무엇을 도와드릴까요?"), is_user=False)
         self.refresh_status_panel()
 
         self._status_timer = QTimer(self)
@@ -842,7 +843,7 @@ class TextInterface(QMainWindow):
 
     def refresh_status_panel(self) -> None:
         if not self.context_manager:
-            self.status_summary.setText("기억 시스템을 불러오지 못했습니다.")
+            self.status_summary.setText(_("기억 시스템을 불러오지 못했습니다."))
             return
         try:
             predictions = self.context_manager.get_predicted_next_commands()
@@ -853,13 +854,13 @@ class TextInterface(QMainWindow):
             prefs = self.context_manager.get_top_preferences(limit=2)
             lines = []
             if topics:
-                lines.append("주제 " + " · ".join(t for t, _ in topics))
+                lines.append(_("주제 ") + " · ".join(t for t, _ in topics))
             if predictions:
-                lines.append("다음 추천 " + " → ".join(predictions))
+                lines.append(_("다음 추천 ") + " → ".join(predictions))
             if prefs:
-                lines.append("선호 " + " · ".join(prefs[:2]))
+                lines.append(_("선호 ") + " · ".join(prefs[:2]))
             if not lines:
-                lines.append("대화를 이어가면 이곳에 요약이 표시됩니다.")
+                lines.append(_("대화를 이어가면 이곳에 요약이 표시됩니다."))
             self.status_summary.setText("\n".join(lines))
         except Exception as e:
             logger.debug(f"상태 패널 갱신 실패: {e}")

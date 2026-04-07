@@ -7,11 +7,110 @@ msgstr ""
 msgid "아리 설정"
 msgstr "아리 설정"
 
+msgid "RP 설정"
+msgstr "RP 설정"
+
+msgid "AI 설정"
+msgstr "AI 설정"
+
+msgid "TTS 설정"
+msgstr "TTS 설정"
+
+msgid "장치 설정"
+msgstr "장치 설정"
+
+msgid "확장"
+msgstr "확장"
+
+msgid "저장"
+msgstr "저장"
+
+msgid "취소"
+msgstr "취소"
+
+msgid "캐릭터 페르소나 설정"
+msgstr "캐릭터 페르소나 설정"
+
+msgid "성격:"
+msgstr "성격:"
+
+msgid "시나리오:"
+msgstr "시나리오:"
+
+msgid "시스템 프롬프트:"
+msgstr "시스템 프롬프트:"
+
+msgid "대화 지침:"
+msgstr "대화 지침:"
+
+msgid "예) 상냥하고 귀여운 AI 비서"
+msgstr "예) 상냥하고 귀여운 AI 비서"
+
+msgid "예) 주인님을 보좌하는 역할극"
+msgstr "예) 주인님을 보좌하는 역할극"
+
+msgid "AI에게 직접 전달할 시스템 지시문"
+msgstr "AI에게 직접 전달할 시스템 지시문"
+
+msgid "이전 대화를 참고할 때의 태도"
+msgstr "이전 대화를 참고할 때의 태도"
+
+msgid "오디오 장치 설정"
+msgstr "오디오 장치 설정"
+
 msgid "마이크 입력 장치 선택:"
 msgstr "마이크 입력 장치 선택:"
 
 msgid "시스템 기본 마이크"
 msgstr "시스템 기본 마이크"
+
+msgid "스피커 출력 장치:"
+msgstr "스피커 출력 장치:"
+
+msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
+msgstr "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
+
+msgid "음성 인식"
+msgstr "음성 인식"
+
+msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
+msgstr "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
+
+msgid "음성 인식 설정..."
+msgstr "음성 인식 설정..."
+
+msgid "UI 테마 설정"
+msgstr "UI 테마 설정"
+
+msgid "테마 프리셋:"
+msgstr "테마 프리셋:"
+
+msgid "글꼴 배율 (0.9 ~ 1.35):"
+msgstr "글꼴 배율 (0.9 ~ 1.35):"
+
+msgid "예: 1.0"
+msgstr "예: 1.0"
+
+msgid "글꼴 패밀리 재정의 (선택):"
+msgstr "글꼴 패밀리 재정의 (선택):"
+
+msgid "비워두면 테마 기본 글꼴 사용"
+msgstr "비워두면 테마 기본 글꼴 사용"
+
+msgid "테마 미리보기"
+msgstr "테마 미리보기"
+
+msgid "테마 폴더 안내"
+msgstr "테마 폴더 안내"
+
+msgid "🎨 팔레트 직접 편집"
+msgstr "🎨 팔레트 직접 편집"
+
+msgid "언어 설정"
+msgstr "언어 설정"
+
+msgid "인터페이스 언어:"
+msgstr "인터페이스 언어:"
 
 msgid "💬 텍스트 대화"
 msgstr "💬 텍스트 대화"
@@ -39,3 +138,36 @@ msgstr "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
 
 msgid "로그 파일 폴더 열기"
 msgstr "로그 파일 폴더 열기"
+
+msgid "캐릭터 표시"
+msgstr "캐릭터 표시"
+
+msgid "캐릭터 숨기기"
+msgstr "캐릭터 숨기기"
+
+msgid "🎮 게임 모드 (GPU 절약)"
+msgstr "🎮 게임 모드 (GPU 절약)"
+
+msgid "스마트 어시스턴트 모드"
+msgstr "스마트 어시스턴트 모드"
+
+msgid "마우스 반응"
+msgstr "마우스 반응"
+
+msgid "예약 작업 관리"
+msgstr "예약 작업 관리"
+
+msgid "게임 모드 ON. GPU 메모리 해제했습니다."
+msgstr "게임 모드 ON. GPU 메모리 해제했습니다."
+
+msgid "게임 모드 OFF. TTS 복원 중..."
+msgstr "게임 모드 OFF. TTS 복원 중..."
+
+msgid "활성화"
+msgstr "활성화"
+
+msgid "비활성화"
+msgstr "비활성화"
+
+msgid "스마트 어시스턴트 모드가 {status}되었습니다."
+msgstr "스마트 어시스턴트 모드가 {status}되었습니다."

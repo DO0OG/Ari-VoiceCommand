@@ -7,11 +7,110 @@ msgstr ""
 msgid "아리 설정"
 msgstr "Ari Settings"
 
+msgid "RP 설정"
+msgstr "RP"
+
+msgid "AI 설정"
+msgstr "AI"
+
+msgid "TTS 설정"
+msgstr "TTS"
+
+msgid "장치 설정"
+msgstr "Device"
+
+msgid "확장"
+msgstr "Extensions"
+
+msgid "저장"
+msgstr "Save"
+
+msgid "취소"
+msgstr "Cancel"
+
+msgid "캐릭터 페르소나 설정"
+msgstr "Character Persona Settings"
+
+msgid "성격:"
+msgstr "Personality:"
+
+msgid "시나리오:"
+msgstr "Scenario:"
+
+msgid "시스템 프롬프트:"
+msgstr "System Prompt:"
+
+msgid "대화 지침:"
+msgstr "Dialogue Instruction:"
+
+msgid "예) 상냥하고 귀여운 AI 비서"
+msgstr "e.g. Kind and cute AI assistant"
+
+msgid "예) 주인님을 보좌하는 역할극"
+msgstr "e.g. Roleplay assisting the master"
+
+msgid "AI에게 직접 전달할 시스템 지시문"
+msgstr "System instructions delivered directly to the AI"
+
+msgid "이전 대화를 참고할 때의 태도"
+msgstr "Attitude when referring to previous conversations"
+
+msgid "오디오 장치 설정"
+msgstr "Audio Device Settings"
+
 msgid "마이크 입력 장치 선택:"
 msgstr "Select Microphone Input:"
 
 msgid "시스템 기본 마이크"
 msgstr "System Default Microphone"
+
+msgid "스피커 출력 장치:"
+msgstr "Speaker Output Device:"
+
+msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
+msgstr "Sound is output through the system's 'Default Playback Device'."
+
+msgid "음성 인식"
+msgstr "Speech Recognition"
+
+msgid "STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."
+msgstr "Configure STT engine, Whisper, mic sensitivity, and wake words."
+
+msgid "음성 인식 설정..."
+msgstr "Speech Settings..."
+
+msgid "UI 테마 설정"
+msgstr "UI Theme Settings"
+
+msgid "테마 프리셋:"
+msgstr "Theme Preset:"
+
+msgid "글꼴 배율 (0.9 ~ 1.35):"
+msgstr "Font Scale (0.9 ~ 1.35):"
+
+msgid "예: 1.0"
+msgstr "e.g. 1.0"
+
+msgid "글꼴 패밀리 재정의 (선택):"
+msgstr "Font Family Override (Optional):"
+
+msgid "비워두면 테마 기본 글꼴 사용"
+msgstr "Leave empty to use theme default"
+
+msgid "테마 미리보기"
+msgstr "Theme Preview"
+
+msgid "테마 폴더 안내"
+msgstr "Theme Folder Info"
+
+msgid "🎨 팔레트 직접 편집"
+msgstr "🎨 Edit Palette"
+
+msgid "언어 설정"
+msgstr "Language Settings"
+
+msgid "인터페이스 언어:"
+msgstr "Interface Language:"
 
 msgid "💬 텍스트 대화"
 msgstr "💬 Text Chat"
@@ -39,3 +138,36 @@ msgstr "Language setting saved. Please restart to apply."
 
 msgid "로그 파일 폴더 열기"
 msgstr "Open Log Folder"
+
+msgid "캐릭터 표시"
+msgstr "Show Character"
+
+msgid "캐릭터 숨기기"
+msgstr "Hide Character"
+
+msgid "🎮 게임 모드 (GPU 절약)"
+msgstr "🎮 Game Mode (Save GPU)"
+
+msgid "스마트 어시스턴트 모드"
+msgstr "Smart Assistant Mode"
+
+msgid "마우스 반응"
+msgstr "Mouse Reaction"
+
+msgid "예약 작업 관리"
+msgstr "Scheduled Tasks"
+
+msgid "게임 모드 ON. GPU 메모리 해제했습니다."
+msgstr "Game Mode ON. GPU memory released."
+
+msgid "게임 모드 OFF. TTS 복원 중..."
+msgstr "Game Mode OFF. Restoring TTS..."
+
+msgid "활성화"
+msgstr "Enabled"
+
+msgid "비활성화"
+msgstr "Disabled"
+
+msgid "스마트 어시스턴트 모드가 {status}되었습니다."
+msgstr "Smart Assistant Mode has been {status}."

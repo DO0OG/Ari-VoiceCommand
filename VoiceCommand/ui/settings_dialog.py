@@ -70,26 +70,26 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.tabs)
 
         # 1. RP 설정 탭
-        self.tabs.addTab(self._create_rp_tab(), "RP 설정")
+        self.tabs.addTab(self._create_rp_tab(), _("RP 설정"))
 
         # 2. LLM 설정 탭
         self._llm_page = _LLMSettingsPage(self.settings, self)
-        self.tabs.addTab(self._llm_page, "AI 설정")
+        self.tabs.addTab(self._llm_page, _("AI 설정"))
 
         # 3. TTS 설정 탭
         self._tts_page = _TTSSettingsPage(self.settings, self)
-        self.tabs.addTab(self._tts_page, "TTS 설정")
+        self.tabs.addTab(self._tts_page, _("TTS 설정"))
 
         # 4. 장치 설정 탭
-        self.tabs.addTab(self._create_device_tab(), "장치 설정")
+        self.tabs.addTab(self._create_device_tab(), _("장치 설정"))
 
         # 5. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
-        self.tabs.addTab(self._plugin_page, "확장")
+        self.tabs.addTab(self._plugin_page, _("확장"))
 
         # 하단 버튼
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("저장")
+        save_btn = QPushButton(_("저장"))
         save_btn.setMinimumHeight(45)
         save_btn.setMinimumWidth(120)
         save_btn.setStyleSheet(f"""
@@ -110,7 +110,7 @@ class SettingsDialog(QDialog):
         """)
         save_btn.clicked.connect(self._save)
 
-        cancel_btn = QPushButton("취소")
+        cancel_btn = QPushButton(_("취소"))
         cancel_btn.setMinimumHeight(45)
         cancel_btn.setMinimumWidth(100)
         cancel_btn.setStyleSheet("""
@@ -138,14 +138,14 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
 
-        group = QGroupBox("캐릭터 페르소나 설정")
+        group = QGroupBox(_("캐릭터 페르소나 설정"))
         gvbox = QVBoxLayout(group)
 
         rp_fields = [
-            ("personality_input",  "성격:",           "personality",         "예) 상냥하고 귀여운 AI 비서"),
-            ("scenario_input",     "시나리오:",        "scenario",            "예) 주인님을 보좌하는 역할극"),
-            ("system_input",       "시스템 프롬프트:", "system_prompt",       "AI에게 직접 전달할 시스템 지시문"),
-            ("history_input",      "대화 지침:",       "history_instruction", "이전 대화를 참고할 때의 태도"),
+            ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
+            ("scenario_input",     _("시나리오:"),        "scenario",            _("예) 주인님을 보좌하는 역할극")),
+            ("system_input",       _("시스템 프롬프트:"), "system_prompt",       _("AI에게 직접 전달할 시스템 지시문")),
+            ("history_input",      _("대화 지침:"),       "history_instruction", _("이전 대화를 참고할 때의 태도")),
         ]
 
         for attr, label, key, ph in rp_fields:
@@ -165,7 +165,7 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
 
-        group = QGroupBox("오디오 장치 설정")
+        group = QGroupBox(_("오디오 장치 설정"))
         gvbox = QVBoxLayout(group)
 
         gvbox.addWidget(QLabel(_("마이크 입력 장치 선택:")))
@@ -182,56 +182,56 @@ class SettingsDialog(QDialog):
         gvbox.addWidget(self.mic_combo)
 
         gvbox.addSpacing(30)
-        gvbox.addWidget(QLabel("스피커 출력 장치:"))
-        gvbox.addWidget(create_muted_label("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."))
+        gvbox.addWidget(QLabel(_("스피커 출력 장치:")))
+        gvbox.addWidget(create_muted_label(_("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다.")))
 
-        stt_group = QGroupBox("음성 인식")
+        stt_group = QGroupBox(_("음성 인식"))
         stt_vbox = QVBoxLayout(stt_group)
-        stt_vbox.addWidget(create_muted_label("STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다."))
-        stt_btn = QPushButton("음성 인식 설정...")
+        stt_vbox.addWidget(create_muted_label(_("STT 엔진, Whisper 설정, 마이크 감도, 웨이크워드를 설정합니다.")))
+        stt_btn = QPushButton(_("음성 인식 설정..."))
         stt_btn.clicked.connect(self._open_stt_settings)
         stt_vbox.addWidget(stt_btn)
 
         vbox.addWidget(stt_group)
         vbox.addWidget(group)
 
-        theme_group = QGroupBox("UI 테마 설정")
+        theme_group = QGroupBox(_("UI 테마 설정"))
         tvbox = QVBoxLayout(theme_group)
 
-        tvbox.addWidget(QLabel("테마 프리셋:"))
+        tvbox.addWidget(QLabel(_("테마 프리셋:")))
         self.theme_preset_combo = QComboBox()
         for preset_key, preset_name in available_theme_presets():
             self.theme_preset_combo.addItem(preset_name, preset_key)
         self._set_combo(self.theme_preset_combo, self.settings.get("ui_theme_preset", "default"))
         tvbox.addWidget(self.theme_preset_combo)
 
-        tvbox.addWidget(QLabel("글꼴 배율 (0.9 ~ 1.35):"))
+        tvbox.addWidget(QLabel(_("글꼴 배율 (0.9 ~ 1.35):")))
         self.theme_scale_input = QLineEdit(str(self.settings.get("ui_theme_scale", 1.0)))
-        self.theme_scale_input.setPlaceholderText("예: 1.0")
+        self.theme_scale_input.setPlaceholderText(_("예: 1.0"))
         tvbox.addWidget(self.theme_scale_input)
 
-        tvbox.addWidget(QLabel("글꼴 패밀리 재정의 (선택):"))
+        tvbox.addWidget(QLabel(_("글꼴 패밀리 재정의 (선택):")))
         self.theme_font_input = QLineEdit(self.settings.get("ui_font_family", ""))
-        self.theme_font_input.setPlaceholderText("비워두면 테마 기본 글꼴 사용")
+        self.theme_font_input.setPlaceholderText(_("비워두면 테마 기본 글꼴 사용"))
         tvbox.addWidget(self.theme_font_input)
 
         self.theme_preview_frame = QFrame()
         self.theme_preview_frame.setFrameShape(QFrame.Shape.StyledPanel)
         preview_layout = QVBoxLayout(self.theme_preview_frame)
         preview_layout.setContentsMargins(10, 10, 10, 10)
-        self.theme_preview_title = QLabel("테마 미리보기")
+        self.theme_preview_title = QLabel(_("테마 미리보기"))
         self.theme_preview_colors = QLabel("")
         self.theme_preview_colors.setWordWrap(True)
         preview_layout.addWidget(self.theme_preview_title)
         preview_layout.addWidget(self.theme_preview_colors)
         tvbox.addWidget(self.theme_preview_frame)
 
-        preview_btn = QPushButton("테마 폴더 안내")
+        preview_btn = QPushButton(_("테마 폴더 안내"))
         preview_btn.setStyleSheet(secondary_btn_style())
         preview_btn.clicked.connect(self._show_theme_hint)
         tvbox.addWidget(preview_btn)
 
-        self.editor_toggle_btn = QPushButton("🎨 팔레트 직접 편집")
+        self.editor_toggle_btn = QPushButton(_("🎨 팔레트 직접 편집"))
         self.editor_toggle_btn.clicked.connect(self._toggle_theme_editor)
         tvbox.addWidget(self.editor_toggle_btn)
 
@@ -240,9 +240,9 @@ class SettingsDialog(QDialog):
 
         vbox.addWidget(theme_group)
 
-        lang_group = QGroupBox("언어 설정")
+        lang_group = QGroupBox(_("언어 설정"))
         lvbox = QVBoxLayout(lang_group)
-        lvbox.addWidget(QLabel("인터페이스 언어:"))
+        lvbox.addWidget(QLabel(_("인터페이스 언어:")))
         self.lang_combo = QComboBox()
         self.lang_combo.addItem("한국어", "ko")
         self.lang_combo.addItem("English", "en")
