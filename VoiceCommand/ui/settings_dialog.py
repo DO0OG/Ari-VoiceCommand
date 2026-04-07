@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 
 from core.config_manager import ConfigManager
+from i18n.translator import _, set_language, get_language
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
     TAB_STYLE, INPUT_STYLE,
@@ -48,7 +49,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("아리 설정")
+        self.setWindowTitle(_("아리 설정"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(550)
         self.settings = ConfigManager.load_settings()
@@ -167,9 +168,9 @@ class SettingsDialog(QDialog):
         group = QGroupBox("오디오 장치 설정")
         gvbox = QVBoxLayout(group)
 
-        gvbox.addWidget(QLabel("마이크 입력 장치 선택:"))
+        gvbox.addWidget(QLabel(_("마이크 입력 장치 선택:")))
         self.mic_combo = QComboBox()
-        self.mic_combo.addItem("시스템 기본 마이크", "")
+        self.mic_combo.addItem(_("시스템 기본 마이크"), "")
         try:
             import speech_recognition as sr
             mics = sr.Microphone.list_microphone_names()
@@ -238,6 +239,23 @@ class SettingsDialog(QDialog):
         self._refresh_theme_preview()
 
         vbox.addWidget(theme_group)
+
+        lang_group = QGroupBox("언어 설정")
+        lvbox = QVBoxLayout(lang_group)
+        lvbox.addWidget(QLabel("인터페이스 언어:"))
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem("한국어", "ko")
+        self.lang_combo.addItem("English", "en")
+        self.lang_combo.addItem("日本語", "ja")
+        self._set_combo(self.lang_combo, get_language())
+        lvbox.addWidget(self.lang_combo)
+        vbox.addWidget(lang_group)
+
+        log_btn = QPushButton(_("로그 파일 폴더 열기"))
+        log_btn.setStyleSheet(secondary_btn_style())
+        log_btn.clicked.connect(self._open_log_folder)
+        vbox.addWidget(log_btn)
+
         vbox.addStretch()
         return widget
 
@@ -256,6 +274,13 @@ class SettingsDialog(QDialog):
             return float(text)
         except (ValueError, TypeError):
             return default
+
+    def _open_log_folder(self):
+        import os
+        import subprocess
+        log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Ari", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        subprocess.Popen(["explorer", log_dir])
 
     def _open_stt_settings(self):
         from ui.stt_settings_dialog import STTSettingsDialog
@@ -336,11 +361,12 @@ class SettingsDialog(QDialog):
             "system_prompt": self.system_input.toPlainText().strip(),
             "history_instruction": self.history_input.toPlainText().strip(),
 
-            # Device / Theme
+            # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),
             "ui_theme_preset": self.theme_preset_combo.currentData(),
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),
+            "language": self.lang_combo.currentData(),
         }
 
         # LLM / TTS 값을 각 페이지에서 수집
@@ -368,6 +394,11 @@ class SettingsDialog(QDialog):
                 "테마 설정이 저장되었습니다.\n열려 있는 UI에는 즉시 반영되며, TTS나 워커는 다시 시작하지 않습니다.",
             )
 
+        selected_lang = self.lang_combo.currentData()
+        if selected_lang != get_language():
+            set_language(selected_lang)
+            QMessageBox.information(self, _("언어 변경"), _("언어 설정이 저장됐어요. 재시작 후 적용됩니다."))
+
         self.accept()
 
     def tts_settings_changed(self) -> bool:
@@ -378,6 +409,9 @@ class SettingsDialog(QDialog):
 
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)
+
+    def language_settings_changed(self) -> bool:
+        return "language" in self.changed_keys
 
     # ── 생명주기 ──────────────────────────────────────────────────────────────
 
