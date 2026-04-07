@@ -1,0 +1,41 @@
+# Ari Voice Assistant — English
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+
+msgid "아리 설정"
+msgstr "Ari Settings"
+
+msgid "마이크 입력 장치 선택:"
+msgstr "Select Microphone Input:"
+
+msgid "시스템 기본 마이크"
+msgstr "System Default Microphone"
+
+msgid "💬 텍스트 대화"
+msgstr "💬 Text Chat"
+
+msgid "설정"
+msgstr "Settings"
+
+msgid "종료"
+msgstr "Exit"
+
+msgid "실행을 취소했습니다."
+msgstr "Execution cancelled."
+
+msgid "코드 실행 시간이 너무 길어 중단했습니다."
+msgstr "Code execution timed out and was stopped."
+
+msgid "위험한 파이썬 작업 감지: {matched}"
+msgstr "Dangerous Python operation detected: {matched}"
+
+msgid "언어 변경"
+msgstr "Language Changed"
+
+msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
+msgstr "Language setting saved. Please restart to apply."
+
+msgid "로그 파일 폴더 열기"
+msgstr "Open Log Folder"

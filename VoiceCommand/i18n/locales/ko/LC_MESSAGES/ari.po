@@ -1,0 +1,41 @@
+# Ari Voice Assistant — 한국어
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ko\n"
+
+msgid "아리 설정"
+msgstr "아리 설정"
+
+msgid "마이크 입력 장치 선택:"
+msgstr "마이크 입력 장치 선택:"
+
+msgid "시스템 기본 마이크"
+msgstr "시스템 기본 마이크"
+
+msgid "💬 텍스트 대화"
+msgstr "💬 텍스트 대화"
+
+msgid "설정"
+msgstr "설정"
+
+msgid "종료"
+msgstr "종료"
+
+msgid "실행을 취소했습니다."
+msgstr "실행을 취소했습니다."
+
+msgid "코드 실행 시간이 너무 길어 중단했습니다."
+msgstr "코드 실행 시간이 너무 길어 중단했습니다."
+
+msgid "위험한 파이썬 작업 감지: {matched}"
+msgstr "위험한 파이썬 작업 감지: {matched}"
+
+msgid "언어 변경"
+msgstr "언어 변경"
+
+msgid "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
+msgstr "언어 설정이 저장됐어요. 재시작 후 적용됩니다."
+
+msgid "로그 파일 폴더 열기"
+msgstr "로그 파일 폴더 열기"
