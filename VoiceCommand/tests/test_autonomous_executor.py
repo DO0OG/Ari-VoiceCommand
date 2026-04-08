@@ -5,10 +5,6 @@ import unittest
 from types import SimpleNamespace
 
 
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
 import agent.autonomous_executor as autonomous_executor_module
 from agent.autonomous_executor import AutonomousExecutor
 

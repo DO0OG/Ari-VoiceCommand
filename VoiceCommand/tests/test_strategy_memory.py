@@ -1,14 +1,9 @@
 import json
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.strategy_memory import StrategyMemory
 

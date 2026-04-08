@@ -133,9 +133,11 @@ class ProactiveScheduler:
         repeat_rule = ""
         repeat_sec = 0
         if re.search(r"매일|평일", schedule_expr):
-            repeat_rule = "daily"; repeat_sec = 86400
+            repeat_rule = "daily"
+            repeat_sec = 86400
         elif re.search(r"매주", schedule_expr):
-            repeat_rule = "weekly"; repeat_sec = 86400 * 7
+            repeat_rule = "weekly"
+            repeat_sec = 86400 * 7
         elif m := re.search(r"(\d+)분마다", schedule_expr):
             repeat_sec = int(m.group(1)) * 60
         elif m := re.search(r"(\d+)시간마다", schedule_expr):
@@ -191,7 +193,9 @@ class ProactiveScheduler:
     def cancel(self, task_id: str) -> bool:
         with self._lock:
             if task_id in self._tasks:
-                del self._tasks[task_id]; self._save(); return True
+                del self._tasks[task_id]
+                self._save()
+                return True
         return False
 
     def cancel_task(self, task_id: str) -> bool:
@@ -430,7 +434,8 @@ class ProactiveScheduler:
         if m:
             h, mi = int(m.group(1)), int(m.group(2) or "0")
             t = now.replace(hour=h, minute=mi)
-            if t <= now: t += timedelta(days=1)
+            if t <= now:
+                t += timedelta(days=1)
             return t
         m = re.search(r"매주\s*([월화수목금토일])요일?\s*(\d{1,2})[시:]\s*(\d{0,2})", expr)
         if m:
@@ -438,19 +443,24 @@ class ProactiveScheduler:
             h, mi = int(m.group(2)), int(m.group(3) or "0")
             days_ahead = (wd - now.weekday()) % 7
             t = now.replace(hour=h, minute=mi) + timedelta(days=days_ahead)
-            if t <= now: t += timedelta(weeks=1)
+            if t <= now:
+                t += timedelta(weeks=1)
             return t
         m = re.search(r"평일\s*(\d{1,2})[시:]\s*(\d{0,2})", expr)
         if m:
             h, mi = int(m.group(1)), int(m.group(2) or "0")
             candidate = now.replace(hour=h, minute=mi)
-            if candidate <= now: candidate += timedelta(days=1)
-            while candidate.weekday() >= 5: candidate += timedelta(days=1)
+            if candidate <= now:
+                candidate += timedelta(days=1)
+            while candidate.weekday() >= 5:
+                candidate += timedelta(days=1)
             return candidate
         m = re.search(r"(\d+)\s*분마다", expr)
-        if m: return now + timedelta(minutes=int(m.group(1)))
+        if m:
+            return now + timedelta(minutes=int(m.group(1)))
         m = re.search(r"(\d+)\s*시간마다", expr)
-        if m: return now + timedelta(hours=int(m.group(1)))
+        if m:
+            return now + timedelta(hours=int(m.group(1)))
         logging.warning("[Scheduler] 스케줄 파싱 실패 (%r), 24시간 후 실행", expr)
         return now + timedelta(days=1)
 

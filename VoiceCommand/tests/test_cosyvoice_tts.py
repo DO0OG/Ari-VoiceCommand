@@ -1,12 +1,8 @@
 import os
-import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from tts.cosyvoice_utils import (
     _PCMChunkBuffer,
@@ -15,6 +11,9 @@ from tts.cosyvoice_utils import (
     inject_breath_cues,
 )
 from tts.cosyvoice_tts import _get_reference_wav
+
+
+VOICECOMMAND_ROOT = str(Path(__file__).resolve().parent.parent)
 
 
 class PCMChunkBufferTests(unittest.TestCase):
@@ -33,7 +32,7 @@ class PCMChunkBufferTests(unittest.TestCase):
 
 class CosyVoiceReferencePathTests(unittest.TestCase):
     def test_reference_wav_falls_back_to_bundle_path_when_runtime_copy_missing(self):
-        expected = os.path.join(ROOT, "reference.wav")
+        expected = os.path.join(VOICECOMMAND_ROOT, "reference.wav")
         with patch("tts.cosyvoice_tts.os.path.exists", return_value=False):
             self.assertEqual(_get_reference_wav(), expected)
 

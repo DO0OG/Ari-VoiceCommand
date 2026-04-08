@@ -1,7 +1,6 @@
 """설정창용 로컬 설치 UI 컴포넌트."""
 from __future__ import annotations
 
-import os
 from typing import Iterable
 
 from PySide6.QtCore import QThread, Qt, Signal
@@ -17,7 +16,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
-    QWidget,
 )
 
 from i18n.translator import _
@@ -137,7 +135,6 @@ class OllamaInstallDialog(QDialog):
         layout.addWidget(buttons)
 
     def _build_path_input(self, layout: QVBoxLayout, placeholder: str, title: str) -> QLineEdit:
-        from PySide6.QtWidgets import QHBoxLayout
 
         row = QHBoxLayout()
         path_input = QLineEdit()

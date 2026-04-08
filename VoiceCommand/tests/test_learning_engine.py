@@ -1,14 +1,8 @@
-import os
-import sys
 import threading
 import time
 import unittest
 from types import SimpleNamespace
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.learning_engine import LearningEngine
 

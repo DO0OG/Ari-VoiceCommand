@@ -1,11 +1,5 @@
-import os
-import sys
 import unittest
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.planner_json_utils import extract_balanced, parse_json_array, parse_json_object
 

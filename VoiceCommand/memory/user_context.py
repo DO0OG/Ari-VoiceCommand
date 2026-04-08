@@ -87,7 +87,8 @@ class UserContextManager:
         facts = {}
         for key, raw in (context.get("facts") or {}).items():
             normalized = self._normalize_fact_entry(raw)
-            if normalized: facts[key] = normalized
+            if normalized:
+                facts[key] = normalized
         context["facts"] = self._limit_facts(facts)
         context["fact_history"] = self._normalize_fact_history(context.get("fact_history", {}))
 
@@ -194,7 +195,8 @@ class UserContextManager:
         """대화 주제 빈도 기록"""
         for topic in topics or []:
             token = str(topic).strip().lower()
-            if len(token) < 2 or token in _KOREAN_STOPWORDS: continue
+            if len(token) < 2 or token in _KOREAN_STOPWORDS:
+                continue
             self.context["conversation_topics"][token] = self.context["conversation_topics"].get(token, 0) + 1
         
         self.context["conversation_topics"] = self._limit_frequency_map(
@@ -352,7 +354,8 @@ class UserContextManager:
         topics = self.context.get("conversation_topics", {})
         for t in list(topics.keys()):
             topics[t] = int(topics[t] * 0.8) # 20% 감소
-            if topics[t] < 1: del topics[t]
+            if topics[t] < 1:
+                del topics[t]
 
         self.save_context()
 
@@ -362,8 +365,10 @@ class UserContextManager:
         """프롬프트 주입용 요약 텍스트 생성."""
         lines = []
         bio = self.context.get("user_bio", {})
-        if bio.get("name") != "사용자": lines.append(f"사용자 이름: {bio['name']}")
-        if bio.get("interests"): lines.append(f"관심사: {', '.join(bio['interests'][:5])}")
+        if bio.get("name") != "사용자":
+            lines.append(f"사용자 이름: {bio['name']}")
+        if bio.get("interests"):
+            lines.append(f"관심사: {', '.join(bio['interests'][:5])}")
         
         facts = self.context.get("facts", {})
         if facts:
@@ -448,8 +453,10 @@ class UserContextManager:
         res, seen = [], set()
         for v in reversed(values or []):
             if v not in seen:
-                res.append(v); seen.add(v)
-                if len(res) >= max_items: break
+                res.append(v)
+                seen.add(v)
+                if len(res) >= max_items:
+                    break
         return list(reversed(res))
 
 

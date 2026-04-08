@@ -1,15 +1,10 @@
 import json
 import os
-import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.agent_orchestrator import AgentOrchestrator, AgentRunResult, StepResult
 from agent.agent_planner import AgentPlanner, ActionStep

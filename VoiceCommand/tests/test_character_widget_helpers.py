@@ -1,11 +1,5 @@
-import os
-import sys
 import unittest
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from ui.character_widget import _is_thinking_bubble_text
 

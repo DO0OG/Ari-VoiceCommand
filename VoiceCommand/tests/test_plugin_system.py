@@ -1,12 +1,7 @@
 import os
-import sys
 import tempfile
 import unittest
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.llm_provider import LLMProvider
 from commands.ai_command import AICommand

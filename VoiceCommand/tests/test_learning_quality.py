@@ -1,14 +1,9 @@
 import os
-import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.goal_predictor import GoalPredictor
 from agent.learning_metrics import LearningMetrics

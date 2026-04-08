@@ -1,11 +1,7 @@
 import os
-import sys
 import unittest
+from pathlib import Path
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.execution_analysis import (
     classify_failure_message,
@@ -16,6 +12,9 @@ from agent.execution_analysis import (
     extract_step_targets,
     is_read_only_step_content,
 )
+
+
+VOICECOMMAND_ROOT = Path(__file__).resolve().parent.parent
 
 
 class ExecutionAnalysisTests(unittest.TestCase):
@@ -29,7 +28,7 @@ class ExecutionAnalysisTests(unittest.TestCase):
         self.assertFalse(is_read_only_step_content("save_document('a','b','c')", "문서 저장"))
 
     def test_extract_artifacts_and_existing_paths(self):
-        target = os.path.abspath(os.path.join(ROOT, "..", "README.md"))
+        target = os.path.abspath(os.path.join(VOICECOMMAND_ROOT, "..", "README.md"))
         artifacts = extract_artifacts([f"saved: {target}", "see https://example.com/page"])
         self.assertIn(target, artifacts["paths"])
         self.assertIn("https://example.com/page", artifacts["urls"])

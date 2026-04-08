@@ -1,13 +1,7 @@
-import os
-import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from audio.simple_wake import SimpleWakeWord
 from core.stt_provider import WhisperSTTProvider

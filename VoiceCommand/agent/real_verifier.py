@@ -181,10 +181,13 @@ class RealVerifier:
             browser_state = (self.executor.execution_globals.get("get_browser_state") or (lambda: {}))() or {}
         except Exception:
             browser_state = {}
+        def _always_false(*_args, **_kwargs):
+            return False
+
         try:
-            is_image_visible = self.executor.execution_globals.get("is_image_visible") or (lambda *_args, **_kwargs: False)
+            is_image_visible = self.executor.execution_globals.get("is_image_visible") or _always_false
         except Exception:
-            is_image_visible = lambda *_args, **_kwargs: False
+            is_image_visible = _always_false
 
         named_folder = self._extract_goal_folder_name(goal)
         if existing_path_items and named_folder:
@@ -345,7 +348,6 @@ class RealVerifier:
             description = getattr(step, "description_kr", "") or ""
             output = str(getattr(exec_r, "output", "") or "")
             error = str(getattr(exec_r, "error", "") or "")
-            combined = "\n".join([content, description, output, error]).lower()
             # 검증 힌트는 실행 출력에서만 확인 — content/description 에는 validate_repo.py
             # 소스 코드가 포함될 수 있어 오판 방지를 위해 output/error 만 사용
             exec_output_only = "\n".join([output, error]).lower()
@@ -502,9 +504,12 @@ class RealVerifier:
 
         steps_summary = "\n".join(lines) or "  (단계 정보 없음)"
         artifact_lines = []
-        if artifacts["paths"]: artifact_lines.append("관측된 경로: " + ", ".join(set(artifacts["paths"]))[:400])
-        if artifacts["urls"]: artifact_lines.append("관측된 URL: " + ", ".join(set(artifacts["urls"]))[:400])
-        if artifact_lines: steps_summary += "\n" + "\n".join(artifact_lines)
+        if artifacts["paths"]:
+            artifact_lines.append("관측된 경로: " + ", ".join(set(artifacts["paths"]))[:400])
+        if artifacts["urls"]:
+            artifact_lines.append("관측된 URL: " + ", ".join(set(artifacts["urls"]))[:400])
+        if artifact_lines:
+            steps_summary += "\n" + "\n".join(artifact_lines)
 
         prompt = _VERIFY_CODE_PROMPT.format(goal=goal, steps_summary=steps_summary)
 
@@ -676,7 +681,8 @@ class RealVerifier:
                 return None
 
             output = result.output.strip().lower()
-            if not output: return None
+            if not output:
+                return None
 
             if "true" in output or output == "1":
                 verified = True

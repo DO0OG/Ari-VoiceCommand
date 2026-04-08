@@ -5,10 +5,9 @@ Anthropic만 자체 SDK 사용.
 """
 import json
 import logging
-import os
 import re
 import threading
-from typing import Optional, List, Dict, Tuple, Any
+from typing import List, Any
 
 from agent.assistant_text_utils import (
     analyze_tool_request,
@@ -460,7 +459,8 @@ class LLMProvider:
                 from memory.memory_manager import get_memory_manager
                 ctx_mgr = get_memory_manager().context_manager
                 for tc in choice.message.tool_calls:
-                    try: args = json.loads(tc.function.arguments)
+                    try:
+                        args = json.loads(tc.function.arguments)
                     except Exception as exc:
                         logging.debug("[LLMProvider] tool arguments 파싱 실패, 빈 값 사용: %s", exc)
                         args = {}
@@ -481,7 +481,8 @@ class LLMProvider:
             msg = self._clean_response(memory_manager.clean_response(raw_msg))
             if stream_callback and msg and not tool_calls:
                 self._emit_stream_text(msg, stream_callback)
-            if msg: self.add_to_history("assistant", msg)
+            if msg:
+                self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
             logging.error("LLM chat_with_tools 오류 (%s): %s", model, e)
@@ -531,7 +532,8 @@ class LLMProvider:
             msg = self._clean_response(response.choices[0].message.content or "")
             if stream_callback and msg:
                 self._emit_stream_text(msg, stream_callback)
-            if msg: self.add_to_history("assistant", msg)
+            if msg:
+                self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
             logging.error("feed_tool_result 오류 (%s): %s", model, e)
@@ -550,14 +552,17 @@ class LLMProvider:
             resp = client.messages.create(**kwargs)
             tool_calls, text_parts = [], []
             for b in resp.content:
-                if b.type == "tool_use": tool_calls.append({"id": b.id, "name": b.name, "arguments": b.input})
-                elif b.type == "text": text_parts.append(b.text)
+                if b.type == "tool_use":
+                    tool_calls.append({"id": b.id, "name": b.name, "arguments": b.input})
+                elif b.type == "text":
+                    text_parts.append(b.text)
             
             raw_msg = " ".join(text_parts)
             msg = self._clean_response(raw_msg)
             if stream_callback and msg and not tool_calls:
                 self._emit_stream_text(msg, stream_callback)
-            if msg: self.add_to_history("assistant", msg)
+            if msg:
+                self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
             logging.error("Anthropic API 오류: %s", e)
@@ -574,7 +579,8 @@ class LLMProvider:
             msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
             if stream_callback and msg:
                 self._emit_stream_text(msg, stream_callback)
-            if msg: self.add_to_history("assistant", msg)
+            if msg:
+                self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
             logging.error("Anthropic feed 오류: %s", e)

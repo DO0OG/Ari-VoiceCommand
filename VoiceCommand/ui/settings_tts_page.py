@@ -191,7 +191,7 @@ class _TTSSettingsPage(QWidget):
 
     def _on_tts_changed(self):
         selected = self.tts_mode_combo.currentData()
-        for key in [d for _, d in _tts_modes()]:
+        for key in [data for _label, data in _tts_modes()]:
             grp = self._tts_groups.get(key)
             if grp:
                 grp.setVisible(key == selected)

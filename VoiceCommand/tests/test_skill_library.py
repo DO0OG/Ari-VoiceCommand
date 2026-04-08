@@ -1,14 +1,9 @@
 import os
-import sys
 import tempfile
 import threading
 import unittest
 import json
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.skill_library import Skill, SkillLibrary
 
