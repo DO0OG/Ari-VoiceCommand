@@ -30,7 +30,8 @@ def _init_schedule_file() -> str:
     try:
         from core.resource_manager import ResourceManager
         return ResourceManager.get_writable_path("scheduled_tasks.json")
-    except Exception:
+    except Exception as exc:
+        logging.debug("[Scheduler] scheduled_tasks 경로 조회 실패, 런타임 폴백 사용: %s", exc)
         return _runtime_fallback_path("scheduled_tasks.json")
 
 
@@ -38,7 +39,8 @@ def _init_schedule_log_file() -> str:
     try:
         from core.resource_manager import ResourceManager
         return ResourceManager.get_writable_path("scheduled_task_runs.jsonl")
-    except Exception:
+    except Exception as exc:
+        logging.debug("[Scheduler] scheduled_task_runs 경로 조회 실패, 런타임 폴백 사용: %s", exc)
         return _runtime_fallback_path("scheduled_task_runs.jsonl")
 
 
@@ -121,7 +123,7 @@ class ProactiveScheduler:
         with self._lock:
             self._tasks[task_id] = task
             self._save()
-        logging.info(f"[Scheduler] 새 작업 등록: {task_id} ({desc})")
+        logging.info("[Scheduler] 새 작업 등록: %s (%s)", task_id, desc)
         return task_id
 
     def add_task(self, name: str, goal: str, schedule_expr: str) -> ScheduledTask:
@@ -238,7 +240,7 @@ class ProactiveScheduler:
                         continue
                     rows.append(item)
         except OSError as exc:
-            logging.debug(f"[Scheduler] 실행 로그 읽기 실패: {exc}")
+            logging.debug("[Scheduler] 실행 로그 읽기 실패: %s", exc)
             return []
         return rows[-limit:]
 
@@ -350,7 +352,7 @@ class ProactiveScheduler:
             except Exception as exc:
                 error = str(exc)
                 summary = "메모리 정리 실패"
-                logging.error(f"[Scheduler] 메모리 정리 실패: {exc}")
+                logging.error("[Scheduler] 메모리 정리 실패: %s", exc)
             if self.tts and summary:
                 self.tts(summary if success else f"(걱정) {summary}: {error}")
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
@@ -364,13 +366,13 @@ class ProactiveScheduler:
             except Exception as exc:
                 error = str(exc)
                 summary = "주간 리포트 생성 실패"
-                logging.error(f"[Scheduler] 주간 리포트 생성 실패: {exc}")
+                logging.error("[Scheduler] 주간 리포트 생성 실패: %s", exc)
             if self.tts and summary:
                 self.tts(summary if success else f"(걱정) {summary}: {error}")
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
-        logging.info(f"[Scheduler] 작업 실행: {task.goal}")
+        logging.info("[Scheduler] 작업 실행: %s", task.goal)
         if self.tts:
             self.tts(f"(진지) 예약된 작업을 시작할게요: {task.goal}")
         
@@ -387,7 +389,7 @@ class ProactiveScheduler:
             if self.tts:
                 self.tts(summary)
         except Exception as e:
-            logging.error(f"[Scheduler] 실행 실패: {e}")
+            logging.error("[Scheduler] 실행 실패: %s", e)
             error = str(e)
             summary = "예약 작업 실행 실패"
         self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
@@ -395,7 +397,7 @@ class ProactiveScheduler:
     def check_missed_tasks_on_startup(self):
         """앱 시작 시 놓친 반복 작업을 보충 실행."""
         for task, run_meta in self._claim_due_tasks(datetime.now()):
-            logging.info(f"[Scheduler] 놓친 작업 보충 실행: {task.goal}")
+            logging.info("[Scheduler] 놓친 작업 보충 실행: %s", task.goal)
             threading.Thread(
                 target=self._execute_task,
                 args=(task, run_meta),
@@ -410,7 +412,7 @@ class ProactiveScheduler:
                     data = json.load(f)
                 self._tasks = {it["task_id"]: self._normalize_task(it) for it in data}
             except Exception as e:
-                logging.warning(f"[Scheduler] 로드 실패: {e}")
+                logging.warning("[Scheduler] 로드 실패: %s", e)
 
     def _save(self):
         try:
@@ -418,7 +420,7 @@ class ProactiveScheduler:
             with open(_SCHEDULE_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logging.error(f"[Scheduler] 저장 실패: {e}")
+            logging.error("[Scheduler] 저장 실패: %s", e)
 
     def _calc_next_run(self, expr: str) -> datetime:
         """자연어 스케줄 표현 → 다음 실행 datetime 계산 (AriScheduler 호환)."""
@@ -449,7 +451,7 @@ class ProactiveScheduler:
         if m: return now + timedelta(minutes=int(m.group(1)))
         m = re.search(r"(\d+)\s*시간마다", expr)
         if m: return now + timedelta(hours=int(m.group(1)))
-        logging.warning(f"[Scheduler] 스케줄 파싱 실패 ({expr!r}), 24시간 후 실행")
+        logging.warning("[Scheduler] 스케줄 파싱 실패 (%r), 24시간 후 실행", expr)
         return now + timedelta(days=1)
 
     def _normalize_task(self, raw: Dict[str, Any]) -> ScheduledTask:
@@ -510,7 +512,7 @@ class ProactiveScheduler:
                 try:
                     due_at = datetime.fromisoformat(task.next_run)
                 except Exception as exc:
-                    logging.debug(f"[Scheduler] 작업 시간 해석 실패: {tid} ({exc})")
+                    logging.debug("[Scheduler] 작업 시간 해석 실패: %s (%s)", tid, exc)
                     continue
                 if self._is_except_date(task, due_at.date().isoformat()):
                     if task.repeat:
@@ -587,7 +589,7 @@ class ProactiveScheduler:
                 with open(_SCHEDULE_RUN_LOG_FILE, "a", encoding="utf-8") as handle:
                     handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
         except OSError as exc:
-            logging.error(f"[Scheduler] 실행 로그 저장 실패: {exc}")
+            logging.error("[Scheduler] 실행 로그 저장 실패: %s", exc)
 
     def _record_learning_artifacts(
         self,
@@ -604,14 +606,16 @@ class ProactiveScheduler:
             started = datetime.fromisoformat(started_at)
             finished = datetime.fromisoformat(finished_at)
             duration_ms = int((finished - started).total_seconds() * 1000)
-        except Exception:
+        except Exception as exc:
+            logging.debug("[Scheduler] 실행 시간 계산 실패, 0ms로 폴백: %s", exc)
             duration_ms = 0
         failure_kind = ""
         if not success:
             try:
                 from agent.execution_analysis import classify_failure_message
                 failure_kind = classify_failure_message(error or summary or "") or "execution_failed"
-            except Exception:
+            except Exception as exc:
+                logging.debug("[Scheduler] 실패 유형 분류 실패, execution_failed 사용: %s", exc)
                 failure_kind = "execution_failed"
         try:
             from agent.strategy_memory import get_strategy_memory
@@ -626,7 +630,7 @@ class ProactiveScheduler:
                 few_shot_eligible=False,
             )
         except Exception as exc:
-            logging.debug(f"[Scheduler] StrategyMemory 기록 실패: {exc}")
+            logging.debug("[Scheduler] StrategyMemory 기록 실패: %s", exc)
         try:
             from agent.episode_memory import GoalEpisode, get_episode_memory
             get_episode_memory().record(
@@ -641,7 +645,7 @@ class ProactiveScheduler:
                 )
             )
         except Exception as exc:
-            logging.debug(f"[Scheduler] EpisodeMemory 기록 실패: {exc}")
+            logging.debug("[Scheduler] EpisodeMemory 기록 실패: %s", exc)
 
 _instance: Optional[ProactiveScheduler] = None
 _instance_lock = threading.Lock()

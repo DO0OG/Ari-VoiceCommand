@@ -87,7 +87,7 @@ class AICommand(BaseCommand):
             self.scheduler = get_scheduler(tts_func)
             self.scheduler.set_orchestrator_func(self.orchestrator.run)
         except Exception as e:
-            logging.warning(f"[AICommand] 스케줄러 초기화 실패: {e}")
+            logging.warning("[AICommand] 스케줄러 초기화 실패: %s", e)
             self.scheduler = None
 
         self._plugin_handlers: Dict[str, Callable] = {}
@@ -274,7 +274,7 @@ class AICommand(BaseCommand):
             result = web_search(query, max_results=max_results)
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
-            logging.error(f"web_search 오류: {e}")
+            logging.error("web_search 오류: %s", e)
             return f"검색 오류: {e}"
 
     def _handle_web_fetch(self, args: dict) -> Optional[str]:
@@ -287,7 +287,7 @@ class AICommand(BaseCommand):
             result = web_fetch(url)
             return result
         except Exception as e:
-            logging.error(f"web_fetch 오류: {e}")
+            logging.error("web_fetch 오류: %s", e)
             return f"페이지 로드 오류: {e}"
 
     def _handle_schedule_task(self, args: dict) -> Optional[str]:
@@ -350,7 +350,8 @@ class AICommand(BaseCommand):
             try:
                 dt = datetime.fromisoformat(t.next_run)
                 time_str = self._format_datetime_kr(dt)
-            except Exception:
+            except Exception as exc:
+                logging.debug("[AICommand] 예약 시간 파싱 실패, 원본 문자열 사용: %s", exc)
                 time_str = t.next_run
             repeat_str = " [반복]" if t.repeat else ""
             lines.append(f"  [{t.task_id}] {time_str}{repeat_str} — {t.goal[:40]}")
@@ -475,7 +476,8 @@ class AICommand(BaseCommand):
         try:
             planner = getattr(self.orchestrator, "planner", None)
             return bool(planner and hasattr(planner, "is_developer_goal") and planner.is_developer_goal(goal))
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AICommand] 개발자 목표 판별 실패, 일반 목표로 처리: %s", exc)
             return False
 
     def _resolve_user_report_dir(self) -> Path:
@@ -533,7 +535,7 @@ class AICommand(BaseCommand):
             report_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
             return str(report_path)
         except Exception as exc:
-            logging.warning(f"[AICommand] 실행 보고서 저장 실패: {exc}")
+            logging.warning("[AICommand] 실행 보고서 저장 실패: %s", exc)
             return ""
 
     def _describe_report_location(self, report_path: str) -> str:
@@ -595,7 +597,8 @@ class AICommand(BaseCommand):
                 continue
             try:
                 payload = json.loads(output)
-            except Exception:
+            except Exception as exc:
+                logging.debug("[AICommand] agent output JSON 파싱 실패, 텍스트 경로 추출 시도: %s", exc)
                 payload = None
             if isinstance(payload, dict):
                 for key in ("saved_path", "report_path", "output_path"):
@@ -812,7 +815,7 @@ class AICommand(BaseCommand):
 
     def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None) -> None:
         if not self._exec_lock.acquire(blocking=False):
-            logging.warning(f"AI 명령 실행 중 재진입 시도 무시: {text}")
+            logging.warning("AI 명령 실행 중 재진입 시도 무시: %s", text)
             return
 
         original_tts = self.tts_wrapper
@@ -898,20 +901,20 @@ class AICommand(BaseCommand):
                 self._emit_user_message(response)
 
             if response:
-                logging.info(f"AI 응답: {response[:50]}...")
+                logging.info("AI 응답: %s...", response[:50])
 
             if response:
                 try:
                     from memory.conversation_history import add_conversation
                     add_conversation(text, response)
                 except Exception as exc:
-                    logging.debug(f"대화 기록 저장 생략: {exc}")
+                    logging.debug("대화 기록 저장 생략: %s", exc)
 
         except AttributeError as e:
-            logging.error(f"AI 어시스턴트가 초기화되지 않았습니다: {e}")
+            logging.error("AI 어시스턴트가 초기화되지 않았습니다: %s", e)
             self.tts_wrapper("AI 기능을 사용할 수 없습니다.")
         except Exception as e:
-            logging.error(f"AI 응답 생성 오류: {e}", exc_info=True)
+            logging.error("AI 응답 생성 오류: %s", e, exc_info=True)
             self.tts_wrapper("응답 생성 중 오류가 발생했습니다.")
         finally:
             self.tts_wrapper = original_tts
@@ -925,18 +928,18 @@ class AICommand(BaseCommand):
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
-            logging.info(f"AI tool 실행: {name} {args}")
+            logging.info("AI tool 실행: %s %s", name, args)
 
             handler = self._dispatch.get(name)
             if handler:
                 try:
                     result = handler(args)
                 except Exception as e:
-                    logging.error(f"tool 핸들러 오류 ({name}): {e}", exc_info=True)
+                    logging.error("tool 핸들러 오류 (%s): %s", name, e, exc_info=True)
                     result = f"오류: {e}"
                 results.append(result)
             else:
-                logging.warning(f"알 수 없는 tool: {name}")
+                logging.warning("알 수 없는 tool: %s", name)
                 results.append(None)
         return results
 
@@ -957,7 +960,7 @@ class AICommand(BaseCommand):
                 stream_callback=stream_callback,
             )
         except Exception as e:
-            logging.error(f"에이전틱 후속 처리 오류: {e}", exc_info=True)
+            logging.error("에이전틱 후속 처리 오류: %s", e, exc_info=True)
             return None
 
     def _invoke_with_optional_stream(self, func: Callable, *args, stream_callback=None, **kwargs):
@@ -994,4 +997,4 @@ class AICommand(BaseCommand):
             elif any(word in user_input for word in ["시간", "몇 시"]):
                 context_mgr.record_command("time")
         except Exception as e:
-            logging.error(f"패턴 기록 실패: {e}")
+            logging.error("패턴 기록 실패: %s", e)
