@@ -31,9 +31,9 @@ class OpenAITTS(QObject):
             try:
                 openai_module = importlib.import_module("openai")
                 self._client = openai_module.OpenAI(api_key=api_key)
-                logging.info(f"OpenAI TTS 초기화 완료 (voice={voice}, model={model})")
+                logging.info("OpenAI TTS 초기화 완료 (voice=%s, model=%s)", voice, model)
             except Exception as e:
-                logging.error(f"OpenAI TTS 초기화 실패: {e}")
+                logging.error("OpenAI TTS 초기화 실패: %s", e)
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or self._client is None:
@@ -53,7 +53,7 @@ class OpenAITTS(QObject):
             )
             pcm_data = response.content  # bytes: 24kHz mono int16
 
-            logging.info(f"[TTS] OpenAI 수신: {time.time()-t0:.2f}s, {len(pcm_data):,} bytes")
+            logging.info("[TTS] OpenAI 수신: %.2fs, %s bytes", time.time() - t0, f"{len(pcm_data):,}")
 
             stream = self.pa.open(
                 format=pyaudio.paInt16,
@@ -65,13 +65,13 @@ class OpenAITTS(QObject):
             stream.stop_stream()
             stream.close()
 
-            logging.info(f"[TTS] OpenAI 전체 완료: {time.time()-t0:.2f}s")
+            logging.info("[TTS] OpenAI 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False
             self.playback_finished.emit()
             return True
 
         except Exception as e:
-            logging.error(f"OpenAI TTS speak 오류: {e}")
+            logging.error("OpenAI TTS speak 오류: %s", e)
             self.is_playing = False
             self.playback_finished.emit()
             return False
@@ -80,10 +80,10 @@ class OpenAITTS(QObject):
         try:
             self.pa.terminate()
         except Exception as exc:
-            logging.debug(f"OpenAI TTS 정리 중 무시된 오류: {exc}")
+            logging.debug("OpenAI TTS 정리 중 무시된 오류: %s", exc)
 
     def __del__(self):
         try:
             self.cleanup()
         except Exception as exc:
-            logging.debug(f"OpenAI TTS 소멸자 정리 실패: {exc}")
+            logging.debug("OpenAI TTS 소멸자 정리 실패: %s", exc)

@@ -112,7 +112,7 @@ class SystemCommand(BaseCommand):
             self._shutdown_immediate()
 
     def _schedule_shutdown(self, delay_seconds: int, time_str: str) -> None:
-        logging.info(f"시스템 종료 예약: {delay_seconds}초 후 ({time_str})")
+        logging.info("시스템 종료 예약: %s초 후 (%s)", delay_seconds, time_str)
         self.tts_wrapper(_("{time}에 컴퓨터를 종료할게요.").format(time=time_str))
         try:
             if sys.platform == "win32":
@@ -122,7 +122,7 @@ class SystemCommand(BaseCommand):
                 minutes = max(1, delay_seconds // 60)
                 subprocess.run(["shutdown", f"+{minutes}"], check=False)
         except Exception as e:
-            logging.error(f"시스템 종료 예약 실패: {e}")
+            logging.error("시스템 종료 예약 실패: %s", e)
             self.tts_wrapper(_("시스템 종료 예약에 실패했습니다."))
 
     def _shutdown_immediate(self) -> None:
@@ -134,7 +134,7 @@ class SystemCommand(BaseCommand):
             else:
                 subprocess.run(["shutdown", "-h", "now"], check=False)
         except Exception as e:
-            logging.error(f"시스템 종료 명령 실패: {e}")
+            logging.error("시스템 종료 명령 실패: %s", e)
             self.tts_wrapper(_("시스템 종료 명령 실행에 실패했습니다."))
 
     def _cancel_shutdown(self) -> None:
@@ -151,7 +151,7 @@ class SystemCommand(BaseCommand):
                     self.tts_wrapper(_("현재 예약된 종료가 없거나 취소에 실패했습니다."))
                     return
         except Exception as e:
-            logging.error(f"종료 취소 실패: {e}")
+            logging.error("종료 취소 실패: %s", e)
             self.tts_wrapper(_("종료 취소 명령 실행에 실패했습니다."))
             return
         self.tts_wrapper(_("종료 예약을 취소했습니다."))
@@ -165,11 +165,11 @@ class SystemCommand(BaseCommand):
             else:
                 subprocess.run(["reboot"], check=False)
         except Exception as e:
-            logging.error(f"시스템 재시작 명령 실패: {e}")
+            logging.error("시스템 재시작 명령 실패: %s", e)
             self.tts_wrapper(_("시스템 재시작 명령 실행에 실패했습니다."))
 
     def _schedule_restart(self, delay_seconds: int, time_str: str) -> None:
-        logging.info(f"시스템 재시작 예약: {delay_seconds}초 후 ({time_str})")
+        logging.info("시스템 재시작 예약: %s초 후 (%s)", delay_seconds, time_str)
         self.tts_wrapper(_("{time}에 컴퓨터를 재시작할게요.").format(time=time_str))
         try:
             if sys.platform == "win32":
@@ -179,7 +179,7 @@ class SystemCommand(BaseCommand):
                 minutes = max(1, delay_seconds // 60)
                 subprocess.run(["shutdown", "-r", f"+{minutes}"], check=False)
         except Exception as e:
-            logging.error(f"시스템 재시작 예약 실패: {e}")
+            logging.error("시스템 재시작 예약 실패: %s", e)
             self.tts_wrapper(_("시스템 재시작 예약에 실패했습니다."))
 
 

@@ -31,7 +31,7 @@ class EdgeTTS(QObject):
         self.volume = volume
         self.is_playing = False
         self.pa = pyaudio.PyAudio()
-        logging.info(f"Edge TTS 초기화 완료 (voice={voice})")
+        logging.info("Edge TTS 초기화 완료 (voice=%s)", voice)
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text:
@@ -60,7 +60,7 @@ class EdgeTTS(QObject):
                 self.playback_finished.emit()
                 return False
 
-            logging.info(f"[TTS] Edge TTS 수신: {time.time()-t0:.2f}s, {len(audio_data):,} bytes")
+            logging.info("[TTS] Edge TTS 수신: %.2fs, %s bytes", time.time() - t0, f"{len(audio_data):,}")
 
             # MP3 → PCM 변환
             from pydub import AudioSegment
@@ -78,13 +78,13 @@ class EdgeTTS(QObject):
             stream.stop_stream()
             stream.close()
 
-            logging.info(f"[TTS] Edge TTS 전체 완료: {time.time()-t0:.2f}s")
+            logging.info("[TTS] Edge TTS 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False
             self.playback_finished.emit()
             return True
 
         except Exception as e:
-            logging.error(f"Edge TTS speak 오류: {e}")
+            logging.error("Edge TTS speak 오류: %s", e)
             self.is_playing = False
             self.playback_finished.emit()
             return False
@@ -104,10 +104,10 @@ class EdgeTTS(QObject):
         try:
             self.pa.terminate()
         except Exception as exc:
-            logging.debug(f"Edge TTS 정리 중 무시된 오류: {exc}")
+            logging.debug("Edge TTS 정리 중 무시된 오류: %s", exc)
 
     def __del__(self):
         try:
             self.cleanup()
         except Exception as exc:
-            logging.debug(f"Edge TTS 소멸자 정리 실패: {exc}")
+            logging.debug("Edge TTS 소멸자 정리 실패: %s", exc)

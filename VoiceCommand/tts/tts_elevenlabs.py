@@ -30,7 +30,7 @@ class ElevenLabsTTS(QObject):
         self._session = None
 
         if api_key:
-            logging.info(f"ElevenLabs TTS 초기화 완료 (voice_id={self.voice_id})")
+            logging.info("ElevenLabs TTS 초기화 완료 (voice_id=%s)", self.voice_id)
         else:
             logging.warning("ElevenLabs API 키가 설정되지 않았습니다.")
 
@@ -87,8 +87,8 @@ class ElevenLabsTTS(QObject):
                 audio_buffer.seek(0)
 
                 if first_chunk_at is not None:
-                    logging.info(f"[TTS] ElevenLabs 첫 청크: {first_chunk_at - t0:.2f}s")
-                logging.info(f"[TTS] ElevenLabs 수신 완료: {time.time()-t0:.2f}s, {bytes_received:,} bytes")
+                    logging.info("[TTS] ElevenLabs 첫 청크: %.2fs", first_chunk_at - t0)
+                logging.info("[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes", time.time() - t0, f"{bytes_received:,}")
 
                 # MP3 → PCM 변환
                 from pydub import AudioSegment
@@ -106,13 +106,13 @@ class ElevenLabsTTS(QObject):
             stream.stop_stream()
             stream.close()
 
-            logging.info(f"[TTS] ElevenLabs 전체 완료: {time.time()-t0:.2f}s")
+            logging.info("[TTS] ElevenLabs 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False
             self.playback_finished.emit()
             return True
 
         except Exception as e:
-            logging.error(f"ElevenLabs TTS speak 오류: {e}")
+            logging.error("ElevenLabs TTS speak 오류: %s", e)
             self.is_playing = False
             self.playback_finished.emit()
             return False
@@ -123,14 +123,14 @@ class ElevenLabsTTS(QObject):
                 self._session.close()
                 self._session = None
         except Exception as exc:
-            logging.debug(f"ElevenLabs 세션 정리 중 무시된 오류: {exc}")
+            logging.debug("ElevenLabs 세션 정리 중 무시된 오류: %s", exc)
         try:
             self.pa.terminate()
         except Exception as exc:
-            logging.debug(f"ElevenLabs TTS 정리 중 무시된 오류: {exc}")
+            logging.debug("ElevenLabs TTS 정리 중 무시된 오류: %s", exc)
 
     def __del__(self):
         try:
             self.cleanup()
         except Exception as exc:
-            logging.debug(f"ElevenLabs TTS 소멸자 정리 실패: {exc}")
+            logging.debug("ElevenLabs TTS 소멸자 정리 실패: %s", exc)
