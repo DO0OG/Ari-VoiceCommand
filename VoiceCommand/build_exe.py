@@ -372,7 +372,8 @@ if build_success:
     # 폴더 정리
     NUITKA_OUT = os.path.join(HERE, "dist", "Main.dist")
     if not one_file and os.path.exists(NUITKA_OUT):
-        if os.path.exists(DIST_DIR): shutil.rmtree(DIST_DIR)
+        if os.path.exists(DIST_DIR):
+            shutil.rmtree(DIST_DIR)
         os.rename(NUITKA_OUT, DIST_DIR)
         print(f"\n✓ 출력 완료: {DIST_DIR}")
     

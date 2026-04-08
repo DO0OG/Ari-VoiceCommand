@@ -132,7 +132,8 @@ class StrategyMemory:
             failure_hint_bonus = 8 if (not rec.success and rec.lesson) else 0
             score = tag_overlap * 15 + token_score * 50 + ngram_score * 30
             score += exact_phrase_bonus + failure_hint_bonus
-            if rec.success: score += 10
+            if rec.success:
+                score += 10
             
             recency = datetime.fromisoformat(rec.timestamp)
             days_diff = (datetime.now() - recency).days
@@ -140,7 +141,8 @@ class StrategyMemory:
             scored.append((score, rec))
 
         relevant = [rec for _, rec in sorted(scored, key=lambda x: x[0], reverse=True)[:3]]
-        if not relevant: return ""
+        if not relevant:
+            return ""
 
         lines = [_("## 과거 유사 사례 및 교훈 (Planning Guide):")]
         for rec in relevant:
@@ -220,7 +222,7 @@ class StrategyMemory:
             scored.append((score, rec))
 
         failures = []
-        for _, rec in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]:
+        for _score, rec in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]:
             reason = rec.lesson or rec.error_summary or rec.failure_kind or _("실패 기록")
             failures.append(f"{rec.goal_summary[:80]} -> {reason[:120]}")
         return failures
@@ -298,12 +300,14 @@ class StrategyMemory:
     def _extract_tokens(self, text: str) -> set[str]:
         tokens = set()
         for token in re.findall(r"[가-힣A-Za-z][가-힣A-Za-z0-9_-]{1,20}", (text or "").lower()):
-            if token in _TOKEN_STOPWORDS: continue
+            if token in _TOKEN_STOPWORDS:
+                continue
             tokens.add(token)
         return tokens
 
     def _token_similarity(self, left: set[str], right: set[str]) -> float:
-        if not left or not right: return 0.0
+        if not left or not right:
+            return 0.0
         return len(left & right) / len(left | right)
 
     def _extract_ngrams(self, text: str) -> set[str]:

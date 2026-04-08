@@ -1,5 +1,4 @@
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime
@@ -7,10 +6,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from commands.ai_command import AICommand
 from agent.agent_orchestrator import AgentRunResult

@@ -67,7 +67,8 @@ def web_search(query: str, max_results: int = 5) -> str:
     try:
         with _create_search_client() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
-        if not results: return "검색 결과가 없습니다."
+        if not results:
+            return "검색 결과가 없습니다."
         
         lines = []
         for i, r in enumerate(results, 1):
@@ -112,7 +113,8 @@ class SmartBrowser:
         self._last_action_summary = ""
 
     def _ensure_driver(self):
-        if self.driver: return
+        if self.driver:
+            return
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -120,7 +122,8 @@ class SmartBrowser:
             from webdriver_manager.chrome import ChromeDriverManager
             
             opts = Options()
-            if self.headless: opts.add_argument("--headless=new")
+            if self.headless:
+                opts.add_argument("--headless=new")
             opts.add_experimental_option("prefs", {"download.default_directory": self.download_dir})
             
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)

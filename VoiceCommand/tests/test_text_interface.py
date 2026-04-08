@@ -1,5 +1,4 @@
 import os
-import sys
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -7,10 +6,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFrame, QLabel
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.proactive_scheduler import ScheduledTask
 from ui.scheduler_panel import SchedulerPanel, TaskRow

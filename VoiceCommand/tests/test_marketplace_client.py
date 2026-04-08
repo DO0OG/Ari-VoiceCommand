@@ -1,18 +1,18 @@
 import os
-import sys
 import unittest
 import io
 import tempfile
 import zipfile
 import hashlib
 import json
+from pathlib import Path
 from unittest import mock
 
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
 from core import marketplace_client
+
+
+VOICECOMMAND_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = VOICECOMMAND_ROOT.parent
 
 
 class MarketplaceClientTests(unittest.TestCase):
@@ -181,7 +181,7 @@ class MarketplaceClientTests(unittest.TestCase):
                         self.assertFalse(marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir))
 
     def test_marketplace_contract_files_expose_sha256_end_to_end(self):
-        repo_root = os.path.dirname(ROOT)
+        repo_root = str(REPO_ROOT)
         install_fn = os.path.join(repo_root, "market", "supabase", "functions", "install-plugin", "index.ts")
         get_fn = os.path.join(repo_root, "market", "supabase", "functions", "get-plugin", "index.ts")
         upload_fn = os.path.join(repo_root, "market", "supabase", "functions", "upload-plugin", "index.ts")

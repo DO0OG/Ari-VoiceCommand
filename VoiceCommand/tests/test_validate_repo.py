@@ -3,20 +3,20 @@ import os
 import subprocess  # nosec B404 - 고정된 검증 스크립트만 실행
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
 import validate_repo
+
+
+VOICECOMMAND_ROOT = str(Path(__file__).resolve().parent.parent)
 
 
 class ValidateRepoTests(unittest.TestCase):
     def test_json_plan_output(self):
         result = subprocess.run(
-            [sys.executable, os.path.join(ROOT, "validate_repo.py"), "--json"],
+            [sys.executable, os.path.join(VOICECOMMAND_ROOT, "validate_repo.py"), "--json"],
             # nosec B603 - 입력값이 테스트 코드 내부 고정값임
             check=True,
             capture_output=True,
@@ -73,7 +73,7 @@ class ValidateRepoTests(unittest.TestCase):
         self.assertEqual(payload["unit_tests"], "tests/test_*.py")
 
     def test_run_compile_writes_pyc_to_temp_location(self):
-        source = os.path.join(ROOT, "agent", "execution_analysis.py")
+        source = os.path.join(VOICECOMMAND_ROOT, "agent", "execution_analysis.py")
         captured = {}
 
         def fake_compile(path, cfile=None, doraise=False):

@@ -1,7 +1,8 @@
-"""애플리케이션 전역 상태와 음성/TTS 오케스트레이션 헬퍼."""
+﻿"""애플리케이션 전역 상태와 음성/TTS 오케스트레이션 헬퍼."""
 
 import logging
 import os
+import re
 import sys
 import time
 import threading
@@ -21,6 +22,7 @@ from core.constants import (
 
 # 모듈 및 오디오 관리
 from audio.audio_manager import GlobalAudio
+from commands.command_registry import CommandRegistry
 from services.weather_service import WeatherService
 from services.timer_manager import TimerManager
 from i18n.translator import _
@@ -92,7 +94,8 @@ def set_character_widget(widget: object) -> None:
 
 
 def start_tts_background():
-    if _state.tts_init_started: return
+    if _state.tts_init_started:
+        return
     _state.tts_init_started = True
 
     from core.config_manager import ConfigManager
@@ -177,8 +180,6 @@ def reconnect_tts_signals():
 
 
 # ── 실행 로직 ───────────────────────────────────────────────────────────────
-
-import re
 
 # 감정 태그 파싱용 정규표현식 사전 컴파일 (성능 최적화)
 _EMOTION_NAMES = "기쁨|슬픔|화남|놀람|평온|수줍|기대|진지|걱정"
@@ -282,7 +283,8 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
         return False
 
     try:
-        if _state.rp_gen: text = _state.rp_gen.generate(text)
+        if _state.rp_gen:
+            text = _state.rp_gen.generate(text)
         ok = _state.fish_tts.speak(text, emotion=emotion)
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
@@ -327,15 +329,18 @@ def should_pause_wake_detection(now: float | None = None) -> bool:
 
 
 def execute_command(command):
-    if _state.command_registry: _state.command_registry.execute(command)
+    if _state.command_registry:
+        _state.command_registry.execute(command)
 
 
 # ── 스레드용 헬퍼 함수 ────────────────────────────────────────────────────────
 
 def get_microphone_index_helper(microphone_name):
-    if not microphone_name: return None
+    if not microphone_name:
+        return None
     for index, name in enumerate(sr.Microphone.list_microphone_names()):
-        if microphone_name in name: return index
+        if microphone_name in name:
+            return index
     return None
 
 
@@ -364,8 +369,10 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
         history.append(text)
         logging.info("인식된 텍스트: %s", text)
         signal.emit(text)
-    except sr.UnknownValueError: logging.warning("음성 인식 불가")
-    except Exception as e: logging.error("음성 인식 오류: %s", e)
+    except sr.UnknownValueError:
+        logging.warning("음성 인식 불가")
+    except Exception as e:
+        logging.error("음성 인식 오류: %s", e)
 
 
 def wake_detector_recalibrate_helper(detector, source):
@@ -379,7 +386,7 @@ def wake_detector_recalibrate_helper(detector, source):
 # ── 모듈 초기화 ──────────────────────────────────────────────────────────────
 
 weather_service = WeatherService(api_key="")
-timer_manager = TimerManager(tts_callback=lambda t: tts_wrapper(text=t))
+timer_manager = TimerManager(tts_callback=lambda text: tts_wrapper(text=text))
 
 def adjust_volume(change):
     try:
@@ -397,7 +404,6 @@ def adjust_volume(change):
         logging.debug("시스템 볼륨 조절 실패: %s", exc)
         tts_wrapper(_("볼륨 조절 실패"))
 
-from commands.command_registry import CommandRegistry
 _state.command_registry = CommandRegistry(
     ai_assistant=None,
     weather_service=weather_service,
@@ -476,3 +482,4 @@ def is_game_mode() -> bool:
 # 이전에 모듈 전역으로 노출됐던 이름들. 같은 객체를 가리키므로 변경이 양쪽에 반영됨.
 learning_mode = _state.learning_mode          # dict, 재할당 없음 → 안전한 별칭
 _tts_init_event = _state.tts_init_event       # threading.Event, 재할당 없음 → 안전한 별칭
+

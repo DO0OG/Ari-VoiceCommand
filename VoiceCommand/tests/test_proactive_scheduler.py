@@ -1,5 +1,4 @@
 import os
-import sys
 import unittest
 import tempfile
 import threading
@@ -7,10 +6,6 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-
-ROOT = os.path.dirname(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask
 

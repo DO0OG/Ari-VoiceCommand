@@ -33,7 +33,7 @@ def _parse_args() -> str:
         return os.path.abspath(args.dir)
 
     # 대화형 입력
-    print(f"CosyVoice3 설치 경로를 입력하세요.")
+    print("CosyVoice3 설치 경로를 입력하세요.")
     print(f"  기본값: {DEFAULT_COSYVOICE_DIR}")
     user_input = input("경로 (엔터 → 기본값 사용): ").strip()
     return os.path.abspath(user_input) if user_input else DEFAULT_COSYVOICE_DIR

@@ -80,7 +80,8 @@ class WeatherService:
 
             # 한국어 변환
             city = CITY_NAME_MAP.get(city_eng, city_eng)
-            if not city: city = "주변"
+            if not city:
+                city = "주변"
 
             logging.info(f"IP 위치: {city_eng} -> {city} ({lat}, {lon})")
             resolved = (lat, lon, city)

@@ -15,7 +15,6 @@ import subprocess
 from collections import deque
 from typing import Optional
 
-import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
