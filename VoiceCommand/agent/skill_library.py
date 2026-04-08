@@ -55,7 +55,8 @@ class SkillLibrary:
         try:
             from core.resource_manager import ResourceManager
             self.file_path = ResourceManager.get_writable_path("skill_library.json")
-        except Exception:
+        except Exception as exc:
+            logging.debug("[SkillLibrary] 저장 경로 조회 실패, 로컬 파일 폴백 사용: %s", exc)
             self.file_path = os.path.join(os.path.dirname(__file__), "skill_library.json")
         self.skills: List[Skill] = []
         self._save_lock = threading.RLock()
@@ -79,7 +80,7 @@ class SkillLibrary:
         except FileNotFoundError:
             self.skills = []
         except Exception as e:
-            logging.warning(f"[SkillLibrary] 로드 실패: {e}")
+            logging.warning("[SkillLibrary] 로드 실패: %s", e)
             self.skills = []
 
     def _save(self):
@@ -90,9 +91,9 @@ class SkillLibrary:
                 with open(self.file_path, "w", encoding="utf-8") as f:
                     json.dump([asdict(skill) for skill in self.skills], f, ensure_ascii=False, indent=2)
             except FileNotFoundError as e:
-                logging.debug(f"[SkillLibrary] 저장 생략: {e}")
+                logging.debug("[SkillLibrary] 저장 생략: %s", e)
             except Exception as e:
-                logging.warning(f"[SkillLibrary] 저장 실패: {e}")
+                logging.warning("[SkillLibrary] 저장 실패: %s", e)
 
     def list_skills(self) -> List[Skill]:
         return [skill for skill in self.skills if skill.enabled]
@@ -219,9 +220,9 @@ class SkillLibrary:
             if new_steps:
                 skill.steps = new_steps
                 self._save()
-                logging.info(f"[SkillLibrary] '{skill.name}' 스텝 자기수정 완료")
+                logging.info("[SkillLibrary] '%s' 스텝 자기수정 완료", skill.name)
         except Exception as exc:
-            logging.debug(f"[SkillLibrary] 스텝 수정 실패: {exc}")
+            logging.debug("[SkillLibrary] 스텝 수정 실패: %s", exc)
 
     def _async_condense(self, skill: Skill):
         """Direction 1: 성공 반복 후 스텝 압축."""
@@ -231,9 +232,9 @@ class SkillLibrary:
             if new_steps:
                 skill.steps = new_steps
                 self._save()
-                logging.info(f"[SkillLibrary] '{skill.name}' 스텝 압축 완료")
+                logging.info("[SkillLibrary] '%s' 스텝 압축 완료", skill.name)
         except Exception as exc:
-            logging.debug(f"[SkillLibrary] 스텝 압축 실패: {exc}")
+            logging.debug("[SkillLibrary] 스텝 압축 실패: %s", exc)
 
     def _async_compile(self, skill: Skill):
         """Direction 2: Python 함수로 컴파일."""
@@ -244,9 +245,9 @@ class SkillLibrary:
             if code:
                 optimizer.save_compiled(skill.skill_id, code)
                 self.mark_compiled(skill.skill_id)
-                logging.info(f"[SkillLibrary] '{skill.name}' Python 컴파일 완료")
+                logging.info("[SkillLibrary] '%s' Python 컴파일 완료", skill.name)
         except Exception as exc:
-            logging.debug(f"[SkillLibrary] Python 컴파일 실패: {exc}")
+            logging.debug("[SkillLibrary] Python 컴파일 실패: %s", exc)
 
     def _async_repair_compiled(self, skill: Skill, error: str):
         """Direction 2: 컴파일 스킬 코드 LLM 수정."""
@@ -259,9 +260,9 @@ class SkillLibrary:
             new_code = optimizer.repair_python(skill, code, error)
             if new_code:
                 optimizer.save_compiled(skill.skill_id, new_code)
-                logging.info(f"[SkillLibrary] '{skill.name}' 컴파일 코드 수정 완료")
+                logging.info("[SkillLibrary] '%s' 컴파일 코드 수정 완료", skill.name)
         except Exception as exc:
-            logging.debug(f"[SkillLibrary] 컴파일 코드 수정 실패: {exc}")
+            logging.debug("[SkillLibrary] 컴파일 코드 수정 실패: %s", exc)
 
     # ── 내부 헬퍼 ─────────────────────────────────────────────────────────
 

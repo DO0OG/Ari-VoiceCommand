@@ -37,7 +37,7 @@ def detect_file_set(folder_path: str, extensions: Optional[List[str]] = None) ->
             "sample_files": files[:20],
         }
     except Exception as e:
-        logger.error(f"detect_file_set 오류: {e}")
+        logger.error("detect_file_set 오류: %s", e)
         return {"error": str(e)}
 
 
@@ -61,7 +61,7 @@ def batch_rename_files(folder_path: str, rename_rule: str, replacement: str = ""
             results.append(result_item)
         return {"renamed_count": len(results), "changes": results}
     except Exception as e:
-        logger.error(f"batch_rename_files 오류: {e}")
+        logger.error("batch_rename_files 오류: %s", e)
         return {"error": str(e)}
 
 def rename_file(old_path: str, new_name: str) -> str:
@@ -77,7 +77,7 @@ def rename_file(old_path: str, new_name: str) -> str:
         os.rename(old_path, new_path)
         return new_path
     except Exception as e:
-        logger.error(f"rename_file 오류: {e}")
+        logger.error("rename_file 오류: %s", e)
         return f"오류: {e}"
 
 def merge_text_files(file_paths: List[str], output_path: str) -> str:
@@ -98,7 +98,7 @@ def merge_text_files(file_paths: List[str], output_path: str) -> str:
                     outfile.write("\n")
         return output_path
     except Exception as e:
-        logger.error(f"merge_text_files 오류: {e}")
+        logger.error("merge_text_files 오류: %s", e)
         return f"오류: {e}"
 
 def organize_folder_by_extension(folder_path: str) -> Dict[str, int]:
@@ -138,7 +138,7 @@ def organize_folder_by_extension(folder_path: str) -> Dict[str, int]:
             
         return stats
     except Exception as e:
-        logger.error(f"organize_folder 오류: {e}")
+        logger.error("organize_folder 오류: %s", e)
         return {"error": str(e)}
 
 def analyze_data_file(file_path: str) -> Dict[str, Any]:
@@ -186,7 +186,8 @@ def analyze_data_file(file_path: str) -> Dict[str, Any]:
                         "column_samples": _sample_columns(rows, reader.fieldnames or []),
                         "numeric_summary": numeric_columns,
                     }
-                except Exception:
+                except Exception as exc:
+                    logger.debug("CSV 상세 파싱 실패, raw 모드로 폴백: %s", exc)
                     f.seek(0)
                     content = f.read(4096)
                     return {
@@ -196,7 +197,7 @@ def analyze_data_file(file_path: str) -> Dict[str, Any]:
                     }
         return {"error": "지원하지 않는 형식입니다."}
     except Exception as e:
-        logger.error(f"analyze_data_file 오류: {e}")
+        logger.error("analyze_data_file 오류: %s", e)
         return {"error": str(e)}
 
 def generate_markdown_report(content: str, output_path: str, title: str = "분석 보고서") -> str:
@@ -220,7 +221,7 @@ def generate_markdown_report(content: str, output_path: str, title: str = "분�
             f.write(full_content)
         return output_path
     except Exception as e:
-        logger.error(f"generate_markdown_report 오류: {e}")
+        logger.error("generate_markdown_report 오류: %s", e)
         return f"오류: {e}"
 
 

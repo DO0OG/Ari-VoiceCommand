@@ -80,7 +80,7 @@ class ResourceManager:
             try:
                 ResourceManager._merge_path_if_missing(source, destination)
             except Exception as e:
-                logging.debug(f"런타임 상태 마이그레이션 실패 {source_rel}: {e}")
+                logging.debug("런타임 상태 마이그레이션 실패 %s: %s", source_rel, e)
 
     @staticmethod
     def _cleanup_legacy_runtime_state(
@@ -109,7 +109,7 @@ class ResourceManager:
                     os.remove(source)
                 cleaned_sources.add(normalized_source)
             except Exception as e:
-                logging.debug(f"레거시 런타임 상태 정리 실패 {source_rel}: {e}")
+                logging.debug("레거시 런타임 상태 정리 실패 %s: %s", source_rel, e)
 
     @staticmethod
     def reset_cache() -> None:
@@ -185,13 +185,13 @@ class ResourceManager:
             try:
                 if os.path.isdir(source):
                     shutil.copytree(source, destination)
-                    logging.info(f"✓ 폴더 추출: {dest_name}")
+                    logging.info("✓ 폴더 추출: %s", dest_name)
                 elif os.path.exists(source):
                     os.makedirs(os.path.dirname(destination), exist_ok=True)
                     shutil.copy2(source, destination)
-                    logging.info(f"✓ 파일 추출: {dest_name}")
+                    logging.info("✓ 파일 추출: %s", dest_name)
             except Exception as e:
-                logging.error(f"리소스 추출 실패 {src_name}: {e}")
+                logging.error("리소스 추출 실패 %s: %s", src_name, e)
 
     @staticmethod
     def get_images_dir() -> str:
@@ -227,7 +227,7 @@ class ResourceManager:
                     elif os.path.isfile(src) and not os.path.exists(dst):
                         shutil.copy2(src, dst)
         except Exception as e:
-            logging.warning(f"테마 파일 준비 실패: {e}")
+            logging.warning("테마 파일 준비 실패: %s", e)
         return writable
 
     @staticmethod
@@ -248,5 +248,5 @@ class ResourceManager:
                     elif os.path.isfile(src) and not os.path.exists(dst):
                         shutil.copy2(src, dst)
         except Exception as e:
-            logging.warning(f"플러그인 파일 준비 실패: {e}")
+            logging.warning("플러그인 파일 준비 실패: %s", e)
         return writable

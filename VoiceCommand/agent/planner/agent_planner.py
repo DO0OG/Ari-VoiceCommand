@@ -428,7 +428,8 @@ def _get_lang() -> str:
     try:
         from i18n.translator import get_language
         return get_language()
-    except Exception:
+    except Exception as exc:
+        logging.debug("[Planner] 언어 설정 조회 실패, ko 기본값 사용: %s", exc)
         return "ko"
 
 
@@ -473,7 +474,7 @@ class AgentPlanner(TemplatePlansMixin):
                                   role_hint="planner")
             return self._parse_object(resp) or {}
         except Exception as e:
-            logging.error(f"[Planner] 반성 실패: {e}")
+            logging.error("[Planner] 반성 실패: %s", e)
             return {}
 
     # ── 공개 API ──────────────────────────────────────────────────────────────
@@ -499,7 +500,7 @@ class AgentPlanner(TemplatePlansMixin):
 
         templated = self._build_template_plan(goal)
         if templated:
-            logging.info(f"[Planner] 템플릿 계획 사용: {goal}")
+            logging.info("[Planner] 템플릿 계획 사용: %s", goal)
             self._last_learning_signals = signals
             return _annotate(templated)
 
@@ -555,7 +556,7 @@ class AgentPlanner(TemplatePlansMixin):
                     self._last_learning_signals = signals
                     return _annotate(fallback_steps)
         if not items:
-            logging.warning(f"[Planner] decompose 파싱 실패: {raw[:200]}")
+            logging.warning("[Planner] decompose 파싱 실패: %s", raw[:200])
             self._last_learning_signals = signals
             return []
         steps = [
@@ -713,7 +714,7 @@ class AgentPlanner(TemplatePlansMixin):
         self._write_trace("fix_step", goal, raw)
         data = self._parse_object(raw)
         if not data or not data.get("content"):
-            logging.warning(f"[Planner] fix_step 파싱 실패: {raw[:200]}")
+            logging.warning("[Planner] fix_step 파싱 실패: %s", raw[:200])
             heuristic = self._heuristic_fix_step(step, error, goal, context)
             if heuristic:
                 return heuristic
@@ -721,7 +722,7 @@ class AgentPlanner(TemplatePlansMixin):
         if self.is_developer_goal(goal):
             disallowed_reason = self._find_disallowed_developer_reason(data.get("content", ""), goal=goal, context=context)
             if disallowed_reason:
-                logging.warning(f"[Planner] 개발용 수정안 거부 ({disallowed_reason})")
+                logging.warning("[Planner] 개발용 수정안 거부 (%s)", disallowed_reason)
                 heuristic = self._heuristic_fix_step(step, error, goal, context)
                 if heuristic:
                     return heuristic
@@ -815,14 +816,16 @@ class AgentPlanner(TemplatePlansMixin):
         try:
             from agent.strategy_memory import get_strategy_memory
             return callback(get_strategy_memory())
-        except Exception:
+        except Exception as exc:
+            logging.debug("[Planner] StrategyMemory 접근 실패, 기본값 사용: %s", exc)
             return default
 
     def _with_episode_memory(self, callback, default):
         try:
             from agent.episode_memory import get_episode_memory
             return callback(get_episode_memory())
-        except Exception:
+        except Exception as exc:
+            logging.debug("[Planner] EpisodeMemory 접근 실패, 기본값 사용: %s", exc)
             return default
 
     def _get_strategy_context(self, goal: str) -> str:
@@ -897,20 +900,34 @@ class AgentPlanner(TemplatePlansMixin):
                         if has_fallback and delay >= 8.0:
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
-                                f"[Planner] {target_model} 장기 대기 오류({delay:.1f}s) → 선택된 대체 모델 {next_model}로 즉시 전환: {e}"
+                                "[Planner] %s 장기 대기 오류(%.1fs) → 선택된 대체 모델 %s로 즉시 전환: %s",
+                                target_model,
+                                delay,
+                                next_model,
+                                e,
                             )
                             failed = True
                             break
                         if attempt < 2 and self._is_retryable_llm_error(e):
-                            logging.warning(f"[Planner] LLM 일시 오류 ({target_model}) → {delay:.1f}s 대기 후 재시도: {e}")
+                            logging.warning(
+                                "[Planner] LLM 일시 오류 (%s) → %.1fs 대기 후 재시도: %s",
+                                target_model,
+                                delay,
+                                e,
+                            )
                             time.sleep(delay)
                             continue
                         if has_fallback and self._is_retryable_llm_error(e):
                             next_model = candidates[candidate_index + 1][2]
-                            logging.warning(f"[Planner] {target_model} 호출 실패 → 선택된 대체 모델 {next_model}로 전환: {e}")
+                            logging.warning(
+                                "[Planner] %s 호출 실패 → 선택된 대체 모델 %s로 전환: %s",
+                                target_model,
+                                next_model,
+                                e,
+                            )
                             failed = True
                             break
-                        logging.error(f"[Planner] LLM 호출 오류 ({target_model}): {e}")
+                        logging.error("[Planner] LLM 호출 오류 (%s): %s", target_model, e)
                         return "".join(collected_parts).strip()
                 if failed:
                     break
@@ -976,7 +993,7 @@ class AgentPlanner(TemplatePlansMixin):
             description = str(item.get("description_kr", "") or "")
             disallowed_reason = self._find_disallowed_developer_reason(content, goal=goal, context=context)
             if disallowed_reason:
-                logging.warning(f"[Planner] 개발 계획 거부 ({disallowed_reason})")
+                logging.warning("[Planner] 개발 계획 거부 (%s)", disallowed_reason)
                 return []
             if not is_read_only_step_content(content, description):
                 has_code_change = True
@@ -1051,7 +1068,8 @@ class AgentPlanner(TemplatePlansMixin):
             repo_scan = str(context.get("step_0_output", "") or "")
             try:
                 payload = json.loads(repo_scan)
-            except Exception:
+            except Exception as exc:
+                logging.debug("[Planner] repo_scan JSON 파싱 실패, 빈 payload 사용: %s", exc)
                 payload = {}
             if isinstance(payload, dict):
                 for area in payload.keys():
@@ -1112,7 +1130,8 @@ class AgentPlanner(TemplatePlansMixin):
             if match:
                 try:
                     return max(0.5, min(float(match.group(1)), 60.0))
-                except Exception:
+                except Exception as exc:
+                    logging.debug("[Planner] 재시도 지연 파싱 실패, 다음 패턴 확인: %s", exc)
                     continue
         return min(2.0 * (attempt + 1), 10.0)
 
@@ -1184,7 +1203,8 @@ class AgentPlanner(TemplatePlansMixin):
                     file_count = info.get("file_count", 0)
                     samples = ", ".join((info.get("samples") or [])[:3])
                     lines.append(f"  {area}: file_count={file_count}, samples={samples}")
-            except Exception:
+            except Exception as exc:
+                logging.debug("[Planner] 개발 컨텍스트 repo_scan 해석 실패: %s", exc)
                 lines.append(f"  repo_scan: {repo_scan[:180]}")
 
         validate_preview = str(context.get("step_1_output", "") or "")
@@ -1209,7 +1229,8 @@ class AgentPlanner(TemplatePlansMixin):
                         lines.append(f"  tests: count={len(test_names)}, all={', '.join(test_names)}")
                 else:
                     lines.append(f"  tests: {tests_output[:180]}")
-            except Exception:
+            except Exception as exc:
+                logging.debug("[Planner] 개발 컨텍스트 tests 해석 실패: %s", exc)
                 lines.append(f"  tests: {tests_output[:180]}")
 
         previous_attempt = str(context.get("이전_시도", "") or "")
@@ -1237,7 +1258,7 @@ class AgentPlanner(TemplatePlansMixin):
                     f"{'=' * 80}\n"
                 )
         except Exception as e:
-            logging.warning(f"[Planner] trace 저장 실패: {e}")
+            logging.warning("[Planner] trace 저장 실패: %s", e)
 
 
 # ── 싱글톤 ─────────────────────────────────────────────────────────────────────

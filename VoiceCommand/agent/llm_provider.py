@@ -60,7 +60,8 @@ def _get_tool_instruction() -> str:
     try:
         from i18n.translator import get_language
         lang = get_language()
-    except Exception:
+    except Exception as exc:
+        logging.debug("[LLMProvider] 도구 지침 언어 조회 실패, ko 기본값 사용: %s", exc)
         lang = "ko"
     if lang == "en":
         return (
@@ -159,11 +160,11 @@ class LLMProvider:
         if planner_provider and planner_provider != provider and planner_api_key:
             self.planner_client = self._make_client(self.planner_provider, planner_api_key)
             if self.planner_client:
-                logging.info(f"플래너 클라이언트 초기화 완료 ({self.planner_provider} / {self.planner_model})")
+                logging.info("플래너 클라이언트 초기화 완료 (%s / %s)", self.planner_provider, self.planner_model)
         if execution_provider and execution_provider != provider and execution_api_key:
             self.execution_client = self._make_client(self.execution_provider, execution_api_key)
             if self.execution_client:
-                logging.info(f"실행 클라이언트 초기화 완료 ({self.execution_provider} / {self.execution_model})")
+                logging.info("실행 클라이언트 초기화 완료 (%s / %s)", self.execution_provider, self.execution_model)
 
     # ── 초기화 ─────────────────────────────────────────────────────────────────
 
@@ -189,21 +190,28 @@ class LLMProvider:
                     }
                 return OpenAI(**kwargs)
         except Exception as e:
-            logging.error(f"LLM 클라이언트 초기화 실패 ({provider}): {e}")
+            logging.error("LLM 클라이언트 초기화 실패 (%s): %s", provider, e)
             return None
 
     def _get_ollama_url(self) -> str:
         try:
             from core.config_manager import ConfigManager
             return ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
-        except Exception:
+        except Exception as exc:
+            logging.debug("[LLMProvider] ollama_base_url 조회 실패, 기본값 사용: %s", exc)
             return "http://localhost:11434/v1"
 
     def _init_client(self):
         self.client = self._make_client(self.provider, self.api_key)
         if self.client:
-            logging.info(f"LLM 클라이언트 초기화 완료 ({self.provider} / {self.model})")
-            logging.info(f"  - Planner: {self.planner_provider}/{self.planner_model}, Execution: {self.execution_provider}/{self.execution_model}")
+            logging.info("LLM 클라이언트 초기화 완료 (%s / %s)", self.provider, self.model)
+            logging.info(
+                "  - Planner: %s/%s, Execution: %s/%s",
+                self.planner_provider,
+                self.planner_model,
+                self.execution_provider,
+                self.execution_model,
+            )
 
     # ── 도구 정의 ──────────────────────────────────────────────────────────────
 
@@ -349,7 +357,7 @@ class LLMProvider:
             route = get_llm_router().route(user_message, {})
             return self._get_role_target(route.role)
         except Exception as e:
-            logging.debug(f"[LLMRouter] 라우팅 생략: {e}")
+            logging.debug("[LLMRouter] 라우팅 생략: %s", e)
         return client, provider, model
 
     def chat(self, user_message, include_context=True, model_override="", system_override="", stream_callback=None, save_history=True):
@@ -408,7 +416,7 @@ class LLMProvider:
                 self._response_cache.set(cache_key, msg)
             return msg
         except Exception as e:
-            logging.error(f"LLM chat 오류 ({model}): {e}")
+            logging.error("LLM chat 오류 (%s): %s", model, e)
             return self._offline_response(user_message)
 
     def chat_with_tools(self, user_message, include_context=True, model_override="", stream_callback=None):
@@ -453,7 +461,9 @@ class LLMProvider:
                 ctx_mgr = get_memory_manager().context_manager
                 for tc in choice.message.tool_calls:
                     try: args = json.loads(tc.function.arguments)
-                    except Exception: args = {}
+                    except Exception as exc:
+                        logging.debug("[LLMProvider] tool arguments 파싱 실패, 빈 값 사용: %s", exc)
+                        args = {}
                     args = self._normalize_tool_arguments(tc.function.name, args, user_message)
                     tool_calls.append({"id": tc.id, "name": tc.function.name, "arguments": args})
                     ctx_mgr.record_command(tc.function.name, args)
@@ -474,7 +484,7 @@ class LLMProvider:
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
-            logging.error(f"LLM chat_with_tools 오류 ({model}): {e}")
+            logging.error("LLM chat_with_tools 오류 (%s): %s", model, e)
             return self._offline_response(user_message), []
 
     def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="", stream_callback=None) -> str:
@@ -524,7 +534,7 @@ class LLMProvider:
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
-            logging.error(f"feed_tool_result 오류 ({model}): {e}")
+            logging.error("feed_tool_result 오류 (%s): %s", model, e)
             return ""
 
     def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None, stream_callback=None):
@@ -550,7 +560,7 @@ class LLMProvider:
             if msg: self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
-            logging.error(f"Anthropic API 오류: {e}")
+            logging.error("Anthropic API 오류: %s", e)
             return f"오류 발생: {e}", []
 
     def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override="", client_override=None, stream_callback=None):
@@ -567,7 +577,7 @@ class LLMProvider:
             if msg: self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
-            logging.error(f"Anthropic feed 오류: {e}")
+            logging.error("Anthropic feed 오류: %s", e)
             return ""
 
     def _stream_or_chat_completion(
@@ -600,7 +610,8 @@ class LLMProvider:
             for chunk in stream:
                 try:
                     delta = chunk.choices[0].delta.content or ""
-                except Exception:
+                except Exception as exc:
+                    logging.debug("[LLMProvider] 스트리밍 delta 추출 실패: %s", exc)
                     delta = ""
                 if not delta:
                     continue
@@ -677,7 +688,8 @@ class LLMProvider:
         try:
             from i18n.translator import get_language
             lang = get_language()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[LLMProvider] 언어 설정 조회 실패, ko 기본값 사용: %s", exc)
             lang = "ko"
         _BASE_PROMPT = {
             "ko": "당신은 한국어 AI 어시스턴트 아리입니다.",
@@ -698,7 +710,7 @@ class LLMProvider:
                 if profile_prompt:
                     parts.append(profile_prompt)
             except Exception as e:
-                logging.debug(f"[LLM] 사용자 프로파일 주입 실패: {e}")
+                logging.debug("[LLM] 사용자 프로파일 주입 실패: %s", e)
             try:
                 from memory.memory_manager import get_memory_manager
                 memory_manager = get_memory_manager()
@@ -706,7 +718,7 @@ class LLMProvider:
                 if facts_prompt:
                     parts.append(facts_prompt)
             except Exception as e:
-                logging.debug(f"[LLM] 사실 주입 실패: {e}")
+                logging.debug("[LLM] 사실 주입 실패: %s", e)
         parts.append(self.rp_generator.build_system_prompt(base_prompt))
         if include_context:
             try:
@@ -715,7 +727,7 @@ class LLMProvider:
                 if context_prompt:
                     parts.append(f"[대화 컨텍스트]\n{context_prompt}")
             except Exception as e:
-                logging.debug(f"[LLM] 메모리 컨텍스트 주입 실패: {e}")
+                logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
         parts.append(_get_tool_instruction())
         parts.append(_LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"]))
         return "\n\n".join(part for part in parts if part)
@@ -747,7 +759,8 @@ def get_llm_provider() -> LLMProvider:
                 try:
                     from core.config_manager import ConfigManager
                     s = ConfigManager.load_settings()
-                except Exception:
+                except Exception as exc:
+                    logging.debug("[LLMProvider] 설정 로드 실패, 기본 LLM 설정 사용: %s", exc)
                     s = {}
                 provider = s.get("llm_provider", "groq")
                 api_key = "ollama" if provider == "ollama" else s.get(_KEY_MAP.get(provider, ""), "")

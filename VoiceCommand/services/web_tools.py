@@ -76,7 +76,7 @@ def web_search(query: str, max_results: int = 5) -> str:
             lines.append(f"    URL: {r.get('href', '')}")
         return "\n".join(lines)
     except Exception as e:
-        logging.error(f"[WebTools] 검색 오류: {e}")
+        logging.error("[WebTools] 검색 오류: %s", e)
         return f"검색 중 오류 발생: {e}"
 
 def web_fetch(url: str, max_chars: int = 3000) -> str:
@@ -125,7 +125,7 @@ class SmartBrowser:
             
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
         except Exception as e:
-            logging.error(f"[SmartBrowser] 드라이버 초기화 실패: {e}")
+            logging.error("[SmartBrowser] 드라이버 초기화 실패: %s", e)
             raise
 
     def navigate_and_action(self, url: str, actions: List[Dict[str, Any]], goal_hint: str = "") -> str:
@@ -223,7 +223,7 @@ class SmartBrowser:
                     self._remember_selector(current_domain, action_key, sel)
                     break
             except Exception as exc:
-                logging.debug(f"[SmartBrowser] 셀렉터 실패: {sel} ({exc})")
+                logging.debug("[SmartBrowser] 셀렉터 실패: %s (%s)", sel, exc)
         if found_el:
             return found_el, matched_selector
 
@@ -239,7 +239,8 @@ class SmartBrowser:
             return None
         try:
             from selenium.webdriver.common.by import By
-        except Exception:
+        except Exception as exc:
+            logging.debug("[SmartBrowser] selenium By 임포트 실패: %s", exc)
             return None
         variants = [text_query]
         lowered = text_query.lower()
@@ -259,14 +260,14 @@ class SmartBrowser:
             try:
                 elements = self.driver.find_elements(By.XPATH, xpath)
             except Exception as exc:
-                logging.debug(f"[SmartBrowser] 텍스트 요소 검색 실패: {variant} ({exc})")
+                logging.debug("[SmartBrowser] 텍스트 요소 검색 실패: %s (%s)", variant, exc)
                 continue
             for element in elements:
                 try:
                     if element.is_displayed():
                         return element
                 except Exception as exc:
-                    logging.debug(f"[SmartBrowser] 요소 표시 상태 확인 실패: {exc}")
+                    logging.debug("[SmartBrowser] 요소 표시 상태 확인 실패: %s", exc)
                     continue
         return None
 
@@ -400,7 +401,7 @@ class SmartBrowser:
                 state["dom_analysis"] = dom_state.__dict__
                 state["dom_suggestions"] = suggest_next_actions(dom_state)
             except Exception as exc:
-                logging.debug(f"[SmartBrowser] DOM 분석 생략: {exc}")
+                logging.debug("[SmartBrowser] DOM 분석 생략: %s", exc)
         return state
 
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
@@ -445,14 +446,16 @@ class SmartBrowser:
         try:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("browser_selector_history.json")
-        except Exception:
+        except Exception as exc:
+            logging.debug("[SmartBrowser] selector history 경로 조회 실패, 런타임 폴백 사용: %s", exc)
             return _runtime_fallback_path("browser_selector_history.json")
 
     def _action_plan_history_path(self) -> str:
         try:
             from core.resource_manager import ResourceManager
             return ResourceManager.get_writable_path("browser_action_plans.json")
-        except Exception:
+        except Exception as exc:
+            logging.debug("[SmartBrowser] action plan 경로 조회 실패, 런타임 폴백 사용: %s", exc)
             return _runtime_fallback_path("browser_action_plans.json")
 
     def _load_selector_history(self) -> Dict[str, Dict[str, str]]:
@@ -468,7 +471,7 @@ class SmartBrowser:
                     for domain, mapping in data.items()
                 }
         except Exception as e:
-            logging.warning(f"[SmartBrowser] 셀렉터 히스토리 로드 실패: {e}")
+            logging.warning("[SmartBrowser] 셀렉터 히스토리 로드 실패: %s", e)
         return {}
 
     def _save_selector_history(self) -> None:
@@ -478,7 +481,7 @@ class SmartBrowser:
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(self._selector_history, handle, ensure_ascii=False, indent=2)
         except Exception as e:
-            logging.warning(f"[SmartBrowser] 셀렉터 히스토리 저장 실패: {e}")
+            logging.warning("[SmartBrowser] 셀렉터 히스토리 저장 실패: %s", e)
 
     def _load_action_plan_history(self) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         path = self._action_plan_history_path()
@@ -498,7 +501,7 @@ class SmartBrowser:
                             normalized[str(domain)][str(key)] = [action for action in actions if isinstance(action, dict)]
                 return normalized
         except Exception as e:
-            logging.warning(f"[SmartBrowser] 액션 플랜 로드 실패: {e}")
+            logging.warning("[SmartBrowser] 액션 플랜 로드 실패: %s", e)
         return {}
 
     def _save_action_plan_history(self) -> None:
@@ -508,7 +511,7 @@ class SmartBrowser:
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(self._action_plan_history, handle, ensure_ascii=False, indent=2)
         except Exception as e:
-            logging.warning(f"[SmartBrowser] 액션 플랜 저장 실패: {e}")
+            logging.warning("[SmartBrowser] 액션 플랜 저장 실패: %s", e)
 
     def _normalize_plan_key(self, goal_hint: str) -> str:
         return normalize_goal_hint(goal_hint)

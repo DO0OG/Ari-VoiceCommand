@@ -86,7 +86,7 @@ def set_character_widget(widget: object) -> None:
         orch = get_orchestrator()
         orch.set_thinking_callback(widget.thinking_signal.emit)
     except Exception as e:
-        logging.warning(f"오케스트레이터 생각 콜백 연결 실패: {e}")
+        logging.warning("오케스트레이터 생각 콜백 연결 실패: %s", e)
         
     reconnect_tts_signals()
 
@@ -107,14 +107,14 @@ def start_tts_background():
                 _state.tts_init_event.set()
                 tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
             except Exception as e:
-                logging.error(f"TTS 초기화 실패: {e}")
+                logging.error("TTS 초기화 실패: %s", e)
                 _state.tts_init_event.set()
         threading.Thread(target=_run, daemon=True).start()
     else:
         try:
             initialize_tts()
         except Exception as e:
-            logging.error(f"TTS 초기화 실패 (동기): {e}")
+            logging.error("TTS 초기화 실패 (동기): %s", e)
         finally:
             _state.tts_init_event.set()
 
@@ -131,15 +131,15 @@ def initialize_tts():
             try:
                 _state.fish_tts.cleanup()
             except Exception as e:
-                logging.debug(f"기존 TTS 정리 중 무시된 오류: {e}")
+                logging.debug("기존 TTS 정리 중 무시된 오류: %s", e)
         try:
             _state.fish_tts, _ = create_tts_provider()
         except Exception as exc:
-            logging.error(f"[TTS] 기본 프로바이더 초기화 실패: {exc}")
+            logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
             fallback = settings.get("tts_fallback_provider", "edge")
             fallback_settings = dict(settings)
             fallback_settings["tts_mode"] = fallback
-            logging.warning(f"[TTS] 폴백으로 전환: {fallback}")
+            logging.warning("[TTS] 폴백으로 전환: %s", fallback)
             _state.fish_tts, _ = create_tts_provider(fallback_settings)
         _state.tts_signature = next_signature
 
@@ -148,10 +148,10 @@ def initialize_tts():
             try:
                 _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
             except Exception as exc:
-                logging.debug(f"기존 TTS 시그널 분리 생략: {exc}")
+                logging.debug("기존 TTS 시그널 분리 생략: %s", exc)
             _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
         except Exception as exc:
-            logging.debug(f"TTS 시그널 연결 실패: {exc}")
+            logging.debug("TTS 시그널 연결 실패: %s", exc)
 
     _state.rp_gen = RPGenerator()
     _state.rp_gen.set_config(
@@ -170,10 +170,10 @@ def reconnect_tts_signals():
         try:
             _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
         except Exception as exc:
-            logging.debug(f"기존 재생 완료 시그널 해제 생략: {exc}")
+            logging.debug("기존 재생 완료 시그널 해제 생략: %s", exc)
         _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
     except Exception as e:
-        logging.debug(f"TTS 시그널 재연결 실패: {e}")
+        logging.debug("TTS 시그널 재연결 실패: %s", e)
 
 
 # ── 실행 로직 ───────────────────────────────────────────────────────────────
@@ -288,7 +288,7 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
             _handle_tts_playback_finished()
         return ok
     except Exception as e:
-        logging.error(f"TTS 오류: {e}")
+        logging.error("TTS 오류: %s", e)
         if show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
         return False
@@ -355,23 +355,24 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
             return
         text = text.strip()
         if len(text) < 2:
-            logging.debug(f"[STT] 너무 짧은 인식 결과 무시: '{text}'")
+            logging.debug("[STT] 너무 짧은 인식 결과 무시: %r", text)
             return
         history = previous_texts if previous_texts is not None else deque(maxlen=3)
         if history.count(text) >= 2:
-            logging.debug(f"[STT] 반복 오인식 무시: '{text}'")
+            logging.debug("[STT] 반복 오인식 무시: %r", text)
             return
         history.append(text)
-        logging.info(f"인식된 텍스트: {text}")
+        logging.info("인식된 텍스트: %s", text)
         signal.emit(text)
     except sr.UnknownValueError: logging.warning("음성 인식 불가")
-    except Exception as e: logging.error(f"음성 인식 오류: {e}")
+    except Exception as e: logging.error("음성 인식 오류: %s", e)
 
 
 def wake_detector_recalibrate_helper(detector, source):
     try:
         detector.recalibrate(source)
-    except Exception:  # nosec B110
+    except Exception as exc:  # nosec B110
+        logging.debug("웨이크 디텍터 재보정 실패, 계속 진행: %s", exc)
         pass
 
 
@@ -392,7 +393,8 @@ def adjust_volume(change):
         new_v = max(0.0, min(1.0, curr + change))
         volume.SetMasterVolumeLevelScalar(new_v, None)
         tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
-    except Exception:
+    except Exception as exc:
+        logging.debug("시스템 볼륨 조절 실패: %s", exc)
         tts_wrapper(_("볼륨 조절 실패"))
 
 from commands.command_registry import CommandRegistry
@@ -419,7 +421,7 @@ def enable_game_mode():
         try:
             _state.fish_tts.cleanup()
         except Exception as e:
-            logging.warning(f"기존 TTS 정리 오류 (무시): {e}")
+            logging.warning("기존 TTS 정리 오류 (무시): %s", e)
     _state.fish_tts = None
 
     try:
@@ -433,11 +435,11 @@ def enable_game_mode():
         _state.game_mode = True
         logging.info("게임 모드 활성화: Fish Audio TTS로 전환, GPU 메모리 해제됨")
     except Exception as e:
-        logging.error(f"게임 모드 전환 실패: {e}")
+        logging.error("게임 모드 전환 실패: %s", e)
         try:
             initialize_tts()
         except Exception as fallback_exc:
-            logging.error(f"게임 모드 실패 후 TTS 복원 실패: {fallback_exc}")
+            logging.error("게임 모드 실패 후 TTS 복원 실패: %s", fallback_exc)
 
 
 def disable_game_mode():
@@ -449,7 +451,7 @@ def disable_game_mode():
         try:
             _state.fish_tts.cleanup()
         except Exception as e:
-            logging.warning(f"Fish TTS 정리 오류 (무시): {e}")
+            logging.warning("Fish TTS 정리 오류 (무시): %s", e)
     _state.fish_tts = None
     _state.game_mode = False
 
@@ -460,7 +462,7 @@ def disable_game_mode():
                 _state.fish_tts.wait_until_warmup_done()
             tts_wrapper(_("게임 모드 해제. CosyVoice로 복원되었습니다."))
         except Exception as e:
-            logging.error(f"TTS 복원 실패: {e}")
+            logging.error("TTS 복원 실패: %s", e)
 
     threading.Thread(target=_reinit, daemon=True, name="TTS-GameModeRestore").start()
     logging.info("게임 모드 비활성화: 원래 TTS 복원 중")

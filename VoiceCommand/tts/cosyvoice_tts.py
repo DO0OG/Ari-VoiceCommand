@@ -44,7 +44,8 @@ def _get_cosyvoice_dir() -> str:
         configured = ConfigManager.load_settings().get("cosyvoice_dir", "")
         if configured and os.path.isdir(configured):
             return configured
-    except Exception:
+    except Exception as exc:
+        logging.debug("cosyvoice_dir 설정 조회 실패, 자동 탐색으로 폴백: %s", exc)
         pass
     # 자동 탐색: 프로젝트 루트 인근 경로 후보
     candidates = [
@@ -159,17 +160,17 @@ class CosyVoiceTTS(QObject):
                 elif line == "READY":
                     self._ready.set()
                 elif line.startswith("INFO:"):
-                    logging.info(f"[worker] {line[5:]}")
+                    logging.info("[worker] %s", line[5:])
                     if "백그라운드 GPU warmup 완료" in line:
                         self._warmup_ready.set()
                 elif line.startswith("DONE:") or line.startswith("ERROR:"):
                     with self._ctrl_lock:
                         self._ctrl_q.append(line)
                 else:
-                    logging.debug(f"[worker] {line}")
+                    logging.debug("[worker] %s", line)
         except Exception as e:
             if not self._stopping:
-                logging.error(f"stderr 읽기 오류: {e}")
+                logging.error("stderr 읽기 오류: %s", e)
 
     def wait_until_ready(self, timeout=300):
         """워커 READY 대기"""
@@ -286,7 +287,7 @@ class CosyVoiceTTS(QObject):
                                 if not data:
                                     break
                                 if first:
-                                    logging.info(f"[TTS] 첫 청크 수신 → 재생 시작: {time.time()-t0:.2f}s")
+                                    logging.info("[TTS] 첫 청크 수신 → 재생 시작: %.2fs", time.time() - t0)
                                     first = False
                                 max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
                                 while not self._stopping:
@@ -297,7 +298,7 @@ class CosyVoiceTTS(QObject):
                                     time.sleep(0.01)
                         except Exception as e:
                             if not self._stopping:
-                                logging.debug(f"pipe_reader 오류: {e}")
+                                logging.debug("pipe_reader 오류: %s", e)
                         finally:
                             self._pcm_done.set()
 
@@ -327,11 +328,11 @@ class CosyVoiceTTS(QObject):
                     if self._stopping:
                         return False
 
-                    logging.info(f"[TTS] 전체 완료: {time.time()-t0:.2f}s")
+                    logging.info("[TTS] 전체 완료: %.2fs", time.time() - t0)
 
                     ctrl = self._wait_ctrl(timeout=60)
                     if ctrl.startswith("ERROR:"):
-                        logging.error(f"워커 오류: {ctrl[6:]}")
+                        logging.error("워커 오류: %s", ctrl[6:])
 
                     self.is_playing = False
                     self.playback_finished.emit()
@@ -339,7 +340,7 @@ class CosyVoiceTTS(QObject):
 
                 except Exception as e:
                     if not self._stopping:
-                        logging.error(f"CosyVoice TTS speak 오류: {e}")
+                        logging.error("CosyVoice TTS speak 오류: %s", e)
                     self.is_playing = False
                     self.playback_finished.emit()
                     return False
@@ -353,7 +354,8 @@ class CosyVoiceTTS(QObject):
                 if not chunk:
                     return None
                 buf += chunk
-        except Exception:
+        except Exception as exc:
+            logging.debug("_read_exact 실패: %s", exc)
             return None
         return buf
 
@@ -378,15 +380,19 @@ class CosyVoiceTTS(QObject):
                 try:
                     self._proc.terminate()
                     self._proc.wait(timeout=2)
-                except Exception:
+                except Exception as exc:
+                    logging.debug("CosyVoice terminate 실패, kill 시도: %s", exc)
                     try:
                         self._proc.kill()
-                    except Exception:
+                    except Exception as kill_exc:
+                        logging.debug("CosyVoice kill 실패: %s", kill_exc)
                         pass
-            except Exception:
+            except Exception as exc:
+                logging.debug("CosyVoice 종료 명령 실패, kill 시도: %s", exc)
                 try:
                     self._proc.kill()
-                except Exception:
+                except Exception as kill_exc:
+                    logging.debug("CosyVoice kill 실패: %s", kill_exc)
                     pass
         self._close_stream()
         self._clear_pcm_state()
@@ -395,5 +401,6 @@ class CosyVoiceTTS(QObject):
     def __del__(self):
         try:
             self.cleanup()
-        except Exception:
+        except Exception as exc:
+            logging.debug("CosyVoice 소멸자 cleanup 실패: %s", exc)
             pass

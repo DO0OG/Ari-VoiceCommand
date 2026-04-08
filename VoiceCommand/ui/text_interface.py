@@ -25,14 +25,14 @@ from PySide6.QtWidgets import (
 try:
     from VoiceCommand import parse_emotion_text, EMOTION_EMOJI
 except Exception as _e:
-    logging.debug(f"VoiceCommand 임포트 건너뜀: {_e}")
+    logging.debug("VoiceCommand 임포트 건너뜀: %s", _e)
     parse_emotion_text = None
     EMOTION_EMOJI = {}
 
 try:
     from memory.user_context import get_context_manager
 except Exception as _e:
-    logging.debug(f"memory.user_context 임포트 건너뜀: {_e}")
+    logging.debug("memory.user_context 임포트 건너뜀: %s", _e)
     get_context_manager = None
 
 # UI 공용 모듈
@@ -434,7 +434,7 @@ class TextInterfaceThread(QThread):
             response = self._execute_query()
             self.response_ready.emit(str(response))
         except Exception as e:
-            logger.error(f"텍스트 처리 오류: {e}")
+            logger.error("텍스트 처리 오류: %s", e)
             self.response_ready.emit(_("오류가 발생했습니다: {error}").format(error=e))
         finally:
             self._detach_progress_callback()
@@ -452,7 +452,7 @@ class TextInterfaceThread(QThread):
                         if result:
                             return result
         except Exception as e:
-            logger.error(f"AICommand 경로 실행 실패: {e}")
+            logger.error("AICommand 경로 실행 실패: %s", e)
 
         # 폴백: ai_assistant 직접 호출
         if hasattr(self.ai_assistant, "chat_with_tools"):
@@ -474,14 +474,14 @@ class TextInterfaceThread(QThread):
             from agent.agent_orchestrator import get_orchestrator
             get_orchestrator().set_progress_callback(self._on_progress)
         except Exception as exc:
-            logger.debug(f"오케스트레이터 progress 연결 생략: {exc}")
+            logger.debug("오케스트레이터 progress 연결 생략: %s", exc)
 
     def _detach_progress_callback(self) -> None:
         try:
             from agent.agent_orchestrator import get_orchestrator
             get_orchestrator().set_progress_callback(None)
         except Exception as exc:
-            logger.debug(f"오케스트레이터 progress 해제 생략: {exc}")
+            logger.debug("오케스트레이터 progress 해제 생략: %s", exc)
 
     def _on_progress(self, event_type: str, **kwargs) -> None:
         self.progress_event.emit(event_type, kwargs)
@@ -775,7 +775,8 @@ class TextInterface(QMainWindow):
         try:
             from core.VoiceCommand import is_tts_playing
             return bool(is_tts_playing())
-        except Exception:
+        except Exception as exc:
+            logger.debug("is_tts_playing 확인 실패, idle로 간주: %s", exc)
             return False
 
     def _try_stream_tts(self, chunk: str) -> None:
@@ -863,7 +864,7 @@ class TextInterface(QMainWindow):
                 lines.append(_("대화를 이어가면 이곳에 요약이 표시됩니다."))
             self.status_summary.setText("\n".join(lines))
         except Exception as e:
-            logger.debug(f"상태 패널 갱신 실패: {e}")
+            logger.debug("상태 패널 갱신 실패: %s", e)
 
     # ── 사이드 패널 ───────────────────────────────────────────────────────────
 
@@ -874,7 +875,7 @@ class TextInterface(QMainWindow):
                 from agent.proactive_scheduler import get_scheduler
                 self._scheduler_panel = SchedulerPanel(scheduler=get_scheduler())
             except Exception as e:
-                logger.error(f"스케줄러 패널 생성 실패: {e}")
+                logger.error("스케줄러 패널 생성 실패: %s", e)
                 return
         geo = self.geometry()
         self._scheduler_panel.show_near(geo.right(), geo.top())
@@ -885,7 +886,7 @@ class TextInterface(QMainWindow):
                 from ui.memory_panel import MemoryPanel
                 self._memory_panel = MemoryPanel(ctx_manager=self.context_manager)
             except Exception as e:
-                logger.error(f"메모리 패널 생성 실패: {e}")
+                logger.error("메모리 패널 생성 실패: %s", e)
                 return
         geo = self.geometry()
         self._memory_panel.show_near(geo.right(), geo.top())
