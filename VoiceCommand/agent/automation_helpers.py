@@ -195,7 +195,8 @@ class AutomationHelpers:
                 self.write_clipboard(text)
                 pg.hotkey("ctrl", "v")
                 return text
-            except Exception:
+            except Exception as exc:
+                logging.debug("[AutomationHelpers] 클립보드 붙여넣기 실패, write 모드로 전환: %s", exc)
                 use_clipboard = False
         pg.write(text, interval=interval)
         return text
@@ -269,7 +270,8 @@ class AutomationHelpers:
                 win.activate()
                 self.remember_window_target(goal_hint or title_substring, win.title)
                 return True
-            except Exception:
+            except Exception as exc:
+                logging.debug("[AutomationHelpers] 창 활성화 실패: %s", exc)
                 return False
         return False
 
@@ -378,7 +380,8 @@ class AutomationHelpers:
         """공유 스마트 브라우저의 현재 상태를 읽기 전용으로 반환합니다."""
         try:
             from services.web_tools import get_smart_browser
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] web_tools 임포트 첫 시도 실패, 재시도: %s", exc)
             from services.web_tools import get_smart_browser
         return get_smart_browser().get_state()
 
@@ -446,11 +449,13 @@ class AutomationHelpers:
         open_windows: List[str] = []
         try:
             active_window = self.get_active_window_title()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] active_window 조회 실패: %s", exc)
             active_window = ""
         try:
             open_windows = self.list_open_windows()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] open_windows 조회 실패: %s", exc)
             open_windows = []
         learned = self.get_learned_strategies(goal_hint=goal_hint, domain=domain)
         execution_policy = self.get_execution_policy(goal_hint=goal_hint, domain=domain)
@@ -494,15 +499,18 @@ class AutomationHelpers:
         browser_state = {}
         try:
             active_window = self.get_active_window_title()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] active_window 조회 실패: %s", exc)
             active_window = ""
         try:
             open_windows = self.list_open_windows()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] open_windows 조회 실패: %s", exc)
             open_windows = []
         try:
             browser_state = self.get_browser_state()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutomationHelpers] browser_state 조회 실패: %s", exc)
             browser_state = {}
         return {
             "active_window_title": active_window,
