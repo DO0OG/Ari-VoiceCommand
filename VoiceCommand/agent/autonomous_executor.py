@@ -296,7 +296,8 @@ class AutonomousExecutor:
         try:
             from agent.episode_memory import get_episode_memory
             return get_episode_memory().get_goal_guidance(goal=goal, limit=limit)
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] episode_memory 조회 실패: %s", exc)
             return ""
 
     def get_recovery_guidance(self, goal: str = "", target_paths: Optional[List[str]] = None) -> str:
@@ -336,43 +337,53 @@ class AutonomousExecutor:
         active_title = ""
         try:
             browser_state = self._automation.get_browser_state()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "browser_state", exc)
             browser_state = {}
         try:
             active_title = self._automation.get_active_window_title()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "active_title", exc)
             active_title = ""
         try:
             open_windows = self._automation.list_open_windows()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "open_windows", exc)
             open_windows = []
         try:
             desktop_state = self._automation.get_desktop_state()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "desktop_state", exc)
             desktop_state = {}
         try:
             learned_strategies = self._automation.get_learned_strategies()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "learned_strategies", exc)
             learned_strategies = {}
         try:
             learned_summary = self._automation.get_learned_strategy_summary()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "learned_summary", exc)
             learned_summary = ""
         try:
             planning_snapshot = self._automation.get_planning_snapshot()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "planning_snapshot", exc)
             planning_snapshot = {}
         try:
             planning_summary = self._automation.get_planning_snapshot_summary()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "planning_summary", exc)
             planning_summary = ""
         try:
             execution_policy = self._automation.get_execution_policy()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "execution_policy", exc)
             execution_policy = {}
         try:
             execution_policy_summary = self._automation.get_execution_policy_summary()
-        except Exception:
+        except Exception as exc:
+            logging.debug("[AutonomousExecutor] %s 조회 실패: %s", "execution_policy_summary", exc)
             execution_policy_summary = ""
 
         last = self.get_last_execution()

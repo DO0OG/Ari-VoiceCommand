@@ -104,6 +104,9 @@ COMPILE_TARGETS = [
     "ui/memory_panel.py",
     "ui/scheduler_panel.py",
     "ui/tray_icon.py",
+    "agent/planner/agent_planner.py",
+    "agent/planner/action_step.py",
+    "agent/planner/template_plans.py",
 ]
 
 TEMPLATE_SMOKE = r"""
