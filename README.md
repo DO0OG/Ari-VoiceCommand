@@ -147,6 +147,15 @@ Please start with the [contribution guide](./docs/CONTRIBUTING.md).
 
 ---
 
+## 🎨 Assets & Credits
+
+- `DNFBitBitv2` font — official source:
+  <https://df.nexon.com/data/font/dnfbitbitv2>
+
+Please check the font's usage terms before redistributing or reusing it outside this project.
+
+---
+
 ## ⚖️ License
 
 Copyright © 2026 [DO0OG (MAD_DOGGO)](https://github.com/DO0OG).

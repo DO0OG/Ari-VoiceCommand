@@ -147,6 +147,15 @@ Windows 自動化、STT/TTS 連携、ローカルモデル対応、PySide6 UX、
 
 ---
 
+## 🎨 アセットと出典
+
+- `DNFBitBitv2` フォント — 公式配布元:
+  <https://df.nexon.com/data/font/dnfbitbitv2>
+
+本プロジェクト外で再配布または再利用する場合は、当該フォントの利用条件もあわせて確認してください。
+
+---
+
 ## ⚖️ License
 
 Copyright © 2026 [DO0OG (MAD_DOGGO)](https://github.com/DO0OG).
