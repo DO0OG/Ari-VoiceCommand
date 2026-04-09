@@ -1361,6 +1361,12 @@ msgstr "{name} 스킬을 삭제할까요?"
 msgid "{name} 업데이트 완료"
 msgstr "{name} 업데이트 완료"
 
+msgid "업데이트"
+msgstr "업데이트"
+
+msgid "업데이트 실패"
+msgstr "업데이트 실패"
+
 msgid "설치 원본 정보가 없습니다."
 msgstr "설치 원본 정보가 없습니다."
 

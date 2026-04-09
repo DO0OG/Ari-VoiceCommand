@@ -1361,6 +1361,12 @@ msgstr "スキル「{name}」を削除しますか？"
 msgid "{name} 업데이트 완료"
 msgstr "{name} のアップデートが完了しました"
 
+msgid "업데이트"
+msgstr "アップデート"
+
+msgid "업데이트 실패"
+msgstr "アップデート失敗"
+
 msgid "설치 원본 정보가 없습니다."
 msgstr "インストール元の情報がありません。"
 

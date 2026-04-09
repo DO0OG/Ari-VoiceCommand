@@ -1361,6 +1361,12 @@ msgstr "Delete skill '{name}'?"
 msgid "{name} 업데이트 완료"
 msgstr "{name} updated successfully"
 
+msgid "업데이트"
+msgstr "Update"
+
+msgid "업데이트 실패"
+msgstr "Update Failed"
+
 msgid "설치 원본 정보가 없습니다."
 msgstr "No installation source found."
 
