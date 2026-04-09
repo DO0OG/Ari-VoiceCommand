@@ -1,8 +1,8 @@
 """
-_() 문자열을 소스에서 자동 추출해 .pot 파일을 생성합니다.
+_() 문자열을 소스에서 자동 추출해 .pot 파일을 생성한다.
 실행: py -3.11 scripts/extract_strings.py
 
-xgettext가 설치된 경우 사용하고, 없으면 간단한 regex 추출로 대체합니다.
+xgettext가 설치된 경우 사용하고, 없으면 간단한 regex 추출로 대체한다.
 """
 import os
 import re

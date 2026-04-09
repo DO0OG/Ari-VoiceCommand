@@ -1,7 +1,7 @@
 """
 확인 다이얼로그 관리자 (Confirmation Manager)
-위험한 명령 실행 전 사용자 확인을 요청합니다.
-크로스-스레드 안전한 Qt 다이얼로그를 제공합니다.
+위험한 명령 실행 전 사용자 확인을 요청한다.
+크로스-스레드 안전한 Qt 다이얼로그를 제공한다.
 """
 import threading
 import logging
@@ -157,9 +157,9 @@ class ConfirmationManager:
     ) -> bool:
         """
         CommandExecutionThread(비-UI)에서 호출 — 블로킹.
-        메인 스레드에서 다이얼로그를 열고, threading.Event로 결과를 동기화합니다.
+        메인 스레드에서 다이얼로그를 열고, threading.Event로 결과를 동기화한다.
         timeout=20초 후 자동 취소.
-        holder 딕셔너리를 호출별로 생성하여 self._result 공유 변수 경쟁 조건을 방지합니다.
+        holder 딕셔너리를 호출별로 생성하여 self._result 공유 변수 경쟁 조건을 방지한다.
         """
         if tts_func:
             try:

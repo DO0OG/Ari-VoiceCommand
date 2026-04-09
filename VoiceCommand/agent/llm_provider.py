@@ -168,7 +168,7 @@ class LLMProvider:
     # ── 초기화 ─────────────────────────────────────────────────────────────────
 
     def _make_client(self, provider: str, api_key: str):
-        """제공자와 API 키로 클라이언트 객체를 생성합니다."""
+        """제공자와 API 키로 클라이언트 객체를 생성한다."""
         cfg = _PROVIDER_CONFIG.get(provider, _PROVIDER_CONFIG["groq"])
         try:
             if provider == "anthropic":

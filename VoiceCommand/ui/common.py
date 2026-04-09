@@ -1,6 +1,6 @@
 """
 UI 공용 유틸리티 (UI Common Utilities)
-반복되는 위젯 생성·레이아웃 조작 패턴을 한 곳에 모읍니다.
+반복되는 위젯 생성·레이아웃 조작 패턴을 한 곳에 모은다.
 
 주요 제공 요소:
   - clear_layout()       레이아웃 내 위젯 일괄 제거
@@ -26,7 +26,7 @@ from ui import theme as theme_module
 # ── 레이아웃 유틸 ─────────────────────────────────────────────────────────────
 
 def clear_layout(layout: QLayout) -> None:
-    """레이아웃 내 모든 위젯을 안전하게 제거하고 메모리를 해제합니다."""
+    """레이아웃 내 모든 위젯을 안전하게 제거하고 메모리를 해제한다."""
     while layout.count():
         item = layout.takeAt(0)
         if item and item.widget():
@@ -40,7 +40,7 @@ def apply_shadow(
     blur_radius: int = theme_module.SHADOW_BLUR,
     offset_y: int = theme_module.SHADOW_OFFSET,
 ) -> None:
-    """위젯에 드롭 섀도우 효과를 적용합니다."""
+    """위젯에 드롭 섀도우 효과를 적용한다."""
     shadow = QGraphicsDropShadowEffect(widget)
     shadow.setBlurRadius(blur_radius)
     shadow.setColor(Qt.black)
@@ -55,7 +55,7 @@ def create_input_field(
     font_size: int = theme_module.FONT_SIZE_NORMAL,
     height: int = 32,
 ) -> QLineEdit:
-    """테마 스타일이 적용된 QLineEdit를 생성합니다."""
+    """테마 스타일이 적용된 QLineEdit를 생성한다."""
     w = QLineEdit()
     w.setPlaceholderText(placeholder)
     w.setFont(QFont(theme_module.FONT_KO, font_size))
@@ -71,7 +71,7 @@ def create_icon_button(
     color: str,
     callback: Optional[Callable] = None,
 ) -> QPushButton:
-    """아이콘 버튼을 생성합니다. callback이 주어지면 clicked에 연결합니다."""
+    """아이콘 버튼을 생성한다. callback이 주어지면 clicked에 연결한다."""
     btn = QPushButton(icon)
     btn.setFixedSize(size, size)
     btn.setToolTip(tooltip)
@@ -83,7 +83,7 @@ def create_icon_button(
 
 
 def create_section_label(text: str, color: str = "") -> QLabel:
-    """섹션 헤더 레이블을 생성합니다."""
+    """섹션 헤더 레이블을 생성한다."""
     lbl = QLabel(text)
     lbl.setFont(QFont(theme_module.FONT_KO, theme_module.FONT_SIZE_NORMAL, QFont.Bold))
     lbl.setStyleSheet(f"color: {color or theme_module.COLOR_PRIMARY};")
@@ -91,7 +91,7 @@ def create_section_label(text: str, color: str = "") -> QLabel:
 
 
 def create_muted_label(text: str) -> QLabel:
-    """흐린 색 보조 텍스트 레이블을 생성합니다."""
+    """흐린 색 보조 텍스트 레이블을 생성한다."""
     lbl = QLabel(text)
     lbl.setFont(QFont(theme_module.FONT_KO, theme_module.FONT_SIZE_NORMAL))
     lbl.setStyleSheet(f"color: {theme_module.COLOR_MUTED};")
@@ -105,7 +105,7 @@ def show_temp_status(
     msg: str,
     duration_ms: int = theme_module.TEMP_STATUS_DURATION,
 ) -> None:
-    """레이블에 메시지를 표시하고 duration_ms 후 자동으로 지웁니다."""
+    """레이블에 메시지를 표시하고 duration_ms 후 자동으로 지운다."""
     label.setText(msg)
     QTimer.singleShot(duration_ms, lambda: label.setText(""))
 
@@ -115,8 +115,8 @@ def show_temp_status(
 class PanelTitleBar(QFrame):
     """드래그 이동 + 닫기 버튼이 포함된 공통 타이틀 바.
 
-    FloatingPanel 기반 클래스에서 자동으로 사용됩니다.
-    추가 버튼이 필요하면 subclass에서 add_button()을 호출하세요.
+    FloatingPanel 기반 클래스에서 자동으로 사용된다.
+    추가 버튼이 필요하면 subclass에서 add_button()을 호출한다.
     """
 
     def __init__(self, title: str, parent: QMainWindow):
@@ -147,7 +147,7 @@ class PanelTitleBar(QFrame):
         callback: Callable,
         size: int = theme_module.BUTTON_LG,
     ) -> QPushButton:
-        """닫기 버튼 앞에 아이콘 버튼을 추가합니다."""
+        """닫기 버튼 앞에 아이콘 버튼을 추가한다."""
         btn = QPushButton(icon)
         btn.setFixedSize(size, size)
         btn.setToolTip(tooltip)
@@ -251,7 +251,7 @@ class FloatingPanel(QMainWindow):
         self.refresh_shell_theme()
 
     def show_near(self, x: int, y: int) -> None:
-        """지정 좌표 근처에 화면 경계를 벗어나지 않도록 표시합니다."""
+        """지정 좌표 근처에 화면 경계를 벗어나지 않도록 표시한다."""
         screen = QApplication.primaryScreen().geometry()
         fx = min(x + 10, screen.width() - self.width() - 10)
         fy = max(20, min(y, screen.height() - self.height() - 40))

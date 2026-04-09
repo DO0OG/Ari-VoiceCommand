@@ -1,6 +1,6 @@
 """
 설정 창 GUI — 탭 기반 구성 (RP, LLM, TTS, 장치, 확장)
-각 탭의 세부 구현은 settings_llm_page / settings_tts_page / settings_plugin_page 에 위임합니다.
+각 탭의 세부 구현은 settings_llm_page / settings_tts_page / settings_plugin_page 에 위임한다.
 """
 import logging
 

@@ -96,7 +96,7 @@ class VerificationResult:
 
 
 class RealVerifier:
-    """검증 코드를 실제로 실행하여 목표 달성 여부를 확인합니다."""
+    """검증 코드를 실제로 실행하여 목표 달성 여부를 확인한다."""
 
     def __init__(self, llm_provider, executor):
         self.llm = llm_provider

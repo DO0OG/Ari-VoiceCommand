@@ -1,6 +1,6 @@
 """
 파일 작업 유틸리티 (File Tools)
-이름 변경, 병합, 정리, CSV/JSON 분석 및 보고서 생성을 지원합니다.
+이름 변경, 병합, 정리, CSV/JSON 분석 및 보고서 생성을 지원한다.
 """
 import os
 import shutil
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def detect_file_set(folder_path: str, extensions: Optional[List[str]] = None) -> Dict[str, Any]:
-    """폴더 내 파일 세트를 스캔하고 확장자별/패턴별 통계를 반환합니다."""
+    """폴더 내 파일 세트를 스캔하고 확장자별/패턴별 통계를 반환한다."""
     try:
         if not os.path.isdir(folder_path):
             return {"error": "디렉터리가 아닙니다."}

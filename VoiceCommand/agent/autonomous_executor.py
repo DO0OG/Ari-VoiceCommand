@@ -1,6 +1,6 @@
 """
 자율 실행 엔진 (Autonomous Execution Engine)
-AI가 생성한 파이썬 코드 및 쉘 명령어를 안전하고 효율적으로 실행합니다.
+AI가 생성한 파이썬 코드 및 쉘 명령어를 안전하고 효율적으로 실행한다.
 """
 import os
 import sys
@@ -172,7 +172,7 @@ class AutonomousExecutor:
     # ── 공개 API ────────────────────────────────────────────────────────────────
 
     def run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
-        """파이썬 코드를 안전하게 실행하고 결과를 반환합니다."""
+        """파이썬 코드를 안전하게 실행하고 결과를 반환한다."""
         self._python_slots.acquire()
 
         start = time.monotonic()
@@ -217,7 +217,7 @@ class AutonomousExecutor:
         return result
 
     def run_shell(self, command: str) -> ExecutionResult:
-        """쉘 명령을 안전하게 실행하고 결과를 반환합니다."""
+        """쉘 명령을 안전하게 실행하고 결과를 반환한다."""
         self._shell_slots.acquire()
 
         start = time.monotonic()

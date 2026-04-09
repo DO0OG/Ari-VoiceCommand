@@ -213,7 +213,7 @@ class ResourceManager:
 
     @staticmethod
     def ensure_theme_files() -> str:
-        """테마 JSON 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        """테마 JSON 파일을 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("theme")
         source = ResourceManager.get_bundle_path("theme")
         os.makedirs(writable, exist_ok=True)
@@ -234,7 +234,7 @@ class ResourceManager:
 
     @staticmethod
     def ensure_plugin_files() -> str:
-        """플러그인 템플릿 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        """플러그인 템플릿 파일을 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("plugins")
         source = ResourceManager.get_bundle_path("plugins")
         os.makedirs(writable, exist_ok=True)
@@ -255,7 +255,7 @@ class ResourceManager:
 
     @staticmethod
     def ensure_skill_files() -> str:
-        """스킬 폴더를 사용자 편집 가능한 위치에 보장합니다."""
+        """스킬 폴더를 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("skills")
         source = ResourceManager.get_bundle_path("skills")
         os.makedirs(writable, exist_ok=True)

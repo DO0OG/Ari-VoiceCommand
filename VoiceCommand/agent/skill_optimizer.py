@@ -61,7 +61,7 @@ def _get_compiled_dir() -> str:
 
 
 class SkillOptimizer:
-    """LLM을 사용해 스킬을 자기수정하고 Python으로 컴파일합니다."""
+    """LLM을 사용해 스킬을 자기수정하고 Python으로 컴파일한다."""
 
     # ── Direction 1: Step 레벨 재작성 ─────────────────────────────────────
 

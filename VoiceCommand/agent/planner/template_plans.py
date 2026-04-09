@@ -2,7 +2,7 @@
 TemplatePlansMixin — GoalProfile 기반 템플릿 플랜 생성 메서드 모음.
 
 AgentPlanner가 이 믹스인을 상속하여 _build_template_plan() 및
-모든 _build_*_plan() 메서드를 사용합니다.
+모든 _build_*_plan() 메서드를 사용한다.
 """
 import json
 import os

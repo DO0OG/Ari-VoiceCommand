@@ -124,7 +124,7 @@ def fetch_plugin(plugin_id: str) -> Optional[Dict]:
 
 def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
     """
-    플러그인을 설치합니다.
+    플러그인을 설치한다.
     1. install-plugin 호출 → install_count 증가 + release_url 획득
     2. ZIP 다운로드 후 plugin_dir에 ZIP 그대로 저장
     3. 실행 중인 PluginManager에 동적 로드
