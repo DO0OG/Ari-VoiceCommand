@@ -3,27 +3,33 @@
 아리(Ari) 프로젝트 문서를 한 곳에 모았습니다.
 README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필요한 문서를 빠르게 찾기 위한 색인 역할을 합니다.
 
-## 사용자 문서
+## 빠르게 시작하기
 
-앱 설치, 설정, 확장, 테마 변경처럼 실제 사용에 가까운 문서는 아래 문서부터 확인하시면 됩니다.
+처음 설치하거나 기본 사용 흐름을 확인할 때는 아래 문서부터 보시면 됩니다.
 
 - [프로그램 사용 가이드](./USAGE.md) — 실행, 기본 사용법, 로컬 설치(Ollama/CosyVoice3), 자동화 예시, NVIDIA NIM
-- [프로그램 사용 가이드](./USAGE.md#4-에이전트-스킬-skills--mcp) — Agent Skills 설치, MCP 스킬 사용 흐름, 관리 UI
-- [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — JSON 테마 파일 편집, 팔레트 에디터 창 사용법
-- [플러그인 가이드](./PLUGIN_GUIDE.md) — 훅(메뉴·명령·도구·샌드박스) 등록, API 버전, ZIP 패키지 구조, 코드 예시
 - [기여 가이드](./CONTRIBUTING.md) — 검증 명령, 브랜치/커밋 규칙, 로컬 산출물 관리
 
-## 프로젝트 문서
+## 확장과 커스터마이징
+
+앱 기능을 확장하거나 외형을 조정할 때는 아래 문서를 참고하시면 됩니다.
+
+- [프로그램 사용 가이드 - Agent Skills / MCP](./USAGE.md#4-에이전트-스킬-skills--mcp) — Agent Skills 설치, MCP 스킬 사용 흐름, 관리 UI
+- [플러그인 가이드](./PLUGIN_GUIDE.md) — 훅(메뉴·명령·도구·샌드박스) 등록, API 버전, ZIP 패키지 구조, 코드 예시
+- [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — 팔레트 에디터와 JSON 테마 파일 편집 방법
+- [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
+
+## 개발 및 운영 참고
 
 아래 문서는 현재 구조, 운영 규칙, 최근 변경 맥락을 정리한 내부 참고 문서입니다.
 
-- 최근 자율 실행 코어는 `state transition`, `execution policy`, `episode memory`, `backup/recovery guidance`까지 포함하도록 확장되었습니다. `workspace audit` 명령은 열린 창을 브라우저/일반 앱으로 분류하고 `summary.md`를 자동 백업 덮어쓰기하는 템플릿을 사용합니다.
-- 플래너 JSON 복구 책임은 `agent/planner_json_utils.py`, 브라우저/데스크톱 계획 조립 책임은 `agent/automation_plan_utils.py`로 분리되어 핵심 본체 파일의 응집도를 높였습니다.
-- 소스 실행(`py Main.py`) 기준 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장되며, 저장소에는 `VoiceCommand/ari_settings.template.json` 템플릿만 유지합니다. 실제 설정은 런타임 경로에 생성됩니다. 로그는 `VoiceCommand/.ari_runtime/logs/`에 쌓입니다.
-- 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
-- `reference.wav`는 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav` 우선, 없으면 `VoiceCommand/reference.wav`를 사용하고, 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav` 우선, 없으면 번들된 `reference.wav`를 사용합니다.
-- `VoiceCommand/validate_repo.py`는 compile + unittest 외에 clean runtime 환경과 marketplace SHA256 계약 smoke까지 함께 확인합니다.
-- [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 - [Claude 메모](./CLAUDE.md) — 개발자용 아키텍처·패턴·상수 레퍼런스
 - [마켓플레이스 설정 가이드](./MARKETPLACE_SETUP_GUIDE.md) — Supabase, GitHub OAuth, Edge Functions, Vercel 배포
 - [세션 컨텍스트](./SESSION_CONTEXT.md) — 최근 작업 맥락과 내부 체크포인트 메모
+
+### 운영 메모
+
+- 소스 실행(`py Main.py`) 기준 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장됩니다.
+- 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
+- `reference.wav`는 소스/테스트 실행 시 런타임 경로를 우선하고, exe 실행 시에는 `%AppData%/Ari/` 경로를 우선합니다.
+- `VoiceCommand/validate_repo.py`는 compile + unittest 외에 clean runtime 환경과 marketplace SHA256 계약 smoke까지 함께 확인합니다.
