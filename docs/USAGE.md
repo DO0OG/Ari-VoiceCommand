@@ -1,6 +1,11 @@
 # 프로그램 사용 가이드
 
+이 문서는 Ari의 실행 방법, 기본 사용 흐름, 로컬 AI 설정, 자동화 기능, 확장 방법을 안내합니다.
+README가 프로젝트 개요를 설명한다면, 이 문서는 실제 사용과 설정 절차에 초점을 둡니다.
+
 ## 1. 실행
+
+먼저 기본 의존성을 설치한 뒤 앱을 실행합니다.
 
 ```bash
 py -3.11 -m pip install -r VoiceCommand/requirements.txt
@@ -8,7 +13,7 @@ cd VoiceCommand
 py -3.11 Main.py
 ```
 
-권장 검증:
+설치 후에는 아래 검증 명령 실행을 권장합니다.
 
 ```bash
 py -3.11 validate_repo.py
@@ -16,7 +21,7 @@ py -3.11 validate_repo.py
 
 ### 선택 의존성 설치
 
-기본 의존성만 설치해도 앱이 실행되지만, 아래 기능은 추가 패키지가 필요합니다.
+기본 의존성만으로도 앱은 실행되지만, 아래 기능은 추가 패키지가 필요합니다.
 
 ```bash
 # OCR 기반 화면 텍스트 검증 (비전 검증 기능)
@@ -37,6 +42,8 @@ pip install elevenlabs
 
 ## 2. 기본 사용 흐름
 
+처음 실행했다면 아래 순서로 설정을 마치는 것을 권장합니다.
+
 1. 앱을 실행합니다.
 2. 트레이 아이콘 우클릭으로 설정창을 엽니다.
 3. 필요한 경우 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama 또는 CosyVoice3를 먼저 설치합니다.
@@ -47,6 +54,8 @@ pip install elevenlabs
 8. CosyVoice용 `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
 
 ## 3. 텍스트 채팅 UI
+
+텍스트 채팅 UI를 통해 음성 입력 없이도 대부분의 기능을 사용할 수 있습니다.
 
 - 음성 없이도 대화와 작업 실행이 가능합니다.
 - 상단 `기억 상태` 패널에서 최근 주제, 추천 명령, 선호 요약을 확인할 수 있습니다.
@@ -61,6 +70,8 @@ pip install elevenlabs
 
 ## 4. 에이전트 스킬 (Skills) / MCP
 
+Agent Skills와 MCP는 Ari의 에이전트 작업 범위를 확장하는 주요 수단입니다.
+
 ### 4-1. 어디서 관리하나요?
 
 - 트레이 메뉴의 `🧩 스킬 관리`
@@ -74,7 +85,7 @@ pip install elevenlabs
 - **GitHub 경로:** `NomaDamas/k-skill/tree/main/coupang-product-search`
 - **HTTPS URL:** `SKILL.md` 직접 URL 또는 GitHub ZIP 다운로드 경로
 
-스킬을 설치하면 런타임 기준 `skills/` 디렉터리에 저장되고, 스킬 설명 / 원본 / 활성화 상태를 함께 관리합니다.
+스킬을 설치하면 런타임 기준 `skills/` 디렉터리에 저장되며, 스킬 설명, 원본, 활성화 상태를 함께 관리합니다.
 
 ### 4-3. MCP 스킬은 어떻게 동작하나요?
 
@@ -97,7 +108,7 @@ pip install elevenlabs
 - **플러그인:** Python 코드/ZIP을 앱에 로드해 기능을 직접 확장
 - **Agent Skills:** `SKILL.md` 지침과 선택적 `scripts/`, MCP 엔드포인트를 통해 LLM 도구 사용 흐름을 확장
 
-즉, 플러그인은 런타임 확장이고 Agent Skills는 에이전트 작업 지식/도구 연결 확장입니다.
+즉, 플러그인은 런타임 기능 확장이고, Agent Skills는 에이전트 작업 지식과 도구 연결 확장에 가깝습니다.
 
 ## 4. 시스템 제어 명령
 
@@ -123,6 +134,8 @@ pip install elevenlabs
 
 ## 5. 시간 예약 예시
 
+아래 예시는 예약 작업 기능이 처리할 수 있는 대표적인 요청 형태입니다.
+
 - `5분 뒤에 알림 줘`
 - `11시에 메모장 열어줘`
 - `11시 30분에 보고서 정리해줘`
@@ -132,12 +145,16 @@ pip install elevenlabs
 
 ## 6. 자주 쓰는 자동화 예시
 
+아래 예시는 자율 실행 엔진이나 도구 호출로 자주 처리하는 자동화 요청입니다.
+
 - `바탕화면에 sample 폴더 만들어줘`
 - `크롬으로 https://example.com 열어줘`
 - `CSV 분석해서 저장해줘`
 - `로그 리포트 만들어줘`
 
 ## 6-1. 자율 실행과 복구 동작
+
+최근 자율 실행 엔진은 실행 중 상태 기록, 실패 복구, 반복 작업 최적화를 함께 다룹니다.
 
 - 최근 자율 실행 엔진은 단계별 상태 변화(active window, URL, 새 창, 새 파일)를 기록합니다.
 - 비슷한 목표를 여러 번 수행하면 과거 성공/실패 에피소드와 실행 정책이 다음 계획에 반영됩니다.
@@ -152,11 +169,11 @@ pip install elevenlabs
 - **0~50회 실행**: 아직 탐색 단계라 같은 앱/사이트에서도 재계획이 잦을 수 있습니다. 파일/앱 제어는 비교적 빨리 안정화되지만, 브라우저 GUI 작업은 성공률 편차가 큽니다.
 - **50~200회 실행**: `PlannerFeedback`, `GoalPredictor`, `EpisodeMemory`가 누적되면서 같은 실패를 덜 반복합니다. 반복 작업은 스킬화와 컴파일 이점이 체감되기 시작합니다.
 - **200회+ 실행**: 검증된 전략 재사용 비중이 커지고, `LearningMetrics`와 `RegressionGuard`를 통해 어떤 학습 요소가 실제 성능 향상에 기여하는지 모니터링할 수 있습니다.
-- 더 자세한 성공률 가이드는 루트 [README](../README.md)를 참고하세요.
+- 더 자세한 성공률 가이드는 한국어 [README](../README.ko.md)를 참고하세요.
 
 ## 6-2. 고강도 자율성 점검 명령 예시
 
-아래처럼 조건이 많은 명령으로 템플릿/복구 동작을 한 번에 점검할 수 있습니다.
+아래처럼 조건이 많은 명령으로 템플릿 처리와 복구 동작을 한 번에 점검할 수 있습니다.
 
 ```text
 바탕화면에 "Ari autonomy final audit" 폴더를 만들고, 현재 열린 창 제목들을 수집해서
@@ -173,6 +190,8 @@ pip install elevenlabs
 - 같은 파일명 재실행 시 백업 이력 증가 여부
 
 ## 7. 로컬 TTS (CosyVoice3) 사용 시
+
+CosyVoice3를 사용하면 로컬 환경에서 비교적 안정적인 TTS 파이프라인을 구성할 수 있습니다.
 
 - `CosyVoice3`는 초기 로드가 백그라운드에서 진행됩니다.
 - 모델 워커는 재사용되므로 첫 실행 후 반복 호출이 더 안정적입니다.
@@ -202,7 +221,7 @@ py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 
 ## 8. Ollama 로컬 LLM 사용 시
 
-인터넷 없이, API 비용 없이 로컬에서 LLM을 실행합니다.
+Ollama를 사용하면 인터넷 연결이나 API 비용 없이 로컬에서 LLM을 실행할 수 있습니다.
 
 1. 설정창 → **AI & TTS → 로컬 설치 → Ollama 설치/모델 받기** 버튼으로 설치하거나,
    [https://ollama.com](https://ollama.com) 에서 직접 설치합니다.
@@ -224,7 +243,7 @@ py -3.11 install_ollama.py
 py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
 ```
 
-권장 사양: RAM 8GB+, GPU VRAM 4GB+(선택).
+권장 사양은 RAM 8GB+, GPU VRAM 4GB+(선택)입니다.
 
 ## 9. NVIDIA NIM 사용 시
 
@@ -236,7 +255,7 @@ py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
 
 ## 10. 음성 메모리 명령
 
-학습된 패턴·기억을 음성으로 조회하거나 관리합니다.
+학습된 패턴과 기억은 음성 명령으로 조회하거나 관리할 수 있습니다.
 
 | 예시 | 동작 |
 |------|------|
@@ -249,7 +268,7 @@ py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
 
 ## 11. 언어 및 국제화 (i18n)
 
-아리는 한국어 외에도 **영어(English)**와 **일본어(日本語)**를 지원합니다.
+Ari는 한국어 외에도 **영어(English)**와 **일본어(日本語)**를 지원합니다.
 
 1. 설정창 → **장치 설정** 탭 하단 → **언어 설정** 섹션에서 원하는 언어를 선택하세요.
 2. **저장** 버튼을 누르면 설정이 반영되며, 다음 시작 시 선택한 언어로 인터페이스와 음성이 전환됩니다.
@@ -260,6 +279,8 @@ py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
    - 플래너 프롬프트(실행 계획 생성) 최적화
 
 ## 12. 플러그인 확장
+
+사용자 플러그인을 통해 앱 동작을 직접 확장할 수 있습니다.
 
 사용자 플러그인은 `%AppData%\Ari\plugins` 폴더에 단일 Python 파일 또는 ZIP 패키지로 추가합니다.
 앱 시작 시 자동 로드되며, 설정창 `확장` 탭에서 목록과 로드 상태를 확인할 수 있습니다.
