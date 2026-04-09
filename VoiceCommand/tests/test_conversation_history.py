@@ -25,7 +25,7 @@ class ConversationHistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             history = self._make_history(tmp)
             history.add("안녕", "반가워요")
-            history.add("날씨 알려줘", "맑아요")
+            history.add("날씨 알려줘", "맑아요", skill_used="korea-weather", data_source="web_search", lang="ko")
             time.sleep(0.12)
 
             with open(history.file_path, "r", encoding="utf-8") as handle:
@@ -33,6 +33,9 @@ class ConversationHistoryTests(unittest.TestCase):
 
             self.assertEqual(len(payload["active"]), 2)
             self.assertEqual(payload["active"][0]["user"], "안녕")
+            self.assertEqual(payload["active"][1]["skill_used"], "korea-weather")
+            self.assertEqual(payload["active"][1]["data_source"], "web_search")
+            self.assertEqual(payload["active"][1]["lang"], "ko")
 
     def test_summarize_chunk_uses_compact_summary_prefix(self):
         history = self._make_history(tempfile.gettempdir())

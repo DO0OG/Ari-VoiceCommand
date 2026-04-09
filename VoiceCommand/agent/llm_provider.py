@@ -54,6 +54,12 @@ _PROVIDER_CONFIG = {
         "requires_api_key": False,
     },
 }
+_EN_MONTHS = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+    "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
 
 def _get_tool_instruction() -> str:
     try:
@@ -436,6 +442,21 @@ class LLMProvider:
             messages.extend(self._history_snapshot())
             
             request_ctx = self._analyze_request(user_message)
+            if skill_ctx.get("force_web_search"):
+                request_ctx["force_tool"] = True
+                request_ctx["preferred_tool"] = "web_search"
+                required_tool_names = set(skill_ctx.get("required_tool_names", []))
+                required_tool_names.add("web_search")
+                skill_ctx = {**skill_ctx, "required_tool_names": sorted(required_tool_names)}
+            if skill_ctx.get("search_query_template"):
+                request_ctx["search_query_hint"] = self._build_search_query_hint(
+                    skill_ctx.get("search_query_template", ""),
+                    user_message,
+                )
+            if skill_ctx.get("force_web_search") and provider == "gemini":
+                messages[0]["content"] += "\n\n" + self._get_force_web_search_instruction(
+                    request_ctx.get("search_query_hint", "") or skill_ctx.get("search_query_template", ""),
+                )
             if skill_ctx.get("preferred_tool") and not request_ctx.get("preferred_tool"):
                 request_ctx["preferred_tool"] = skill_ctx["preferred_tool"]
             tools, tool_choice = self._select_tools_for_request(
@@ -471,6 +492,9 @@ class LLMProvider:
                         logging.debug("[LLMProvider] tool arguments 파싱 실패, 빈 값 사용: %s", exc)
                         args = {}
                     args = self._normalize_tool_arguments(tc.function.name, args, user_message)
+                    if tc.function.name == "web_search" and not str(args.get("query", "") or "").strip():
+                        query_hint = str(request_ctx.get("search_query_hint", "") or "").strip()
+                        args["query"] = query_hint or user_message
                     tool_calls.append({"id": tc.id, "name": tc.function.name, "arguments": args})
                     ctx_mgr.record_command(tc.function.name, args)
 
@@ -529,7 +553,16 @@ class LLMProvider:
                     "role": "tool", "tool_call_id": tc.get("id", tc.get("name", "tool_0")), "content": str(result)
                 })
 
-            messages = [{"role": "system", "content": self._build_system(user_message=original_msg)}]
+            messages = [{
+                "role": "system",
+                "content": "\n\n".join(
+                    part for part in (
+                        self._build_system(user_message=original_msg),
+                        self._get_source_attribution_instruction(),
+                    )
+                    if part
+                ),
+            }]
             messages.extend(self._history_snapshot())
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
@@ -714,6 +747,9 @@ class LLMProvider:
         return contains_specific_goal_markers(text)
 
     def _fallback_tool_calls_from_text(self, raw, msg, ctx):
+        if ctx.get("preferred_tool") == "web_search":
+            query = str(ctx.get("search_query_hint", "") or "").strip() or msg
+            return [{"id": "fb_1", "name": "web_search", "arguments": {"query": query, "max_results": 5}}]
         if "execute_python_code" in raw or ctx.get("force_tool"):
             return [{"id": "fb_1", "name": "run_agent_task", "arguments": {"goal": msg, "explanation": "진행할게요."}}]
         return []
@@ -725,6 +761,9 @@ class LLMProvider:
                 "prompt": "",
                 "required_tool_names": [],
                 "preferred_tool": "",
+                "force_web_search": False,
+                "escalate_to_agent": False,
+                "search_query_template": "",
             }
         try:
             from agent.skill_manager import get_skill_manager
@@ -737,7 +776,69 @@ class LLMProvider:
                 "prompt": "",
                 "required_tool_names": [],
                 "preferred_tool": "",
+                "force_web_search": False,
+                "escalate_to_agent": False,
+                "search_query_template": "",
             }
+
+    def _get_source_attribution_instruction(self) -> str:
+        from i18n.translator import _
+
+        return _(
+            "[실시간 데이터 응답 지침]\n"
+            "- 검색 결과에 없는 정보는 절대 지어내지 마세요.\n"
+            "- 정보가 없으면 '검색 결과에서 확인하지 못했습니다'라고 솔직하게 말하세요.\n"
+            "- 데이터 출처(웹 검색, 공식 API 등)를 짧게 언급하세요."
+        )
+
+    def _get_force_web_search_instruction(self, query_hint: str) -> str:
+        from i18n.translator import _
+
+        guidance = _(
+            "이 요청은 최신 실시간 데이터가 필요합니다. 반드시 web_search 도구를 먼저 호출하세요."
+        )
+        query_hint = str(query_hint or "").strip()
+        if not query_hint:
+            return guidance
+        return guidance + "\n" + _("권장 검색어: {query}").format(query=query_hint)
+
+    def _build_search_query_hint(self, template: str, user_message: str) -> str:
+        template = str(template or "").strip()
+        if not template:
+            return ""
+        import datetime
+
+        today = datetime.date.today()
+        date_hint = self._extract_date_hint(user_message, today) or today.isoformat()
+        return template.replace("{date}", date_hint)
+
+    def _extract_date_hint(self, user_message: str, today) -> str:
+        text = str(user_message or "").strip()
+        iso_match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", text)
+        if iso_match:
+            return iso_match.group(1)
+        month_day_match = re.search(r"(\d{1,2})\s*[월月]\s*(\d{1,2})\s*[일日]", text)
+        if month_day_match:
+            month = int(month_day_match.group(1))
+            day = int(month_day_match.group(2))
+            try:
+                return today.replace(month=month, day=day).isoformat()
+            except ValueError:
+                return ""
+        en_match = re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december|"
+            r"jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})\b",
+            text,
+            re.IGNORECASE,
+        )
+        if en_match:
+            month = _EN_MONTHS[en_match.group(1).lower()]
+            day = int(en_match.group(2))
+            try:
+                return today.replace(month=month, day=day).isoformat()
+            except ValueError:
+                return ""
+        return ""
 
     def _build_system(self, include_context=False, user_message=""):
         try:

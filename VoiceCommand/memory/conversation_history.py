@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 _INTERNAL_USER_PREFIXES = (
     "당신은 AI 에이전트 스킬을 Python 함수로 컴파일합니다.",
@@ -21,14 +21,22 @@ class ConversationHistory:
     def __init__(self):
         from core.resource_manager import ResourceManager
         self.file_path = ResourceManager.get_writable_path("conversation_history.json")
-        self.active: List[Dict[str, str]] = []
+        self.active: List[Dict[str, object]] = []
         self.summaries: List[str] = []
         self._lock = threading.RLock()
         self._save_timer: threading.Timer | None = None
         self._save_delay_seconds = 0.15
         self.load()
 
-    def add(self, user_msg: str, ai_response: str):
+    def add(
+        self,
+        user_msg: str,
+        ai_response: str,
+        *,
+        skill_used: str = "",
+        data_source: str = "",
+        lang: str = "",
+    ):
         if self._is_internal_entry(user_msg, ai_response):
             return
         with self._lock:
@@ -36,6 +44,9 @@ class ConversationHistory:
                 "timestamp": datetime.now().isoformat(),
                 "user": user_msg,
                 "ai": ai_response,
+                "skill_used": skill_used,
+                "data_source": data_source,
+                "lang": lang,
             }
             self.active.append(entry)
             if len(self.active) > self.MAX_ACTIVE:
@@ -52,7 +63,7 @@ class ConversationHistory:
             self.summaries = self.summaries[-self.MAX_SUMMARIES:]
         self.active = self.active[self.COMPRESS_UNIT:]
 
-    def _summarize_chunk(self, items: List[Dict[str, str]]) -> str:
+    def _summarize_chunk(self, items: List[Dict[str, object]]) -> str:
         if not items:
             return ""
         fallback = self._fallback_summarize(items)
@@ -81,7 +92,7 @@ class ConversationHistory:
             logging.debug("대화 요약 LLM 폴백 사용: %s", exc)
             return fallback
 
-    def _fallback_summarize(self, items: List[Dict[str, str]]) -> str:
+    def _fallback_summarize(self, items: List[Dict[str, object]]) -> str:
         parts = []
         for item in items:
             user = (item.get("user") or "").strip()
@@ -194,8 +205,21 @@ class ConversationHistory:
 _history = ConversationHistory()
 
 
-def add_conversation(user_msg, ai_response):
-    _history.add(user_msg, ai_response)
+def add_conversation(
+    user_msg,
+    ai_response,
+    *,
+    skill_used: str = "",
+    data_source: str = "",
+    lang: str = "",
+):
+    _history.add(
+        user_msg,
+        ai_response,
+        skill_used=skill_used,
+        data_source=data_source,
+        lang=lang,
+    )
 
 
 def get_conversation_history() -> ConversationHistory:

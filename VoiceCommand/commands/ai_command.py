@@ -272,6 +272,7 @@ class AICommand(BaseCommand):
         max_results = int(args.get("max_results", 5))
         try:
             from services.web_tools import web_search
+            logging.info("[AICommand] web_search 실행: query=%r, max_results=%s", query, max_results)
             result = web_search(query, max_results=max_results)
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
@@ -663,6 +664,65 @@ class AICommand(BaseCommand):
         if cleaned:
             self.tts_wrapper(cleaned)
 
+    def _get_skill_context(self, text: str) -> dict:
+        try:
+            from agent.skill_manager import get_skill_manager
+
+            return get_skill_manager().build_match_context(text)
+        except Exception as exc:
+            logging.debug("[AICommand] 스킬 컨텍스트 조회 실패: %s", exc)
+            return {
+                "skills": [],
+                "prompt": "",
+                "required_tool_names": [],
+                "preferred_tool": "",
+                "force_web_search": False,
+                "escalate_to_agent": False,
+                "search_query_template": "",
+            }
+
+    def _get_primary_skill_name(self, skill_ctx: dict) -> str:
+        skills = list(skill_ctx.get("skills", []) or [])
+        if not skills:
+            return ""
+        return str(getattr(skills[0], "name", "") or "")
+
+    def _get_current_language(self) -> str:
+        try:
+            from i18n.translator import get_language
+
+            return get_language()
+        except Exception as exc:
+            logging.debug("[AICommand] 언어 조회 실패, ko 기본값 사용: %s", exc)
+            return "ko"
+
+    def _build_script_skill_escalation_tool_call(self, text: str, skill_ctx: dict) -> dict:
+        try:
+            from i18n.translator import _
+        except Exception:
+            _ = lambda message, **kwargs: message.format(**kwargs) if kwargs else message  # type: ignore[assignment]
+
+        skill_name = self._get_primary_skill_name(skill_ctx) or "script"
+        logging.info("[AICommand] script 스킬 감지 → run_agent_task 승격: %s", skill_name)
+        return {
+            "id": "skill_script_escalate",
+            "name": "run_agent_task",
+            "arguments": {
+                "goal": text,
+                "explanation": _("{name} 스킬 실행을 위해 에이전트 모드로 전환합니다.").format(name=skill_name),
+            },
+        }
+
+    def _infer_data_source_from_tool_calls(self, tool_calls: List[dict]) -> str:
+        tool_names = {str(tc.get("name", "") or "") for tc in tool_calls}
+        if "web_search" in tool_names:
+            return "web_search"
+        if "mcp_call" in tool_names:
+            return "mcp"
+        if "run_agent_task" in tool_names:
+            return "agent"
+        return ""
+
     def _recover_tool_calls_from_response(self, user_text: str, response: Optional[str]) -> List[dict]:
         """LLM이 텍스트로만 '[run_agent_task 호출]' 같은 잔해를 남겼을 때 최소 복구."""
         if not response:
@@ -670,6 +730,25 @@ class AICommand(BaseCommand):
 
         recovered: List[dict] = []
         normalized_when = self._extract_schedule_phrase(user_text)
+
+        web_search_patterns = (
+            r'web_search\s*\(\s*"([^"]+)"',
+            r"web_search\s*\(\s*'([^']+)'",
+            r'web_search\s*\(\s*query\s*=\s*"([^"]+)"',
+            r"web_search\s*\(\s*query\s*=\s*'([^']+)'",
+            r'tools\.web_search\s*\(\s*query\s*=\s*"([^"]+)"',
+            r"tools\.web_search\s*\(\s*query\s*=\s*'([^']+)'",
+        )
+        for pattern in web_search_patterns:
+            match = re.search(pattern, response, flags=re.IGNORECASE)
+            if not match:
+                continue
+            recovered.append({
+                "id": "ai_command_recover_1",
+                "name": "web_search",
+                "arguments": {"query": match.group(1).strip(), "max_results": 5},
+            })
+            return recovered
 
         if re.search(r'set_timer', response, flags=re.IGNORECASE):
             if self._is_shutdown_request(user_text) and normalized_when:
@@ -858,17 +937,25 @@ class AICommand(BaseCommand):
             self.orchestrator.tts = output_callback
             self._current_goal = text   # self-fix용 목표 텍스트 저장
             response = None
+            tool_calls: List[dict] = []
+            skill_ctx = self._get_skill_context(text)
+            skill_used = self._get_primary_skill_name(skill_ctx)
+            data_source = ""
+            lang = self._get_current_language()
 
             if hasattr(self.ai_assistant, 'chat_with_tools'):
                 if self.learning_mode_ref.get('enabled'):
                     self._record_user_pattern(text)
 
-                response, tool_calls = self._invoke_with_optional_stream(
-                    self.ai_assistant.chat_with_tools,
-                    text,
-                    include_context=True,
-                    stream_callback=stream_callback,
-                )
+                if skill_ctx.get("escalate_to_agent"):
+                    tool_calls = [self._build_script_skill_escalation_tool_call(text, skill_ctx)]
+                else:
+                    response, tool_calls = self._invoke_with_optional_stream(
+                        self.ai_assistant.chat_with_tools,
+                        text,
+                        include_context=True,
+                        stream_callback=stream_callback,
+                    )
 
                 if not tool_calls:
                     tool_calls = self._recover_tool_calls_from_response(text, response)
@@ -890,6 +977,7 @@ class AICommand(BaseCommand):
                     logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격: %s", text[:80])
 
                 if tool_calls:
+                    data_source = self._infer_data_source_from_tool_calls(tool_calls)
                     # 도구 호출 전 자연스러운 안내 문장만 선행 출력
                     if response and self._should_emit_preface_response(response):
                         self._emit_user_message(response)
@@ -936,7 +1024,13 @@ class AICommand(BaseCommand):
             if response:
                 try:
                     from memory.conversation_history import add_conversation
-                    add_conversation(text, response)
+                    add_conversation(
+                        text,
+                        response,
+                        skill_used=skill_used,
+                        data_source=data_source,
+                        lang=lang,
+                    )
                 except Exception as exc:
                     logging.debug("대화 기록 저장 생략: %s", exc)
 
