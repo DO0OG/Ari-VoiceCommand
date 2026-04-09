@@ -46,7 +46,10 @@
 ## 문서 / 체크리스트 유지
 
 - PR 병합 또는 구조 변경 이후에는 아래 항목을 함께 확인해 주세요.
-  - `README.md`, `README.en.md`, `README.ja.md`
+  - `README.md` (영문 기본)
+  - `README.en.md` (영문 호환 링크)
+  - `README.ko.md`
+  - `README.ja.md`
   - `docs/README.md`
   - `docs/CLAUDE.md`
   - `docs/SESSION_CONTEXT.md`

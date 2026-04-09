@@ -1,10 +1,10 @@
-# 🎙️ Ari (아리) — AI Voice Assistant
+# 🎙️ Ari — Open-Source Windows AI Voice Assistant
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
   <p align="center">
-    <strong>"말 한마디로 시작하는 당신만의 자율 에이전트"</strong><br />
-    Windows 환경을 이해하고, 학습하며, 스스로 업무를 완수하는 다국어 음성 AI 어시스턴트입니다.
+    <strong>A Windows voice assistant and desktop agent with wake word, multilingual STT/TTS, desktop automation, MCP tools, plugins, and local LLM support.</strong><br />
+    Ari is an open-source Python/PySide6 desktop assistant for Windows that listens, acts, verifies results, and improves over time.
   </p>
 
   <p align="center">
@@ -15,105 +15,131 @@
   </p>
 
   <p align="center">
-    <a href="./README.en.md">English</a> | <a href="./README.ja.md">日本語</a> | <strong>한국어</strong>
+    <a href="./README.ko.md">한국어</a> | <strong>English</strong> | <a href="./README.ja.md">日本語</a>
   </p>
 </div>
 
 ---
 
-## ✨ 아리는 어떤 프로젝트인가요?
+## ✨ At a Glance
 
-아리는 단순한 음성 인식 도구가 아닙니다. 사용자의 데스크탑 위에 상주하며 **복합적인 목표를 스스로 계획하고 실행**하는 강력한 **자율 에이전트(Autonomous Agent)**입니다. 
+- **Windows-native AI voice assistant** with wake word, speech recognition, and text-to-speech.
+- **Autonomous agent loop** that plans desktop tasks, executes tools/code, and retries with self-correction.
+- **Local-first AI stack** with Ollama, CosyVoice3, and secure offline-friendly workflows.
+- **Extensible architecture** through plugins, `SKILL.md` skills, and Model Context Protocol (MCP) integration.
+- **PySide6 desktop UI** with character widget, chat interface, and visual verification flows.
 
-### 🤖 핵심 기능 한눈에 보기
+### Quick Links
 
-| 기능 | 설명 |
-| :--- | :--- |
-| **자율 실행 (Agent)** | 목표를 말하면 Python/Shell 코드를 직접 짜서 실행하고, 오류 발생 시 스스로 수정(Self-Fix)합니다. |
-| **자가 학습 (Learning)** | 성공한 작업 패턴을 추출하여 '스킬'로 저장하며, 반복될수록 LLM 호출 없이 더 빠르게 실행됩니다. |
-| **에이전트 스킬 (SKILL.md)** | GitHub/URL/로컬 경로에서 SKILL.md 스킬을 설치하고, 사용자 요청에 맞춰 자동으로 프롬프트에 주입합니다. |
-| **MCP 연동** | HTTPS 기반 MCP 서버 세션을 열고, 원격 도구를 안정적으로 호출해 결과를 응답에 반영합니다. |
-| **시각적 상호작용** | 감정에 따라 실시간으로 애니메이션되는 캐릭터 위젯과 텍스트 채팅 UI를 제공합니다. |
-| **개인화 기억** | 사용자와의 대화를 통해 선호도와 전문 분야를 기억하고, 맞춤형 주간 리포트를 생성합니다. |
-| **로컬 모드 지원** | Ollama와 CosyVoice3를 통해 인터넷 연결 없는 보안 환경에서도 LLM과 TTS를 구동할 수 있습니다. |
-
----
-
-## 🚀 주요 하이라이트
-
-- **자연스러운 대화:** 한국어·영어·일본어 완벽 지원 및 언어별 최적화된 시스템 프롬프트 주입.
-- **강력한 자동화:** 브라우저 DOM 분석, 파일 시스템 제어, 시스템 볼륨 및 전원 관리.
-- **확장 가능한 생태계:** 플러그인 시스템을 통해 새로운 명령과 도구를 즉시 추가하고 마켓플레이스에서 공유.
-- **지능형 결과 검증:** 실행 결과를 단순 텍스트가 아닌 OCR 비전 검증을 통해 화면상에서 직접 확인.
+- 📖 [Usage Guide](./docs/USAGE.md)
+- 🧩 [Agent Skills / MCP](./docs/USAGE.md#4-에이전트-스킬-skills--mcp)
+- 🔌 [Plugin Development](./docs/PLUGIN_GUIDE.md)
+- 🌐 [Project Homepage](https://ari-voice-command.vercel.app)
+- 👩‍💻 [Contributing](./docs/CONTRIBUTING.md)
 
 ---
 
-## 📈 성능 및 학습 지표
+## 🛠️ Quick Start
 
-사용하면 할수록 아리는 더 똑똑해집니다.
+### Requirements
 
-### 자율실행 성공률
-| 작업 유형 | 초기 성공률 | 학습 후 성공률 |
-| :--- | :---: | :---: |
-| **파일/시스템 제어** | 85% | **98%** |
-| **웹 브라우징/검색** | 65% | **88%** |
-| **복합 워크플로우** | 40% | **75%** |
-
-### 자가학습 단계별 가이드
-- **Step 1 (0~50회):** 탐색 단계. 실패를 통해 `StrategyMemory`를 축적합니다.
-- **Step 2 (50~200회):** 최적화 단계. 자주 쓰는 작업이 **스킬(Skill)**로 컴파일됩니다.
-- **Step 3 (200회+):** 안정 단계. 대부분의 일상 업무를 LLM 도움 없이 즉각 처리합니다.
-
----
-
-## 🛠️ 빠른 시작
-
-### 요구 사양
 - **OS:** Windows 10/11 (64-bit)
 - **Python:** 3.11
-- **Hardware:** RAM 8GB 이상 권장 (로컬 모델 구동 시 GPU VRAM 4GB 이상 권장)
+- **Hardware:** 8GB+ RAM recommended (4GB+ GPU VRAM recommended for local models)
 
-### 설치 및 실행
+### Installation & Run
+
 ```bash
-# 1. 저장소 클론
+# 1. Clone repository
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd Ari-VoiceCommand
 
-# 2. 의존성 설치
+# 2. Install dependencies
 pip install -r VoiceCommand/requirements.txt
 
-# 3. 실행
+# 3. Run
 cd VoiceCommand
 py -3.11 Main.py
 ```
 
 ---
 
-## 🏗️ 시스템 아키텍처
+## 🤖 What is Ari?
+
+Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that can listen, plan, execute, verify, learn, and improve over time.
+
+### Core Capabilities
+
+| Area | What Ari Does |
+| :--- | :--- |
+| **Voice Pipeline** | Supports wake word activation, multilingual speech recognition (STT), and natural text-to-speech (TTS) responses. |
+| **Agent & Automation** | Plans complex goals, writes Python/Shell automation, executes tasks, and retries with self-fixing strategies. |
+| **Skills, Plugins & MCP** | Extends behavior through installable `SKILL.md` packages, plugin modules, and remote/local MCP tools. |
+| **Local AI Stack** | Supports local LLM workflows with Ollama and local TTS pipelines for privacy-sensitive environments. |
+| **UI & Verification** | Provides a PySide6 desktop UI, animated character widget, text chat, and OCR-based result verification. |
+| **Memory & Personalization** | Stores user preferences, adapts behavior, and accumulates reusable strategies for repeated tasks. |
+
+---
+
+## 🚀 Developer Highlights
+
+- **Python + PySide6 desktop app:** straightforward to inspect, extend, and package for Windows.
+- **Automation-first design:** browser DOM control, file/system actions, and agent-driven workflow execution.
+- **Open integration surface:** OpenAI-compatible providers, Ollama, MCP servers, plugins, and installable skills.
+- **Learning-oriented runtime:** strategy memory and skill compilation improve repeated task execution.
+
+---
+
+## 🏗️ System Architecture
+
+Ari listens for a wake word, routes requests through a command and agent layer, executes tools or LLM workflows, then verifies and learns from the result.
 
 ```mermaid
 graph TD
-    A[사용자 발화] --> B{웨이크워드}
-    B -- "아리야" --> C[STT 엔진]
-    C --> D[명령 레지스트리]
-    D -- "복합 목표" --> E[자율 에이전트 루프]
-    E --> F[플래너 / 실행기]
-    F --> G[결과 검증 / 학습]
-    G --> H[Strategy Memory / 스킬화]
-    D -- "채팅 / 도구" --> I[LLM Provider]
-    I --> J[TTS 응답]
+    A[User Speech] --> B{Wake Word}
+    B -- "Hey Ari" --> C[STT Engine]
+    C --> D[Command Registry]
+    D -- "Complex Goal" --> E[Autonomous Agent Loop]
+    E --> F[Planner / Executor]
+    F --> G[Verification / Learning]
+    G --> H[Strategy Memory / Skills]
+    D -- "Chat / Tool" --> I[LLM Provider]
+    I --> J[TTS Response]
     H -.-> F
 ```
 
 ---
 
-## 📚 문서 및 링크
+## 📈 Performance & Learning
 
-- 📖 **[사용자 가이드](./docs/USAGE.md)**: 상세 설정 및 사용법
-- 🧩 **[에이전트 스킬 / MCP 사용](./docs/USAGE.md#4-에이전트-스킬-skills--mcp)**: 스킬 설치, 관리 UI, MCP 호출 흐름
-- 🔌 **[플러그인 제작](./docs/PLUGIN_GUIDE.md)**: 나만의 기능 추가하기
-- 🎨 **[테마 커스터마이징](./docs/THEME_CUSTOMIZATION.md)**: UI 디자인 변경
-- 👩‍💻 **[기여하기](./docs/CONTRIBUTING.md)**: 프로젝트 참여 가이드
+Ari is designed to improve with use.
+
+| Task Category | Initial Success | Post-Learning |
+| :--- | :---: | :---: |
+| **File/System Control** | 85% | **98%** |
+| **Web Browsing/Search** | 65% | **88%** |
+| **Complex Workflow** | 40% | **75%** |
+
+- **Step 1 (0-50 runs):** exploration and `StrategyMemory` accumulation
+- **Step 2 (50-200 runs):** optimization and skill compilation
+- **Step 3 (200+ runs):** faster routine execution with less LLM dependency
+
+---
+
+## 📚 Documentation
+
+- 📖 **[Usage Guide](./docs/USAGE.md)**: setup, operation, and configuration
+- 🧩 **[Agent Skills / MCP](./docs/USAGE.md#4-에이전트-스킬-skills--mcp)**: skill installation, management UI, and MCP flows
+- 🔌 **[Plugin Development](./docs/PLUGIN_GUIDE.md)**: extending Ari with your own features
+- 🎨 **[Theme Customization](./docs/THEME_CUSTOMIZATION.md)**: UI and appearance changes
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome, especially around Windows automation, STT/TTS integrations, local model support, PySide6 UX, plugin tooling, and MCP workflows.
+
+Please start with the [contribution guide](./docs/CONTRIBUTING.md).
 
 ---
 
