@@ -229,6 +229,12 @@ def start_performance_warmups() -> None:
         get_embedder().warmup_async()
     except Exception as exc:
         logging.debug("임베더 워밍업 생략: %s", exc)
+    try:
+        from agent.skill_manager import get_skill_manager
+
+        get_skill_manager()
+    except Exception as exc:
+        logging.debug("스킬 매니저 초기화 생략: %s", exc)
 
 
 def flush_runtime_state() -> None:
@@ -247,6 +253,12 @@ def flush_runtime_state() -> None:
         flush_skill_library()
     except Exception as exc:
         logging.debug("SkillLibrary flush 생략: %s", exc)
+    try:
+        from agent.mcp_client import get_mcp_pool
+
+        get_mcp_pool().close_all()
+    except Exception as exc:
+        logging.debug("MCP 세션 정리 생략: %s", exc)
     try:
         from memory.conversation_history import get_conversation_history
         get_conversation_history().flush()

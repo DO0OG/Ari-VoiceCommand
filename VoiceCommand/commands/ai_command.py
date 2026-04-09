@@ -113,6 +113,7 @@ class AICommand(BaseCommand):
             "run_agent_task":           self._handle_agent_task,
             "web_search":               self._handle_web_search,
             "web_fetch":                self._handle_web_fetch,
+            "mcp_call":                 self._handle_mcp_call,
             "schedule_task":            self._handle_schedule_task,
             "cancel_scheduled_task":    self._handle_cancel_scheduled_task,
             "list_scheduled_tasks":     self._handle_list_scheduled_tasks,
@@ -289,6 +290,35 @@ class AICommand(BaseCommand):
         except Exception as e:
             logging.error("web_fetch 오류: %s", e)
             return f"페이지 로드 오류: {e}"
+
+    def _handle_mcp_call(self, args: dict) -> Optional[str]:
+        endpoint = str(args.get("endpoint", "") or "").strip()
+        tool_name = str(args.get("tool", "") or "").strip()
+        raw_arguments = args.get("arguments", {})
+        if not endpoint or not tool_name:
+            from i18n.translator import _
+
+            return _("MCP 호출 실패: endpoint와 tool이 필요합니다.")
+
+        if isinstance(raw_arguments, str):
+            try:
+                raw_arguments = json.loads(raw_arguments)
+            except json.JSONDecodeError:
+                raw_arguments = {"input": raw_arguments}
+        if raw_arguments is None:
+            raw_arguments = {}
+        if not isinstance(raw_arguments, dict):
+            raw_arguments = {"input": raw_arguments}
+
+        try:
+            from agent.mcp_client import get_mcp_pool
+
+            return get_mcp_pool().call(endpoint, tool_name, raw_arguments)
+        except Exception as exc:
+            from i18n.translator import _
+
+            logging.error("mcp_call 오류: %s", exc, exc_info=True)
+            return _("MCP 도구 호출 중 오류가 발생했습니다: {error}").format(error=exc)
 
     def _handle_schedule_task(self, args: dict) -> Optional[str]:
         """작업 예약"""

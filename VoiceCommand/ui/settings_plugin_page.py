@@ -105,10 +105,47 @@ class _PluginSettingsPage(QWidget):
         pvbox.addLayout(btn_row)
 
         vbox.addWidget(plugin_group)
+
+        skill_group = QGroupBox(_("Agent Skills"))
+        svbox = QVBoxLayout(skill_group)
+        svbox.addWidget(
+            create_muted_label(_("SKILL.md 포맷 스킬. Claude Code 등 다른 에이전트와 공유 가능."))
+        )
+
+        skill_row = QHBoxLayout()
+        self.skill_source_input = QLineEdit()
+        self.skill_source_input.setPlaceholderText(
+            _("GitHub (예: NomaDamas/k-skill) 또는 URL 또는 로컬 경로")
+        )
+        skill_row.addWidget(self.skill_source_input, 1)
+        skill_install_btn = QPushButton(_("설치"))
+        skill_install_btn.setStyleSheet(secondary_btn_style())
+        skill_install_btn.clicked.connect(self._install_skill)
+        skill_row.addWidget(skill_install_btn)
+        svbox.addLayout(skill_row)
+
+        self.skill_list_widget = QListWidget()
+        self.skill_list_widget.setMaximumHeight(120)
+        svbox.addWidget(self.skill_list_widget)
+
+        skill_btn_row = QHBoxLayout()
+        manage_btn = QPushButton(_("스킬 관리 창 열기"))
+        manage_btn.setStyleSheet(secondary_btn_style())
+        manage_btn.clicked.connect(self._open_skill_manager)
+        refresh_btn = QPushButton(_("목록 새로고침"))
+        refresh_btn.setStyleSheet(secondary_btn_style())
+        refresh_btn.clicked.connect(self._refresh_skill_list)
+        skill_btn_row.addWidget(manage_btn)
+        skill_btn_row.addWidget(refresh_btn)
+        skill_btn_row.addStretch()
+        svbox.addLayout(skill_btn_row)
+
+        vbox.addWidget(skill_group)
         vbox.addStretch()
 
         self._refresh_plugin_list()
         self._refresh_marketplace_list()
+        self._refresh_skill_list()
 
     # ── 플러그인 목록 ──────────────────────────────────────────────────────────
 
@@ -248,6 +285,29 @@ class _PluginSettingsPage(QWidget):
             self.marketplace_status_label.setText(message)
             self.marketplace_status_label.setStyleSheet("color: #e74c3c;")
             QMessageBox.warning(self, _("마켓플레이스"), message)
+
+    def _refresh_skill_list(self):
+        from agent.skill_manager import get_skill_manager
+
+        self.skill_list_widget.clear()
+        for skill in get_skill_manager().load_all():
+            prefix = "✓" if skill.enabled else "○"
+            suffix = " [MCP]" if skill.is_mcp_skill else ""
+            self.skill_list_widget.addItem(f"{prefix}  {skill.name}{suffix}")
+
+    def _install_skill(self):
+        from ui.skills_dialog import SkillsDialog
+
+        dialog = SkillsDialog(parent=self)
+        dialog.source_input.setText(self.skill_source_input.text().strip())
+        dialog.exec()
+        self._refresh_skill_list()
+
+    def _open_skill_manager(self):
+        from ui.skills_dialog import SkillsDialog
+
+        SkillsDialog(parent=self).exec()
+        self._refresh_skill_list()
 
     # ── 공개 인터페이스 ────────────────────────────────────────────────────────
 

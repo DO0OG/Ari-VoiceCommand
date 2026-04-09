@@ -179,6 +179,31 @@ CORE_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "mcp_call",
+            "description": _("MCP 스킬 도구를 호출합니다. MCP 엔드포인트 URL, 도구명, 파라미터를 지정하세요."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "description": _("MCP 서버 엔드포인트 URL (예: https://yuju777-coupang-mcp.hf.space/mcp)"),
+                    },
+                    "tool": {
+                        "type": "string",
+                        "description": _("호출할 MCP 도구명 (예: search_coupang_products)"),
+                    },
+                    "arguments": {
+                        "type": "object",
+                        "description": _("도구에 전달할 파라미터 (JSON 객체)"),
+                    },
+                },
+                "required": ["endpoint", "tool"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "shutdown_computer",
             "description": _("컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요."),
             "parameters": {

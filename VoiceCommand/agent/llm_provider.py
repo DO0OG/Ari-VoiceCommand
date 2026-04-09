@@ -384,7 +384,7 @@ class LLMProvider:
                 return cached
             if save_history:
                 self.add_to_history("user", user_message)
-            messages = [{"role": "system", "content": system_override or self._build_system(include_context)}]
+            messages = [{"role": "system", "content": system_override or self._build_system(include_context, user_message=user_message)}]
             messages.extend(self._history_snapshot())
 
             if provider == "anthropic":
@@ -431,11 +431,17 @@ class LLMProvider:
                 logging.warning("[LLMProvider] 도구 대화 모델 미설정: provider=%s", provider)
                 return self._missing_model_response(provider), []
             self.add_to_history("user", user_message)
-            messages = [{"role": "system", "content": self._build_system(include_context)}]
+            skill_ctx = self._get_skill_context(user_message)
+            messages = [{"role": "system", "content": self._build_system(include_context, user_message=user_message)}]
             messages.extend(self._history_snapshot())
             
             request_ctx = self._analyze_request(user_message)
-            tools, tool_choice = self._select_tools_for_request(request_ctx)
+            if skill_ctx.get("preferred_tool") and not request_ctx.get("preferred_tool"):
+                request_ctx["preferred_tool"] = skill_ctx["preferred_tool"]
+            tools, tool_choice = self._select_tools_for_request(
+                request_ctx,
+                required_tool_names=set(skill_ctx.get("required_tool_names", [])),
+            )
 
             if provider == "anthropic":
                 # Anthropic tool use is more complex, using simple fallback for now
@@ -523,7 +529,7 @@ class LLMProvider:
                     "role": "tool", "tool_call_id": tc.get("id", tc.get("name", "tool_0")), "content": str(result)
                 })
 
-            messages = [{"role": "system", "content": self._build_system()}]
+            messages = [{"role": "system", "content": self._build_system(user_message=original_msg)}]
             messages.extend(self._history_snapshot())
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
@@ -543,7 +549,7 @@ class LLMProvider:
         model = model_override or self.model
         client = client_override or self.client
         try:
-            system = self._build_system(include_context)
+            system = self._build_system(include_context, user_message=user_message)
             messages = self._history_snapshot()
             kwargs = {"model": model, "max_tokens": 1000, "system": system, "messages": messages}
             if use_tools:
@@ -575,7 +581,12 @@ class LLMProvider:
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
             messages = self._history_snapshot()
             messages.append({"role": "user", "content": results_content})
-            resp = client.messages.create(model=model, max_tokens=500, system=self._build_system(), messages=messages)
+            resp = client.messages.create(
+                model=model,
+                max_tokens=500,
+                system=self._build_system(user_message=original_msg),
+                messages=messages,
+            )
             msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
             if stream_callback and msg:
                 self._emit_stream_text(msg, stream_callback)
@@ -651,19 +662,36 @@ class LLMProvider:
         ctx.setdefault("intent", "conversation")
         return ctx
 
-    def _select_tools_for_request(self, ctx: dict):
+    def _select_tools_for_request(self, ctx: dict, required_tool_names: set[str] | None = None):
+        required_tool_names = set(required_tool_names or set())
         tools = self.get_available_tools()
         if ctx.get("preferred_tool"):
             filtered = [t for t in tools if t["function"]["name"] == ctx["preferred_tool"]]
+            if required_tool_names:
+                filtered.extend(
+                    tool
+                    for tool in tools
+                    if tool["function"]["name"] in required_tool_names
+                    and tool["function"]["name"] != ctx["preferred_tool"]
+                )
             if filtered:
                 return filtered, {"type": "function", "function": {"name": ctx["preferred_tool"]}}
 
         allowed_names = _TOOL_NAMES_BY_INTENT.get(ctx.get("intent", "conversation"))
         if allowed_names:
+            allowed_names = set(allowed_names) | required_tool_names
             filtered = []
             for tool in tools:
                 name = tool["function"]["name"]
                 if name not in _CORE_TOOL_NAMES or name in allowed_names:
+                    filtered.append(tool)
+            if filtered:
+                tools = filtered
+        elif required_tool_names:
+            filtered = []
+            for tool in tools:
+                name = tool["function"]["name"]
+                if name not in _CORE_TOOL_NAMES or name in required_tool_names:
                     filtered.append(tool)
             if filtered:
                 tools = filtered
@@ -690,7 +718,28 @@ class LLMProvider:
             return [{"id": "fb_1", "name": "run_agent_task", "arguments": {"goal": msg, "explanation": "진행할게요."}}]
         return []
 
-    def _build_system(self, include_context=False):
+    def _get_skill_context(self, user_message: str) -> dict:
+        if not str(user_message or "").strip():
+            return {
+                "skills": [],
+                "prompt": "",
+                "required_tool_names": [],
+                "preferred_tool": "",
+            }
+        try:
+            from agent.skill_manager import get_skill_manager
+
+            return get_skill_manager().build_match_context(user_message)
+        except Exception as exc:
+            logging.debug("[LLMProvider] 스킬 컨텍스트 주입 생략: %s", exc)
+            return {
+                "skills": [],
+                "prompt": "",
+                "required_tool_names": [],
+                "preferred_tool": "",
+            }
+
+    def _build_system(self, include_context=False, user_message=""):
         try:
             from i18n.translator import get_language
             lang = get_language()
@@ -735,6 +784,9 @@ class LLMProvider:
             except Exception as e:
                 logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
         parts.append(_get_tool_instruction())
+        skill_ctx = self._get_skill_context(user_message)
+        if skill_ctx.get("prompt"):
+            parts.append(skill_ctx["prompt"])
         parts.append(_LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"]))
         return "\n\n".join(part for part in parts if part)
 

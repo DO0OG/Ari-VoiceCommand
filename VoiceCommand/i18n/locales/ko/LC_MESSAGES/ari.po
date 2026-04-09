@@ -1297,3 +1297,78 @@ msgstr "🤖 계획 {count}단계"
 
 msgid "🤖 실행 중..."
 msgstr "🤖 실행 중..."
+
+msgid "🧩 스킬 관리"
+msgstr "🧩 스킬 관리"
+
+msgid "Agent Skills"
+msgstr "에이전트 스킬"
+
+msgid "[사용 가능한 스킬]"
+msgstr "[사용 가능한 스킬]"
+
+msgid "스킬 스크립트 경로"
+msgstr "스킬 스크립트 경로"
+
+msgid "MCP 실행 안내"
+msgstr "MCP 실행 안내"
+
+msgid "이 스킬은 MCP 프로토콜을 사용합니다."
+msgstr "이 스킬은 MCP 프로토콜을 사용합니다."
+
+msgid "curl 명령 대신 mcp_call 도구를 사용하세요."
+msgstr "curl 명령 대신 mcp_call 도구를 사용하세요."
+
+msgid "예시"
+msgstr "예시"
+
+msgid "MCP 스킬 도구를 호출합니다. MCP 엔드포인트 URL, 도구명, 파라미터를 지정하세요."
+msgstr "MCP 스킬 도구를 호출합니다. MCP 엔드포인트 URL, 도구명, 파라미터를 지정하세요."
+
+msgid "MCP 서버 엔드포인트 URL (예: https://yuju777-coupang-mcp.hf.space/mcp)"
+msgstr "MCP 서버 엔드포인트 URL (예: https://yuju777-coupang-mcp.hf.space/mcp)"
+
+msgid "호출할 MCP 도구명 (예: search_coupang_products)"
+msgstr "호출할 MCP 도구명 (예: search_coupang_products)"
+
+msgid "도구에 전달할 파라미터 (JSON 객체)"
+msgstr "도구에 전달할 파라미터 (JSON 객체)"
+
+msgid "MCP 호출 실패: endpoint와 tool이 필요합니다."
+msgstr "MCP 호출 실패: endpoint와 tool이 필요합니다."
+
+msgid "MCP 도구 호출 중 오류가 발생했습니다: {error}"
+msgstr "MCP 도구 호출 중 오류가 발생했습니다: {error}"
+
+msgid "SKILL.md 포맷 스킬. Claude Code 등 다른 에이전트와 공유 가능."
+msgstr "SKILL.md 포맷 스킬. Claude Code 등 다른 에이전트와 공유 가능."
+
+msgid "GitHub (예: NomaDamas/k-skill) 또는 URL 또는 로컬 경로"
+msgstr "GitHub (예: NomaDamas/k-skill) 또는 URL 또는 로컬 경로"
+
+msgid "스킬을 선택하면 SKILL.md 내용이 표시됩니다."
+msgstr "스킬을 선택하면 SKILL.md 내용이 표시됩니다."
+
+msgid "설치된 스킬: {names}"
+msgstr "설치된 스킬: {names}"
+
+msgid "스킬을 설치할 수 없었습니다."
+msgstr "스킬을 설치할 수 없었습니다."
+
+msgid "{name} 스킬을 삭제할까요?"
+msgstr "{name} 스킬을 삭제할까요?"
+
+msgid "{name} 업데이트 완료"
+msgstr "{name} 업데이트 완료"
+
+msgid "설치 원본 정보가 없습니다."
+msgstr "설치 원본 정보가 없습니다."
+
+msgid "스킬 관리 창 열기"
+msgstr "스킬 관리 창 열기"
+
+msgid "스킬 삭제"
+msgstr "스킬 삭제"
+
+msgid "스킬 설치 중..."
+msgstr "스킬 설치 중..."
