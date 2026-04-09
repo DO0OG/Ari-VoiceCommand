@@ -4,10 +4,11 @@
 """
 import logging
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
-    QComboBox, QGroupBox, QWidget,
+    QComboBox, QGroupBox, QWidget, QFormLayout,
     QTabWidget, QMessageBox, QFrame,
 )
 from PySide6.QtGui import QFont
@@ -140,6 +141,12 @@ class SettingsDialog(QDialog):
 
         group = QGroupBox(_("캐릭터 페르소나 설정"))
         gvbox = QVBoxLayout(group)
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
+        form.setLabelAlignment(Qt.AlignTop | Qt.AlignLeft)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
 
         rp_fields = [
             ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
@@ -149,14 +156,17 @@ class SettingsDialog(QDialog):
         ]
 
         for attr, label, key, ph in rp_fields:
-            gvbox.addWidget(QLabel(label))
+            label_widget = QLabel(label)
+            label_widget.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             edit = QTextEdit()
             edit.setPlainText(self.settings.get(key, ""))
             edit.setPlaceholderText(ph)
-            edit.setMaximumHeight(80)
+            edit.setMinimumHeight(86)
+            edit.setMaximumHeight(86)
             setattr(self, attr, edit)
-            gvbox.addWidget(edit)
+            form.addRow(label_widget, edit)
 
+        gvbox.addLayout(form)
         vbox.addWidget(group)
         vbox.addStretch()
         return widget
