@@ -254,6 +254,68 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(tool_choice, {"type": "function", "function": {"name": "mcp_call"}})
         self.assertEqual(tool_names, {"mcp_call"})
 
+    def test_select_tools_for_request_prefers_web_search_when_forced(self):
+        provider = LLMProvider()
+
+        tools, tool_choice = provider._select_tools_for_request(
+            {
+                "intent": "conversation",
+                "force_tool": True,
+                "preferred_tool": "web_search",
+            },
+            required_tool_names={"web_search"},
+        )
+        tool_names = {tool["function"]["name"] for tool in tools}
+
+        self.assertEqual(tool_choice, {"type": "function", "function": {"name": "web_search"}})
+        self.assertEqual(tool_names, {"web_search"})
+
+    def test_fallback_tool_calls_from_text_prefers_web_search_when_forced(self):
+        provider = LLMProvider()
+
+        tool_calls = provider._fallback_tool_calls_from_text(
+            "web_search(\"LCK 경기 결과\")",
+            "오늘 LCK 경기 결과 알려줘",
+            {
+                "force_tool": True,
+                "preferred_tool": "web_search",
+                "search_query_hint": "LCK 2026-04-10 경기 결과",
+            },
+        )
+
+        self.assertEqual(tool_calls[0]["name"], "web_search")
+        self.assertEqual(tool_calls[0]["arguments"]["query"], "LCK 2026-04-10 경기 결과")
+
+    def test_build_search_query_hint_uses_explicit_month_day_from_user_message(self):
+        provider = LLMProvider()
+        import datetime
+        real_date = datetime.date
+
+        class _FixedDate:
+            @staticmethod
+            def today():
+                return real_date(2026, 4, 10)
+
+        with patch("datetime.date", _FixedDate):
+            query = provider._build_search_query_hint("LCK {date} 경기 결과", "4월 9일 LCK 경기 결과 알려줘")
+
+        self.assertEqual(query, "LCK 2026-04-09 경기 결과")
+
+    def test_build_search_query_hint_supports_english_month_day(self):
+        provider = LLMProvider()
+        import datetime
+        real_date = datetime.date
+
+        class _FixedDate:
+            @staticmethod
+            def today():
+                return real_date(2026, 4, 10)
+
+        with patch("datetime.date", _FixedDate):
+            query = provider._build_search_query_hint("LCK {date} match results", "Show me LCK match results for April 9")
+
+        self.assertEqual(query, "LCK 2026-04-09 match results")
+
     def test_build_system_includes_skill_prompt_when_message_matches(self):
         provider = LLMProvider()
 
@@ -263,6 +325,9 @@ class LLMProviderTests(unittest.TestCase):
                 "prompt": "[사용 가능한 스킬]\n쿠팡 MCP 스킬",
                 "required_tool_names": ["mcp_call"],
                 "preferred_tool": "mcp_call",
+                "force_web_search": False,
+                "escalate_to_agent": False,
+                "search_query_template": "",
             }
             system_prompt = provider._build_system(user_message="쿠팡에서 모니터 찾아줘")
 

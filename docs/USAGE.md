@@ -94,7 +94,44 @@ Agent Skills와 MCP는 Ari의 에이전트 작업 범위를 확장하는 주요 
 - 실제 실행은 내장 도구 `mcp_call(endpoint, tool, arguments)`를 통해 처리됩니다.
 - 현재 MCP 호출은 **HTTPS 엔드포인트만 허용**합니다.
 
-### 4-4. UI에서 무엇을 할 수 있나요?
+### 4-4. 스킬 메타데이터와 i18n은 어떻게 쓰나요?
+
+스킬 라우팅 품질을 높이려면 `SKILL.md` frontmatter에 아래 필드를 넣는 것을 권장합니다.
+
+- `skill_type`: `prompt_only` / `search` / `script` / `mcp`
+- `triggers_ko`, `triggers_en`, `triggers_ja`: 언어별 매칭 키워드
+- `description_ko`, `description_en`, `description_ja`: 언어별 스킬 설명
+- `search_query_template_ko`, `search_query_template_en`, `search_query_template_ja`: 실시간 검색형 스킬의 언어별 검색 템플릿
+
+예시:
+
+```yaml
+skill_type: search
+triggers_ko:
+  - 경기 결과
+  - 순위
+triggers_en:
+  - match results
+  - standings
+triggers_ja:
+  - 試合結果
+  - 順位
+description_ko: 특정 리그 경기 결과와 순위를 조회한다.
+description_en: Retrieve match results and standings for a league.
+description_ja: リーグの試合結果と順位を取得する。
+search_query_template_ko: LCK {date} 경기 결과
+search_query_template_en: LCK {date} match results
+search_query_template_ja: LCK {date} 試合結果
+```
+
+추가 참고:
+
+- 새 스킬이 위 필드를 모두 제공하지 않아도 Ari는 스킬 이름/설명 기반으로 **기본 키워드 fallback** 을 시도합니다.
+- 다만 다국어 사용자 경험을 안정적으로 보장하려면 `triggers_*` / `description_*` 를 명시하는 편이 가장 안전합니다.
+- `search` 타입 스킬은 실시간 데이터 질의에서 `web_search` 우선 경로로 라우팅됩니다.
+- `script` 타입 스킬은 필요 시 `run_agent_task` 경로로 승격됩니다.
+
+### 4-5. UI에서 무엇을 할 수 있나요?
 
 - 설치된 스킬 목록 확인
 - `SKILL.md` 본문 미리보기
@@ -103,7 +140,7 @@ Agent Skills와 MCP는 Ari의 에이전트 작업 범위를 확장하는 주요 
 - 설치 원본이 있을 경우 업데이트
 - 스킬 삭제
 
-### 4-5. 플러그인과 무엇이 다른가요?
+### 4-6. 플러그인과 무엇이 다른가요?
 
 - **플러그인:** Python 코드/ZIP을 앱에 로드해 기능을 직접 확장
 - **Agent Skills:** `SKILL.md` 지침과 선택적 `scripts/`, MCP 엔드포인트를 통해 LLM 도구 사용 흐름을 확장

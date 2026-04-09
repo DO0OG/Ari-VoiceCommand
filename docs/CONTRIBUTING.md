@@ -48,6 +48,23 @@
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
 - Agent Skills/MCP를 건드렸다면 `test_skill_manager`, `test_skill_installer`, `test_mcp_client`, `test_llm_provider`, `test_ai_command`도 함께 확인해 주세요.
 
+## Agent Skills 작성 가이드
+
+새 스킬을 추가하거나 기존 `SKILL.md`를 갱신할 때는 아래 메타데이터를 우선 검토해 주세요.
+
+- `skill_type`: `prompt_only` / `search` / `script` / `mcp`
+- `triggers_ko`, `triggers_en`, `triggers_ja`
+- `description_ko`, `description_en`, `description_ja`
+- `search_query_template_ko`, `search_query_template_en`, `search_query_template_ja` (`search` 타입일 때)
+
+권장 이유:
+
+- 한국어/영어/일본어 사용자가 같은 스킬을 안정적으로 매칭할 수 있습니다.
+- 실시간 데이터 스킬은 언어별 검색 템플릿으로 `web_search` 강제 경로를 더 정확하게 탈 수 있습니다.
+- 스크립트형 스킬은 `script` 타입 선언으로 `run_agent_task` 승격 조건을 명확히 할 수 있습니다.
+
+메타데이터가 부족해도 Ari가 스킬 이름/설명 기반 fallback 매칭을 시도하지만, 다국어 품질은 frontmatter를 명시했을 때가 가장 좋습니다.
+
 ## 문서 / 체크리스트 유지
 
 - PR 병합 또는 구조 변경 이후에는 아래 항목을 함께 확인해 주세요.

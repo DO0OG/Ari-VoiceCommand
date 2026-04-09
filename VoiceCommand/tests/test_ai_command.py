@@ -216,6 +216,29 @@ class AICommandTests(unittest.TestCase):
         add_conversation.assert_called_once()
         self.assertIn("실행 보고서", add_conversation.call_args[0][1])
 
+    def test_script_skill_escalation_routes_to_run_agent_task_and_records_metadata(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        command._dispatch["run_agent_task"] = lambda args: "작업 완료. 스크립트 스킬을 실행했습니다."
+
+        skill_ctx = {
+            "skills": [SimpleNamespace(name="joseon-sillok-search")],
+            "prompt": "",
+            "required_tool_names": [],
+            "preferred_tool": "",
+            "force_web_search": False,
+            "escalate_to_agent": True,
+            "search_query_template": "",
+        }
+
+        with patch.object(command, "_get_skill_context", return_value=skill_ctx):
+            with patch("memory.conversation_history.add_conversation") as add_conversation:
+                combined = command.run_interaction("실록에서 세종 기록 찾아줘")
+
+        self.assertIn("작업 완료.", combined)
+        add_conversation.assert_called_once()
+        self.assertEqual(add_conversation.call_args.kwargs["skill_used"], "joseon-sillok-search")
+        self.assertEqual(add_conversation.call_args.kwargs["data_source"], "agent")
+
     def test_extract_saved_path_ignores_scanned_markdown_path_without_save_signal(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         run_result = AgentRunResult(
@@ -299,6 +322,17 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(recovered[0]["name"], "schedule_task")
         self.assertEqual(recovered[0]["arguments"]["when"], "30분에")
+
+    def test_recover_tool_calls_from_response_parses_web_search_call(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "오늘 LCK 경기 결과 알려줘",
+            'tools.web_search(query="LCK 2026-04-10 경기 결과")',
+        )
+
+        self.assertEqual(recovered[0]["name"], "web_search")
+        self.assertEqual(recovered[0]["arguments"]["query"], "LCK 2026-04-10 경기 결과")
 
     def test_set_timer_response_for_shutdown_is_recovered_as_schedule_task(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
