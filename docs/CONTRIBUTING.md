@@ -23,7 +23,6 @@
    - PR 제목은 반드시 `[Type] 설명` 형식을 사용합니다.
      - 예: `[Docs] 기여 체크리스트 최신화`
    - PR 본문은 `1. 2. 3.` 순서 목록 형식으로 작성해 주세요.
-   - GitHub 관련 작성자/기여자는 `DO0OG (MAD_DOGGO)`만 남도록 유지합니다.
 
 ## 코딩 스타일
 
@@ -64,16 +63,14 @@
 ## 로컬 전용 파일
 
 아래 파일과 폴더는 로컬 환경 전용 산출물이므로 기본적으로 Git 추적 대상이 아닙니다.
-
-- 아래 파일/폴더는 로컬 개발 산출물이라 기본적으로 Git 추적 대상이 아닙니다.
-  - `VoiceCommand/.ari_runtime/`
-  - `VoiceCommand/reference.wav`
-  - `market/web/.env.local`
-  - `market/web/node_modules/`
-  - `market/web/.next/`
-  - `market/web/tsconfig.tsbuildinfo`
-  - `market/supabase/.temp/`
-  - `supabase/`
+- `VoiceCommand/.ari_runtime/`
+- `VoiceCommand/reference.wav`
+- `market/web/.env.local`
+- `market/web/node_modules/`
+- `market/web/.next/`
+- `market/web/tsconfig.tsbuildinfo`
+- `market/supabase/.temp/`
+- `supabase/`
 - 저장소에는 `VoiceCommand/ari_settings.template.json`만 템플릿 기준선으로 유지합니다. 실제 사용 중인 `VoiceCommand/ari_settings.json`은 로컬 전용 파일이며 Git 추적 대상이 아닙니다.
 - 처음 설정할 때는 템플릿을 참고해 런타임 경로(`VoiceCommand/.ari_runtime/ari_settings.json` 또는 `%AppData%/Ari/ari_settings.json`)에 복사해서 사용하세요.
 - 소스 실행 중 생성되는 개인 API 키, 예약 작업, 로그, 메모리, 플러그인 캐시는 `.ari_runtime/` 아래에만 남도록 유지해 주세요. 빌드된 exe는 `%AppData%/Ari/`를 사용합니다.
