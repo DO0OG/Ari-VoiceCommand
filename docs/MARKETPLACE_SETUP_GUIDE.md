@@ -2,12 +2,17 @@
 
 > Supabase · GitHub OAuth · Vercel 배포까지 순서대로 따라하는 가이드입니다.
 
+이 문서는 Ari 플러그인 마켓플레이스를 직접 운영하거나 재구성할 때 필요한 설정 절차를 정리합니다.
+앱 사용 방법이 아니라 배포 파이프라인과 서비스 설정을 다루므로, 운영 목적일 때 참고하시면 됩니다.
+
 > 참고: 2026-04 기준 **Agent Skills (`SKILL.md`)** 는 앱 내부 `skills/` 런타임 디렉터리에서 별도로 관리됩니다.
 > 이 문서의 마켓플레이스는 여전히 **플러그인 ZIP 배포 파이프라인** 기준입니다.
 
 ---
 
 ## 1단계 — Supabase 프로젝트 생성 + DB 초기화
+
+먼저 백엔드 저장소와 인증에 사용할 Supabase 프로젝트를 준비합니다.
 
 1. [supabase.com](https://supabase.com) → `Sign In` → GitHub 계정으로 로그인
 2. 대시보드 → `New project` 클릭
@@ -25,6 +30,8 @@
 ---
 
 ## 2단계 — GitHub OAuth App 등록
+
+다음으로 GitHub 로그인을 위한 OAuth 앱을 등록합니다.
 
 1. GitHub 로그인 → 우상단 프로필 → `Settings`
 2. 좌측 맨 아래 `Developer settings` → `OAuth Apps` → `New OAuth App`
@@ -47,6 +54,8 @@
 ---
 
 ## 3단계 — GitHub Actions Secrets 등록
+
+배포 자동화에 필요한 시크릿은 저장소 GitHub Actions 설정에 등록합니다.
 
 1. GitHub에서 `DO0OG/Ari-VoiceCommand` 레포 이동
 2. 상단 탭 `Settings` → 좌측 `Secrets and variables` → `Actions`

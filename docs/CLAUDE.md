@@ -1,5 +1,8 @@
 # CLAUDE.md (Ari/아리)
 
+This file is a developer-facing architecture and workflow reference for AI coding sessions.
+Use it together with `docs/SESSION_CONTEXT.md` when resuming work across sessions.
+
 ## Project Overview
 Korean voice-controlled AI assistant for Windows. Features: Wake word ("아리야"), STT (Google/Whisper), LLM (Groq/OpenAI/Anthropic/Mistral/Gemini/OpenRouter/NVIDIA NIM/Ollama), TTS (CosyVoice3/Fish Audio/OpenAI/ElevenLabs/Edge), GUI/Browser automation, multi-role LLM (planner/executor model separation), streaming responses, self-improving agent loop (SkillLibrary + ReflectionEngine + PlannerFeedback), and SQLite FTS5 memory indexing.
 
@@ -21,6 +24,8 @@ Korean voice-controlled AI assistant for Windows. Features: Wake word ("아리�
 4. 검증: `validate_repo.py --compile-only` → 영향 테스트 → `git add` (로컬 파일 제외)
 
 ## Architecture & Logic
+
+아래 항목은 주요 모듈의 역할과 최근 분리 구조를 빠르게 파악하기 위한 요약입니다.
 - **Entry**: `Main.py` (Qt App, System Tray, CosyVoice first-run check, plugin load with hook injection, `PluginWatcher` hot-reload timer)
 - **State**: `AppState` in `core/VoiceCommand.py` — replaces 13 module-level globals
 - **Config**: `ConfigManager` (`core/config_manager.py`) — RLock, double-checked locking cache

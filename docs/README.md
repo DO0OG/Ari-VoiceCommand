@@ -1,8 +1,11 @@
 # 문서 모음
 
 아리(Ari) 프로젝트 문서를 한 곳에 모았습니다.
+README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필요한 문서를 빠르게 찾기 위한 색인 역할을 합니다.
 
 ## 사용자 문서
+
+앱 설치, 설정, 확장, 테마 변경처럼 실제 사용에 가까운 문서는 아래 문서부터 확인하시면 됩니다.
 
 - [프로그램 사용 가이드](./USAGE.md) — 실행, 기본 사용법, 로컬 설치(Ollama/CosyVoice3), 자동화 예시, NVIDIA NIM
 - [프로그램 사용 가이드](./USAGE.md#4-에이전트-스킬-skills--mcp) — Agent Skills 설치, MCP 스킬 사용 흐름, 관리 UI
@@ -11,6 +14,8 @@
 - [기여 가이드](./CONTRIBUTING.md) — 검증 명령, 브랜치/커밋 규칙, 로컬 산출물 관리
 
 ## 프로젝트 문서
+
+아래 문서는 현재 구조, 운영 규칙, 최근 변경 맥락을 정리한 내부 참고 문서입니다.
 
 - 최근 자율 실행 코어는 `state transition`, `execution policy`, `episode memory`, `backup/recovery guidance`까지 포함하도록 확장되었습니다. `workspace audit` 명령은 열린 창을 브라우저/일반 앱으로 분류하고 `summary.md`를 자동 백업 덮어쓰기하는 템플릿을 사용합니다.
 - 플래너 JSON 복구 책임은 `agent/planner_json_utils.py`, 브라우저/데스크톱 계획 조립 책임은 `agent/automation_plan_utils.py`로 분리되어 핵심 본체 파일의 응집도를 높였습니다.
