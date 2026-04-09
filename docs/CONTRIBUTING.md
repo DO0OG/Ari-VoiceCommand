@@ -6,23 +6,24 @@
 ## 기여 방법
 
 1. 이슈 제기
-   - 작업을 시작하기 전, 먼저 대응되는 GitHub 이슈를 생성해 주세요.
-   - 이슈 제목은 반드시 `<Type>: 설명` 형식을 사용합니다.
+   - 규모가 크거나 논의가 필요한 변경은 GitHub 이슈를 먼저 생성해 주세요.
+   - 작은 문서 수정, 오탈자 수정, 단순 정리는 바로 PR로 진행해도 됩니다.
+   - 이슈 제목은 가능하면 `<Type>: 설명` 형식을 사용해 주세요.
      - 예: `Fix: 세션 컨텍스트 문서 최신화`
    - 허용 타입은 `Feat`, `Fix`, `Docs`, `Style`, `Refactor`, `Test`, `Chore` 입니다.
-   - 이슈 본문은 `-` 목록 형식으로 작성해 주세요.
+   - 이슈 본문은 가능하면 `-` 목록 형식으로 정리해 주세요.
 
 2. 풀 리퀘스트 제출
    - 코드 기여를 하고 싶으시다면 다음 단계를 따라주세요:
-     a. 이슈 번호에 맞는 브랜치를 생성합니다.
+     a. 필요하다면 작업 내용을 구분하기 쉬운 브랜치를 생성합니다.
         - 권장 형식: `<issue-number>-<type>-<slug>`
         - 예: `58-docs-기여-체크리스트-최신화-및-후속-개선-과제-정리`
      b. 변경사항을 검증한 뒤 커밋합니다.
      c. 브랜치에 푸시합니다.
      d. 풀 리퀘스트를 생성합니다.
-   - PR 제목은 반드시 `[Type] 설명` 형식을 사용합니다.
+   - PR 제목은 가능하면 `[Type] 설명` 형식을 사용해 주세요.
      - 예: `[Docs] 기여 체크리스트 최신화`
-   - PR 본문은 `1. 2. 3.` 순서 목록 형식으로 작성해 주세요.
+   - PR 본문에는 변경 요약, 테스트 내용, 관련 이슈를 함께 적어 주세요.
 
 ## 코딩 스타일
 
@@ -41,7 +42,7 @@
 - 기본 검증 명령:
   - `py -3.11 VoiceCommand/validate_repo.py`
   - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
-- 현재 전체 기준선은 **`348 tests + smoke`** 입니다.
+- 현재 기본 기준선은 **전체 unittest + smoke** 입니다.
 - `validate_repo.py`는 현재 compile + unit test 외에 clean runtime 환경과 marketplace SHA256 계약 smoke도 함께 확인합니다.
 - 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
@@ -55,9 +56,7 @@
   - `README.ko.md`
   - `README.ja.md`
   - `docs/README.md`
-  - `docs/CLAUDE.md`
-  - `docs/SESSION_CONTEXT.md`
-  - 테스트 개수 표기(`348 tests + smoke` 등)가 최신 검증 결과와 일치하는지
+  - 테스트 기준 설명(예: 전체 unittest + smoke)이 최신 검증 흐름과 일치하는지
 - 문서만 수정하더라도 현재 저장소 운영 규칙과 실제 검증 기준이 어긋나지 않는지 함께 점검해 주세요.
 
 ## 로컬 전용 파일
@@ -78,7 +77,7 @@
 
 ## 커밋 메시지 가이드라인
 
-- 커밋 제목은 반드시 `<Type>: 설명` 형식을 사용합니다.
+- 커밋 제목은 가능하면 `<Type>: 설명` 형식을 사용해 주세요.
   - `Feat` : 새로운 기능 추가
   - `Fix` : 버그 수정
   - `Docs` : 문서 수정

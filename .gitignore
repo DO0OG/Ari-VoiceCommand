@@ -187,6 +187,9 @@ market/supabase/.temp/
 /supabase/
 .mailmap
 /AGENTS.md
+/docs/CLAUDE.md
+/docs/SESSION_CONTEXT.md
+/docs/MARKETPLACE_SETUP_GUIDE.md
 
 # ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
 VoiceCommand/.ari_runtime/
