@@ -186,6 +186,7 @@ market/web/.env.local
 market/supabase/.temp/
 /supabase/
 .mailmap
+/AGENTS.md
 
 # ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
 VoiceCommand/.ari_runtime/
