@@ -1,6 +1,6 @@
 """
 전략 기억 (Strategy Memory) — Phase 3.2 고도화
-실패 원인 분석(Lesson)을 포함한 지능형 검색 및 전략 주입을 지원합니다.
+실패 원인 분석(Lesson)을 포함한 지능형 검색 및 전략 주입을 지원한다.
 """
 import atexit
 import json
@@ -65,7 +65,7 @@ class StrategyRecord:
 
 
 class StrategyMemory:
-    """과거 전략을 기억하고 현재 목표에 맞춤형 가이드를 제공합니다."""
+    """과거 전략을 기억하고 현재 목표에 맞춤형 가이드를 제공한다."""
 
     def __init__(self, filepath: str = _MEMORY_FILE):
         self.filepath = filepath

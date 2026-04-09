@@ -1,6 +1,6 @@
 """
 개발/CI 공용 검증 스크립트.
-문법 검사, 유닛 테스트, 템플릿 플래너 스모크 테스트를 한 번에 수행합니다.
+문법 검사, 유닛 테스트, 템플릿 플래너 스모크 테스트를 한 번에 수행한다.
 """
 from __future__ import annotations
 
@@ -48,8 +48,11 @@ COMPILE_TARGETS = [
     "agent/learning_metrics.py",
     "agent/llm_provider.py",
     "agent/llm_router.py",
+    "agent/mcp_client.py",
     "agent/ocr_helper.py",
     "agent/planner_json_utils.py",
+    "agent/skill_installer.py",
+    "agent/skill_manager.py",
     "agent/tool_schemas.py",
     "agent/planner_feedback.py",
     "agent/proactive_scheduler.py",
@@ -103,6 +106,7 @@ COMPILE_TARGETS = [
     "ui/text_interface.py",
     "ui/memory_panel.py",
     "ui/scheduler_panel.py",
+    "ui/skills_dialog.py",
     "ui/tray_icon.py",
     "agent/planner/agent_planner.py",
     "agent/planner/action_step.py",

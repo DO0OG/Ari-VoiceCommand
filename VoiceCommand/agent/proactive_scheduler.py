@@ -1,6 +1,6 @@
 """
 능동적 스케줄러 (Proactive Scheduler) — Phase 3.4 고도화
-지정 시각 알람, 주제 기반 선제 제안, 예약 작업 관리를 담당합니다.
+지정 시각 알람, 주제 기반 선제 제안, 예약 작업 관리를 담당한다.
 AriScheduler(구 scheduler.py) 기능을 통합 — SchedulerPanel UI와 호환.
 """
 import json
@@ -82,7 +82,7 @@ class ScheduledTaskRun:
     next_run_after: str = ""
 
 class ProactiveScheduler:
-    """사용자의 컨텍스트를 학습하여 선제적으로 제안하고 지정 시각에 작업을 수행합니다."""
+    """사용자의 컨텍스트를 학습하여 선제적으로 제안하고 지정 시각에 작업을 수행한다."""
 
     _WEEKDAY_KO = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
@@ -251,7 +251,7 @@ class ProactiveScheduler:
     # ── 선제적 제안 (Phase 3.4 핵심) ──────────────────────────────────────────
 
     def get_proactive_suggestions(self) -> List[Dict[str, str]]:
-        """사용자 컨텍스트(주제, 빈도)를 분석하여 할 일을 제안합니다."""
+        """사용자 컨텍스트(주제, 빈도)를 분석하여 할 일을 제안한다."""
         from memory.user_context import get_context_manager
         ctx_mgr = get_context_manager()
         ctx = ctx_mgr.context

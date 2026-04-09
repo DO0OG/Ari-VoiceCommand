@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from commands.ai_command import AICommand
@@ -255,6 +255,27 @@ class AICommandTests(unittest.TestCase):
         self.assertTrue(
             any("5분" in cmd for cmd in executed_cmds),
             f"5분이 포함된 명령 없음: {executed_cmds}",
+        )
+
+    def test_handle_mcp_call_routes_through_mcp_pool(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        fake_pool = Mock()
+        fake_pool.call.return_value = "검색 결과"
+
+        with patch("agent.mcp_client.get_mcp_pool", return_value=fake_pool):
+            result = command._handle_mcp_call(
+                {
+                    "endpoint": "https://example.com/mcp",
+                    "tool": "search_coupang_products",
+                    "arguments": {"keyword": "monitor"},
+                }
+            )
+
+        self.assertEqual(result, "검색 결과")
+        fake_pool.call.assert_called_once_with(
+            "https://example.com/mcp",
+            "search_coupang_products",
+            {"keyword": "monitor"},
         )
 
     def test_shutdown_recovery_prefers_schedule_tool_when_goal_is_delayed(self):

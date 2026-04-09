@@ -1,6 +1,6 @@
 """
 에이전트 오케스트레이터 (Agent Orchestrator)
-Plan → Execute+Self-Fix → Verify 다층 루프로 목표를 자율적으로 달성합니다.
+Plan → Execute+Self-Fix → Verify 다층 루프로 목표를 자율적으로 달성한다.
 
 사용 패턴:
   1. execute_with_self_fix(code, step_type, goal)
@@ -23,8 +23,8 @@ from agent.learning_engine import LearningEngine
 
 logger = logging.getLogger(__name__)
 
-# StepResult를 execution_engine에서 임포트하여 re-export합니다.
-# 기존 코드의 `from agent.agent_orchestrator import StepResult` 는 계속 동작합니다.
+# StepResult를 execution_engine에서 임포트하여 re-export한다.
+# 기존 코드의 `from agent.agent_orchestrator import StepResult` 는 계속 동작한다.
 __all__ = ["AgentOrchestrator", "AgentRunResult", "StepResult", "get_orchestrator"]
 
 

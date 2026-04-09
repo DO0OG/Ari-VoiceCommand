@@ -1,8 +1,8 @@
 """
-.po 파일을 .mo 바이너리로 컴파일합니다. (인코딩 지원 강화 버전)
+.po 파일을 .mo 바이너리로 컴파일한다. (인코딩 지원 강화 버전)
 실행: py -3.11 scripts/compile_po.py
 
-msgfmt 없이 Python 표준 라이브러리만 사용합니다.
+msgfmt 없이 Python 표준 라이브러리만 사용한다.
 """
 import os
 import struct

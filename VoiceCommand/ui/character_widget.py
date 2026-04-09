@@ -823,7 +823,7 @@ class CharacterWidget(QWidget):
                     logging.error(f"실시간 테마 반영 실패: {e}")
 
     def refresh_theme(self):
-        """테마 변경 후 캐릭터 관련 UI를 갱신합니다."""
+        """테마 변경 후 캐릭터 관련 UI를 갱신한다."""
         if self.speech_bubble:
             text = self.speech_bubble.text
             self._hide_speech_bubble_slot()

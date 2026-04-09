@@ -3,8 +3,8 @@
 이 파일은 AI 세션(Claude, Gemini 등) 간 프로젝트 상태를 공유하기 위한 문서입니다.
 새 세션 시작 시 이 파일을 가장 먼저 제공하세요.
 
-## Last Updated: 2026-04-07
-## 상태: UI/TTS 다국어 지원(i18n) 최종 완료 · ko/en/ja 지원 · 301/301 테스트 통과
+## Last Updated: 2026-04-10
+## 상태: Agent Skills + MCP 통합 완료 · 문서/번역 최신화 · 348 tests + smoke 통과
 
 ---
 
@@ -17,6 +17,7 @@
 - TTS: Fish Audio / CosyVoice3 (로컬) / OpenAI TTS / ElevenLabs / Edge TTS
 - UI: PySide6 시스템 트레이 + 캐릭터 애니메이션 (Shimeji 스타일)
 - 진입점: `Main.py` → `VoiceCommand.py` → `CommandRegistry` → 각 Command 클래스
+- 최근 추가 기능: `SKILL.md` 기반 Agent Skills, MCP(Streamable HTTP) 도구 호출, SkillsDialog UI
 
 ### 디렉터리 구조
 
@@ -31,6 +32,7 @@
 | `VoiceCommand/tts/` | TTS 제공자 팩토리 |
 | `VoiceCommand/ui/` | PySide6 위젯 (캐릭터, 설정, 테마) |
 | `VoiceCommand/audio/` | PyAudio 싱글톤, 웨이크워드 |
+| `VoiceCommand/skills/` | 설치된 Agent Skills (`SKILL.md`, `scripts/`, `.ari_skill_meta.json`) |
 
 ---
 
@@ -51,13 +53,13 @@
 
 ---
 
-## 3. LLM 도구 목록 (get_available_tools 기준, 2026-03-30)
+## 3. LLM 도구 목록 (get_available_tools 기준, 2026-04-10)
 
 ```
 get_screen_status, play_youtube, set_timer, cancel_timer,
 get_weather, adjust_volume, get_current_time,
 execute_python_code, execute_shell_command, run_agent_task,
-web_search, web_fetch, schedule_task,
+web_search, web_fetch, mcp_call, schedule_task,
 shutdown_computer, list_scheduled_tasks, cancel_scheduled_task
 ```
 총 16개. 플러그인 도구는 `_plugin_tools`로 동적 추가.

@@ -1,7 +1,7 @@
 """
 안전 검사기 (Safety Checker)
-AI가 생성한 코드/명령/URL의 위험 수준을 분류합니다.
-패턴은 모듈 로드 시 한 번만 컴파일됩니다.
+AI가 생성한 코드/명령/URL의 위험 수준을 분류한다.
+패턴은 모듈 로드 시 한 번만 컴파일된다.
 """
 import re
 import threading
@@ -157,7 +157,7 @@ class SafetyChecker:
         return self._clone_report(report)
 
     def check_url(self, url: str) -> SafetyReport:
-        """URL의 안전성을 검사합니다."""
+        """URL의 안전성을 검사한다."""
         if url in self._url_cache:
             return self._clone_report(self._url_cache[url])
         url_lower = url.lower()
@@ -198,7 +198,7 @@ class SafetyChecker:
         return self._clone_report(report)
 
     def check_app_launch(self, app_name: str) -> SafetyReport:
-        """앱 실행의 안전성을 검사합니다."""
+        """앱 실행의 안전성을 검사한다."""
         if app_name in self._app_cache:
             return self._clone_report(self._app_cache[app_name])
         # Path.resolve() 기반 정규화로 대소문자/유니코드 우회 방지

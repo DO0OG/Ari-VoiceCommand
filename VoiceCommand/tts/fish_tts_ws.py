@@ -1,6 +1,6 @@
 """
 Fish Audio WebSocket TTS
-WAV 전체 수신 후 wave 모듈로 파싱하여 재생합니다.
+WAV 전체 수신 후 wave 모듈로 파싱하여 재생한다.
 """
 import io
 import logging

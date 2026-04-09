@@ -1,6 +1,6 @@
 """
 목표 에피소드 기억 (Episode Memory)
-최근 자율 실행 에피소드의 요약을 저장하고 유사 목표 planning/replan에 재주입합니다.
+최근 자율 실행 에피소드의 요약을 저장하고 유사 목표 planning/replan에 재주입한다.
 """
 from __future__ import annotations
 

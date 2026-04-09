@@ -1,7 +1,7 @@
 """
 검증 엔진 (Verification Engine)
-실행 결과가 목표를 달성했는지 판단합니다.
-개발자 목표 전용 사전 검사와 RealVerifier / Planner 폴백을 포함합니다.
+실행 결과가 목표를 달성했는지 판단한다.
+개발자 목표 전용 사전 검사와 RealVerifier / Planner 폴백을 포함한다.
 """
 import logging
 from typing import List, Optional, Tuple

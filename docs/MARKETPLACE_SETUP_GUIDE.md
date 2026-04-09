@@ -2,6 +2,9 @@
 
 > Supabase · GitHub OAuth · Vercel 배포까지 순서대로 따라하는 가이드입니다.
 
+> 참고: 2026-04 기준 **Agent Skills (`SKILL.md`)** 는 앱 내부 `skills/` 런타임 디렉터리에서 별도로 관리됩니다.
+> 이 문서의 마켓플레이스는 여전히 **플러그인 ZIP 배포 파이프라인** 기준입니다.
+
 ---
 
 ## 1단계 — Supabase 프로젝트 생성 + DB 초기화

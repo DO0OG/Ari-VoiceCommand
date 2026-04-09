@@ -1297,3 +1297,84 @@ msgstr "🤖 Plan step {count}"
 
 msgid "🤖 실행 중..."
 msgstr "🤖 Running..."
+
+msgid "🧩 스킬 관리"
+msgstr "🧩 Skill Manager"
+
+msgid "Agent Skills"
+msgstr "Agent Skills"
+
+msgid "[사용 가능한 스킬]"
+msgstr "[Available Skills]"
+
+msgid "스킬 스크립트 경로"
+msgstr "Skill script path"
+
+msgid "MCP 실행 안내"
+msgstr "MCP usage guide"
+
+msgid "이 스킬은 MCP 프로토콜을 사용합니다."
+msgstr "This skill uses the MCP protocol."
+
+msgid "curl 명령 대신 mcp_call 도구를 사용하세요."
+msgstr "Use the mcp_call tool instead of raw curl commands."
+
+msgid "예시"
+msgstr "Example"
+
+msgid "MCP 스킬 도구를 호출합니다. MCP 엔드포인트 URL, 도구명, 파라미터를 지정하세요."
+msgstr "Call an MCP skill tool. Specify the endpoint URL, tool name, and parameters."
+
+msgid "MCP 서버 엔드포인트 URL (예: https://yuju777-coupang-mcp.hf.space/mcp)"
+msgstr "MCP server endpoint URL (e.g. https://yuju777-coupang-mcp.hf.space/mcp)"
+
+msgid "호출할 MCP 도구명 (예: search_coupang_products)"
+msgstr "MCP tool name to call (e.g. search_coupang_products)"
+
+msgid "도구에 전달할 파라미터 (JSON 객체)"
+msgstr "Parameters to pass to the tool (JSON object)"
+
+msgid "MCP 호출 실패: endpoint와 tool이 필요합니다."
+msgstr "MCP call failed: endpoint and tool are required."
+
+msgid "MCP 도구 호출 중 오류가 발생했습니다: {error}"
+msgstr "Error calling MCP tool: {error}"
+
+msgid "SKILL.md 포맷 스킬. Claude Code 등 다른 에이전트와 공유 가능."
+msgstr "SKILL.md format skills. Compatible with Claude Code and other agents."
+
+msgid "GitHub (예: NomaDamas/k-skill) 또는 URL 또는 로컬 경로"
+msgstr "GitHub (e.g. NomaDamas/k-skill), URL, or local path"
+
+msgid "스킬을 선택하면 SKILL.md 내용이 표시됩니다."
+msgstr "Select a skill to preview its SKILL.md content."
+
+msgid "설치된 스킬: {names}"
+msgstr "Skills installed: {names}"
+
+msgid "스킬을 설치할 수 없었습니다."
+msgstr "Failed to install skill."
+
+msgid "{name} 스킬을 삭제할까요?"
+msgstr "Delete skill '{name}'?"
+
+msgid "{name} 업데이트 완료"
+msgstr "{name} updated successfully"
+
+msgid "업데이트"
+msgstr "Update"
+
+msgid "업데이트 실패"
+msgstr "Update Failed"
+
+msgid "설치 원본 정보가 없습니다."
+msgstr "No installation source found."
+
+msgid "스킬 관리 창 열기"
+msgstr "Open Skill Manager"
+
+msgid "스킬 삭제"
+msgstr "Delete skill"
+
+msgid "스킬 설치 중..."
+msgstr "Installing skill..."

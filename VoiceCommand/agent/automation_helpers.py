@@ -1,6 +1,6 @@
 """
 GUI / 브라우저 / 앱 자동화 공통 헬퍼 (Phase 2.1 고도화)
-pyautogui, pyperclip, pygetwindow, selenium을 활용하여 강력한 자동화 환경을 제공합니다.
+pyautogui, pyperclip, pygetwindow, selenium을 활용하여 강력한 자동화 환경을 제공한다.
 """
 import os
 import ctypes
@@ -78,7 +78,7 @@ class AutomationHelpers:
         return url
 
     def open_path(self, path: str) -> str:
-        """파일 탐색기 등으로 경로를 열거나 파일을 실행합니다."""
+        """파일 탐색기 등으로 경로를 열거나 파일을 실행한다."""
         normalized = os.path.abspath(path)
         if not os.path.exists(normalized):
             raise FileNotFoundError(f"열 경로를 찾지 못했습니다: {path}")
@@ -86,7 +86,7 @@ class AutomationHelpers:
         return path
 
     def launch_app(self, target: str) -> str:
-        """이름 또는 경로로 앱을 실행합니다."""
+        """이름 또는 경로로 앱을 실행한다."""
         normalized = (target or "").strip().strip('"')
         if not normalized:
             raise ValueError("실행할 대상이 비어 있습니다.")
@@ -145,12 +145,12 @@ class AutomationHelpers:
     # ── 마우스 및 키보드 제어 ───────────────────────────────────────────────────
 
     def wait_seconds(self, seconds: float) -> float:
-        """지정된 시간(초) 동안 대기합니다."""
+        """지정된 시간(초) 동안 대기한다."""
         time.sleep(seconds)
         return seconds
 
     def click_screen(self, x: Optional[int] = None, y: Optional[int] = None, clicks: int = 1, button: str = "left") -> str:
-        """화면의 특정 좌표 또는 현재 위치를 클릭합니다."""
+        """화면의 특정 좌표 또는 현재 위치를 클릭한다."""
         pg = self._get_pyautogui()
         if x is not None and y is not None:
             pg.click(x=x, y=y, clicks=clicks, button=button)
@@ -159,7 +159,7 @@ class AutomationHelpers:
         return "current_position"
 
     def click_image(self, image_path: str, confidence: float = 0.8) -> bool:
-        """화면에서 이미지를 찾아 클릭합니다 (이미지 인식 기반)."""
+        """화면에서 이미지를 찾아 클릭한다 (이미지 인식 기반)."""
         pg = self._get_pyautogui()
         try:
             # opencv-python 필요
@@ -172,7 +172,7 @@ class AutomationHelpers:
         return False
 
     def is_image_visible(self, image_path: str, confidence: float = 0.8) -> bool:
-        """지정한 이미지가 현재 화면에 보이는지 읽기 전용으로 확인합니다."""
+        """지정한 이미지가 현재 화면에 보이는지 읽기 전용으로 확인한다."""
         pg = self._get_pyautogui()
         try:
             pos = pg.locateCenterOnScreen(image_path, confidence=confidence)
@@ -182,13 +182,13 @@ class AutomationHelpers:
             return False
 
     def move_mouse(self, x: int, y: int, duration: float = 0.2) -> str:
-        """마우스 커서를 이동합니다."""
+        """마우스 커서를 이동한다."""
         pg = self._get_pyautogui()
         pg.moveTo(x, y, duration=duration)
         return f"{x},{y}"
 
     def type_text(self, text: str, interval: float = 0.01, use_clipboard: bool = True) -> str:
-        """텍스트를 입력합니다. 한글 대응을 위해 기본적으로 클립보드를 사용합니다."""
+        """텍스트를 입력한다. 한글 대응을 위해 기본적으로 클립보드를 사용한다."""
         pg = self._get_pyautogui()
         if use_clipboard:
             try:
@@ -223,7 +223,7 @@ class AutomationHelpers:
         return win.title if win else ""
 
     def list_open_windows(self, limit: int = 12) -> List[str]:
-        """현재 열려 있는 창 제목 목록을 반환합니다."""
+        """현재 열려 있는 창 제목 목록을 반환한다."""
         gw = self._get_pygetwindow()
         titles: List[str] = []
         for win in gw.getAllWindows():
@@ -242,12 +242,12 @@ class AutomationHelpers:
         return titles[0] if titles else None
 
     def find_windows(self, title_substring: str, limit: int = 5) -> List[object]:
-        """제목에 특정 문자열이 포함된 창 목록을 반환합니다."""
+        """제목에 특정 문자열이 포함된 창 목록을 반환한다."""
         gw = self._get_pygetwindow()
         return list(gw.getWindowsWithTitle(title_substring))[:limit]
 
     def get_window_state(self, title_substring: str) -> dict:
-        """창 존재 여부, 개수, 대표 제목을 반환합니다."""
+        """창 존재 여부, 개수, 대표 제목을 반환한다."""
         windows = self.find_windows(title_substring)
         titles = [(getattr(win, "title", "") or "").strip() for win in windows]
         titles = [title for title in titles if title]
@@ -260,7 +260,7 @@ class AutomationHelpers:
         }
 
     def focus_window(self, title_substring: str, goal_hint: str = "") -> bool:
-        """특정 창을 찾아 활성화(포커스)합니다."""
+        """특정 창을 찾아 활성화(포커스)한다."""
         target = self.resolve_window_target(goal_hint, title_substring)
         win = self.find_window(target)
         if win:
@@ -276,7 +276,7 @@ class AutomationHelpers:
         return False
 
     def wait_for_window(self, title_substring: str, timeout: float = 10.0, goal_hint: str = "") -> str:
-        """특정 창이 나타날 때까지 대기합니다."""
+        """특정 창이 나타날 때까지 대기한다."""
         end = time.time() + timeout
         target = self.resolve_window_target(goal_hint, title_substring)
         while time.time() < end:
@@ -288,7 +288,7 @@ class AutomationHelpers:
         raise TimeoutError(f"창을 찾지 못했습니다: {target}")
 
     def wait_for_window_state(self, title_substring: str, minimum_count: int = 1, timeout: float = 10.0) -> dict:
-        """특정 창이 원하는 개수 이상 나타날 때까지 대기합니다."""
+        """특정 창이 원하는 개수 이상 나타날 때까지 대기한다."""
         end = time.time() + timeout
         while time.time() < end:
             state = self.get_window_state(title_substring)
@@ -329,7 +329,7 @@ class AutomationHelpers:
         submit_selector: str = "button[type='submit'],input[type='submit']",
         headless: bool = False,
     ) -> str:
-        """브라우저를 열어 로그인을 시도합니다."""
+        """브라우저를 열어 로그인을 시도한다."""
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -377,7 +377,7 @@ class AutomationHelpers:
                     logger.debug("browser_login 정리 실패: %s", exc)
 
     def get_browser_state(self) -> dict:
-        """공유 스마트 브라우저의 현재 상태를 읽기 전용으로 반환합니다."""
+        """공유 스마트 브라우저의 현재 상태를 읽기 전용으로 반환한다."""
         try:
             from services.web_tools import get_smart_browser
         except Exception as exc:
@@ -390,7 +390,7 @@ class AutomationHelpers:
         return str(state.get("current_url", ""))
 
     def get_learned_strategies(self, goal_hint: str = "", domain: str = "") -> dict:
-        """현재까지 축적된 브라우저/데스크톱 전략을 읽기 전용으로 반환합니다."""
+        """현재까지 축적된 브라우저/데스크톱 전략을 읽기 전용으로 반환한다."""
         normalized_goal = self._normalize_goal_hint(goal_hint)
         browser_state = self.get_browser_state()
         browser_plans = browser_state.get("action_plan_strategies", {}) if isinstance(browser_state, dict) else {}
@@ -427,7 +427,7 @@ class AutomationHelpers:
         }
 
     def get_learned_strategy_summary(self, goal_hint: str = "", domain: str = "") -> str:
-        """LLM이 바로 참고하기 쉬운 학습 전략 요약 문자열을 반환합니다."""
+        """LLM이 바로 참고하기 쉬운 학습 전략 요약 문자열을 반환한다."""
         learned = self.get_learned_strategies(goal_hint=goal_hint, domain=domain)
         lines: List[str] = []
         if learned.get("resolved_domain"):
@@ -493,7 +493,7 @@ class AutomationHelpers:
         return " | ".join(lines)
 
     def get_desktop_state(self) -> dict:
-        """현재 데스크톱/브라우저/창 상태를 한 번에 요약합니다."""
+        """현재 데스크톱/브라우저/창 상태를 한 번에 요약한다."""
         active_window = ""
         open_windows: List[str] = []
         browser_state = {}
@@ -566,7 +566,7 @@ class AutomationHelpers:
         return " | ".join([line for line in lines if line][:2])
 
     def _sample_directory_entries(self, directory: str, limit: int = 8) -> List[str]:
-        """상태 비교용으로 디렉터리 엔트리 일부만 가볍게 수집합니다."""
+        """상태 비교용으로 디렉터리 엔트리 일부만 가볍게 수집한다."""
         normalized = os.path.abspath(directory or "")
         if not normalized or not os.path.isdir(normalized):
             return []
@@ -577,7 +577,7 @@ class AutomationHelpers:
         return [os.path.join(normalized, name) for name in entries]
 
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
-        """브라우저 다운로드 폴더에서 다운로드 완료 파일을 대기합니다."""
+        """브라우저 다운로드 폴더에서 다운로드 완료 파일을 대기한다."""
         try:
             from services.web_tools import get_smart_browser
         except Exception:
@@ -653,7 +653,7 @@ class AutomationHelpers:
         )
 
     def run_browser_actions(self, url: str, actions: list, headless: bool = False, goal_hint: str = "") -> dict:
-        """공유 스마트 브라우저로 상태 인식 기반 액션 시퀀스를 수행합니다."""
+        """공유 스마트 브라우저로 상태 인식 기반 액션 시퀀스를 수행한다."""
         try:
             from services.web_tools import get_smart_browser
         except Exception:
@@ -810,7 +810,7 @@ class AutomationHelpers:
         actions: Optional[List[dict]] = None,
         timeout: float = 10.0,
     ) -> dict:
-        """앱 실행/창 대기/포커스/후속 액션을 하나의 데스크톱 워크플로우로 수행합니다."""
+        """앱 실행/창 대기/포커스/후속 액션을 하나의 데스크톱 워크플로우로 수행한다."""
         actions = actions or self.get_desktop_workflow_plan(goal_hint)
         opened = ""
         window_title = ""

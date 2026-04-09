@@ -37,18 +37,20 @@
 - 기본 검증 명령:
   - `py -3.11 VoiceCommand/validate_repo.py`
   - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
+- 현재 전체 기준선은 **`348 tests + smoke`** 입니다.
 - `validate_repo.py`는 현재 compile + unit test 외에 clean runtime 환경과 marketplace SHA256 계약 smoke도 함께 확인합니다.
 - 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
+- Agent Skills/MCP를 건드렸다면 `test_skill_manager`, `test_skill_installer`, `test_mcp_client`, `test_llm_provider`, `test_ai_command`도 함께 확인해 주세요.
 
 ## 문서 / 체크리스트 유지
 
 - PR 병합 또는 구조 변경 이후에는 아래 항목을 함께 확인해 주세요.
-  - README의 `최근 업데이트` / `최근 자율 저장소 작업 안정화 메모`
+  - `README.md`, `README.en.md`, `README.ja.md`
   - `docs/README.md`
   - `docs/CLAUDE.md`
   - `docs/SESSION_CONTEXT.md`
-  - 테스트 개수 표기(`301/301`, `301 tests + smoke` 등)가 최신 검증 결과와 일치하는지
+  - 테스트 개수 표기(`348 tests + smoke` 등)가 최신 검증 결과와 일치하는지
 - 문서만 수정하더라도 현재 저장소 운영 규칙과 실제 검증 기준이 어긋나지 않는지 함께 점검해 주세요.
 
 ## 로컬 전용 파일

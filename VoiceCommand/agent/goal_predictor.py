@@ -1,4 +1,4 @@
-"""과거 유사 전략을 바탕으로 목표 위험도를 예측합니다."""
+"""과거 유사 전략을 바탕으로 목표 위험도를 예측한다."""
 from __future__ import annotations
 
 import re

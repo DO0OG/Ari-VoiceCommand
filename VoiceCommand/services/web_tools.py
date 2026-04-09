@@ -1,6 +1,6 @@
 """
 웹 도구 모음 (Web Tools) — Phase 2.1 고도화
-인터넷 검색, 페이지 조회 및 Selenium 기반의 스마트 브라우저 워크플로우를 제공합니다.
+인터넷 검색, 페이지 조회 및 Selenium 기반의 스마트 브라우저 워크플로우를 제공한다.
 """
 import html
 import logging
@@ -44,7 +44,7 @@ def _is_safe_http_url(url: str) -> bool:
 
 
 def _create_search_client():
-    """검색 클라이언트를 최신 패키지명 우선으로 로드합니다."""
+    """검색 클라이언트를 최신 패키지명 우선으로 로드한다."""
     import_errors = []
     try:
         from ddgs import DDGS
@@ -63,7 +63,7 @@ def _create_search_client():
 # ── DuckDuckGo 검색 및 단순 Fetch ─────────────────────────────────────────────
 
 def web_search(query: str, max_results: int = 5) -> str:
-    """인터넷 검색 후 결과를 텍스트로 반환합니다."""
+    """인터넷 검색 후 결과를 텍스트로 반환한다."""
     try:
         with _create_search_client() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
@@ -81,7 +81,7 @@ def web_search(query: str, max_results: int = 5) -> str:
         return f"검색 중 오류 발생: {e}"
 
 def web_fetch(url: str, max_chars: int = 3000) -> str:
-    """URL의 본문 텍스트를 추출합니다."""
+    """URL의 본문 텍스트를 추출한다."""
     try:
         if not _is_safe_http_url(url):
             parsed = urllib.parse.urlparse(url)
@@ -132,7 +132,7 @@ class SmartBrowser:
             raise
 
     def navigate_and_action(self, url: str, actions: List[Dict[str, Any]], goal_hint: str = "") -> str:
-        """지정된 URL로 이동하여 일련의 작업을 수행합니다.
+        """지정된 URL로 이동하여 일련의 작업을 수행한다.
         actions 예: [{"type": "click", "selectors": ["#login", ".btn-submit"]}, {"type": "type", "text": "...", "selectors": ["input[name='q']"]}]
         """
         self._ensure_driver()
@@ -307,7 +307,7 @@ class SmartBrowser:
         replan_callback=None,
         max_replan_rounds: int = 2,
     ) -> Dict[str, Any]:
-        """로그인 후 DOM 상태를 분석하고 후속 액션을 동적으로 실행합니다."""
+        """로그인 후 DOM 상태를 분석하고 후속 액션을 동적으로 실행한다."""
         self._ensure_driver()
         self.driver.get(url)
         action_results: List[Dict[str, Any]] = []
@@ -370,7 +370,7 @@ class SmartBrowser:
         }
 
     def get_state(self, include_dom_analysis: bool = False) -> Dict[str, Any]:
-        """현재 브라우저 상태를 요약합니다."""
+        """현재 브라우저 상태를 요약한다."""
         if not self.driver:
             state = {
                 "ready": False,
@@ -408,7 +408,7 @@ class SmartBrowser:
         return state
 
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
-        """다운로드 완료 파일을 감지해 경로를 반환합니다."""
+        """다운로드 완료 파일을 감지해 경로를 반환한다."""
         end = time.time() + timeout
         last_seen: Dict[str, tuple[int, float]] = {}
         while time.time() < end:

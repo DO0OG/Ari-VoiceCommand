@@ -1,7 +1,7 @@
 """
 학습 엔진 (Learning Engine)
 실행 결과를 전략 메모리·에피소드 메모리·학습 지표에 기록하고,
-플래너 피드백 루프 업데이트와 실패 반성(Reflection)을 담당합니다.
+플래너 피드백 루프 업데이트와 실패 반성(Reflection)을 담당한다.
 """
 import logging
 import threading
@@ -56,7 +56,7 @@ class LearningEngine:
         t.start()
 
     def _get_policy_summary(self) -> str:
-        """executor로부터 현재 execution_policy_summary를 조회합니다."""
+        """executor로부터 현재 execution_policy_summary를 조회한다."""
         if self._executor is None:
             return ""
         try:
@@ -69,7 +69,7 @@ class LearningEngine:
             return ""
 
     def record_learning_metrics(self, run_result) -> None:
-        """각 학습 컴포넌트의 활성화 여부·성공 여부를 metrics에 기록합니다."""
+        """각 학습 컴포넌트의 활성화 여부·성공 여부를 metrics에 기록한다."""
         try:
             from agent.learning_metrics import get_learning_metrics
             metrics = get_learning_metrics()
@@ -100,7 +100,7 @@ class LearningEngine:
         lesson: str = "",
         failure_kind_override: str = "",
     ) -> None:
-        """StrategyMemory에 이번 실행 결과를 기록합니다."""
+        """StrategyMemory에 이번 실행 결과를 기록한다."""
         try:
             from agent.strategy_memory import get_strategy_memory
             failed = [

@@ -1,6 +1,6 @@
 """
 실행 결과/단계 분석 유틸리티.
-실패 분류, 읽기 전용 단계 판정, 실행 산출물 추출 규칙을 한 곳에 모읍니다.
+실패 분류, 읽기 전용 단계 판정, 실행 산출물 추출 규칙을 한 곳에 모은다.
 """
 from __future__ import annotations
 
@@ -115,7 +115,7 @@ def mutates_runtime_state(content: str, description: str = "") -> bool:
 
 
 def extract_step_targets(text: str) -> Dict[str, List[str]]:
-    """단계 코드/명령에서 경로/URL 타깃을 추출합니다."""
+    """단계 코드/명령에서 경로/URL 타깃을 추출한다."""
     text = text or ""
     paths = [p.strip().strip('"').strip("'") for p in _PATH_LITERAL_RE.findall(text)]
     urls = [u.strip().strip('"').strip("'") for u in _URL_RE.findall(text)]
@@ -145,7 +145,7 @@ def extract_step_targets(text: str) -> Dict[str, List[str]]:
 
 
 def extract_workflow_hints(texts: Iterable[str]) -> List[str]:
-    """단계 코드/설명에서 재사용 가능한 워크플로우 힌트를 추출합니다."""
+    """단계 코드/설명에서 재사용 가능한 워크플로우 힌트를 추출한다."""
     hints: List[str] = []
     for text in texts:
         if not text:

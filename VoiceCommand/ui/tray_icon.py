@@ -42,6 +42,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         self._plugin_separator = self.menu.addSeparator()
         self._plugin_actions: list = []
 
+        self.skills_action = self.menu.addAction(_("🧩 스킬 관리"))
+        self.skills_action.triggered.connect(self.open_skills_dialog)
+
         self.settings_action = self.menu.addAction(_("설정"))
         self.settings_action.triggered.connect(self.open_settings)
 
@@ -137,6 +140,13 @@ class SystemTrayIcon(QSystemTrayIcon):
                 except Exception as e:
                     logging.error(f"실시간 테마 반영 실패: {e}")
 
+    def open_skills_dialog(self):
+        try:
+            from ui.skills_dialog import SkillsDialog
+
+            SkillsDialog(parent=None).exec()
+        except Exception as e:
+            logging.error("스킬 관리 창 열기 실패: %s", e)
 
     def open_scheduled_tasks(self):
         try:
@@ -191,6 +201,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.game_mode_action.setText(_("🎮 게임 모드 (GPU 절약)"))
         self.smart_mode_action.setText(_("스마트 어시스턴트 모드"))
         self.mouse_reaction_action.setText(_("마우스 반응"))
+        self.skills_action.setText(_("🧩 스킬 관리"))
         self.settings_action.setText(_("설정"))
         self.scheduled_tasks_action.setText(_("예약 작업 관리"))
         self.exit_action.setText(_("종료"))

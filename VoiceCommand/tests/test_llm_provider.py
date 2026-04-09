@@ -1,5 +1,6 @@
 import threading
 import unittest
+from unittest.mock import patch
 
 
 from agent.llm_provider import LLMProvider
@@ -236,6 +237,37 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("schedule_task", tool_names)
         self.assertIn("set_timer", tool_names)
         self.assertNotIn("run_agent_task", tool_names)
+
+    def test_select_tools_for_request_keeps_required_mcp_tool(self):
+        provider = LLMProvider()
+
+        tools, tool_choice = provider._select_tools_for_request(
+            {
+                "intent": "conversation",
+                "force_tool": False,
+                "preferred_tool": "mcp_call",
+            },
+            required_tool_names={"mcp_call"},
+        )
+        tool_names = {tool["function"]["name"] for tool in tools}
+
+        self.assertEqual(tool_choice, {"type": "function", "function": {"name": "mcp_call"}})
+        self.assertEqual(tool_names, {"mcp_call"})
+
+    def test_build_system_includes_skill_prompt_when_message_matches(self):
+        provider = LLMProvider()
+
+        with patch("agent.skill_manager.get_skill_manager") as get_manager:
+            get_manager.return_value.build_match_context.return_value = {
+                "skills": [],
+                "prompt": "[사용 가능한 스킬]\n쿠팡 MCP 스킬",
+                "required_tool_names": ["mcp_call"],
+                "preferred_tool": "mcp_call",
+            }
+            system_prompt = provider._build_system(user_message="쿠팡에서 모니터 찾아줘")
+
+        self.assertIn("[사용 가능한 스킬]", system_prompt)
+        self.assertIn("쿠팡 MCP 스킬", system_prompt)
 
     def test_register_plugin_tool_updates_available_tools_without_mutating_core_tools(self):
         provider = LLMProvider()

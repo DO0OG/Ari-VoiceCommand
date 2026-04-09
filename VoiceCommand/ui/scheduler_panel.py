@@ -1,7 +1,7 @@
 """
 스케줄러 관리 패널 (Scheduler Panel)
-예약 작업 목록 조회, 추가, 삭제, 활성화 토글 UI입니다.
-FloatingPanel 기반 클래스를 사용해 구조를 공유합니다.
+예약 작업 목록 조회, 추가, 삭제, 활성화 토글 UI이다.
+FloatingPanel 기반 클래스를 사용해 구조를 공유한다.
 """
 import logging
 from datetime import datetime

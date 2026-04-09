@@ -31,6 +31,8 @@ Ari is not just another voice recognition tool. It is a powerful **Autonomous Ag
 | :--- | :--- |
 | **Autonomous Agent** | State your goal, and Ari writes and executes Python/Shell code, with built-in Self-Fixing capabilities. |
 | **Adaptive Learning** | Extracts successful patterns into 'Skills'. The more you use it, the faster it runs without LLM calls. |
+| **Agent Skills (SKILL.md)** | Install agent skills from GitHub / URL / local paths and inject them automatically when a request matches. |
+| **MCP Integration** | Opens HTTPS MCP sessions and calls remote tools safely through the built-in tool bridge. |
 | **Visual Interaction** | Features a character widget that animates in real-time based on emotions and a sleek chat UI. |
 | **Personalized Memory** | Remembers user preferences and expertise from conversations and generates weekly reports. |
 | **Local Mode Support** | Run LLM and TTS in a secure environment without an internet connection using Ollama and CosyVoice3. |
@@ -108,6 +110,7 @@ graph TD
 ## 📚 Documentation
 
 - 📖 **[Usage Guide](./docs/USAGE.md)**: Detailed settings and usage
+- 🧩 **[Agent Skills / MCP](./docs/USAGE.md#4-에이전트-스킬-skills--mcp)**: Skill install flow, management UI, MCP usage
 - 🔌 **[Plugin Development](./docs/PLUGIN_GUIDE.md)**: Add your own features
 - 🎨 **[Theme Customization](./docs/THEME_CUSTOMIZATION.md)**: Change UI design
 - 👩‍💻 **[Contributing](./docs/CONTRIBUTING.md)**: Guide for participating in the project

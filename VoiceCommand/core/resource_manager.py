@@ -26,6 +26,7 @@ _LEGACY_RUNTIME_MAPPINGS = (
     ("scheduled_task_runs.jsonl", "scheduled_task_runs.jsonl"),
     ("scheduled_tasks.json", "scheduled_tasks.json"),
     ("agent/scheduled_tasks.json", "scheduled_tasks.json"),
+    ("skills", "skills"),
     ("skill_library.json", "skill_library.json"),
     ("strategy_memory.json", "strategy_memory.json"),
     ("user_context.json", "user_context.json"),
@@ -170,6 +171,7 @@ class ResourceManager:
             ('images', 'images'),
             ('theme', 'theme'),
             ('plugins', 'plugins'),
+            ('skills', 'skills'),
             ('DNFBitBitv2.ttf', 'DNFBitBitv2.ttf'),
             ('icon.png', 'icon.png'),
             ('reference.wav', 'reference.wav'),
@@ -211,7 +213,7 @@ class ResourceManager:
 
     @staticmethod
     def ensure_theme_files() -> str:
-        """테마 JSON 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        """테마 JSON 파일을 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("theme")
         source = ResourceManager.get_bundle_path("theme")
         os.makedirs(writable, exist_ok=True)
@@ -232,7 +234,7 @@ class ResourceManager:
 
     @staticmethod
     def ensure_plugin_files() -> str:
-        """플러그인 템플릿 파일을 사용자 편집 가능한 위치에 보장합니다."""
+        """플러그인 템플릿 파일을 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("plugins")
         source = ResourceManager.get_bundle_path("plugins")
         os.makedirs(writable, exist_ok=True)
@@ -249,4 +251,25 @@ class ResourceManager:
                         shutil.copy2(src, dst)
         except Exception as e:
             logging.warning("플러그인 파일 준비 실패: %s", e)
+        return writable
+
+    @staticmethod
+    def ensure_skill_files() -> str:
+        """스킬 폴더를 사용자 편집 가능한 위치에 보장한다."""
+        writable = ResourceManager.get_writable_path("skills")
+        source = ResourceManager.get_bundle_path("skills")
+        os.makedirs(writable, exist_ok=True)
+
+        try:
+            if os.path.isdir(source):
+                for name in os.listdir(source):
+                    src = os.path.join(source, name)
+                    dst = os.path.join(writable, name)
+                    if os.path.isdir(src):
+                        if not os.path.exists(dst):
+                            shutil.copytree(src, dst)
+                    elif not os.path.exists(dst):
+                        shutil.copy2(src, dst)
+        except Exception as e:
+            logging.warning("스킬 파일 준비 실패: %s", e)
         return writable

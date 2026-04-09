@@ -1,7 +1,7 @@
 """
 UI 테마 로더
 기본 테마 JSON을 `theme/` 폴더에 두고, 배포 시 `%APPDATA%/Ari/theme`로 복사해
-사용자가 Python 코드 수정 없이 JSON만 편집해 UI 테마를 바꿀 수 있게 합니다.
+사용자가 Python 코드 수정 없이 JSON만 편집해 UI 테마를 바꿀 수 있게 한다.
 """
 from __future__ import annotations
 

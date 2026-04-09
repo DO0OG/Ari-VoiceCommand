@@ -1,6 +1,6 @@
 """
 TTS 제공자 추상 기반 클래스
-모든 TTS 구현체는 이 인터페이스를 따라야 합니다.
+모든 TTS 구현체는 이 인터페이스를 따라야 한다.
 """
 from abc import ABC, abstractmethod
 from PySide6.QtCore import QObject, Signal

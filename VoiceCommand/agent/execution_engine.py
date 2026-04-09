@@ -1,7 +1,7 @@
 """
 실행 엔진 (Execution Engine)
 단계 실행, 병렬/순차 그룹핑, 조건 평가, 자동 수정, pip 설치,
-런타임 컨텍스트 갱신, 개발자 가드를 담당합니다.
+런타임 컨텍스트 갱신, 개발자 가드를 담당한다.
 """
 import concurrent.futures
 import json
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── 데이터 클래스 ──────────────────────────────────────────────────────────────
-# StepResult를 execution_engine에 정의하여 agent_orchestrator와의 순환 임포트를 방지합니다.
+# StepResult를 execution_engine에 정의하여 agent_orchestrator와의 순환 임포트를 방지한다.
 
 @dataclass
 class StepResult:

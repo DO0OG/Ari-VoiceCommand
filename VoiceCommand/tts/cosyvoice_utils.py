@@ -1,7 +1,7 @@
 """CosyVoice TTS 순수 유틸.
 
 Qt, PyAudio, subprocess 의존 없이 테스트 가능한 텍스트 정규화와
-PCM 버퍼 유틸만 분리합니다.
+PCM 버퍼 유틸만 분리한다.
 """
 from __future__ import annotations
 

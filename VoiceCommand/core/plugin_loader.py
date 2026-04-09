@@ -1,7 +1,7 @@
 """사용자 플러그인 로더.
 
 `plugins/*.py`와 `plugins/*.zip` 파일을 스캔하고, 각 플러그인의
-`register(context)` 함수를 호출해 확장 기능을 로드합니다.
+`register(context)` 함수를 호출해 확장 기능을 로드한다.
 """
 from __future__ import annotations
 
