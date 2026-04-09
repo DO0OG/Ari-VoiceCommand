@@ -13,12 +13,13 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
 )
 
 from i18n.translator import _
 from ui.common import create_muted_label
-from ui.theme import secondary_btn_style
+from ui.theme import secondary_btn_style, BUTTON_LG
 
 
 class _SkillInstallThread(QThread):
@@ -43,6 +44,8 @@ class _SkillInstallThread(QThread):
 class SkillsDialog(QDialog):
     """설치된 SKILL.md 스킬을 미리보기/설치/활성화/삭제한다."""
 
+    _ACTION_BUTTON_HEIGHT = BUTTON_LG + 6
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._install_thread: _SkillInstallThread | None = None
@@ -63,6 +66,7 @@ class SkillsDialog(QDialog):
         source_row.addWidget(self.source_input, 1)
         install_button = QPushButton(_("설치"))
         install_button.setStyleSheet(secondary_btn_style())
+        install_button.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         install_button.clicked.connect(self._on_install)
         source_row.addWidget(install_button)
         layout.addLayout(source_row)
@@ -88,14 +92,24 @@ class SkillsDialog(QDialog):
         button_row = QHBoxLayout()
         self.toggle_button = QPushButton(_("비활성화"))
         self.toggle_button.setStyleSheet(secondary_btn_style())
+        self.toggle_button.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        self.toggle_button.setMinimumWidth(120)
         self.toggle_button.clicked.connect(self._on_toggle)
         update_button = QPushButton(_("업데이트"))
         update_button.setStyleSheet(secondary_btn_style())
+        update_button.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        update_button.setMinimumWidth(120)
         update_button.clicked.connect(self._on_update)
         delete_button = QPushButton(_("삭제"))
         delete_button.setStyleSheet(secondary_btn_style())
+        delete_button.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        delete_button.setMinimumWidth(120)
         delete_button.clicked.connect(self._on_delete)
         close_button = QPushButton(_("닫기"))
+        close_button.setStyleSheet(secondary_btn_style())
+        close_button.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        close_button.setMinimumWidth(120)
+        close_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         close_button.clicked.connect(self.accept)
         button_row.addWidget(self.toggle_button)
         button_row.addWidget(update_button)

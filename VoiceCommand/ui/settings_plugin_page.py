@@ -6,20 +6,22 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QGroupBox, QListWidget, QListWidgetItem,
-    QMessageBox,
+    QMessageBox, QSizePolicy,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 
 from i18n.translator import _
-from ui.theme import secondary_btn_style
+from ui.theme import secondary_btn_style, BUTTON_LG
 from ui.common import create_muted_label
 from ui.marketplace_browser import MarketplaceFetchThread, MarketplaceInstallThread
 
 
 class _PluginSettingsPage(QWidget):
     """플러그인 관리 및 마켓플레이스 탭 위젯."""
+
+    _ACTION_BUTTON_HEIGHT = BUTTON_LG + 6
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,6 +48,7 @@ class _PluginSettingsPage(QWidget):
         search_row.addWidget(self.market_search_input)
         market_search_btn = QPushButton(_("검색"))
         market_search_btn.setStyleSheet(secondary_btn_style())
+        market_search_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         market_search_btn.clicked.connect(self._refresh_marketplace_list)
         search_row.addWidget(market_search_btn)
         mvbox.addLayout(search_row)
@@ -59,12 +62,15 @@ class _PluginSettingsPage(QWidget):
         market_btn_row = QHBoxLayout()
         self.market_install_btn = QPushButton(_("선택 플러그인 설치"))
         self.market_install_btn.setStyleSheet(secondary_btn_style())
+        self.market_install_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         self.market_install_btn.clicked.connect(self._install_selected_marketplace_plugin)
         market_refresh_btn = QPushButton(_("목록 새로고침"))
         market_refresh_btn.setStyleSheet(secondary_btn_style())
+        market_refresh_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         market_refresh_btn.clicked.connect(self._refresh_marketplace_list)
         market_open_btn = QPushButton(_("웹 마켓플레이스 열기"))
         market_open_btn.setStyleSheet(secondary_btn_style())
+        market_open_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         market_open_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl("https://ari-voice-command.vercel.app/marketplace"))
         )
@@ -96,9 +102,11 @@ class _PluginSettingsPage(QWidget):
         btn_row = QHBoxLayout()
         open_btn = QPushButton(_("플러그인 폴더 열기"))
         open_btn.setStyleSheet(secondary_btn_style())
+        open_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         open_btn.clicked.connect(self._open_plugin_folder)
         reload_btn = QPushButton(_("플러그인 목록 새로고침"))
         reload_btn.setStyleSheet(secondary_btn_style())
+        reload_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         reload_btn.clicked.connect(self._refresh_plugin_list)
         btn_row.addWidget(open_btn)
         btn_row.addWidget(reload_btn)
@@ -120,6 +128,7 @@ class _PluginSettingsPage(QWidget):
         skill_row.addWidget(self.skill_source_input, 1)
         skill_install_btn = QPushButton(_("설치"))
         skill_install_btn.setStyleSheet(secondary_btn_style())
+        skill_install_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
         skill_install_btn.clicked.connect(self._install_skill)
         skill_row.addWidget(skill_install_btn)
         svbox.addLayout(skill_row)
@@ -131,13 +140,16 @@ class _PluginSettingsPage(QWidget):
         skill_btn_row = QHBoxLayout()
         manage_btn = QPushButton(_("스킬 관리 창 열기"))
         manage_btn.setStyleSheet(secondary_btn_style())
+        manage_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        manage_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         manage_btn.clicked.connect(self._open_skill_manager)
         refresh_btn = QPushButton(_("목록 새로고침"))
         refresh_btn.setStyleSheet(secondary_btn_style())
+        refresh_btn.setMinimumHeight(self._ACTION_BUTTON_HEIGHT)
+        refresh_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         refresh_btn.clicked.connect(self._refresh_skill_list)
-        skill_btn_row.addWidget(manage_btn)
-        skill_btn_row.addWidget(refresh_btn)
-        skill_btn_row.addStretch()
+        skill_btn_row.addWidget(manage_btn, 1)
+        skill_btn_row.addWidget(refresh_btn, 1)
         svbox.addLayout(skill_btn_row)
 
         vbox.addWidget(skill_group)
