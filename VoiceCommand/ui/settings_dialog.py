@@ -4,11 +4,10 @@
 """
 import logging
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
-    QComboBox, QGroupBox, QWidget, QGridLayout,
+    QComboBox, QGroupBox, QWidget,
     QTabWidget, QMessageBox, QFrame,
 )
 from PySide6.QtGui import QFont
@@ -143,13 +142,7 @@ class SettingsDialog(QDialog):
 
         group = QGroupBox(_("캐릭터 페르소나 설정"))
         gvbox = QVBoxLayout(group)
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(12)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setRowStretch(0, 1)
-        grid.setRowStretch(1, 1)
+        gvbox.setSpacing(8)
 
         rp_fields = [
             ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
@@ -158,28 +151,16 @@ class SettingsDialog(QDialog):
             ("history_input",      _("대화 지침:"),       "history_instruction", _("이전 대화를 참고할 때의 태도")),
         ]
 
-        for index, (attr, label, key, ph) in enumerate(rp_fields):
-            section = QWidget()
-            section_layout = QVBoxLayout(section)
-            section_layout.setContentsMargins(0, 0, 0, 0)
-            section_layout.setSpacing(6)
-
+        for attr, label, key, ph in rp_fields:
             label_widget = QLabel(label)
-            label_widget.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            section_layout.addWidget(label_widget)
-
+            gvbox.addWidget(label_widget)
             edit = QTextEdit()
             edit.setPlainText(self.settings.get(key, ""))
             edit.setPlaceholderText(ph)
-            edit.setMinimumHeight(150)
+            edit.setMinimumHeight(90)
             setattr(self, attr, edit)
-            section_layout.addWidget(edit, 1)
+            gvbox.addWidget(edit, 1)
 
-            row = index // 2
-            column = index % 2
-            grid.addWidget(section, row, column)
-
-        gvbox.addLayout(grid)
         vbox.addWidget(group, 1)
         return widget
 
