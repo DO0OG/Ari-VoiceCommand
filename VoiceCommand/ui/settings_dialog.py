@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
-    QComboBox, QGroupBox, QWidget, QFormLayout,
+    QComboBox, QGroupBox, QWidget, QGridLayout,
     QTabWidget, QMessageBox, QFrame,
 )
 from PySide6.QtGui import QFont
@@ -138,15 +138,18 @@ class SettingsDialog(QDialog):
     def _create_rp_tab(self):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
+        vbox.setContentsMargins(8, 8, 8, 8)
+        vbox.setSpacing(10)
 
         group = QGroupBox(_("캐릭터 페르소나 설정"))
         gvbox = QVBoxLayout(group)
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
-        form.setLabelAlignment(Qt.AlignTop | Qt.AlignLeft)
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(10)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
 
         rp_fields = [
             ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
@@ -155,20 +158,29 @@ class SettingsDialog(QDialog):
             ("history_input",      _("대화 지침:"),       "history_instruction", _("이전 대화를 참고할 때의 태도")),
         ]
 
-        for attr, label, key, ph in rp_fields:
+        for index, (attr, label, key, ph) in enumerate(rp_fields):
+            section = QWidget()
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(6)
+
             label_widget = QLabel(label)
             label_widget.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            section_layout.addWidget(label_widget)
+
             edit = QTextEdit()
             edit.setPlainText(self.settings.get(key, ""))
             edit.setPlaceholderText(ph)
-            edit.setMinimumHeight(86)
-            edit.setMaximumHeight(86)
+            edit.setMinimumHeight(150)
             setattr(self, attr, edit)
-            form.addRow(label_widget, edit)
+            section_layout.addWidget(edit, 1)
 
-        gvbox.addLayout(form)
-        vbox.addWidget(group)
-        vbox.addStretch()
+            row = index // 2
+            column = index % 2
+            grid.addWidget(section, row, column)
+
+        gvbox.addLayout(grid)
+        vbox.addWidget(group, 1)
         return widget
 
     def _create_device_tab(self):
