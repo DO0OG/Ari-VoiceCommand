@@ -750,6 +750,16 @@ class AICommand(BaseCommand):
             })
             return recovered
 
+        if (
+            self._is_shutdown_request(user_text)
+            and self._is_shutdown_confirmation_response(response)
+        ):
+            logging.info(
+                "[AICommand] 종료 확인성 응답으로 판단해 텍스트 기반 도구 복구를 보류: %s",
+                response[:80],
+            )
+            return recovered
+
         if re.search(r'set_timer', response, flags=re.IGNORECASE):
             if self._is_shutdown_request(user_text) and normalized_when:
                 recovered.append({
@@ -831,6 +841,30 @@ class AICommand(BaseCommand):
             return recovered
 
         return recovered
+
+    def _is_shutdown_confirmation_response(self, response: str) -> bool:
+        """종료/전원 차단을 실제 실행하지 않고 사용자 재확인을 요청하는 응답인지 판별."""
+        normalized = re.sub(r"\s+", " ", (response or "").strip()).lower()
+        if not normalized:
+            return False
+
+        shutdown_mentions = (
+            re.search(r"(컴퓨터|시스템|pc|전원).*(종료|꺼|끄)", normalized, flags=re.IGNORECASE)
+            or re.search(r"shutdown", normalized, flags=re.IGNORECASE)
+        )
+        if not shutdown_mentions:
+            return False
+
+        confirmation_patterns = (
+            r"(정말|진짜).*(꺼|끄|종료).*(까요|습니까|\?)",
+            r"(꺼|끄|종료).*(드릴까요|할까요|해도\s*될까요|하시겠습니까|\?)",
+            r"(진행\s*중인\s*작업|저장\s*안|중단됩니다).*(정말|꺼드릴까요|종료할까요|\?)",
+            r"(확인|괜찮|준비).*(되면|되셨으면|말씀|답|확인)",
+        )
+        return any(
+            re.search(pattern, normalized, flags=re.IGNORECASE)
+            for pattern in confirmation_patterns
+        )
 
     def _extract_schedule_phrase(self, text: str) -> str:
         normalized = (text or "").strip()

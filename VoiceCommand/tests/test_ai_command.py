@@ -312,6 +312,38 @@ class AICommandTests(unittest.TestCase):
         self.assertEqual(recovered[0]["name"], "schedule_task")
         self.assertEqual(recovered[0]["arguments"]["when"], "5분 뒤")
 
+    def test_shutdown_recovery_skips_confirmation_question_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "컴퓨터 꺼줘",
+            "(진지) 지금 컴퓨터를 종료하면 진행 중인 작업이 모두 중단됩니다. "
+            "혹시 저장 안 한 코드나 작업이 있으신가요? 정말 꺼드릴까요?",
+        )
+
+        self.assertEqual(recovered, [])
+
+    def test_shutdown_recovery_skips_delayed_confirmation_question_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "5분 뒤에 컴퓨터 꺼줘",
+            "5분 뒤에 컴퓨터를 종료하면 진행 중인 작업이 중단됩니다. 정말 종료할까요?",
+        )
+
+        self.assertEqual(recovered, [])
+
+    def test_shutdown_recovery_allows_execution_statement_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "컴퓨터 꺼줘",
+            "컴퓨터를 종료합니다. 잠시만 기다려 주세요.",
+        )
+
+        self.assertEqual(recovered[0]["name"], "shutdown_computer")
+        self.assertTrue(recovered[0]["arguments"]["confirmed"])
+
     def test_shutdown_recovery_treats_relative_e_phrase_as_delayed_schedule(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
 

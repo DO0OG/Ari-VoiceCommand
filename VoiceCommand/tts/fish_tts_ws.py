@@ -16,6 +16,10 @@ from PySide6.QtCore import QObject, Signal
 class FishTTSWebSocket(QObject):
     playback_finished = Signal()
     _QUEUE_MAX_CHUNKS = 64
+    _MIN_PLAYBACK_JOIN_TIMEOUT_SEC = 30.0
+    _PLAYBACK_TIMEOUT_GRACE_RATIO = 0.15
+    _PLAYBACK_TIMEOUT_GRACE_MIN_SEC = 5.0
+    _PLAYBACK_TIMEOUT_MAX_SEC = 900.0
 
     def __init__(self, api_key="", reference_id=""):
         super().__init__()
@@ -52,6 +56,8 @@ class FishTTSWebSocket(QObject):
             self.stop_event.clear()
             stop_event = self.stop_event
             download_done = threading.Event()
+            metadata_ready = threading.Event()
+            playback_meta = {"duration_sec": 0.0}
 
             def play_worker():
                 # 1단계: 전체 WAV 수집
@@ -71,6 +77,7 @@ class FishTTSWebSocket(QObject):
 
                 wav_bytes = buf.getvalue()
                 if not wav_bytes:
+                    metadata_ready.set()
                     return
 
                 # 2단계: wave 모듈로 파싱
@@ -80,11 +87,21 @@ class FishTTSWebSocket(QObject):
                         sample_width = wf.getsampwidth()
                         sample_rate = wf.getframerate()
                         frames = wf.readframes(wf.getnframes())
+                    duration_sec = _estimate_pcm_duration_seconds(
+                        len(frames),
+                        sample_rate,
+                        channels,
+                        sample_width,
+                    )
+                    playback_meta["duration_sec"] = duration_sec
+                    metadata_ready.set()
                     logging.info(
                         f"[TTS] WAV 파라미터: {sample_rate}Hz {channels}ch "
-                        f"{sample_width * 8}bit / {len(frames)} bytes"
+                        f"{sample_width * 8}bit / {len(frames)} bytes "
+                        f"({duration_sec:.1f}s)"
                     )
                 except Exception as exc:
+                    metadata_ready.set()
                     logging.error(f"WAV 파싱 실패: {exc}")
                     return
 
@@ -147,9 +164,17 @@ class FishTTSWebSocket(QObject):
             audio_queue.put(None)
             logging.debug(f"다운로드 완료 ({chunk_count}개 청크)")
 
-            self.play_thread.join(timeout=30.0)
+            metadata_ready.wait(timeout=5.0)
+            playback_timeout = _playback_join_timeout(
+                playback_meta.get("duration_sec", 0.0)
+            )
+            self.play_thread.join(timeout=playback_timeout)
             if self.play_thread.is_alive():
-                logging.warning("재생 스레드 타임아웃 — 강제 중단")
+                logging.warning(
+                    "재생 스레드 타임아웃 — 강제 중단 (예상 재생 %.1fs, 대기 %.1fs)",
+                    playback_meta.get("duration_sec", 0.0),
+                    playback_timeout,
+                )
                 self.stop_event.set()
                 self.play_thread.join(timeout=2.0)
 
@@ -175,3 +200,28 @@ class FishTTSWebSocket(QObject):
 
     def __del__(self):
         pass
+
+
+def _estimate_pcm_duration_seconds(
+    frame_bytes: int,
+    sample_rate: int,
+    channels: int,
+    sample_width: int,
+) -> float:
+    bytes_per_second = sample_rate * channels * sample_width
+    if bytes_per_second <= 0:
+        return 0.0
+    return max(0.0, frame_bytes / bytes_per_second)
+
+
+def _playback_join_timeout(duration_sec: float) -> float:
+    if duration_sec <= 0:
+        return FishTTSWebSocket._MIN_PLAYBACK_JOIN_TIMEOUT_SEC
+
+    grace_sec = max(
+        FishTTSWebSocket._PLAYBACK_TIMEOUT_GRACE_MIN_SEC,
+        duration_sec * FishTTSWebSocket._PLAYBACK_TIMEOUT_GRACE_RATIO,
+    )
+    timeout = duration_sec + grace_sec
+    timeout = max(timeout, FishTTSWebSocket._MIN_PLAYBACK_JOIN_TIMEOUT_SEC)
+    return min(timeout, FishTTSWebSocket._PLAYBACK_TIMEOUT_MAX_SEC)
