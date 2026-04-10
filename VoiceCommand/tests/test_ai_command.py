@@ -333,12 +333,55 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(recovered, [])
 
+    def test_shutdown_recovery_skips_english_confirmation_question_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "turn off the computer",
+            "Shutting down the computer will stop ongoing work. "
+            "Are you sure you want me to shut it down?",
+        )
+
+        self.assertEqual(recovered, [])
+
+    def test_shutdown_recovery_skips_japanese_confirmation_question_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "コンピューターを終了して",
+            "コンピューターをシャットダウンすると作業が中断されます。本当に終了しますか？",
+        )
+
+        self.assertEqual(recovered, [])
+
     def test_shutdown_recovery_allows_execution_statement_response(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
 
         recovered = command._recover_tool_calls_from_response(
             "컴퓨터 꺼줘",
             "컴퓨터를 종료합니다. 잠시만 기다려 주세요.",
+        )
+
+        self.assertEqual(recovered[0]["name"], "shutdown_computer")
+        self.assertTrue(recovered[0]["arguments"]["confirmed"])
+
+    def test_shutdown_recovery_allows_english_execution_statement_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "turn off the computer",
+            "Shutting down the computer. Please wait a moment.",
+        )
+
+        self.assertEqual(recovered[0]["name"], "shutdown_computer")
+        self.assertTrue(recovered[0]["arguments"]["confirmed"])
+
+    def test_shutdown_recovery_allows_japanese_execution_statement_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "コンピューターを終了して",
+            "コンピューターを終了します。少々お待ちください。",
         )
 
         self.assertEqual(recovered[0]["name"], "shutdown_computer")
