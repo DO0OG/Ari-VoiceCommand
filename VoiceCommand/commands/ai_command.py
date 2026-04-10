@@ -48,7 +48,16 @@ class AICommand(BaseCommand):
         "안녕", "고마워", "감사", "잘자", "반가", "미안", "사랑", "농담",
         "몇 시", "시간", "날씨", "볼륨", "음악", "노래", "타이머",
     )
-    _SHUTDOWN_KEYWORDS = ("컴퓨터", "pc", "시스템", "윈도우")
+    _SHUTDOWN_TARGET_KEYWORDS = (
+        "컴퓨터", "시스템", "윈도우", "전원",
+        "computer", "pc", "system", "windows", "machine", "power",
+        "コンピューター", "コンピュータ", "パソコン", "システム", "電源",
+    )
+    _SHUTDOWN_ACTION_KEYWORDS = (
+        "종료", "꺼", "끄",
+        "shutdown", "shut down", "turn off", "power off",
+        "シャットダウン", "終了", "オフ", "切",
+    )
     _SCHEDULE_PATTERN_STRINGS = (
         # 복합 상대 시간 (순서 중요: 긴 표현을 먼저 매칭)
         r'(\d+\s*시간\s*\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
@@ -750,6 +759,16 @@ class AICommand(BaseCommand):
             })
             return recovered
 
+        if (
+            self._is_shutdown_request(user_text)
+            and self._is_shutdown_confirmation_response(response)
+        ):
+            logging.info(
+                "[AICommand] 종료 확인성 응답으로 판단해 텍스트 기반 도구 복구를 보류: %s",
+                response[:80],
+            )
+            return recovered
+
         if re.search(r'set_timer', response, flags=re.IGNORECASE):
             if self._is_shutdown_request(user_text) and normalized_when:
                 recovered.append({
@@ -783,7 +802,7 @@ class AICommand(BaseCommand):
             })
             return recovered
 
-        if re.search(r'(컴퓨터|시스템|pc).*(종료|꺼)', response, flags=re.IGNORECASE) or re.search(r'shutdown', response, flags=re.IGNORECASE):
+        if self._contains_shutdown_reference(response):
             if normalized_when:
                 recovered.append({
                     "id": "ai_command_recover_1",
@@ -832,6 +851,49 @@ class AICommand(BaseCommand):
 
         return recovered
 
+    def _is_shutdown_confirmation_response(self, response: str) -> bool:
+        """종료/전원 차단을 실제 실행하지 않고 사용자 재확인을 요청하는 응답인지 판별."""
+        normalized = re.sub(r"\s+", " ", (response or "").strip()).lower()
+        if not normalized:
+            return False
+
+        if not self._contains_shutdown_reference(normalized):
+            return False
+
+        confirmation_patterns = (
+            r"(정말|진짜).*(꺼|끄|종료).*(까요|습니까|\?)",
+            r"(꺼|끄|종료).*(드릴까요|할까요|해도\s*될까요|하시겠습니까|\?)",
+            r"(진행\s*중인\s*작업|저장\s*안|중단됩니다).*(정말|꺼드릴까요|종료할까요|\?)",
+            r"(확인|괜찮|준비).*(되면|되셨으면|말씀|답|확인)",
+            r"(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like).*(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off)",
+            r"(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off).*(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like|\?)",
+            r"(unsaved|ongoing|in\s+progress|running\s+work|current\s+work).*(stop|interrupt|terminate|close|lost|shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|\?)",
+            r"(本当に|確認|よろしい).*(終了|シャットダウン|オフ).*(か|？|\?)",
+            r"(終了|シャットダウン|オフ).*(しますか|してもよろしい|よろしいですか|か|？|\?)",
+            r"(保存していない|作業中|進行中|中断).*(本当に|終了しますか|シャットダウンしますか|？|\?)",
+        )
+        return any(
+            re.search(pattern, normalized, flags=re.IGNORECASE)
+            for pattern in confirmation_patterns
+        )
+
+    def _contains_shutdown_reference(self, text: str) -> bool:
+        """한국어/영어/일본어 종료·전원 차단 언급을 보수적으로 감지한다."""
+        normalized = re.sub(r"\s+", " ", (text or "").strip()).lower()
+        if not normalized:
+            return False
+        if "shutdown_computer" in normalized:
+            return True
+        if re.search(
+            r"\bshutdown\b|\bshut\s+down\b|\bshut\s+it\s+down\b|\bshutting\s+down\b",
+            normalized,
+            flags=re.IGNORECASE,
+        ):
+            return True
+        has_target = any(token.lower() in normalized for token in self._SHUTDOWN_TARGET_KEYWORDS)
+        has_action = any(token.lower() in normalized for token in self._SHUTDOWN_ACTION_KEYWORDS)
+        return has_target and has_action
+
     def _extract_schedule_phrase(self, text: str) -> str:
         normalized = (text or "").strip()
         if not normalized:
@@ -843,11 +905,7 @@ class AICommand(BaseCommand):
         return ""
 
     def _is_shutdown_request(self, text: str) -> bool:
-        lowered = (text or "").lower()
-        return (
-            any(token in lowered for token in self._SHUTDOWN_KEYWORDS)
-            and ("종료" in text or "꺼" in text)
-        )
+        return self._contains_shutdown_reference(text)
 
     def _extract_timer_args_from_response(self, response: str) -> Optional[dict]:
         match = re.search(
