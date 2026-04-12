@@ -5,6 +5,7 @@ import time
 import secrets
 import queue
 from collections import deque
+from typing import Callable
 import speech_recognition as sr
 from queue import Queue
 from PySide6.QtCore import QThread, Signal
@@ -16,6 +17,28 @@ from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
 
 _RNG = secrets.SystemRandom()
+
+
+def _wait_for_tts_playback_completion(
+    is_tts_playing: Callable[[], bool],
+    timeout: float = 15.0,
+    initial_sleep: float = 0.05,
+    backoff_factor: float = 1.5,
+    max_sleep: float = 0.3,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    now_fn: Callable[[], float] = time.time,
+) -> bool:
+    """TTS 재생 종료까지 지수 백오프로 대기한다."""
+    wait_start = now_fn()
+    sleep_interval = initial_sleep
+    while is_tts_playing():
+        elapsed = now_fn() - wait_start
+        if elapsed > timeout:
+            logging.warning("TTS 대기 타임아웃 (%.0f초 초과)", timeout)
+            return False
+        sleep_fn(min(sleep_interval, max_sleep))
+        sleep_interval = min(sleep_interval * backoff_factor, max_sleep)
+    return True
 
 # ───────────────────────────────────────────────────────────────────────────
 # VoiceRecognitionThread
@@ -110,7 +133,7 @@ class VoiceRecognitionThread(QThread):
                 
                 time.sleep(0.1)
         except Exception as e:
-            logging.error(f"VoiceRecognitionThread 오류: {e}", exc_info=True)
+            logging.error("VoiceRecognitionThread 오류: %s", e, exc_info=True)
         finally:
             self.cleanup()
 
@@ -129,17 +152,12 @@ class VoiceRecognitionThread(QThread):
         # TTS 재생 완료 대기 (유동적 대기)
         try:
             from VoiceCommand import is_tts_playing
-            wait_start = time.time()
-            while is_tts_playing():
-                if time.time() - wait_start > 15.0:
-                    logging.warning("TTS 대기 타임아웃 (15초 초과)")
-                    break
-                time.sleep(0.1)
+            _wait_for_tts_playback_completion(is_tts_playing)
             
             # 재생이 끝난 후 음성 인시 시작 전 아주 짧은 여유
             time.sleep(0.2)
         except Exception as e:
-            logging.error(f"TTS 대기 중 오류: {e}")
+            logging.error("TTS 대기 중 오류: %s", e)
             time.sleep(0.5)
         
         set_listening_indicator(True)
@@ -291,7 +309,7 @@ class CommandExecutionThread(QThread):
             except queue.Empty:
                 continue
             except Exception as e:
-                logging.error(f"CommandExecutionThread 오류: {e}")
+                logging.error("CommandExecutionThread 오류: %s", e)
                 continue
 
     def execute(self, command):

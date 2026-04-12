@@ -21,6 +21,24 @@ class _TempBrowser(SmartBrowser):
 
 
 class WebToolsTests(unittest.TestCase):
+    def test_is_safe_http_url_blocks_local_and_private_targets(self):
+        blocked_urls = (
+            "http://localhost:8000",
+            "https://127.0.0.1/api",
+            "https://10.0.0.25/status",
+            "https://192.168.0.10/admin",
+            "https://[::1]/",
+            "https://[fe80::1]/",
+            "https://0.0.0.0/",
+            "file:///etc/passwd",
+        )
+
+        for url in blocked_urls:
+            with self.subTest(url=url):
+                self.assertFalse(web_tools._is_safe_http_url(url))
+
+        self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
+
     def test_create_search_client_prefers_ddgs_package_name(self):
         class _Client:
             def __enter__(self):

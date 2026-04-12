@@ -63,7 +63,7 @@ def _runtime_fallback_path(filename: str) -> str:
     return os.path.join(runtime_root, filename)
 
 
-class AutomationHelpers:
+class _AutomationHelpersCore:
     def __init__(self):
         self.desktop_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop")
         self._app_aliases = {key: tuple(values) for key, values in _APP_ALIAS_CANDIDATES.items()}
@@ -1226,3 +1226,164 @@ class AutomationHelpers:
 
     def _has_action_type(self, actions: List[dict], action_type: str) -> bool:
         return has_action_type(actions, action_type)
+
+
+class _AutomationStateMixin:
+    """공유 상태/히스토리 초기화 믹스인."""
+
+
+class _AppLaunchMixin:
+    """URL/앱/경로 실행 믹스인."""
+
+
+class _InputAutomationMixin:
+    """마우스/키보드/클립보드/스크린샷 믹스인."""
+
+
+class _WindowAutomationMixin:
+    """윈도우 탐색/포커스/히스토리 믹스인."""
+
+
+class _BrowserAutomationMixin:
+    """브라우저 자동화 및 브라우저 계획 믹스인."""
+
+
+class _StrategyLearningMixin:
+    """학습 전략/플래닝/유틸 래퍼 믹스인."""
+
+
+class _DesktopAutomationMixin:
+    """데스크톱 워크플로우 믹스인."""
+
+
+class _RuntimeLibraryMixin:
+    """지연 로딩 라이브러리 접근 믹스인."""
+
+
+def _attach_mixin_methods(mixin_cls, method_names: List[str]) -> None:
+    for method_name in method_names:
+        setattr(mixin_cls, method_name, _AutomationHelpersCore.__dict__[method_name])
+
+
+_attach_mixin_methods(_AutomationStateMixin, [
+    "__init__",
+])
+
+_attach_mixin_methods(_AppLaunchMixin, [
+    "open_url",
+    "open_path",
+    "launch_app",
+    "_resolve_executable_target",
+    "_iter_launch_candidates",
+    "_extend_unique",
+    "_shell_open",
+])
+
+_attach_mixin_methods(_InputAutomationMixin, [
+    "wait_seconds",
+    "click_screen",
+    "click_image",
+    "is_image_visible",
+    "move_mouse",
+    "type_text",
+    "press_keys",
+    "hotkey",
+    "write_clipboard",
+    "read_clipboard",
+    "screenshot",
+    "_wait_for_image_visible",
+])
+
+_attach_mixin_methods(_WindowAutomationMixin, [
+    "get_active_window_title",
+    "list_open_windows",
+    "find_window",
+    "find_windows",
+    "get_window_state",
+    "focus_window",
+    "wait_for_window",
+    "wait_for_window_state",
+    "resolve_window_target",
+    "remember_window_target",
+    "_window_target_history_path",
+    "_load_window_target_history",
+    "_save_window_target_history",
+])
+
+_attach_mixin_methods(_BrowserAutomationMixin, [
+    "browser_login",
+    "get_browser_state",
+    "get_browser_current_url",
+    "wait_for_download",
+    "suggest_browser_actions",
+    "build_adaptive_browser_plan",
+    "build_resilient_browser_plans",
+    "run_browser_actions",
+    "run_adaptive_browser_workflow",
+    "run_resilient_browser_workflow",
+    "_score_browser_plan",
+    "_describe_browser_plan_reason",
+    "_augment_browser_plan_with_state",
+])
+
+_attach_mixin_methods(_StrategyLearningMixin, [
+    "get_learned_strategies",
+    "get_learned_strategy_summary",
+    "get_planning_snapshot",
+    "get_planning_snapshot_summary",
+    "get_execution_policy",
+    "get_execution_policy_summary",
+    "_sample_directory_entries",
+    "_plan_sort_key",
+    "_workflow_succeeded",
+    "_normalize_goal_hint",
+    "_tokenize_goal_hint",
+    "_normalize_similarity_token",
+    "_token_overlap_score",
+    "_find_similar_goal_key",
+    "_merge_action_sequences",
+    "_fingerprint_action",
+    "_describe_action_plan",
+    "_has_action_type",
+])
+
+_attach_mixin_methods(_DesktopAutomationMixin, [
+    "get_desktop_state",
+    "suggest_desktop_workflow",
+    "build_adaptive_desktop_plan",
+    "build_resilient_desktop_plans",
+    "run_desktop_workflow",
+    "run_adaptive_desktop_workflow",
+    "run_resilient_desktop_workflow",
+    "_execute_desktop_action",
+    "_score_desktop_plan",
+    "_describe_desktop_plan_reason",
+    "_augment_desktop_plan_with_state",
+    "remember_desktop_workflow_plan",
+    "get_desktop_workflow_plan",
+    "_desktop_workflow_history_path",
+    "_load_desktop_workflow_history",
+    "_save_desktop_workflow_history",
+    "_should_remember_desktop_workflow",
+])
+
+_attach_mixin_methods(_RuntimeLibraryMixin, [
+    "_get_pyautogui",
+    "_get_pyperclip",
+    "_get_pygetwindow",
+])
+
+
+class AutomationHelpers(
+    _AutomationStateMixin,
+    _AppLaunchMixin,
+    _InputAutomationMixin,
+    _WindowAutomationMixin,
+    _BrowserAutomationMixin,
+    _StrategyLearningMixin,
+    _DesktopAutomationMixin,
+    _RuntimeLibraryMixin,
+):
+    """GUI/브라우저/데스크톱 자동화 퍼블릭 진입점."""
+
+    pass

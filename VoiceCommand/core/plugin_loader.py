@@ -79,6 +79,8 @@ class PluginInfo:
 
 
 class PluginManager:
+    _load_lock = threading.RLock()
+
     def __init__(self):
         self._plugins: List[PluginInfo] = []
         self._modules: Dict[str, ModuleType] = {}
@@ -176,132 +178,139 @@ class PluginManager:
         return info
 
     def discover_plugins(self) -> List[PluginInfo]:
-        directory = self.plugin_dir()
-        os.makedirs(directory, exist_ok=True)
-        discovered: List[PluginInfo] = []
-        for name in sorted(os.listdir(directory)):
-            if name.startswith("_"):
-                continue
-            path = os.path.join(directory, name)
-            if not os.path.isfile(path):
-                continue
-            if not (name.endswith(".py") or name.endswith(".zip")):
-                continue
-            discovered.append(self._plugin_stub(path))
-        self._plugins = discovered
-        return list(discovered)
+        with self._load_lock:
+            directory = self.plugin_dir()
+            os.makedirs(directory, exist_ok=True)
+            discovered: List[PluginInfo] = []
+            for name in sorted(os.listdir(directory)):
+                if name.startswith("_"):
+                    continue
+                path = os.path.join(directory, name)
+                if not os.path.isfile(path):
+                    continue
+                if not (name.endswith(".py") or name.endswith(".zip")):
+                    continue
+                discovered.append(self._plugin_stub(path))
+            self._plugins = discovered
+            return list(discovered)
 
     def load_plugins(self, context: Optional[PluginContext] = None) -> List[PluginInfo]:
-        context = context or PluginContext()
-        if context.run_sandboxed is None:
-            from core.plugin_sandbox import run_sandboxed as _sandbox_fn
-            context.run_sandboxed = _sandbox_fn
-        self._context = context
-        loaded_plugins: List[PluginInfo] = []
-        for plugin in self.discover_plugins():
-            try:
-                info = self._load_single_plugin(plugin, context)
-            except Exception as exc:
-                plugin.loaded = False
-                plugin.error = str(exc)
-                logger.warning(f"[PluginLoader] 플러그인 로드 실패: {plugin.path} ({exc})")
-                info = plugin
-            loaded_plugins.append(info)
-        self._plugins = loaded_plugins
-        return list(loaded_plugins)
+        with self._load_lock:
+            context = context or PluginContext()
+            if context.run_sandboxed is None:
+                from core.plugin_sandbox import run_sandboxed as _sandbox_fn
+                context.run_sandboxed = _sandbox_fn
+            self._context = context
+            loaded_plugins: List[PluginInfo] = []
+            for plugin in self.discover_plugins():
+                try:
+                    info = self._load_single_plugin(plugin, context)
+                except Exception as exc:
+                    plugin.loaded = False
+                    plugin.error = str(exc)
+                    logger.warning("[PluginLoader] 플러그인 로드 실패: %s (%s)", plugin.path, exc)
+                    info = plugin
+                loaded_plugins.append(info)
+            self._plugins = loaded_plugins
+            return list(loaded_plugins)
 
     def list_plugins(self) -> List[PluginInfo]:
-        return list(self._plugins)
+        with self._load_lock:
+            return list(self._plugins)
 
     def load_plugin(self, path: str, context: Optional[PluginContext] = None) -> PluginInfo:
-        active_context = context or self._context or PluginContext()
-        if active_context.run_sandboxed is None:
-            from core.plugin_sandbox import run_sandboxed as _sandbox_fn
-            active_context.run_sandboxed = _sandbox_fn
-        self._context = active_context
-        plugin = self._plugin_stub(path)
-        existing = next(
-            (
-                item for item in self._plugins
-                if item.path == path or item.name == plugin.name
-            ),
-            None,
-        )
-        if existing is not None:
-            self.unload_plugin(existing.name)
-        info = self._load_single_plugin(plugin, active_context)
-        self._plugins = [item for item in self._plugins if item.name != info.name]
-        self._plugins.append(info)
-        self._plugins.sort(key=lambda item: item.name)
-        return info
+        with self._load_lock:
+            active_context = context or self._context or PluginContext()
+            if active_context.run_sandboxed is None:
+                from core.plugin_sandbox import run_sandboxed as _sandbox_fn
+                active_context.run_sandboxed = _sandbox_fn
+            self._context = active_context
+            plugin = self._plugin_stub(path)
+            existing = next(
+                (
+                    item for item in self._plugins
+                    if item.path == path or item.name == plugin.name
+                ),
+                None,
+            )
+            if existing is not None:
+                self.unload_plugin(existing.name)
+            info = self._load_single_plugin(plugin, active_context)
+            self._plugins = [item for item in self._plugins if item.name != info.name]
+            self._plugins.append(info)
+            self._plugins.sort(key=lambda item: item.name)
+            return info
 
     def reload_plugin(self, plugin_name: str) -> Optional[PluginInfo]:
-        path = self._find_plugin_path(plugin_name)
-        if not path:
-            return None
-        self.unload_plugin(plugin_name)
-        return self.load_plugin(path)
+        with self._load_lock:
+            path = self._find_plugin_path(plugin_name)
+            if not path:
+                return None
+            self.unload_plugin(plugin_name)
+            return self.load_plugin(path)
 
     def unload_plugin(self, plugin_name: str) -> bool:
-        plugin = next((item for item in self._plugins if item.name == plugin_name), None)
-        if plugin is None:
-            return False
+        with self._load_lock:
+            plugin = next((item for item in self._plugins if item.name == plugin_name), None)
+            if plugin is None:
+                return False
 
-        for action in plugin.registered_menu_actions:
-            if self._context and getattr(self._context, "tray_icon", None) and hasattr(self._context.tray_icon, "remove_plugin_menu_action"):
-                self._context.tray_icon.remove_plugin_menu_action(action)
-        if self._context and getattr(self._context, "register_command", None):
-            registry_owner = getattr(self._context.register_command, "__self__", None)
-            if registry_owner and hasattr(registry_owner, "unregister_command"):
-                for command in plugin.registered_commands:
-                    registry_owner.unregister_command(command)
-        for tool_name in plugin.registered_tools:
-            self._unregister_tool(tool_name)
-        if self._context and getattr(self._context, "character_widget", None):
-            widget = self._context.character_widget
-            unregister_character_pack = _get_unregister_character_pack(widget)
-            if unregister_character_pack is not None:
-                for pack_name in plugin.registered_character_packs:
-                    unregister_character_pack(pack_name)
+            for action in plugin.registered_menu_actions:
+                if self._context and getattr(self._context, "tray_icon", None) and hasattr(self._context.tray_icon, "remove_plugin_menu_action"):
+                    self._context.tray_icon.remove_plugin_menu_action(action)
+            if self._context and getattr(self._context, "register_command", None):
+                registry_owner = getattr(self._context.register_command, "__self__", None)
+                if registry_owner and hasattr(registry_owner, "unregister_command"):
+                    for command in plugin.registered_commands:
+                        registry_owner.unregister_command(command)
+            for tool_name in plugin.registered_tools:
+                self._unregister_tool(tool_name)
+            if self._context and getattr(self._context, "character_widget", None):
+                widget = self._context.character_widget
+                unregister_character_pack = _get_unregister_character_pack(widget)
+                if unregister_character_pack is not None:
+                    for pack_name in plugin.registered_character_packs:
+                        unregister_character_pack(pack_name)
 
-        # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
-        if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:
-            try:
-                self._context.set_character_menu_enabled(True)
-            except Exception as exc:
-                logger.debug("[PluginLoader] 캐릭터 메뉴 복원 실패 (%s): %s", plugin_name, exc)
+            # 이 플러그인이 캐릭터 메뉴를 비활성화했다면 복원
+            if plugin.character_menu_disabled and self._context and self._context.set_character_menu_enabled:
+                try:
+                    self._context.set_character_menu_enabled(True)
+                except Exception as exc:
+                    logger.debug("[PluginLoader] 캐릭터 메뉴 복원 실패 (%s): %s", plugin_name, exc)
 
-        module = self._modules.pop(plugin_name, None)
-        if module is not None:
-            sys.modules.pop(module.__name__, None)
-        if plugin.sys_path_entry:
-            try:
-                sys.path.remove(plugin.sys_path_entry)
-            except ValueError:
-                pass
-        if plugin.runtime_path:
-            try:
-                shutil.rmtree(plugin.runtime_path)
-            except OSError as exc:
-                logger.warning("[PluginLoader] 런타임 디렉터리 정리 실패 (%s): %s", plugin.runtime_path, exc)
+            module = self._modules.pop(plugin_name, None)
+            if module is not None:
+                sys.modules.pop(module.__name__, None)
+            if plugin.sys_path_entry:
+                try:
+                    sys.path.remove(plugin.sys_path_entry)
+                except ValueError:
+                    pass
+            if plugin.runtime_path:
+                try:
+                    shutil.rmtree(plugin.runtime_path)
+                except OSError as exc:
+                    logger.warning("[PluginLoader] 런타임 디렉터리 정리 실패 (%s): %s", plugin.runtime_path, exc)
 
-        self._plugins = [item for item in self._plugins if item.name != plugin_name]
-        logger.info("[PluginLoader] 플러그인 언로드: %s", plugin_name)
-        return True
+            self._plugins = [item for item in self._plugins if item.name != plugin_name]
+            logger.info("[PluginLoader] 플러그인 언로드: %s", plugin_name)
+            return True
 
     def summary(self) -> List[Dict[str, str]]:
-        return [
-            {
-                "name": plugin.name,
-                "version": plugin.version,
-                "description": plugin.description,
-                "path": plugin.path,
-                "loaded": str(plugin.loaded),
-                "error": plugin.error,
-                "api_version": plugin.api_version,
-            }
-            for plugin in self._plugins
-        ]
+        with self._load_lock:
+            return [
+                {
+                    "name": plugin.name,
+                    "version": plugin.version,
+                    "description": plugin.description,
+                    "path": plugin.path,
+                    "loaded": str(plugin.loaded),
+                    "error": plugin.error,
+                    "api_version": plugin.api_version,
+                }
+                for plugin in self._plugins
+            ]
 
     def _load_single_plugin(self, plugin: PluginInfo, context: PluginContext) -> PluginInfo:
         module_name = f"ari_user_plugin_{plugin.name}"

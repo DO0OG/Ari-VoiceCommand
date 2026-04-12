@@ -20,6 +20,15 @@ class _TempAutomationHelpers(AutomationHelpers):
 
 
 class AutomationHelpersTests(unittest.TestCase):
+    def test_automation_helpers_exposes_internal_mixins(self):
+        base_names = {base.__name__ for base in AutomationHelpers.__bases__}
+
+        self.assertIn("_AppLaunchMixin", base_names)
+        self.assertIn("_InputAutomationMixin", base_names)
+        self.assertIn("_WindowAutomationMixin", base_names)
+        self.assertIn("_BrowserAutomationMixin", base_names)
+        self.assertIn("_DesktopAutomationMixin", base_names)
+
     def test_app_aliases_use_runtime_candidates_instead_of_absolute_paths(self):
         helper = AutomationHelpers()
 
