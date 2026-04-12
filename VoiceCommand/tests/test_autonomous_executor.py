@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 import agent.autonomous_executor as autonomous_executor_module
@@ -10,6 +11,28 @@ from agent.autonomous_executor import AutonomousExecutor
 
 
 class AutonomousExecutorTests(unittest.TestCase):
+    def test_build_child_env_filters_expanded_sensitive_prefixes(self):
+        fake_env = {
+            "PATH": "allowed",
+            "AWS_SECRET_ACCESS_KEY": "blocked",
+            "AZURE_OPENAI_KEY": "blocked",
+            "GOOGLE_API_KEY": "blocked",
+            "GITHUB_TOKEN": "blocked",
+            "PRIVATE_TOKEN": "blocked",
+            "CUSTOM_VALUE": "allowed",
+        }
+
+        with patch.dict(autonomous_executor_module.os.environ, fake_env, clear=True):
+            child_env = autonomous_executor_module._build_child_env()
+
+        self.assertEqual(child_env["PATH"], "allowed")
+        self.assertEqual(child_env["CUSTOM_VALUE"], "allowed")
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", child_env)
+        self.assertNotIn("AZURE_OPENAI_KEY", child_env)
+        self.assertNotIn("GOOGLE_API_KEY", child_env)
+        self.assertNotIn("GITHUB_TOKEN", child_env)
+        self.assertNotIn("PRIVATE_TOKEN", child_env)
+
     def test_runner_script_exposes_learned_strategies_helpers(self):
         executor = AutonomousExecutor()
 

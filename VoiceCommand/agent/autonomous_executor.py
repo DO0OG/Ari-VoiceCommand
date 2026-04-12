@@ -24,7 +24,11 @@ from i18n.translator import _
 # 자식 프로세스에 전달하지 않을 환경 변수 접두사 (API 키 등 민감 정보)
 _SENSITIVE_ENV_PREFIXES = (
     "OPENAI_", "GROQ_", "ANTHROPIC_", "SUPABASE_",
-    "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_",
+    "GEMINI_", "MISTRAL_", "COHERE_", "DEEPSEEK_",
+    "AWS_", "AZURE_", "GCP_", "GOOGLE_",
+    "GITHUB_", "GITLAB_", "DISCORD_", "SLACK_",
+    "DATABASE_", "DB_", "MONGO_", "REDIS_", "POSTGRES_",
+    "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_", "PRIVATE_",
 )
 _SUBPROCESS_TIMEOUT_SECONDS = 30
 _PROCESS_KILL_WAIT_SECONDS = 5

@@ -3,6 +3,7 @@
 인터넷 검색, 페이지 조회 및 Selenium 기반의 스마트 브라우저 워크플로우를 제공한다.
 """
 import html
+import ipaddress
 import logging
 import os
 import json
@@ -29,6 +30,8 @@ _HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
+_BLOCKED_HOSTNAMES = {"localhost", "0.0.0.0"}
+_BLOCKED_IP_PREFIXES = ("127.", "10.", "169.254.", "192.168.")
 
 
 def _runtime_fallback_path(filename: str) -> str:
@@ -40,7 +43,27 @@ def _runtime_fallback_path(filename: str) -> str:
 
 def _is_safe_http_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+
+    host = (parsed.hostname or "").strip().rstrip(".").lower()
+    if not host or host in _BLOCKED_HOSTNAMES:
+        return False
+    if any(host.startswith(prefix) for prefix in _BLOCKED_IP_PREFIXES):
+        return False
+
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+
+    return not (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+    )
 
 
 def _create_search_client():

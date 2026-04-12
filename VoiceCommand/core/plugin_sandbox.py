@@ -54,7 +54,10 @@ def run_sandboxed(code: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
 
     if process.is_alive():
         process.terminate()
-        process.join()
+        process.join(timeout=3)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=2)
         logger.warning("[Sandbox] 타임아웃 (%ss) 초과", safe_timeout)
         return {"ok": False, "output": "", "error": f"타임아웃 ({safe_timeout}초) 초과"}
 
