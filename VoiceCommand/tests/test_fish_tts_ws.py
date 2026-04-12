@@ -2,6 +2,7 @@ import io
 import threading
 import unittest
 import wave
+from unittest.mock import patch
 
 from tts.fish_tts_ws import (
     FishTTSWebSocket,
@@ -69,7 +70,8 @@ class FishTTSWebSocketTests(unittest.TestCase):
             handle.writeframes(b"\x00\x00" * 800)
         wav_bytes = wav_buffer.getvalue()
 
-        tts = FishTTSWebSocket.__new__(FishTTSWebSocket)
+        with patch.object(FishTTSWebSocket, "__init__", lambda self, *args, **kwargs: None):
+            tts = FishTTSWebSocket()
         tts.session = type(
             "_Session",
             (),

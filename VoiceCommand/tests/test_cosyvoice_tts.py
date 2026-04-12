@@ -86,7 +86,8 @@ class _FakeProc:
 
 class CosyVoiceTTSSpeakTests(unittest.TestCase):
     def test_speak_streams_worker_output_and_emits_completion(self):
-        tts = CosyVoiceTTS.__new__(CosyVoiceTTS)
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
         tts._ready = threading.Event()
         tts._ready.set()
         tts._proc = _FakeProc()

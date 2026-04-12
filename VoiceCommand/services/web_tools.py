@@ -30,7 +30,7 @@ _HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
-_BLOCKED_HOSTNAMES = {"localhost", "0.0.0.0"}
+_BLOCKED_HOSTNAMES = {"localhost"}
 _BLOCKED_IP_PREFIXES = ("127.", "10.", "169.254.", "192.168.")
 
 
