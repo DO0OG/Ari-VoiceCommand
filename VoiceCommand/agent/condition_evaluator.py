@@ -34,13 +34,15 @@ _UNARY_OPERATORS = {
     ast.Not: lambda value: not value,
 }
 
+_CondValue = bool | int | float | str | list[object] | dict[object, object] | None
+
 
 def evaluate_condition(condition: str, context: dict[str, str]) -> bool:
     parsed = ast.parse(condition, mode="eval")
     return bool(_evaluate_condition_node(parsed, {"step_outputs": context}))
 
 
-def _evaluate_condition_node(node: ast.AST, scope: dict[str, Any]) -> Any:
+def _evaluate_condition_node(node: ast.AST, scope: dict[str, Any]) -> _CondValue:
     if isinstance(node, ast.Expression):
         return _evaluate_condition_node(node.body, scope)
     if isinstance(node, ast.Constant):
@@ -81,7 +83,7 @@ def _evaluate_condition_node(node: ast.AST, scope: dict[str, Any]) -> Any:
     raise ValueError(f"지원하지 않는 조건식 노드: {type(node).__name__}")
 
 
-def _evaluate_condition_call(node: ast.Call, scope: dict[str, Any]) -> Any:
+def _evaluate_condition_call(node: ast.Call, scope: dict[str, Any]) -> _CondValue:
     if isinstance(node.func, ast.Name):
         func = _SAFE_AST_CALLS.get(node.func.id)
         if func is None:

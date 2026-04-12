@@ -96,7 +96,11 @@ class ConfigManager:
             if key not in normalized or expected is None:
                 continue
             value = normalized[key]
-            if type(value) is not type(expected):
+            if isinstance(expected, bool):
+                if not isinstance(value, bool):
+                    logging.warning("[ConfigManager] bool 타입 불일치 무시: %s=%r", key, value)
+                    normalized[key] = copy.deepcopy(expected)
+            elif isinstance(value, bool) or not isinstance(value, type(expected)):
                 logging.warning("[ConfigManager] 타입 불일치 무시: %s=%r", key, value)
                 normalized[key] = copy.deepcopy(expected)
         return normalized

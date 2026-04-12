@@ -1,4 +1,6 @@
 import os
+import struct
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +12,7 @@ from tts.cosyvoice_utils import (
     apply_emotion_prosody,
     inject_breath_cues,
 )
-from tts.cosyvoice_tts import _get_reference_wav
+from tts.cosyvoice_tts import CosyVoiceTTS, _get_reference_wav
 
 
 VOICECOMMAND_ROOT = str(Path(__file__).resolve().parent.parent)
@@ -41,6 +43,75 @@ class CosyVoiceReferencePathTests(unittest.TestCase):
         second = _normalize_text_cached("12시 30분")
         self.assertEqual(first, second)
         self.assertIn("열두시", first)
+
+
+class _DummySignal:
+    def __init__(self):
+        self.emitted = 0
+
+    def emit(self):
+        self.emitted += 1
+
+
+class _FakeStream:
+    def __init__(self):
+        self.started = False
+
+    def is_active(self):
+        return False
+
+    def start_stream(self):
+        self.started = True
+
+
+class _FakeStdin:
+    def __init__(self):
+        self.writes = []
+        self.flush_calls = 0
+
+    def write(self, data):
+        self.writes.append(data)
+
+    def flush(self):
+        self.flush_calls += 1
+
+
+class _FakeProc:
+    def __init__(self):
+        self.stdin = _FakeStdin()
+
+    def poll(self):
+        return None
+
+
+class CosyVoiceTTSSpeakTests(unittest.TestCase):
+    def test_speak_streams_worker_output_and_emits_completion(self):
+        tts = CosyVoiceTTS.__new__(CosyVoiceTTS)
+        tts._ready = threading.Event()
+        tts._ready.set()
+        tts._proc = _FakeProc()
+        tts._speak_lock = threading.Lock()
+        tts._stopping = False
+        tts._pcm_lock = threading.Lock()
+        tts._pcm_buffer = _PCMChunkBuffer()
+        tts._pcm_done = threading.Event()
+        tts.playback_finished = _DummySignal()
+        tts.is_playing = False
+        tts._clear_pcm_state = lambda: None
+        tts._close_stream = lambda: None
+        fake_stream = _FakeStream()
+        tts._ensure_stream = lambda: fake_stream
+        tts._wait_ctrl = lambda timeout=60: "DONE:ok"
+        payloads = iter([struct.pack("<I", 4), b"data", struct.pack("<I", 0)])
+        tts._read_exact = lambda _n: next(payloads, None)
+
+        result = tts.speak("테스트 문장")
+
+        self.assertTrue(result)
+        self.assertTrue(fake_stream.started)
+        self.assertEqual(tts.playback_finished.emitted, 1)
+        self.assertEqual(tts._proc.stdin.flush_calls, 1)
+        self.assertEqual(tts._proc.stdin.writes, ["테스트 문장\n".encode("utf-8")])
 
 
 class ApplyEmotionProsodyTests(unittest.TestCase):

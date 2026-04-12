@@ -1,5 +1,7 @@
 import os
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 
@@ -165,6 +167,47 @@ class PluginLoaderTests(unittest.TestCase):
 
             self.assertFalse(plugin.loaded)
             self.assertIn("안전 검사 실패", plugin.error)
+
+    def test_load_plugin_serializes_concurrent_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first_path = os.path.join(tmp, "first.py")
+            second_path = os.path.join(tmp, "second.py")
+            for path, name in ((first_path, "first"), (second_path, "second")):
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(
+                        f"PLUGIN_INFO = {{'name': '{name}', 'version': '1.0.0', 'api_version': '1.0'}}\n"
+                    )
+
+            manager = _TempPluginManager(tmp)
+            counter_lock = threading.Lock()
+            active_loads = 0
+            max_concurrent = 0
+
+            def fake_load_single(plugin, context):
+                nonlocal active_loads, max_concurrent
+                with counter_lock:
+                    active_loads += 1
+                    max_concurrent = max(max_concurrent, active_loads)
+                time.sleep(0.05)
+                plugin.loaded = True
+                plugin.error = ""
+                with counter_lock:
+                    active_loads -= 1
+                return plugin
+
+            manager._load_single_plugin = fake_load_single
+
+            threads = [
+                threading.Thread(target=manager.load_plugin, args=(first_path, PluginContext())),
+                threading.Thread(target=manager.load_plugin, args=(second_path, PluginContext())),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(max_concurrent, 1)
+            self.assertEqual(sorted(plugin.name for plugin in manager.list_plugins()), ["first", "second"])
 
 
 if __name__ == "__main__":

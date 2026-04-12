@@ -1,10 +1,12 @@
 """
 기억 관리자 (단기 및 장기 기억 통합)
 """
+import heapq
 import logging
 import re
 import threading
 from datetime import datetime
+from typing import Optional
 from memory.user_context import get_context_manager
 from memory.conversation_history import add_conversation
 from memory.memory_index import get_memory_index
@@ -35,7 +37,7 @@ class MemoryManager:
         self.context_manager = get_context_manager()
         logging.info("MemoryManager 초기화 완료")
 
-    def process_interaction(self, user_msg, ai_response):
+    def process_interaction(self, user_msg: str, ai_response: str) -> None:
         """대화 상호작용 기록 및 정보 추출"""
         timestamp = datetime.now().isoformat()
         try:
@@ -69,7 +71,7 @@ class MemoryManager:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""
         return not any(kw in key for kw in _EPHEMERAL_FACT_KEYS)
 
-    def _extract_info_from_response(self, response):
+    def _extract_info_from_response(self, response: str) -> None:
         """AI 응답에서 [FACT: ...], [BIO: ...], [PREF: ...] 태그 추출 및 저장"""
         try:
             # 사실 추출: [FACT: key=value] — 지속성 있는 사실만 저장
@@ -94,7 +96,7 @@ class MemoryManager:
         except Exception as e:
             logging.warning("응답 태그 파싱 실패: %s", e)
 
-    def get_full_context_prompt(self):
+    def get_full_context_prompt(self) -> str:
         """LLM에 전달할 전체 컨텍스트 요약 생성"""
         parts = []
         try:
@@ -102,7 +104,7 @@ class MemoryManager:
             if profile:
                 parts.append(profile)
         except Exception as e:
-            logging.error(f"프로파일 요약 실패: {e}")
+            logging.error("프로파일 요약 실패: %s", e)
         facts_prompt = self.get_top_facts_prompt()
         if facts_prompt:
             parts.append(facts_prompt)
@@ -111,20 +113,25 @@ class MemoryManager:
             if summary:
                 parts.append(summary)
         except Exception as e:
-            logging.error(f"컨텍스트 요약 실패: {e}")
+            logging.error("컨텍스트 요약 실패: %s", e)
         now = datetime.now()
         time_info = f"현재 시간: {now.strftime('%Y-%m-%d %H:%M:%S')}"
         parts.insert(0, time_info)
         return "\n\n".join(part for part in parts if part)
 
+    def get_memory_prompt(self) -> str:
+        """레거시 호출부 호환용 컨텍스트 프롬프트 반환."""
+        return self.get_full_context_prompt()
+
     def get_top_facts_prompt(self, n: int = 5) -> str:
-        top_facts = sorted(
-            self.context_manager.context.get("facts", {}).items(),
-            key=lambda item: item[1].get("confidence", 0),
-            reverse=True,
-        )[:n]
-        if not top_facts:
+        facts = self.context_manager.context.get("facts", {})
+        if not facts:
             return ""
+        top_facts = heapq.nlargest(
+            n,
+            facts.items(),
+            key=lambda item: item[1].get("confidence", 0),
+        )
         lines = ["[기억하고 있는 사실]"]
         for key, fact in top_facts:
             value = fact.get("value", "")
@@ -132,22 +139,22 @@ class MemoryManager:
                 lines.append(f"- {key}: {value}")
         return "\n".join(lines)
 
-    def clean_response(self, response):
+    def clean_response(self, response: str) -> str:
         """특수 태그만 제거하고 텍스트 자체는 보존."""
         cleaned = _RE_TAGS.sub('', response or "")
         cleaned = _RE_WHITESPACE.sub(' ', cleaned).strip()
         return cleaned
 
-    def _extract_topics(self, user_msg: str, ai_response: str):
+    def _extract_topics(self, user_msg: str, ai_response: str) -> list[str]:
         topics = self.context_manager.extract_topics(user_msg, ai_response)
         return [topic for topic in topics if topic not in _TOPIC_BLOCKLIST]
 
 # 싱글톤
-_memory_manager = None
+_memory_manager: Optional[MemoryManager] = None
 _memory_manager_lock = threading.Lock()
 
 
-def get_memory_manager():
+def get_memory_manager() -> MemoryManager:
     global _memory_manager
     if _memory_manager is None:
         with _memory_manager_lock:
