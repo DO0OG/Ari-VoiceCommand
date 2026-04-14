@@ -385,8 +385,8 @@ class AgentOrchestrator:
                 score += 0.3
             elif matched_domains >= 2:
                 score += 0.15
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[Orchestrator] 태그 기반 난이도 추정 생략: %s", exc)
 
         try:
             from agent.strategy_memory import get_strategy_memory
@@ -396,8 +396,8 @@ class AgentOrchestrator:
                 avg_steps = sum(len(record.steps_desc or []) for record in similar) / len(similar)
                 if avg_steps > 5:
                     score += 0.25
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[Orchestrator] 전략 기억 기반 난이도 추정 생략: %s", exc)
 
         return min(score, 1.0)
 

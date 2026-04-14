@@ -290,7 +290,7 @@ class ExecutionEngine:
             try:
                 from agent.llm_provider import get_llm_provider
 
-                resp = get_llm_provider().chat(prompt=simplify_prompt, save_history=False)
+                resp = get_llm_provider().chat(user_message=simplify_prompt, save_history=False)
                 simplified_content = resp.strip() if resp else ""
                 if simplified_content and simplified_content != step.content:
                     logger.info("[ExecutionEngine] 전략: 단계 단순화 적용")
@@ -325,8 +325,8 @@ class ExecutionEngine:
             avg_ms = hints.get("avg_duration_ms", 0)
             if avg_ms > 0:
                 base = max(base, avg_ms / 1000 * 2.5)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[ExecutionEngine] planner feedback 기반 타임아웃 추정 생략: %s", exc)
         return min(base, 120.0)
 
     def _auto_restore_failed_writes(
