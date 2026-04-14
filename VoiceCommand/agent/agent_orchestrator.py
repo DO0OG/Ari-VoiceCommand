@@ -20,6 +20,7 @@ from agent.autonomous_executor import AutonomousExecutor, ExecutionResult, get_e
 from agent.execution_engine import ExecutionEngine, StepResult  # StepResult는 여기서 정의
 from agent.verification_engine import VerificationEngine
 from agent.learning_engine import LearningEngine
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,29 @@ class AgentOrchestrator:
                 run_result.learning_components["ReflectionEngine"] = True
                 lesson = getattr(reflection, "lesson", "") or ""
                 if lesson:
-                    run_result.summary += f"\n(교훈: {lesson})"
+                    run_result.summary += _("\n(교훈: {lesson})").format(lesson=lesson)
+                    retry_context = {
+                        "reflection_insight": lesson,
+                        "avoid_patterns": " | ".join(
+                            getattr(reflection, "avoid_patterns", [])[:3]
+                        ),
+                    }
+                    retry_result = self._run_loop(
+                        goal,
+                        reflection_context=retry_context,
+                    )
+                    if retry_result.achieved:
+                        retry_result.learning_components["ReflectionEngine"] = True
+                        run_result = retry_result
+            else:
+                self._learn.schedule_reflection(
+                    goal,
+                    run_result,
+                    callback=lambda reflection_result: self._learn.record_reflection_lesson(
+                        goal,
+                        reflection_result,
+                    ),
+                )
 
             duration = int((time.time() - start_time) * 1000)
             self._learn.schedule_post_run_update(goal, run_result, duration)
@@ -145,11 +168,22 @@ class AgentOrchestrator:
 
     # ── 내부 루프 ─────────────────────────────────────────────────────────────
 
-    def _run_loop(self, goal: str) -> AgentRunResult:
+    def _run_loop(
+        self,
+        goal: str,
+        reflection_context: Optional[Dict[str, str]] = None,
+    ) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {"goal": goal}
         learning_components: Dict[str, bool] = {}
+        if reflection_context:
+            with self._context_lock:
+                context.update({
+                    str(key): str(value)
+                    for key, value in reflection_context.items()
+                    if value
+                })
 
         try:
             from agent.episode_memory import get_episode_memory

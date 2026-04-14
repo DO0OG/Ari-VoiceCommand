@@ -58,10 +58,12 @@ class LearningQualityTests(unittest.TestCase):
             chat=lambda *args, **kwargs: '{"lesson":"다운로드 버튼 위치를 먼저 재검증하세요.","avoid_patterns":["무한 대기"],"fix_suggestion":"wait_selector를 추가하세요."}'
         )
         fake_memory = SimpleNamespace(get_lessons_by_cause=lambda *args, **kwargs: ["이전 교훈"])
+        fake_metrics = SimpleNamespace(record_llm_call=lambda *args, **kwargs: None)
 
         with patch("agent.llm_provider.get_llm_provider", return_value=fake_llm):
             with patch("agent.strategy_memory.get_strategy_memory", return_value=fake_memory):
-                result = engine.reflect("브라우저 다운로드", run_result)
+                with patch("agent.learning_metrics.get_learning_metrics", return_value=fake_metrics):
+                    result = engine.reflect("브라우저 다운로드", run_result)
 
         self.assertEqual(result.root_cause, "timeout")
         self.assertIn("다운로드 버튼 위치를 먼저 재검증", result.lesson)
@@ -75,8 +77,12 @@ class LearningQualityTests(unittest.TestCase):
             metrics.record("SkillLibrary", activated=True, success=False)
             metrics.record("SkillLibrary", activated=False, success=False)
             metrics.record("SkillLibrary", activated=False, success=True)
+            metrics.record_counter("new_skills_created", count=2)
+            metrics.record_counter("python_compiled_skills", count=1)
+            metrics.record_llm_call("ReflectionEngine", estimated_tokens=120)
 
             component = metrics.get_component("SkillLibrary")
+            summary = metrics.get_summary(days=7)
 
             self.assertEqual(component.activated_count, 2)
             self.assertEqual(component.total_with, 2)
@@ -85,6 +91,10 @@ class LearningQualityTests(unittest.TestCase):
             self.assertAlmostEqual(component.success_rate_without, 0.5)
             self.assertAlmostEqual(component.lift, 0.0)
             self.assertTrue(metrics.get_report_lines(limit=1))
+            self.assertEqual(summary["new_skills_created"], 2)
+            self.assertEqual(summary["python_compiled_skills"], 1)
+            self.assertEqual(summary["estimated_tokens"], 120)
+            self.assertEqual(summary["components"][0]["name"], "SkillLibrary")
 
     def test_regression_guard_warns_only_when_drop_and_sample_are_large_enough(self):
         guard = RegressionGuard()

@@ -11,6 +11,16 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-14 최신):
+  agent/agent_orchestrator.py — 실패 reflection lesson/avoid_patterns 동일 실행 재주입 + 1회 재시도
+  agent/learning_engine.py    — background reflection 스레드 + lesson 업데이트 helper
+  agent/reflection_engine.py  — fallback 메시지 i18n 런타임 번역 + 추정 토큰 계측
+  agent/skill_library.py      — goal embedding 기반 스킬 매칭 + compile_failed 추적
+  agent/episode_memory.py     — embedder 우선 저장/검색 + missing embedding background backfill
+  agent/learning_metrics.py   — 일별 학습 통계/카운터/추정 토큰 summary 집계
+  agent/weekly_report.py      — 자기개선 루프 활동/신규 스킬/Python 컴파일/토큰 리포트 표시
+  i18n/locales/*.po           — ko/en/ja 자기개선 루프 문자열 동기화
+
 포함 모듈 (2026-04-06 최신):
   audio/simple_wake.py     — 정규화 전체 문구 비교로 문장 내부 부분 일치 오탐 차단
   core/VoiceCommand.py     — extend_tts_resume_guard() 추가: 세그먼트별 보호 구간 연장

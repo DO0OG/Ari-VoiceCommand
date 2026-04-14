@@ -77,6 +77,44 @@ class LearningEngineTests(unittest.TestCase):
         self.assertIsNone(engine._post_run_thread)
         self.assertLess(elapsed, 0.5)
 
+    def test_schedule_reflection_uses_daemon_thread(self):
+        event = threading.Event()
+        engine = LearningEngine(is_developer_goal_fn=lambda goal: False)
+        run_result = SimpleNamespace(step_results=[], achieved=False, learning_components={})
+
+        def fake_reflect(goal, result):
+            event.set()
+            return SimpleNamespace(lesson="교훈", root_cause="timeout")
+
+        engine.reflect_on_failure = fake_reflect
+        engine.schedule_reflection("실패 목표", run_result)
+
+        self.assertIsNotNone(engine._reflection_thread)
+        self.assertTrue(engine._reflection_thread.daemon)
+        engine.wait_for_background_thread()
+        self.assertTrue(event.is_set())
+
+    def test_schedule_reflection_runs_inline_when_background_disabled(self):
+        engine = LearningEngine(
+            is_developer_goal_fn=lambda goal: False,
+            background_updates_enabled=False,
+        )
+        run_result = SimpleNamespace(step_results=[], achieved=False, learning_components={})
+        callbacks = []
+
+        engine.reflect_on_failure = lambda goal, result: SimpleNamespace(
+            lesson="교훈",
+            root_cause="timeout",
+        )
+        engine.schedule_reflection(
+            "실패 목표",
+            run_result,
+            callback=lambda reflection: callbacks.append(reflection.lesson),
+        )
+
+        self.assertEqual(callbacks, ["교훈"])
+        self.assertIsNone(engine._reflection_thread)
+
 
 if __name__ == "__main__":
     unittest.main()

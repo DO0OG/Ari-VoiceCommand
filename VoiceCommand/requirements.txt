@@ -1,5 +1,8 @@
 # AI-Assistant (Ari) 의존성
-# 업데이트: 2026-04-03
+# 업데이트: 2026-04-14
+#   자기개선 루프 문서 기준선 갱신: 즉시 reflection 재시도 / background reflection /
+#   임베딩 기반 skill matching / 주간 학습 통계 / i18n locale 동기화
+#   이번 업데이트는 주석/문서 기준선 정리가 중심이며 새 런타임 의존성은 추가하지 않음
 #   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
 #   보안 업데이트: certifi / requests / Pillow 상향
@@ -12,6 +15,7 @@
 #   런타임 상태(로그/스케줄/메모리/플러그인 캐시)는 소스 실행 시 VoiceCommand/.ari_runtime,
 #   빌드된 exe 실행 시 %AppData%/Ari 에 저장
 # 개발 검증: validate_repo.py (compile + unittest + smoke)
+# 번역 검증: scripts/extract_strings.py + scripts/compile_po.py
 
 # ── 음성 인식 ──────────────────────────────────────────────────────────────────
 SpeechRecognition==3.10.1
