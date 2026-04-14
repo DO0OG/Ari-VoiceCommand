@@ -26,6 +26,7 @@ class LearningEngine:
         self.tts = tts_func
         self._background_updates_enabled = background_updates_enabled
         self._post_run_thread: Optional[threading.Thread] = None
+        self._reflection_thread: Optional[threading.Thread] = None
         self._executor = executor  # policy_summary 조회용 (선택적)
 
     # ── 공개 메서드 ────────────────────────────────────────────────────────────
@@ -34,6 +35,8 @@ class LearningEngine:
         """이전 백그라운드 스레드가 살아있으면 종료를 기다립니다."""
         if self._post_run_thread is not None and self._post_run_thread.is_alive():
             self._post_run_thread.join(timeout=5.0)
+        if self._reflection_thread is not None and self._reflection_thread.is_alive():
+            self._reflection_thread.join(timeout=5.0)
 
     def schedule_post_run_update(
         self,
@@ -147,7 +150,50 @@ class LearningEngine:
         from agent.reflection_engine import get_reflection_engine
         return get_reflection_engine().reflect(goal, run_result)
 
+    def schedule_reflection(self, goal: str, run_result, callback: Optional[Callable] = None) -> None:
+        """반성 결과가 즉시 필요하지 않을 때 ReflectionEngine 호출을 백그라운드로 실행."""
+        if getattr(run_result, "achieved", False):
+            return
+        if not self._background_updates_enabled:
+            reflection = self.reflect_on_failure(goal, run_result)
+            if callback is not None:
+                callback(reflection)
+            return
+        t = threading.Thread(
+            target=self._reflect_safe,
+            args=(goal, run_result, callback),
+            daemon=True,
+            name="AriReflection",
+        )
+        self._reflection_thread = t
+        t.start()
+
+    def record_reflection_lesson(self, goal: str, reflection_result) -> None:
+        lesson = str(getattr(reflection_result, "lesson", "") or "").strip()
+        if not lesson:
+            return
+        try:
+            from agent.strategy_memory import get_strategy_memory
+
+            updated = get_strategy_memory().update_latest_lesson(
+                goal=goal,
+                lesson=lesson,
+                failure_kind=str(getattr(reflection_result, "root_cause", "") or ""),
+            )
+            if not updated:
+                logger.debug("[LearningEngine] reflection lesson 업데이트 대상이 없습니다.")
+        except Exception as exc:
+            logger.debug("[LearningEngine] reflection lesson 기록 실패: %s", exc)
+
     # ── 내부 메서드 ────────────────────────────────────────────────────────────
+
+    def _reflect_safe(self, goal: str, run_result, callback: Optional[Callable] = None) -> None:
+        try:
+            reflection = self.reflect_on_failure(goal, run_result)
+            if callback is not None:
+                callback(reflection)
+        except Exception as exc:
+            logger.debug("[LearningEngine] background reflection 실패: %s", exc)
 
     def _post_run_update_safe(
         self,

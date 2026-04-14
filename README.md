@@ -90,7 +90,15 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 - **Python + PySide6 desktop app:** straightforward to inspect, extend, and package for Windows.
 - **Automation-first design:** browser DOM control, file/system actions, and agent-driven workflow execution.
 - **Open integration surface:** OpenAI-compatible providers, Ollama, MCP servers, plugins, and installable skills.
-- **Learning-oriented runtime:** strategy memory and skill compilation improve repeated task execution.
+- **Learning-oriented runtime:** strategy memory, immediate failure reflection retry, embedding-based skill matching, and skill compilation improve repeated task execution.
+
+### Recent Self-Improvement Loop Updates
+
+- **Immediate same-run recovery:** failed runs can now inject reflection lessons directly into a one-time retry within the same orchestration session.
+- **Background reflection path:** when a run succeeds, reflection can be scheduled asynchronously so user-visible completion is not blocked.
+- **Better reusable skill matching:** skill lookup now combines trigger/tag heuristics with embedding similarity for paraphrased goals.
+- **Weekly learning visibility:** weekly reports now summarize learning-component activity, newly created skills, compiled skills, and estimated self-improvement token usage.
+- **Consistent i18n maintenance:** newly added self-improvement strings are aligned across Korean, English, and Japanese locale files.
 
 ---
 

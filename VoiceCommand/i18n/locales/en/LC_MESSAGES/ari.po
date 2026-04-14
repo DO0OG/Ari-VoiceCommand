@@ -1390,3 +1390,102 @@ msgstr "Suggested search query: {query}"
 
 msgid "{name} 스킬 실행을 위해 에이전트 모드로 전환합니다."
 msgstr "Switching to agent mode to run the {name} skill."
+
+msgid "\n(교훈: {lesson})"
+msgstr "\n(Lesson: {lesson})"
+
+msgid "[{cause}] {goal}: {failure}"
+msgstr "[{cause}] {goal}: {failure}"
+
+msgid "{goal} 작업 실패. {fix}"
+msgstr "{goal} task failed. {fix}"
+
+msgid "대기 시간을 늘리거나 비동기 폴링 방식으로 전환하고, 재시도 횟수를 명시하세요."
+msgstr "Increase the wait time or switch to asynchronous polling, and specify the retry count."
+
+msgid "관리자 권한 없이 접근 가능한 경로를 먼저 확인하거나, 권한 요청 단계를 선행하세요."
+msgstr "Check paths accessible without administrator privileges first, or add a permission request step up front."
+
+msgid "필요한 패키지가 없습니다. pip install로 설치 단계를 먼저 실행하거나 표준 라이브러리로 대체하세요."
+msgstr "A required package is missing. Run the installation step with pip install first, or replace it with a standard library alternative."
+
+msgid "파일·경로 존재 여부를 사전에 검증하고, 없으면 생성 단계를 먼저 실행하세요."
+msgstr "Verify that the file or path exists in advance, and if not, create it first."
+
+msgid "코드의 들여쓰기와 따옴표를 재검토하고, 더 단순한 구조로 재작성하세요."
+msgstr "Review the code indentation and quotes, then rewrite it in a simpler structure."
+
+msgid "사용할 모듈과 함수명을 명확히 지정하고, 동적 import 경로를 확인하세요."
+msgstr "Specify the module and function names clearly, and verify the dynamic import path."
+
+msgid "요청에 타임아웃과 재시도 로직을 추가하고, 오프라인 대안을 검토하세요."
+msgstr "Add timeout and retry logic to the request, and consider an offline fallback."
+
+msgid "파괴적 작업 전에 사용자에게 미리 알리고, 취소 시 롤백 단계를 포함하세요."
+msgstr "Inform the user before destructive work, and include rollback steps for cancellation."
+
+msgid "단계를 더 작게 나누고, 각 단계의 사전 조건을 검증하는 로직을 추가하세요."
+msgstr "Break the steps into smaller units, and add logic to validate each prerequisite."
+
+msgid "동일한 대기 시간 단순 재시도"
+msgstr "Simple retry with the same wait time"
+
+msgid "blocking I/O 루프 없는 대기"
+msgstr "Waiting without a blocking I/O loop"
+
+msgid "권한 없는 시스템 경로 직접 쓰기"
+msgstr "Writing directly to a system path without permission"
+
+msgid "관리자 권한 검증 없이 레지스트리 접근"
+msgstr "Accessing the registry without checking administrator privileges"
+
+msgid "설치 확인 없이 외부 패키지 직접 import"
+msgstr "Importing an external package directly without verifying installation"
+
+msgid "표준 라이브러리 대체 없이 선택 패키지 의존"
+msgstr "Relying on an optional package without a standard library fallback"
+
+msgid "존재 확인 없이 파일·경로 사용"
+msgstr "Using a file or path without checking that it exists"
+
+msgid "상대 경로만으로 파일 탐색"
+msgstr "Searching for files using only relative paths"
+
+msgid "복잡한 중첩 코드 단일 블록 생성"
+msgstr "Generating a single block of deeply nested code"
+
+msgid "탭·스페이스 혼합 들여쓰기"
+msgstr "Mixed tab-and-space indentation"
+
+msgid "미확인 모듈명 직접 사용"
+msgstr "Using an unverified module name directly"
+
+msgid "선택적 패키지 동적 import 없이 참조"
+msgstr "Referencing an optional package without a dynamic import"
+
+msgid "재시도 없는 단일 HTTP 요청"
+msgstr "A single HTTP request without retries"
+
+msgid "타임아웃 없는 네트워크 호출"
+msgstr "A network call without a timeout"
+
+msgid "확인 없이 파괴적 작업 실행"
+msgstr "Running destructive work without confirmation"
+
+msgid "동일 실패 패턴 조건 변경 없이 반복"
+msgstr "Repeating the same failure pattern without changing conditions"
+
+msgid "최근 유사 목표 에피소드:"
+msgstr "Recent similar goal episodes:"
+
+msgid "## 자기개선 루프 활동 (최근 {days}일)"
+msgstr "## Self-Improvement Loop Activity (Last {days} Days)"
+
+msgid "{component}: {count}회 활성화, 성공률 {rate}%"
+msgstr "{component}: Activated {count} times, Success rate {rate}%"
+
+msgid "신규 스킬 생성: {new}개 | Python 컴파일 완료: {compiled}개"
+msgstr "New skills created: {new} | Python compiled: {compiled}"
+
+msgid "자기개선 추정 토큰: {tokens:,} tokens/주"
+msgstr "Self-improvement estimated tokens: {tokens:,} tokens/week"

@@ -487,20 +487,68 @@ class AgentIntegrationTests(unittest.TestCase):
                 )
             ],
         )
+        retry_failed_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=False,
+            summary="재시도도 실패",
+            step_results=[],
+        )
 
-        with patch.object(orchestrator, "_run_loop", return_value=failed_result):
-            with patch.object(orchestrator, "_post_run_update", return_value=None):
-                with patch.object(orchestrator, "_record_strategy", return_value=None) as record_strategy:
-                    with patch("agent.reflection_engine.get_reflection_engine") as reflection_engine:
-                        reflection_engine.return_value.reflect.return_value = SimpleNamespace(
-                            lesson="다운로드 버튼을 다시 찾으세요.",
-                            root_cause="timeout",
-                        )
-                        with patch.object(orchestrator.planner, "reflect", side_effect=AssertionError("planner reflect should not be used")):
-                            result = orchestrator.run("브라우저 다운로드 자동화")
+        with patch.object(orchestrator, "_run_loop", side_effect=[failed_result, retry_failed_result]) as run_loop:
+            with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
+                with patch.object(orchestrator._learn, "record_learning_metrics", return_value=None):
+                    with patch.object(orchestrator, "_record_strategy", return_value=None) as record_strategy:
+                        with patch("agent.reflection_engine.get_reflection_engine") as reflection_engine:
+                            reflection_engine.return_value.reflect.return_value = SimpleNamespace(
+                                lesson="다운로드 버튼을 다시 찾으세요.",
+                                root_cause="timeout",
+                                avoid_patterns=["무한 대기"],
+                            )
+                            with patch.object(orchestrator.planner, "reflect", side_effect=AssertionError("planner reflect should not be used")):
+                                result = orchestrator.run("브라우저 다운로드 자동화")
 
         self.assertIn("교훈", result.summary)
         self.assertEqual(record_strategy.call_args.kwargs.get("failure_kind_override"), "timeout")
+        self.assertEqual(run_loop.call_count, 2)
+        self.assertEqual(
+            run_loop.call_args_list[1].kwargs.get("reflection_context"),
+            {
+                "reflection_insight": "다운로드 버튼을 다시 찾으세요.",
+                "avoid_patterns": "무한 대기",
+            },
+        )
+
+    def test_run_uses_retry_result_when_reflection_retry_succeeds(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        failed_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=False,
+            summary="다운로드 실패",
+            step_results=[],
+        )
+        retry_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=True,
+            summary="재시도 성공",
+            step_results=[],
+        )
+
+        with patch.object(orchestrator, "_run_loop", side_effect=[failed_result, retry_result]):
+            with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
+                with patch.object(orchestrator._learn, "record_learning_metrics", return_value=None):
+                    with patch.object(orchestrator, "_record_strategy", return_value=None):
+                        with patch("agent.reflection_engine.get_reflection_engine") as reflection_engine:
+                            reflection_engine.return_value.reflect.return_value = SimpleNamespace(
+                                lesson="버튼 탐색 순서를 조정하세요.",
+                                root_cause="timeout",
+                                avoid_patterns=["무한 대기"],
+                            )
+
+                            result = orchestrator.run("브라우저 다운로드 자동화")
+
+        self.assertTrue(result.achieved)
+        self.assertEqual(result.summary, "재시도 성공")
+        self.assertTrue(result.learning_components["ReflectionEngine"])
 
     def test_run_records_learning_metrics_for_component_usage(self):
         orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
@@ -517,7 +565,7 @@ class AgentIntegrationTests(unittest.TestCase):
         fake_metrics = SimpleNamespace(record=lambda *args, **kwargs: None)
 
         with patch.object(orchestrator, "_run_loop", return_value=run_result):
-            with patch.object(orchestrator, "_post_run_update", return_value=None):
+            with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
                 with patch.object(orchestrator, "_record_strategy", return_value=None):
                     with patch("agent.learning_metrics.get_learning_metrics", return_value=fake_metrics):
                         with patch.object(fake_metrics, "record", wraps=fake_metrics.record) as record:

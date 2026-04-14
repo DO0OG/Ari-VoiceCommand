@@ -4,6 +4,7 @@ from __future__ import annotations
 import atexit
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -40,9 +41,11 @@ class Skill:
     confidence: float = 0.5
     enabled: bool = True
     compiled: bool = False      # True: Python 함수로 컴파일됨 (Direction 2)
+    compile_failed: bool = False
     user_positive_feedback: int = 0
     user_negative_feedback: int = 0
     context_tags: List[str] = field(default_factory=list)
+    goal_embedding: List[float] = field(default_factory=list)
 
     # 자기수정 임계값
     _COMPILE_THRESHOLD = 5       # success_count >= 이 값이면 Python 컴파일 시도
@@ -72,6 +75,8 @@ class SkillLibrary:
             for item in data:
                 # compiled 필드 없는 이전 데이터 호환
                 item.setdefault("compiled", False)
+                item.setdefault("compile_failed", False)
+                item.setdefault("goal_embedding", [])
                 loaded.append(Skill(**{
                     k: v for k, v in item.items()
                     if k in Skill.__dataclass_fields__
@@ -103,17 +108,23 @@ class SkillLibrary:
             return None
         normalized = self._normalize_goal(goal)
         goal_tags = set(self._infer_context_tags(goal))
+        query_embedding = self._embed_goal(goal)
         best_skill = None
-        best_score = 0
+        best_score = 0.0
         for skill in self.skills:
             if not skill.enabled:
                 continue
-            score = 0
+            score = 0.0
             for pattern in skill.trigger_patterns:
                 if pattern and pattern in normalized:
                     score += len(pattern)
             tag_overlap = len(goal_tags & set(skill.context_tags or []))
             score += tag_overlap * 10
+            if query_embedding and skill.goal_embedding:
+                embedding_score = (
+                    self._cosine_similarity(query_embedding, skill.goal_embedding) * 40
+                )
+                score = score * 0.6 + embedding_score * 0.4
             if score > best_score and skill.confidence >= 0.4:
                 best_skill = skill
                 best_score = score
@@ -139,7 +150,11 @@ class SkillLibrary:
                     target=self._async_condense, args=(skill,), daemon=True
                 ).start()
             # Direction 2: Python 컴파일 (백그라운드)
-            if skill.success_count == Skill._COMPILE_THRESHOLD and not skill.compiled:
+            if (
+                skill.success_count == Skill._COMPILE_THRESHOLD
+                and not skill.compiled
+                and not skill.compile_failed
+            ):
                 threading.Thread(
                     target=self._async_compile, args=(skill,), daemon=True
                 ).start()
@@ -153,13 +168,14 @@ class SkillLibrary:
             name=trigger_patterns[0][:24],
             trigger_patterns=trigger_patterns[:4],
             steps=[self._step_to_dict(step) for step in steps],
-            success_count=3,
+            success_count=1,
             avg_duration_ms=int(duration_ms),
-            confidence=0.65,
             context_tags=context_tags,
+            goal_embedding=self._embed_goal(goal),
         )
         skill.confidence = self._recalculate_confidence(skill)
         self.skills.append(skill)
+        self._record_metric_event("new_skills_created")
         self._schedule_save()
         return skill
 
@@ -196,6 +212,8 @@ class SkillLibrary:
         for skill in self.skills:
             if skill.skill_id == skill_id:
                 skill.compiled = True
+                skill.compile_failed = False
+                self._record_metric_event("python_compiled_skills")
                 self._schedule_save()
                 return
 
@@ -238,6 +256,8 @@ class SkillLibrary:
 
     def _async_compile(self, skill: Skill):
         """Direction 2: Python 함수로 컴파일."""
+        if skill.compile_failed:
+            return
         try:
             from agent.skill_optimizer import get_skill_optimizer
             optimizer = get_skill_optimizer()
@@ -246,7 +266,12 @@ class SkillLibrary:
                 optimizer.save_compiled(skill.skill_id, code)
                 self.mark_compiled(skill.skill_id)
                 logging.info("[SkillLibrary] '%s' Python 컴파일 완료", skill.name)
+                return
+            skill.compile_failed = True
+            self._save()
         except Exception as exc:
+            skill.compile_failed = True
+            self._save()
             logging.debug("[SkillLibrary] Python 컴파일 실패: %s", exc)
 
     def _async_repair_compiled(self, skill: Skill, error: str):
@@ -333,6 +358,32 @@ class SkillLibrary:
         if skill.context_tags:
             confidence += min(len(skill.context_tags) * 0.01, 0.05)
         return round(max(0.0, min(1.0, confidence)), 2)
+
+    def _embed_goal(self, goal: str) -> List[float]:
+        try:
+            from agent.embedder import get_embedder
+
+            return get_embedder().embed(goal).tolist()
+        except Exception:
+            return []
+
+    def _cosine_similarity(self, left: List[float], right: List[float]) -> float:
+        if not left or not right:
+            return 0.0
+        dot = sum(a * b for a, b in zip(left, right))
+        left_norm = math.sqrt(sum(value * value for value in left))
+        right_norm = math.sqrt(sum(value * value for value in right))
+        if left_norm == 0 or right_norm == 0:
+            return 0.0
+        return dot / (left_norm * right_norm)
+
+    def _record_metric_event(self, event_name: str, count: int = 1) -> None:
+        try:
+            from agent.learning_metrics import get_learning_metrics
+
+            get_learning_metrics().record_counter(event_name, count=count)
+        except Exception as exc:
+            logging.debug("[SkillLibrary] learning metric 이벤트 기록 실패: %s", exc)
 
     def _schedule_save(self) -> None:
         with self._save_lock:

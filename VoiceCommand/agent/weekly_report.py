@@ -35,6 +35,7 @@ class WeeklyReport:
         recent_task_runs = self._recent_task_runs(scheduler.get_task_runs(limit=30), days=days)
         task_success = len([item for item in recent_task_runs if item.get("success")])
         task_fail = len(recent_task_runs) - task_success
+        learning_summary = learning_metrics.get_summary(days=days)
 
         lines = [
             _("이번 주 자기개선 리포트예요!"),
@@ -59,7 +60,35 @@ class WeeklyReport:
         metric_lines = learning_metrics.get_report_lines(limit=3)
         if metric_lines:
             lines.append(_("학습 기여도: ") + " / ".join(metric_lines))
-        
+
+        component_rows = learning_summary.get("components", [])
+        if (
+            component_rows
+            or learning_summary.get("new_skills_created", 0)
+            or learning_summary.get("python_compiled_skills", 0)
+            or learning_summary.get("estimated_tokens", 0)
+        ):
+            lines.append(_("## 자기개선 루프 활동 (최근 {days}일)").format(days=days))
+            for row in component_rows[:4]:
+                lines.append(
+                    _("{component}: {count}회 활성화, 성공률 {rate}%").format(
+                        component=row.get("name", ""),
+                        count=row.get("activated_count", 0),
+                        rate=round(float(row.get("success_rate", 0.0)) * 100),
+                    )
+                )
+            lines.append(
+                _("신규 스킬 생성: {new}개 | Python 컴파일 완료: {compiled}개").format(
+                    new=learning_summary.get("new_skills_created", 0),
+                    compiled=learning_summary.get("python_compiled_skills", 0),
+                )
+            )
+            lines.append(
+                _("자기개선 추정 토큰: {tokens:,} tokens/주").format(
+                    tokens=int(learning_summary.get("estimated_tokens", 0)),
+                )
+            )
+
         regression_alert = regression_guard.check()
         if regression_alert:
             lines.append(_("회귀 경고: ") + regression_alert)

@@ -207,14 +207,22 @@ class SkillOptimizer:
 
     def _call_llm(self, prompt: str) -> str:
         from agent.llm_provider import get_llm_provider
-        return get_llm_provider().chat(
+        from agent.learning_metrics import get_learning_metrics
+
+        response = get_llm_provider().chat(
             prompt,
             include_context=False,
+            save_history=False,
             system_override=(
                 "당신은 AI 에이전트 스킬 최적화 전문가입니다. "
                 "요청된 형식으로만 응답하세요."
             ),
         )
+        get_learning_metrics().record_llm_call(
+            component="SkillOptimizer",
+            estimated_tokens=max(len(prompt) // 4, 1),
+        )
+        return response
 
     def _parse_json_steps(self, response: str) -> Optional[List[dict]]:
         try:

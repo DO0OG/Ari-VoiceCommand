@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import List
 
+from i18n.translator import _
+
 _DEVELOPER_SCOPE_RE = re.compile(
     r"(voicecommand(?:/(?:agent|core|ui|plugins|tests)\b|\s*(?:저장소|repository|codebase|repo)\b)?|저장소|repository|codebase|\brepo\b|\bdocs\b)",
     re.IGNORECASE,
@@ -62,6 +64,7 @@ class EpisodeMemory:
         self._episodes: List[GoalEpisode] = []
         self._save_lock = threading.RLock()
         self._save_timer: threading.Timer | None = None
+        self._embedding_thread: threading.Thread | None = None
         self._save_delay_seconds = 0.1
         self._load()
 
@@ -88,7 +91,7 @@ class EpisodeMemory:
             state_change_summary=(episode.state_change_summary or "")[:300],
             policy_summary=(episode.policy_summary or "")[:300],
             timestamp=episode.timestamp or datetime.now().isoformat(),
-            embedding=list(episode.embedding or self._compute_embedding(similarity_text)),
+            embedding=list(episode.embedding or self._embed_text(similarity_text)),
         )
         self._episodes.append(item)
         if len(self._episodes) > _MAX_EPISODES:
@@ -103,7 +106,7 @@ class EpisodeMemory:
         candidates = self._episodes
         matched_by_goal = False
         if normalized_goal:
-            goal_embedding = self._compute_embedding(normalized_goal)
+            goal_embedding = self._embed_text(normalized_goal)
             scored = []
             for episode in self._episodes:
                 overlap = self._score_episode(goal, episode, goal_embedding=goal_embedding)
@@ -128,7 +131,7 @@ class EpisodeMemory:
         lines: List[str] = []
         selected = candidates[:limit] if matched_by_goal else candidates[-limit:]
         for episode in selected:
-            status = "성공" if episode.achieved else "실패"
+            status = _("성공") if episode.achieved else _("실패")
             line = f"[{status}] {episode.goal[:60]}"
             if episode.policy_summary:
                 line += f" | policy={episode.policy_summary[:80]}"
@@ -143,7 +146,7 @@ class EpisodeMemory:
         normalized = str(domain or "").strip().lower()
         if not normalized:
             return []
-        goal_embedding = self._compute_embedding(normalized)
+        goal_embedding = self._embed_text(normalized)
         scored = []
         for episode in self._episodes:
             if episode.achieved:
@@ -190,7 +193,7 @@ class EpisodeMemory:
         summary = self.get_recent_summary(goal=goal, limit=limit)
         if not summary:
             return ""
-        lines = ["최근 유사 목표 에피소드:"]
+        lines = [_("최근 유사 목표 에피소드:")]
         lines.extend(summary.splitlines())
         return "\n".join(lines)
 
@@ -224,17 +227,8 @@ class EpisodeMemory:
                 if not isinstance(item, dict):
                     continue
                 episode = GoalEpisode(**item)
-                if not episode.embedding:
-                    episode.embedding = self._compute_embedding(self._build_similarity_text(
-                        goal=episode.goal,
-                        summary=episode.summary,
-                        target_domains=episode.target_domains,
-                        target_windows=episode.target_windows,
-                        target_paths=episode.target_paths,
-                        state_change_summary=episode.state_change_summary,
-                        policy_summary=episode.policy_summary,
-                    ))
                 self._episodes.append(episode)
+            self._backfill_missing_embeddings()
         except Exception as exc:
             logging.warning(f"[EpisodeMemory] 로드 실패: {exc}")
 
@@ -285,8 +279,8 @@ class EpisodeMemory:
         token_score = self._token_similarity(self._extract_tokens(goal_text), self._extract_tokens(episode_text))
         ngram_score = self._ngram_similarity(self._extract_ngrams(goal_text), self._extract_ngrams(episode_text))
         embedding_score = self._cosine_similarity(
-            goal_embedding or self._compute_embedding(goal_text),
-            episode.embedding or self._compute_embedding(episode_text),
+            goal_embedding or self._embed_text(goal_text),
+            episode.embedding or self._embed_text(episode_text),
         )
         return token_score * 0.35 + ngram_score * 0.2 + max(0.0, embedding_score) * 0.45
 
@@ -314,17 +308,20 @@ class EpisodeMemory:
             return 0.0
         return len(left & right) / len(left | right)
 
-    def _compute_embedding(self, text: str) -> List[float]:
+    def _embed_text(self, text: str) -> List[float]:
         try:
             from agent.embedder import get_embedder
             return get_embedder().embed(text).tolist()
         except Exception:
-            vector = [0.0] * _EMBED_DIM
-            for token in self._extract_tokens(text):
-                digest = hashlib.sha256(token.encode("utf-8")).digest()
-                index = int.from_bytes(digest[:4], "big") % _EMBED_DIM
-                vector[index] += 1.0
-            return vector
+            return self._compute_embedding(text)
+
+    def _compute_embedding(self, text: str) -> List[float]:
+        vector = [0.0] * _EMBED_DIM
+        for token in self._extract_tokens(text):
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            index = int.from_bytes(digest[:4], "big") % _EMBED_DIM
+            vector[index] += 1.0
+        return vector
 
     def _cosine_similarity(self, left: List[float], right: List[float]) -> float:
         if not left or not right:
@@ -343,6 +340,37 @@ class EpisodeMemory:
             self._save_timer = threading.Timer(self._save_delay_seconds, self._save)
             self._save_timer.daemon = True
             self._save_timer.start()
+
+    def _backfill_missing_embeddings(self) -> None:
+        pending = [episode for episode in self._episodes if not episode.embedding]
+        if not pending:
+            return
+        if self._embedding_thread is not None and self._embedding_thread.is_alive():
+            return
+
+        def _worker() -> None:
+            updated = False
+            for episode in pending:
+                similarity_text = self._build_similarity_text(
+                    goal=episode.goal,
+                    summary=episode.summary,
+                    target_domains=episode.target_domains,
+                    target_windows=episode.target_windows,
+                    target_paths=episode.target_paths,
+                    state_change_summary=episode.state_change_summary,
+                    policy_summary=episode.policy_summary,
+                )
+                episode.embedding = self._embed_text(similarity_text)
+                updated = True
+            if updated:
+                self._schedule_save()
+
+        self._embedding_thread = threading.Thread(
+            target=_worker,
+            daemon=True,
+            name="AriEpisodeEmbedBackfill",
+        )
+        self._embedding_thread.start()
 
     def flush(self) -> None:
         with self._save_lock:

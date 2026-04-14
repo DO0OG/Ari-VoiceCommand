@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 import json
+import time
 
 
 from agent.episode_memory import EpisodeMemory, GoalEpisode
@@ -127,6 +128,32 @@ class EpisodeMemoryTests(unittest.TestCase):
             with open(path, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
             self.assertEqual(len(payload), 1)
+
+    def test_load_backfills_missing_embeddings_in_background(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "episode_memory.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(
+                    [
+                        {
+                            "goal": "브라우저 다운로드",
+                            "achieved": False,
+                            "summary": "실패",
+                            "embedding": [],
+                        }
+                    ],
+                    handle,
+                    ensure_ascii=False,
+                )
+
+            memory = EpisodeMemory(filepath=path)
+
+            for _ in range(20):
+                if memory._episodes and memory._episodes[0].embedding:
+                    break
+                time.sleep(0.05)
+
+            self.assertTrue(memory._episodes[0].embedding)
 
 
 if __name__ == "__main__":

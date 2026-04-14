@@ -26,7 +26,16 @@ class WeeklyReportTests(unittest.TestCase):
             ]
         )
         fake_learning_metrics = SimpleNamespace(
-            get_report_lines=lambda limit=3: ["SkillLibrary 2회 활성 (활성 80% / 비활성 50% / lift +30%p)"]
+            get_report_lines=lambda limit=3: ["SkillLibrary 2회 활성 (활성 80% / 비활성 50% / lift +30%p)"],
+            get_summary=lambda days=7: {
+                "components": [
+                    {"name": "SkillLibrary", "activated_count": 12, "success_rate": 0.83},
+                    {"name": "ReflectionEngine", "activated_count": 4, "success_rate": 0.75},
+                ],
+                "new_skills_created": 3,
+                "python_compiled_skills": 1,
+                "estimated_tokens": 4321,
+            },
         )
         fake_regression_guard = SimpleNamespace(
             check=lambda: "이번 주 성공률이 20% 하락했어요 (60% → 40%). 최근 변경 사항을 확인해보세요."
@@ -45,6 +54,10 @@ class WeeklyReportTests(unittest.TestCase):
         self.assertIn("반복 실패 패턴: timeout 2회", text)
         self.assertIn("신뢰도 낮은 스킬", text)
         self.assertIn("학습 기여도:", text)
+        self.assertIn("## 자기개선 루프 활동", text)
+        self.assertIn("SkillLibrary: 12회 활성화, 성공률 83%", text)
+        self.assertIn("신규 스킬 생성: 3개 | Python 컴파일 완료: 1개", text)
+        self.assertIn("자기개선 추정 토큰: 4,321 tokens/주", text)
         self.assertIn("회귀 경고:", text)
 
 

@@ -243,6 +243,24 @@ class StrategyMemory:
                 break
         return lessons
 
+    def update_latest_lesson(self, goal: str, lesson: str, failure_kind: str = "") -> bool:
+        normalized_goal = str(goal or "")[:200]
+        normalized_lesson = str(lesson or "").strip()[:400]
+        normalized_failure_kind = str(failure_kind or "").strip()[:80]
+        if not normalized_goal or not normalized_lesson:
+            return False
+        for record in reversed(self._records):
+            if record.goal_summary != normalized_goal:
+                continue
+            if normalized_failure_kind and record.failure_kind and record.failure_kind != normalized_failure_kind:
+                continue
+            record.lesson = normalized_lesson
+            if normalized_failure_kind and not record.failure_kind:
+                record.failure_kind = normalized_failure_kind
+            self._schedule_save()
+            return True
+        return False
+
     def get_stats(self, days: int = 7, offset: int = 0) -> dict:
         now = datetime.now()
         safe_days = max(int(days or 0), 0)
