@@ -1489,3 +1489,43 @@ msgstr "New skills created: {new} | Python compiled: {compiled}"
 
 msgid "자기개선 추정 토큰: {tokens:,} tokens/주"
 msgstr "Self-improvement estimated tokens: {tokens:,} tokens/week"
+
+msgid "다른 작업이 진행 중입니다."
+msgstr "Another task is in progress."
+
+
+msgid "[걱정] 오류 발생, 수정 중입니다. ({att}/{max})"
+msgstr "[worried] Error occurred, fixing. ({att}/{max})"
+
+
+msgid "반복 실패 패턴 감지: {reason}"
+msgstr "Repeated failure pattern detected: {reason}"
+
+
+msgid "다음 코드가 실패했습니다:\n{content}\n오류: {error}\n기능을 유지하되 최대한 단순하게 다시 작성하세요. 표준 라이브러리만 사용하고, try/except 추가 금지."
+msgstr "The following code failed:\n{content}\nError: {error}\nRewrite it as simply as possible while preserving functionality. Use only the standard library; do not add try/except."
+
+
+msgid "step {step_id} 실행 시간 {elapsed:.0f}s 초과 (예상 {expected:.0f}s). 단계를 더 작게 분할하거나 비동기 방식을 고려하세요."
+msgstr "step {step_id} exceeded execution time {elapsed:.0f}s (expected {expected:.0f}s). Consider splitting into smaller steps or using async."
+
+
+msgid "계획 수립에 실패했습니다."
+msgstr "Failed to build a plan."
+
+
+msgid "사전 검증 실패: {reason}"
+msgstr "Pre-validation failed: {reason}"
+
+
+msgid "실행 실패: {reason}"
+msgstr "Execution failed: {reason}"
+
+
+msgid "[진지] 접근 방법을 바꿔서 다시 시도합니다."
+msgstr "[serious] Changing the approach and trying again."
+
+
+msgid "[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다."
+msgstr "[serious] The goal has not been achieved yet. Trying again."
+

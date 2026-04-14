@@ -12,12 +12,17 @@ nofollow 정책:
 출력: dist/Ari/
 
 포함 모듈 (2026-04-14 최신):
-  agent/agent_orchestrator.py — 실패 reflection lesson/avoid_patterns 동일 실행 재주입 + 1회 재시도
+  agent/agent_orchestrator.py — shared context 캐시, 동적 계획 반복, 반복 실패 조기 종료
+  agent/execution_engine.py   — 반복 동일 오류 중단, 회복 전략 다변화, 단계 타임아웃 힌트
+  agent/agent_planner.py      — StrategyMemory lift 게이팅 + optional step 필드 전달
+  agent/agent_math.py         — cosine_similarity 공통 유틸
+  agent/tag_keywords.py       — 공통 TAG_KEYWORDS 사전
+  agent/record_store.py       — append-only 기반 증분 저장 스토어 스캐폴드
   agent/learning_engine.py    — background reflection 스레드 + lesson 업데이트 helper
   agent/reflection_engine.py  — fallback 메시지 i18n 런타임 번역 + 추정 토큰 계측
   agent/skill_library.py      — goal embedding 기반 스킬 매칭 + compile_failed 추적
   agent/episode_memory.py     — embedder 우선 저장/검색 + missing embedding background backfill
-  agent/learning_metrics.py   — 일별 학습 통계/카운터/추정 토큰 summary 집계
+  agent/learning_metrics.py   — 일별 학습 통계/카운터/추정 토큰 summary 집계 + lift 게이팅
   agent/weekly_report.py      — 자기개선 루프 활동/신규 스킬/Python 컴파일/토큰 리포트 표시
   i18n/locales/*.po           — ko/en/ja 자기개선 루프 문자열 동기화
 
@@ -229,6 +234,7 @@ nuitka_args = [
     "--include-module=agent.confirmation_manager",
     "--include-module=agent.agent_orchestrator",
     "--include-module=agent.agent_planner",
+    "--include-module=agent.agent_math",
     "--include-module=agent.assistant_text_utils",
     "--include-module=agent.autonomous_executor",
     "--include-module=agent.automation_plan_utils",
@@ -239,8 +245,10 @@ nuitka_args = [
     "--include-module=agent.llm_provider",
     "--include-module=agent.llm_router",
     "--include-module=agent.real_verifier",
+    "--include-module=agent.record_store",
     "--include-module=agent.regression_guard",
     "--include-module=agent.safety_checker",
+    "--include-module=agent.tag_keywords",
     "--include-module=agent.proactive_scheduler",
     "--include-module=agent.strategy_memory",
     "--include-module=agent.episode_memory",

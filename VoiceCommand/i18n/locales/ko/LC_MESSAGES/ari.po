@@ -1489,3 +1489,43 @@ msgstr "신규 스킬 생성: {new}개 | Python 컴파일 완료: {compiled}개"
 
 msgid "자기개선 추정 토큰: {tokens:,} tokens/주"
 msgstr "자기개선 추정 토큰: {tokens:,} tokens/주"
+
+msgid "다른 작업이 진행 중입니다."
+msgstr "다른 작업이 진행 중입니다."
+
+
+msgid "[걱정] 오류 발생, 수정 중입니다. ({att}/{max})"
+msgstr "[걱정] 오류 발생, 수정 중입니다. ({att}/{max})"
+
+
+msgid "반복 실패 패턴 감지: {reason}"
+msgstr "반복 실패 패턴 감지: {reason}"
+
+
+msgid "다음 코드가 실패했습니다:\n{content}\n오류: {error}\n기능을 유지하되 최대한 단순하게 다시 작성하세요. 표준 라이브러리만 사용하고, try/except 추가 금지."
+msgstr "다음 코드가 실패했습니다:\n{content}\n오류: {error}\n기능을 유지하되 최대한 단순하게 다시 작성하세요. 표준 라이브러리만 사용하고, try/except 추가 금지."
+
+
+msgid "step {step_id} 실행 시간 {elapsed:.0f}s 초과 (예상 {expected:.0f}s). 단계를 더 작게 분할하거나 비동기 방식을 고려하세요."
+msgstr "step {step_id} 실행 시간 {elapsed:.0f}s 초과 (예상 {expected:.0f}s). 단계를 더 작게 분할하거나 비동기 방식을 고려하세요."
+
+
+msgid "계획 수립에 실패했습니다."
+msgstr "계획 수립에 실패했습니다."
+
+
+msgid "사전 검증 실패: {reason}"
+msgstr "사전 검증 실패: {reason}"
+
+
+msgid "실행 실패: {reason}"
+msgstr "실행 실패: {reason}"
+
+
+msgid "[진지] 접근 방법을 바꿔서 다시 시도합니다."
+msgstr "[진지] 접근 방법을 바꿔서 다시 시도합니다."
+
+
+msgid "[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다."
+msgstr "[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다."
+

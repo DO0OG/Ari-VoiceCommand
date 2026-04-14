@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 from agent.execution_analysis import (
+    analyze_failure,
     classify_failure_message,
     describes_open_action,
     describes_storage_action,
@@ -22,6 +23,14 @@ class ExecutionAnalysisTests(unittest.TestCase):
         self.assertEqual(classify_failure_message("HTTP timeout while fetching"), "timeout")
         self.assertEqual(classify_failure_message("Access is denied"), "permission_denied")
         self.assertEqual(classify_failure_message("NameError: foo"), "code_generation_error")
+
+    def test_analyze_failure_returns_profile(self):
+        analysis = analyze_failure("HTTP timeout while fetching")
+
+        self.assertEqual(analysis.primary_cause, "timeout")
+        self.assertGreater(analysis.severity, 0.0)
+        self.assertGreater(analysis.recovery_probability, 0.0)
+        self.assertEqual(analysis.recommended_strategy, "retry")
 
     def test_read_only_step_detection(self):
         self.assertTrue(is_read_only_step_content("print('hello')", "정보 수집"))

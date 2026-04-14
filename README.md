@@ -96,6 +96,11 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 
 - **Immediate same-run recovery:** failed runs can now inject reflection lessons directly into a one-time retry within the same orchestration session.
 - **Background reflection path:** when a run succeeds, reflection can be scheduled asynchronously so user-visible completion is not blocked.
+- **Shared-context caching:** expensive Episode Memory and Goal Predictor lookups are now collected once per run and reused across reflection retries.
+- **Adaptive planning depth:** orchestration now estimates goal difficulty and adjusts the maximum replan iterations dynamically instead of relying on a fixed loop count.
+- **Failure-pattern early exit:** repeated replan reasons and repeated step-level error signatures now stop earlier to avoid wasteful loops.
+- **Recovery strategy diversification:** execution recovery can escalate from LLM fixes to simplification and optional-step skipping when appropriate.
+- **Lift-based activation gating:** learning metrics can temporarily disable components whose measured lift turns meaningfully negative.
 - **Better reusable skill matching:** skill lookup now combines trigger/tag heuristics with embedding similarity for paraphrased goals.
 - **Weekly learning visibility:** weekly reports now summarize learning-component activity, newly created skills, compiled skills, and estimated self-improvement token usage.
 - **Consistent i18n maintenance:** newly added self-improvement strings are aligned across Korean, English, and Japanese locale files.

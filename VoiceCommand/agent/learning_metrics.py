@@ -8,6 +8,8 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 
+logger = logging.getLogger(__name__)
+
 
 def _get_metrics_file() -> str:
     try:
@@ -117,6 +119,24 @@ class LearningMetrics:
             if metrics is None:
                 return ComponentMetrics(name=name)
             return ComponentMetrics(**asdict(metrics))
+
+    def should_activate(self, component_name: str, min_samples: int = 10) -> bool:
+        """해당 컴포넌트를 이번 실행에서 활성화할지 여부를 반환한다."""
+        with self._lock:
+            metrics = self._metrics.get(component_name)
+        if metrics is None:
+            return True
+        total = metrics.total_with + metrics.total_without
+        if total < min_samples:
+            return True
+        if metrics.lift < -0.1:
+            logger.info(
+                "[LearningMetrics] %s lift=%.3f → 이번 실행 비활성화",
+                component_name,
+                metrics.lift,
+            )
+            return False
+        return True
 
     def get_report_lines(self, limit: int = 3) -> list[str]:
         with self._lock:

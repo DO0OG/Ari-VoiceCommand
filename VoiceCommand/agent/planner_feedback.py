@@ -8,14 +8,7 @@ import re
 import threading
 from typing import List
 
-_TAG_KEYWORDS = {
-    "파일": ["파일", "저장", "쓰기", "읽기", "폴더", "경로", "다운로드", "복사", "이동"],
-    "웹": ["웹", "브라우저", "사이트", "크롬", "엣지", "url", "링크", "로그인"],
-    "시스템": ["시스템", "쉘", "cmd", "프로세스", "서비스", "레지스트리"],
-    "자동화": ["자동", "스케줄", "예약", "반복", "알람", "배치"],
-    "ui": ["창", "클릭", "마우스", "키보드", "화면", "포커스"],
-    "정보": ["뉴스", "날씨", "시간", "요약", "정리", "검색"],
-}
+from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 
 
 class PlannerFeedbackLoop:
@@ -79,6 +72,27 @@ class PlannerFeedbackLoop:
             return ""
         return "[플래너 힌트]\n" + "\n".join(f"- {line}" for line in lines[:4])
 
+    def get_hints_raw(self, step_type: str, tags: List[str] | None = None) -> dict:
+        normalized_step_type = str(step_type or "").strip()
+        if not normalized_step_type:
+            return {}
+        bucket = self.stats.get(normalized_step_type, {})
+        durations = [
+            int(value)
+            for value in bucket.get("durations", [])
+            if isinstance(value, int) or str(value).isdigit()
+        ]
+        total = int(bucket.get("success", 0)) + int(bucket.get("fail", 0))
+        result = {
+            "success": int(bucket.get("success", 0)),
+            "fail": int(bucket.get("fail", 0)),
+            "total": total,
+            "avg_duration_ms": int(sum(durations) / len(durations)) if durations else 0,
+        }
+        if tags:
+            result["tags"] = self._normalize_tags(tags)
+        return result
+
     def infer_tags(self, goal: str = "", steps: List | None = None) -> List[str]:
         text_parts = [str(goal or "")]
         for step in steps or []:
@@ -114,3 +128,7 @@ def get_planner_feedback_loop() -> PlannerFeedbackLoop:
             if _feedback_loop is None:
                 _feedback_loop = PlannerFeedbackLoop()
     return _feedback_loop
+
+
+def get_planner_feedback() -> PlannerFeedbackLoop:
+    return get_planner_feedback_loop()

@@ -516,7 +516,16 @@ class AgentPlanner(TemplatePlansMixin):
         else:
             feedback_loop = get_planner_feedback_loop()
             feedback_tags = feedback_loop.infer_tags(goal=goal)
-            strategy_ctx = self._get_strategy_context(goal)
+            strategy_ctx = ""
+            try:
+                from agent.learning_metrics import get_learning_metrics
+
+                metrics = get_learning_metrics()
+                should_activate = getattr(metrics, "should_activate", lambda *args, **kwargs: True)
+                if should_activate("StrategyMemory"):
+                    strategy_ctx = self._get_strategy_context(goal)
+            except Exception:
+                strategy_ctx = self._get_strategy_context(goal)
             episode_failure_patterns = self._get_episode_failure_patterns(goal)
             ctx_block = self._fmt_context(context)
             if strategy_ctx:
@@ -568,6 +577,7 @@ class AgentPlanner(TemplatePlansMixin):
                 expected_output=s.get("expected_output", ""),
                 condition=s.get("condition", ""),
                 on_failure=s.get("on_failure", "abort"),
+                optional=bool(s.get("optional", False)),
             )
             for i, s in enumerate(items)
         ]
@@ -735,6 +745,7 @@ class AgentPlanner(TemplatePlansMixin):
             expected_output=data.get("expected_output", ""),
             condition=step.condition,
             on_failure=step.on_failure,
+            optional=step.optional,
         )
 
     def _heuristic_fix_step(
@@ -766,6 +777,7 @@ class AgentPlanner(TemplatePlansMixin):
                 expected_output="fallback search file path",
                 condition=step.condition,
                 on_failure=step.on_failure,
+                optional=step.optional,
             )
 
         if "syntaxerror" in normalized_error and "with open" in content:
@@ -778,6 +790,7 @@ class AgentPlanner(TemplatePlansMixin):
                 expected_output=step.expected_output,
                 condition=step.condition,
                 on_failure=step.on_failure,
+                optional=step.optional,
             )
 
         if "name 'len' is not defined" in normalized_error:
@@ -789,6 +802,7 @@ class AgentPlanner(TemplatePlansMixin):
                 expected_output=step.expected_output,
                 condition=step.condition,
                 on_failure=step.on_failure,
+                optional=step.optional,
             )
 
         return None

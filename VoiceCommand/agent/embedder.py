@@ -13,6 +13,8 @@ from typing import Any, Optional
 
 import numpy as np
 
+from agent.agent_math import cosine_similarity as _cosine_similarity
+
 _EMBED_DIM_MINILM = 384
 _EMBED_DIM_FALLBACK = 64
 log = logging.getLogger(__name__)
@@ -124,12 +126,7 @@ class Embedder:
 
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-        if a is None or b is None or a.size == 0 or b.size == 0:
-            return 0.0
-        denom = float(np.linalg.norm(a) * np.linalg.norm(b))
-        if denom == 0:
-            return 0.0
-        return float(np.dot(a, b) / denom)
+        return _cosine_similarity(a, b)
 
     def warmup_async(self, sample_text: str = "아리 성능 워밍업") -> None:
         if self._warmup_started:

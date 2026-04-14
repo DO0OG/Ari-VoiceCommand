@@ -96,6 +96,20 @@ class LearningQualityTests(unittest.TestCase):
             self.assertEqual(summary["estimated_tokens"], 120)
             self.assertEqual(summary["components"][0]["name"], "SkillLibrary")
 
+    def test_learning_metrics_should_activate_uses_sample_size_and_negative_lift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = LearningMetrics(filepath=os.path.join(tmp, "learning_metrics.json"))
+
+            for _ in range(9):
+                metrics.record("EpisodeMemory", activated=True, success=False)
+            self.assertTrue(metrics.should_activate("EpisodeMemory"))
+
+            for _ in range(11):
+                metrics.record("GoalPredictor", activated=True, success=False)
+                metrics.record("GoalPredictor", activated=False, success=True)
+
+            self.assertFalse(metrics.should_activate("GoalPredictor"))
+
     def test_regression_guard_warns_only_when_drop_and_sample_are_large_enough(self):
         guard = RegressionGuard()
         fake_strategy_memory = SimpleNamespace(

@@ -1,7 +1,7 @@
 # AI-Assistant (Ari) 의존성
 # 업데이트: 2026-04-14
-#   자기개선 루프 문서 기준선 갱신: 즉시 reflection 재시도 / background reflection /
-#   임베딩 기반 skill matching / 주간 학습 통계 / i18n locale 동기화
+#   자기개선 루프 기준선 갱신: shared context 캐시 / 동적 계획 반복 / 반복 실패 조기 종료 /
+#   회복 전략 다변화 / lift 기반 컴포넌트 게이팅 / 임베딩 기반 skill matching / i18n locale 동기화
 #   이번 업데이트는 주석/문서 기준선 정리가 중심이며 새 런타임 의존성은 추가하지 않음
 #   numpy<2 핀 (NumPy 2.x — shiboken6/easyocr C 확장 충돌 방지)
 #   데이터 분석·시각화·문서·시스템 패키지 추가 (자율실행 엔진 복잡 작업 지원)
