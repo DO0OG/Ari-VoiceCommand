@@ -237,7 +237,7 @@ class AgentOrchestrator:
                 learning_components, self.planner.get_last_learning_signals()
             )
             if not steps:
-                run_result.summary = "계획 수립에 실패했습니다."
+                run_result.summary = _("계획 수립에 실패했습니다.")
                 break
             prevalidation_issues = self._prevalidate_steps(steps)
             if prevalidation_issues:
@@ -257,7 +257,7 @@ class AgentOrchestrator:
                     break
                 replan_reasons.append(reason_sig)
                 if iteration >= max_iterations - 1:
-                    run_result.summary = f"사전 검증 실패: {reason}"
+                    run_result.summary = _("사전 검증 실패: {reason}", reason=reason)
                 continue
 
             self._log_plan(steps)
@@ -280,7 +280,7 @@ class AgentOrchestrator:
                     context.update(adaptive_ctx)
                 reason = adaptive_ctx.get("재계획_이유", "실행 실패")
                 self._emit_progress("replan", iteration=iteration, reason=reason)
-                self._say("[진지] 접근 방법을 바꿔서 다시 시도합니다.")
+                self._say(_("[진지] 접근 방법을 바꿔서 다시 시도합니다."))
                 reason_sig = reason[:80]
                 if reason_sig in replan_reasons:
                     logger.info("[Orchestrator] 동일 재계획 이유 반복, 루프 조기 종료: %s", reason_sig)
@@ -288,7 +288,7 @@ class AgentOrchestrator:
                     break
                 replan_reasons.append(reason_sig)
                 if iteration >= max_iterations - 1:
-                    run_result.summary = f"실행 실패: {reason}"
+                    run_result.summary = _("실행 실패: {reason}", reason=reason)
                 continue
 
             # Layer 3: Verify
@@ -307,7 +307,7 @@ class AgentOrchestrator:
                 self._emit_progress(
                     "not_achieved", summary=summary, iteration=iteration
                 )
-                self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
+                self._say(_("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다."))
                 reason_sig = summary[:80]
                 if reason_sig in replan_reasons:
                     logger.info("[Orchestrator] 동일 재계획 이유 반복, 루프 조기 종료: %s", reason_sig)
