@@ -576,6 +576,42 @@ class AgentIntegrationTests(unittest.TestCase):
         self.assertIn(("EpisodeMemory", True, True), recorded)
         self.assertIn(("SkillLibrary", False, True), recorded)
 
+    def test_run_reuses_shared_context_for_reflection_retry(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        failed_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=False,
+            summary="다운로드 실패",
+            step_results=[],
+        )
+        retry_result = AgentRunResult(
+            goal="브라우저 다운로드 자동화",
+            achieved=True,
+            summary="재시도 성공",
+            step_results=[],
+        )
+        shared_context = {"goal_risk_warning": "주의"}
+
+        with patch.object(orchestrator, "_build_shared_context", return_value=shared_context):
+            with patch.object(orchestrator, "_run_loop", side_effect=[failed_result, retry_result]) as run_loop:
+                with patch.object(
+                    orchestrator._learn,
+                    "reflect_on_failure",
+                    return_value=SimpleNamespace(
+                        lesson="버튼 탐색 순서를 조정하세요.",
+                        root_cause="timeout",
+                        avoid_patterns=["무한 대기"],
+                    ),
+                ):
+                    with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
+                        with patch.object(orchestrator._learn, "record_learning_metrics", return_value=None):
+                            with patch.object(orchestrator, "_record_strategy", return_value=None):
+                                result = orchestrator.run("브라우저 다운로드 자동화")
+
+        self.assertTrue(result.achieved)
+        self.assertIs(run_loop.call_args_list[0].kwargs["shared_context"], shared_context)
+        self.assertIs(run_loop.call_args_list[1].kwargs["shared_context"], shared_context)
+
     def test_prevalidate_steps_flags_empty_shell_and_dangerous_python(self):
         orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
         steps = [

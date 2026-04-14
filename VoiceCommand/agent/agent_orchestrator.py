@@ -114,12 +114,13 @@ class AgentOrchestrator:
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
             logger.warning("[Orchestrator] 이미 에이전트가 실행 중입니다.")
-            return AgentRunResult(goal=goal, summary="다른 작업이 진행 중입니다.")
+            return AgentRunResult(goal=goal, summary=_("다른 작업이 진행 중입니다."))
 
         start_time = time.time()
         self._set_thinking(True)
         try:
-            run_result = self._run_loop(goal)
+            shared_context = self._build_shared_context(goal)
+            run_result = self._run_loop(goal, shared_context=shared_context)
             lesson = ""
             reflection = None
             if not run_result.achieved:
@@ -137,6 +138,7 @@ class AgentOrchestrator:
                     retry_result = self._run_loop(
                         goal,
                         reflection_context=retry_context,
+                        shared_context=shared_context,
                     )
                     if retry_result.achieved:
                         retry_result.learning_components["ReflectionEngine"] = True
@@ -172,51 +174,34 @@ class AgentOrchestrator:
         self,
         goal: str,
         reflection_context: Optional[Dict[str, str]] = None,
+        shared_context: Optional[Dict[str, str]] = None,
     ) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
         context: Dict[str, str] = {"goal": goal}
         learning_components: Dict[str, bool] = {}
+
+        if shared_context and shared_context.get("recent_goal_episodes"):
+            learning_components["EpisodeMemory"] = True
+        if shared_context and shared_context.get("goal_risk_warning"):
+            learning_components["GoalPredictor"] = True
+
+        context_init: Dict[str, str] = {}
+        if shared_context:
+            context_init.update({
+                str(key): str(value)
+                for key, value in shared_context.items()
+                if value
+            })
         if reflection_context:
+            context_init.update({
+                str(key): str(value)
+                for key, value in reflection_context.items()
+                if value
+            })
+        if context_init:
             with self._context_lock:
-                context.update({
-                    str(key): str(value)
-                    for key, value in reflection_context.items()
-                    if value
-                })
-
-        try:
-            from agent.episode_memory import get_episode_memory
-            recent_episode_summary = get_episode_memory().get_recent_summary(
-                goal=goal, limit=3
-            )
-            if recent_episode_summary:
-                with self._context_lock:
-                    context["recent_goal_episodes"] = recent_episode_summary[:600]
-                learning_components["EpisodeMemory"] = True
-        except Exception as exc:
-            logger.debug("[Orchestrator] episode memory 주입 생략: %s", exc)
-
-        try:
-            from agent.goal_predictor import get_goal_predictor
-            prediction = get_goal_predictor().warn_if_high_risk(goal)
-            if prediction.warning:
-                learning_components["GoalPredictor"] = True
-                with self._context_lock:
-                    context["goal_risk_warning"] = prediction.warning[:300]
-                    if prediction.risk_factors:
-                        context["goal_risk_factors"] = (
-                            " | ".join(prediction.risk_factors[:3])[:300]
-                        )
-                self._emit_progress(
-                    "risk_warning",
-                    warning=prediction.warning,
-                    sample_size=prediction.sample_size,
-                    success_rate=prediction.estimated_success_rate,
-                )
-                self._say(f"[진지] {prediction.warning}")
-        except Exception as exc:
-            logger.debug("[Orchestrator] goal predictor 주입 생략: %s", exc)
+                context.update(context_init)
 
         if self._should_prefer_template_over_skill(goal):
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
@@ -225,18 +210,28 @@ class AgentOrchestrator:
                 goal, context, learning_components
             )
             if skill_result is not None:
-                self._merge_learning_components(
-                    skill_result.learning_components, learning_components
-                )
+                self._merge_learning_components(learning_components, skill_result.learning_components)
+                skill_result.learning_components = learning_components
                 return skill_result
 
-        for iteration in range(self.MAX_PLAN_ITERATIONS):
+        difficulty = self._estimate_goal_difficulty(goal)
+        max_iterations = max(2, min(2 + round(difficulty * 4), 6))
+        logger.info("[Orchestrator] 목표 난이도 %.2f → 최대 %d회 반복", difficulty, max_iterations)
+        replan_reasons: list[str] = []
+
+        for iteration in range(max_iterations):
             run_result.total_iterations = iteration + 1
             logger.info(
-                f"[Orchestrator] 계획 수립 (반복 {iteration+1}/{self.MAX_PLAN_ITERATIONS})"
+                f"[Orchestrator] 계획 수립 (반복 {iteration+1}/{max_iterations})"
             )
 
             # Layer 1: Plan
+            timeout_hint = context.pop("이전_단계_타임아웃", "")
+            if timeout_hint:
+                with self._context_lock:
+                    context["재계획_힌트"] = (
+                        f"{context.get('재계획_힌트', '')} {timeout_hint}"
+                    ).strip()
             steps = self.planner.decompose(goal, context)
             self._merge_learning_components(
                 learning_components, self.planner.get_last_learning_signals()
@@ -255,7 +250,13 @@ class AgentOrchestrator:
                     iteration=iteration,
                     reason=reason,
                 )
-                if iteration >= self.MAX_PLAN_ITERATIONS - 1:
+                reason_sig = reason[:80]
+                if reason_sig in replan_reasons:
+                    logger.info("[Orchestrator] 동일 재계획 이유 반복, 루프 조기 종료: %s", reason_sig)
+                    run_result.summary = _("반복 실패 패턴 감지: {reason}", reason=reason)
+                    break
+                replan_reasons.append(reason_sig)
+                if iteration >= max_iterations - 1:
                     run_result.summary = f"사전 검증 실패: {reason}"
                 continue
 
@@ -265,7 +266,7 @@ class AgentOrchestrator:
             )
 
             # Layer 2: Execute + Self-Fix
-            all_success, step_results = self._exec.execute_plan(
+            all_success, step_results = self._execute_plan(
                 steps, context, goal
             )
             run_result.step_results.extend(step_results)
@@ -274,13 +275,19 @@ class AgentOrchestrator:
                 failed = [
                     sr for sr in step_results if not sr.exec_result.success
                 ]
-                adaptive_ctx = self._exec._build_adaptive_context(failed)
+                adaptive_ctx = self._build_adaptive_context(failed)
                 with self._context_lock:
                     context.update(adaptive_ctx)
                 reason = adaptive_ctx.get("재계획_이유", "실행 실패")
                 self._emit_progress("replan", iteration=iteration, reason=reason)
                 self._say("[진지] 접근 방법을 바꿔서 다시 시도합니다.")
-                if iteration >= self.MAX_PLAN_ITERATIONS - 1:
+                reason_sig = reason[:80]
+                if reason_sig in replan_reasons:
+                    logger.info("[Orchestrator] 동일 재계획 이유 반복, 루프 조기 종료: %s", reason_sig)
+                    run_result.summary = _("반복 실패 패턴 감지: {reason}", reason=reason)
+                    break
+                replan_reasons.append(reason_sig)
+                if iteration >= max_iterations - 1:
                     run_result.summary = f"실행 실패: {reason}"
                 continue
 
@@ -301,9 +308,98 @@ class AgentOrchestrator:
                     "not_achieved", summary=summary, iteration=iteration
                 )
                 self._say("[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다.")
+                reason_sig = summary[:80]
+                if reason_sig in replan_reasons:
+                    logger.info("[Orchestrator] 동일 재계획 이유 반복, 루프 조기 종료: %s", reason_sig)
+                    run_result.summary = _("반복 실패 패턴 감지: {reason}", reason=summary)
+                    break
+                replan_reasons.append(reason_sig)
 
         run_result.learning_components = learning_components
         return run_result
+
+    def _build_shared_context(self, goal: str) -> Dict[str, str]:
+        """루프 진입 전 1회만 실행해야 하는 고비용 검색을 수행한다."""
+        from agent.learning_metrics import get_learning_metrics
+
+        metrics = get_learning_metrics()
+        additions: Dict[str, str] = {}
+        should_activate = getattr(metrics, "should_activate", lambda *args, **kwargs: True)
+
+        if should_activate("EpisodeMemory"):
+            try:
+                from agent.episode_memory import get_episode_memory
+
+                summary = get_episode_memory().get_recent_summary(goal=goal, limit=3)
+                if summary:
+                    additions["recent_goal_episodes"] = summary[:600]
+            except Exception as exc:
+                logger.debug("[Orchestrator] episode memory 생략: %s", exc)
+
+        if should_activate("GoalPredictor"):
+            try:
+                from agent.goal_predictor import get_goal_predictor
+
+                prediction = get_goal_predictor().warn_if_high_risk(goal)
+                if prediction.warning:
+                    additions["goal_risk_warning"] = prediction.warning[:300]
+                    if prediction.risk_factors:
+                        additions["goal_risk_factors"] = (
+                            " | ".join(prediction.risk_factors[:3])[:300]
+                        )
+                    self._emit_progress(
+                        "risk_warning",
+                        warning=prediction.warning,
+                        sample_size=prediction.sample_size,
+                        success_rate=prediction.estimated_success_rate,
+                    )
+                    self._say(f"[진지] {prediction.warning}")
+            except Exception as exc:
+                logger.debug("[Orchestrator] goal predictor 생략: %s", exc)
+
+        return additions
+
+    def _estimate_goal_difficulty(self, goal: str) -> float:
+        """목표의 예상 복잡도를 0.0~1.0으로 반환한다."""
+        from i18n.translator import get_language
+
+        connectors_by_language: dict[str, list[str]] = {
+            "ko": ["그리고", "다음에", "이후에", "후에", "그 다음", "마지막으로"],
+            "en": ["and then", "next", "after that", "then", "finally"],
+            "ja": ["そして", "次に", "その後", "最後に"],
+        }
+        connectors = connectors_by_language.get(get_language(), connectors_by_language["ko"])
+        normalized_goal = str(goal or "")
+
+        score = min(sum(1 for connector in connectors if connector in normalized_goal) * 0.15, 0.45)
+
+        try:
+            from agent.tag_keywords import TAG_KEYWORDS
+
+            matched_domains = sum(
+                1
+                for keywords in TAG_KEYWORDS.values()
+                if any(keyword.lower() in normalized_goal.lower() for keyword in keywords)
+            )
+            if matched_domains >= 3:
+                score += 0.3
+            elif matched_domains >= 2:
+                score += 0.15
+        except Exception:
+            pass
+
+        try:
+            from agent.strategy_memory import get_strategy_memory
+
+            similar = get_strategy_memory().search_similar_records(goal, limit=3)
+            if similar:
+                avg_steps = sum(len(record.steps_desc or []) for record in similar) / len(similar)
+                if avg_steps > 5:
+                    score += 0.25
+        except Exception:
+            pass
+
+        return min(score, 1.0)
 
     # ── 스킬 실행 ─────────────────────────────────────────────────────────────
 
@@ -358,10 +454,11 @@ class AgentOrchestrator:
                     expected_output=item.get("expected_output", ""),
                     condition=item.get("condition", ""),
                     on_failure=item.get("on_failure", "abort"),
+                    optional=bool(item.get("optional", False)),
                 )
                 for idx, item in enumerate(skill.steps)
             ]
-            all_success, step_results = self._exec.execute_plan(
+            all_success, step_results = self._execute_plan(
                 steps, context, goal
             )
             result = AgentRunResult(

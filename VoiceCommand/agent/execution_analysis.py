@@ -4,8 +4,10 @@
 """
 from __future__ import annotations
 
+import copy
 import os
 import re
+from dataclasses import dataclass, field
 from typing import Dict, Iterable, List
 
 
@@ -47,6 +49,28 @@ _WORKFLOW_CALL_RE = re.compile(r"\b(run_browser_actions|run_desktop_workflow|foc
 _WINDOW_TARGET_RE = re.compile(r"(?:expected_window|window|title_substring)\s*=\s*['\"]([^'\"]+)['\"]")
 
 
+@dataclass
+class ErrorAnalysis:
+    primary_cause: str
+    severity: float
+    recovery_probability: float
+    recommended_strategy: str
+    secondary_causes: List[str] = field(default_factory=list)
+
+
+_FAILURE_PROFILES: dict[str, ErrorAnalysis] = {
+    "timeout": ErrorAnalysis("timeout", 0.4, 0.6, "retry"),
+    "permission_denied": ErrorAnalysis("permission_denied", 0.7, 0.3, "simplify"),
+    "missing_module": ErrorAnalysis("missing_module", 0.3, 0.9, "retry"),
+    "missing_resource": ErrorAnalysis("missing_resource", 0.5, 0.5, "llm_fix"),
+    "syntax_error": ErrorAnalysis("syntax_error", 0.4, 0.8, "llm_fix"),
+    "code_generation_error": ErrorAnalysis("code_generation_error", 0.5, 0.7, "simplify"),
+    "network_error": ErrorAnalysis("network_error", 0.5, 0.5, "retry"),
+    "user_cancelled": ErrorAnalysis("user_cancelled", 0.0, 0.0, "abort"),
+    "execution_failed": ErrorAnalysis("execution_failed", 0.6, 0.4, "llm_fix"),
+}
+
+
 def classify_failure_message(message: str) -> str:
     normalized = (message or "").lower()
     if not normalized:
@@ -68,6 +92,16 @@ def classify_failure_message(message: str) -> str:
     if "사용자 취소" in normalized:
         return "user_cancelled"
     return "execution_failed"
+
+
+def analyze_failure(error_message: str) -> ErrorAnalysis:
+    primary = classify_failure_message(error_message)
+    return copy.copy(
+        _FAILURE_PROFILES.get(
+            primary,
+            ErrorAnalysis(primary, 0.5, 0.5, "llm_fix"),
+        )
+    )
 
 
 def is_read_only_step_content(content: str, description: str = "") -> bool:

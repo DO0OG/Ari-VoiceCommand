@@ -4,12 +4,14 @@ from __future__ import annotations
 import atexit
 import json
 import logging
-import math
 import os
 import re
 import threading
 from dataclasses import asdict, dataclass, field
 from typing import List, Optional
+
+from agent.agent_math import cosine_similarity
+from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 
 _DEVELOPER_SCOPE_RE = re.compile(
     r"(voicecommand(?:/(?:agent|core|ui|plugins|tests)\b|\s*(?:저장소|repository|codebase|repo)\b)?|저장소|repository|codebase|\brepo\b|\bdocs\b)",
@@ -19,15 +21,6 @@ _DEVELOPER_ACTION_RE = re.compile(
     r"(validate_repo\.py|--compile-only|pytest|unittest|코드\s*(?:변경|수정)|검증|테스트(?:\s*실행)?|구현|개선(?:\s*과제)?|분석|전체\s*파악)",
     re.IGNORECASE,
 )
-
-_TAG_KEYWORDS = {
-    "파일": ["파일", "폴더", "저장", "쓰기", "읽기", "복사", "이동", "다운로드"],
-    "웹": ["웹", "브라우저", "사이트", "크롬", "엣지", "url", "링크", "로그인"],
-    "자동화": ["자동", "반복", "스케줄", "예약", "알람", "배치"],
-    "UI": ["창", "클릭", "마우스", "키보드", "화면", "포커스"],
-    "정보": ["뉴스", "날씨", "시간", "요약", "정리", "검색"],
-}
-
 
 @dataclass
 class Skill:
@@ -64,7 +57,7 @@ class SkillLibrary:
         self.skills: List[Skill] = []
         self._save_lock = threading.RLock()
         self._save_timer: threading.Timer | None = None
-        self._save_delay_seconds = 0.1
+        self._save_delay_seconds = 5.0
         self._load()
 
     def _load(self):
@@ -121,9 +114,7 @@ class SkillLibrary:
             tag_overlap = len(goal_tags & set(skill.context_tags or []))
             score += tag_overlap * 10
             if query_embedding and skill.goal_embedding:
-                embedding_score = (
-                    self._cosine_similarity(query_embedding, skill.goal_embedding) * 40
-                )
+                embedding_score = cosine_similarity(query_embedding, skill.goal_embedding) * 40
                 score = score * 0.6 + embedding_score * 0.4
             if score > best_score and skill.confidence >= 0.4:
                 best_skill = skill
@@ -317,6 +308,7 @@ class SkillLibrary:
             "expected_output": getattr(step, "expected_output", ""),
             "condition": getattr(step, "condition", ""),
             "on_failure": getattr(step, "on_failure", "abort"),
+            "optional": bool(getattr(step, "optional", False)),
         }
 
     def _blend_duration(self, current: int, new_value: int, count: int) -> int:
@@ -366,16 +358,6 @@ class SkillLibrary:
             return get_embedder().embed(goal).tolist()
         except Exception:
             return []
-
-    def _cosine_similarity(self, left: List[float], right: List[float]) -> float:
-        if not left or not right:
-            return 0.0
-        dot = sum(a * b for a, b in zip(left, right))
-        left_norm = math.sqrt(sum(value * value for value in left))
-        right_norm = math.sqrt(sum(value * value for value in right))
-        if left_norm == 0 or right_norm == 0:
-            return 0.0
-        return dot / (left_norm * right_norm)
 
     def _record_metric_event(self, event_name: str, count: int = 1) -> None:
         try:

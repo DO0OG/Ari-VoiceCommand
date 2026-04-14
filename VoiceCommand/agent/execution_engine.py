@@ -12,18 +12,21 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional, Tuple
 
+import dataclasses
 from dataclasses import dataclass
 
 from agent.agent_planner import AgentPlanner, ActionStep
 from agent.condition_evaluator import evaluate_condition
 from agent.autonomous_executor import AutonomousExecutor, ExecutionResult
 from agent.execution_analysis import (
+    analyze_failure,
     classify_failure_message,
     extract_artifacts,
     extract_step_targets,
     is_read_only_step_content,
     mutates_runtime_state,
 )
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -202,13 +205,41 @@ class ExecutionEngine:
     ) -> Tuple[ExecutionResult, int, bool]:
         curr, fixed = step, False
         res = ExecutionResult(success=False, error="실행되지 않음")
+        seen_errors: list[str] = []
         for att in range(1, self.MAX_STEP_RETRIES + 2):
+            step_start = time.monotonic()
             res = self._run_step(curr, context)
+            elapsed = time.monotonic() - step_start
+            expected = self._estimate_step_timeout(curr)
+            if elapsed > expected:
+                logger.warning(
+                    "[ExecutionEngine] 단계 실행 시간 초과: %.1fs (예상 %.1fs), step=%s",
+                    elapsed,
+                    expected,
+                    curr.step_id,
+                )
+                context["이전_단계_타임아웃"] = _(
+                    "step {step_id} 실행 시간 {elapsed:.0f}s 초과 (예상 {expected:.0f}s). "
+                    "단계를 더 작게 분할하거나 비동기 방식을 고려하세요."
+                ).format(
+                    step_id=curr.step_id,
+                    elapsed=elapsed,
+                    expected=expected,
+                )
             if res.success:
                 return res, att, fixed
             if att > self.MAX_STEP_RETRIES:
                 break
             err = res.error or res.output or "오류"
+            err_sig = err[:120]
+            if err_sig in seen_errors:
+                logger.info(
+                    "[ExecutionEngine] 동일 에러 반복 감지, 수정 중단 (%d회): %s",
+                    att,
+                    err_sig,
+                )
+                break
+            seen_errors.append(err_sig)
             if err in _LOCK_CONTENTION_ERRORS:
                 time.sleep(att)
                 continue
@@ -216,14 +247,87 @@ class ExecutionEngine:
             if "No module named" in err and self._auto_install_if_needed(err):
                 logger.info("[ExecutionEngine] 패키지 설치 후 단계 재실행")
                 continue
-            self._say("[걱정] 오류 발생, 수정 중입니다. (%d/%d)" % (att, self.MAX_STEP_RETRIES))
-            f = self.planner.fix_step(curr, err, goal, context)
-            if f and f.content and f.content != curr.content:
-                curr, fixed = f, True
+            self._say(
+                _("[걱정] 오류 발생, 수정 중입니다. ({att}/{max})").format(
+                    att=att,
+                    max=self.MAX_STEP_RETRIES,
+                )
+            )
+            recovered = self._apply_recovery_strategy(curr, err, att, goal, context)
+            if recovered is not None:
+                curr, fixed = recovered, True
             else:
                 break
         self._auto_restore_failed_writes(curr, res)
         return res, att, fixed
+
+    def _apply_recovery_strategy(
+        self,
+        step: ActionStep,
+        error: str,
+        attempt: int,
+        goal: str,
+        context: Dict[str, str],
+    ) -> Optional[ActionStep]:
+        """실패 단계에 적합한 회복 전략을 선택하여 수정된 ActionStep을 반환한다."""
+        analysis = analyze_failure(error)
+        failure_kind = analysis.primary_cause
+        if analysis.recovery_probability < 0.1 or analysis.recommended_strategy == "abort":
+            return None
+
+        fixed = self.planner.fix_step(step, error, goal, context)
+        if fixed and fixed.content and fixed.content != step.content:
+            logger.info("[ExecutionEngine] 전략: LLM 코드 수정 적용")
+            return fixed
+
+        simplify_allowed = analysis.recommended_strategy in {"simplify", "llm_fix", "retry"}
+        if attempt >= 2 and simplify_allowed and failure_kind in ("syntax_error", "code_generation_error"):
+            simplify_prompt = _(
+                "다음 코드가 실패했습니다:\n{content}\n오류: {error}\n"
+                "기능을 유지하되 최대한 단순하게 다시 작성하세요. "
+                "표준 라이브러리만 사용하고, try/except 추가 금지."
+            ).format(content=step.content, error=error[:200])
+            try:
+                from agent.llm_provider import get_llm_provider
+
+                resp = get_llm_provider().chat(prompt=simplify_prompt, save_history=False)
+                simplified_content = resp.strip() if resp else ""
+                if simplified_content and simplified_content != step.content:
+                    logger.info("[ExecutionEngine] 전략: 단계 단순화 적용")
+                    return dataclasses.replace(step, content=simplified_content)
+            except Exception as exc:
+                logger.debug("[ExecutionEngine] 단순화 실패: %s", exc)
+
+        if (
+            attempt >= 2
+            and analysis.recommended_strategy in {"skip", "simplify", "llm_fix"}
+            and getattr(step, "optional", False)
+        ):
+            logger.info("[ExecutionEngine] 전략: optional 단계 건너뜀")
+            return dataclasses.replace(step, content="pass  # skipped: optional step failed")
+
+        return None
+
+    def _estimate_step_timeout(self, step: ActionStep) -> float:
+        """단계 타입별 예상 타임아웃(초)을 반환한다."""
+        default_timeouts: dict[str, float] = {
+            "python": 30.0,
+            "shell": 20.0,
+            "browser": 45.0,
+            "ui": 30.0,
+            "file": 10.0,
+        }
+        base = default_timeouts.get(getattr(step, "step_type", "python"), 30.0)
+        try:
+            from agent.planner_feedback import get_planner_feedback
+
+            hints = get_planner_feedback().get_hints_raw(step.step_type)
+            avg_ms = hints.get("avg_duration_ms", 0)
+            if avg_ms > 0:
+                base = max(base, avg_ms / 1000 * 2.5)
+        except Exception:
+            pass
+        return min(base, 120.0)
 
     def _auto_restore_failed_writes(
         self,

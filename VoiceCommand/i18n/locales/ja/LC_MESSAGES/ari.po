@@ -1489,3 +1489,23 @@ msgstr "新規スキル作成: {new}個 | Pythonコンパイル完了: {compiled
 
 msgid "자기개선 추정 토큰: {tokens:,} tokens/주"
 msgstr "自己改善推定トークン: {tokens:,} tokens/週"
+
+msgid "다른 작업이 진행 중입니다."
+msgstr "別のタスクが進行中です。"
+
+
+msgid "[걱정] 오류 발생, 수정 중입니다. ({att}/{max})"
+msgstr "[心配] エラーが発生しました。修正中です。({att}/{max})"
+
+
+msgid "반복 실패 패턴 감지: {reason}"
+msgstr "繰り返し失敗パターンを検出: {reason}"
+
+
+msgid "다음 코드가 실패했습니다:\n{content}\n오류: {error}\n기능을 유지하되 최대한 단순하게 다시 작성하세요. 표준 라이브러리만 사용하고, try/except 추가 금지."
+msgstr "次のコードが失敗しました:\n{content}\nエラー: {error}\n機能を維持しつつできるだけシンプルに書き直してください。標準ライブラリのみ使用し、try/exceptを追加しないこと。"
+
+
+msgid "step {step_id} 실행 시간 {elapsed:.0f}s 초과 (예상 {expected:.0f}s). 단계를 더 작게 분할하거나 비동기 방식을 고려하세요."
+msgstr "step {step_id} の実行時間 {elapsed:.0f}s が超過しました (予想 {expected:.0f}s)。ステップを小さく分割するか非同期方式を検討してください。"
+

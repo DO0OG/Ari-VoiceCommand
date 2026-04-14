@@ -13,6 +13,8 @@ from collections import Counter
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
+
+from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
 from i18n.translator import _
 
@@ -25,16 +27,6 @@ def _get_memory_file() -> str:
 
 _MEMORY_FILE = _get_memory_file()
 _MAX_RECORDS = 500
-
-# 태그 키워드는 검색을 위해 한국어 유지하되, 표시용은 번역
-_TAG_KEYWORDS: Dict[str, List[str]] = {
-    "파일":    ["파일", "저장", "읽기", "쓰기", "삭제", "복사", "이동", "폴더", "디렉토리", "분석", "정리"],
-    "웹":      ["API", "요청", "다운로드", "HTTP", "검색", "사이트", "인터넷", "크롬", "엣지", "브라우저"],
-    "시스템":  ["프로세스", "시스템", "CMD", "쉘", "레지스트리", "서비스", "종료", "재부팅", "하드웨어"],
-    "자동화":  ["자동", "반복", "루프", "스케줄", "예약", "배치", "타이머", "알람"],
-    "UI":     ["창", "클릭", "마우스", "키보드", "화면", "스크린", "모니터", "포커스", "캡처"],
-    "정보":    ["날씨", "뉴스", "시간", "요약", "정리", "뭐야", "알려줘"]
-}
 
 _TOKEN_STOPWORDS = {
     "해줘", "해주세요", "하고", "다음", "이후", "정리", "저장", "실행", "요청", "작업",
@@ -72,7 +64,7 @@ class StrategyMemory:
         self._records: List[StrategyRecord] = []
         self._save_lock = threading.RLock()
         self._save_timer: Optional[threading.Timer] = None
-        self._save_delay_seconds = 0.1
+        self._save_delay_seconds = 5.0
         self._load()
 
     def record(self, goal: str, steps: list, success: bool, error: str = "", 

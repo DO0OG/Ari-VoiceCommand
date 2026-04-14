@@ -53,6 +53,95 @@ class ExecutionEngineConditionTests(unittest.TestCase):
         engine.executor.restore_last_backup.assert_called_once_with(r"C:\temp\report.txt")
         self.assertIn("자동 복구", result.output)
 
+    def test_execute_step_with_retry_stops_on_repeated_error_signature(self):
+        engine = ExecutionEngine.__new__(ExecutionEngine)
+        engine.MAX_STEP_RETRIES = 2
+        engine.executor = SimpleNamespace(restore_last_backup=MagicMock())
+        retry_step = ActionStep(
+            step_id=1,
+            step_type="python",
+            content="print('retry')",
+            description_kr="재시도 단계",
+        )
+        engine.planner = SimpleNamespace(
+            fix_step=MagicMock(return_value=retry_step)
+        )
+        engine._say = lambda message: None
+        engine._auto_install_if_needed = lambda error: False
+        engine._run_step = lambda step, context: ExecutionResult(success=False, error="same failure")
+        engine._estimate_step_timeout = lambda step: 999.0
+
+        step = ActionStep(step_id=1, step_type="python", content="print('x')", description_kr="실패 단계")
+
+        result, attempts, was_fixed = engine._execute_step_with_retry(step, "반복 오류", {})
+
+        self.assertFalse(result.success)
+        self.assertEqual(attempts, 2)
+        self.assertTrue(was_fixed)
+        engine.planner.fix_step.assert_called_once()
+
+    def test_execute_step_with_retry_can_skip_optional_step_after_recovery_attempts(self):
+        engine = ExecutionEngine.__new__(ExecutionEngine)
+        engine.MAX_STEP_RETRIES = 2
+        engine.executor = SimpleNamespace(restore_last_backup=MagicMock())
+        revised_step = ActionStep(
+            step_id=2,
+            step_type="python",
+            content="print('retry once')",
+            description_kr="재시도 단계",
+            optional=True,
+        )
+        engine.planner = SimpleNamespace(
+            fix_step=MagicMock(side_effect=[revised_step, None])
+        )
+        engine._say = lambda message: None
+        engine._auto_install_if_needed = lambda error: False
+        engine._estimate_step_timeout = lambda step: 999.0
+
+        def _run_step(step, context):
+            if step.content.startswith("pass"):
+                return ExecutionResult(success=True, output="skipped")
+            if "retry once" in step.content:
+                return ExecutionResult(success=False, error="second failure")
+            return ExecutionResult(success=False, error="first failure")
+
+        engine._run_step = _run_step
+
+        step = ActionStep(
+            step_id=2,
+            step_type="python",
+            content="print('start')",
+            description_kr="optional 단계",
+            optional=True,
+        )
+
+        result, attempts, was_fixed = engine._execute_step_with_retry(step, "optional 복구", {})
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.output, "skipped")
+        self.assertEqual(attempts, 3)
+        self.assertTrue(was_fixed)
+
+    def test_execute_step_with_retry_records_timeout_hint_in_context(self):
+        engine = ExecutionEngine.__new__(ExecutionEngine)
+        engine.MAX_STEP_RETRIES = 0
+        engine.executor = SimpleNamespace(restore_last_backup=MagicMock())
+        engine.planner = SimpleNamespace(fix_step=lambda *args, **kwargs: None)
+        engine._say = lambda message: None
+        engine._auto_install_if_needed = lambda error: False
+        engine._estimate_step_timeout = lambda step: -1.0
+        engine._run_step = lambda step, context: ExecutionResult(success=True, output="done")
+
+        context = {}
+        step = ActionStep(step_id=3, step_type="python", content="print('ok')", description_kr="빠른 단계")
+
+        result, attempts, was_fixed = engine._execute_step_with_retry(step, "타임아웃 힌트", context)
+
+        self.assertTrue(result.success)
+        self.assertEqual(attempts, 1)
+        self.assertFalse(was_fixed)
+        self.assertIn("이전_단계_타임아웃", context)
+
 
 if __name__ == "__main__":
     unittest.main()

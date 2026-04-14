@@ -18,6 +18,7 @@ class ActionStep:
     writes: List[str] = field(default_factory=list)
     reads: List[str] = field(default_factory=list)
     parallel_group: int = -1
+    optional: bool = False
 
 
 @dataclass

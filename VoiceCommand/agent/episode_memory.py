@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import List
 
+from agent.agent_math import cosine_similarity
 from i18n.translator import _
 
 _DEVELOPER_SCOPE_RE = re.compile(
@@ -65,7 +66,7 @@ class EpisodeMemory:
         self._save_lock = threading.RLock()
         self._save_timer: threading.Timer | None = None
         self._embedding_thread: threading.Thread | None = None
-        self._save_delay_seconds = 0.1
+        self._save_delay_seconds = 5.0
         self._load()
 
     def record(self, episode: GoalEpisode) -> None:
@@ -278,7 +279,7 @@ class EpisodeMemory:
         )
         token_score = self._token_similarity(self._extract_tokens(goal_text), self._extract_tokens(episode_text))
         ngram_score = self._ngram_similarity(self._extract_ngrams(goal_text), self._extract_ngrams(episode_text))
-        embedding_score = self._cosine_similarity(
+        embedding_score = cosine_similarity(
             goal_embedding or self._embed_text(goal_text),
             episode.embedding or self._embed_text(episode_text),
         )
@@ -322,16 +323,6 @@ class EpisodeMemory:
             index = int.from_bytes(digest[:4], "big") % _EMBED_DIM
             vector[index] += 1.0
         return vector
-
-    def _cosine_similarity(self, left: List[float], right: List[float]) -> float:
-        if not left or not right:
-            return 0.0
-        dot = sum(a * b for a, b in zip(left, right))
-        left_norm = sum(a * a for a in left) ** 0.5
-        right_norm = sum(b * b for b in right) ** 0.5
-        if left_norm == 0 or right_norm == 0:
-            return 0.0
-        return dot / (left_norm * right_norm)
 
     def _schedule_save(self) -> None:
         with self._save_lock:
