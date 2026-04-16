@@ -83,6 +83,15 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 | **UI & Verification** | Provides a PySide6 desktop UI, animated character widget, text chat, and OCR-based result verification. |
 | **Memory & Personalization** | Stores user preferences, adapts behavior, and accumulates reusable strategies for repeated tasks. |
 
+### Character Widget Highlights
+
+- **Affinity system:** tracks clicks, petting, chats, and daily logins to change greetings and relationship level.
+- **Petting interaction:** slow hover over the character triggers affectionate reactions and affinity gain.
+- **Focus-aware reactions:** detects foreground app categories such as coding, browser, media, chat, office, and games.
+- **Night mode & yawn behavior:** slows animation pacing late at night and injects sleepy idle reactions.
+- **System monitor alerts:** reacts to high CPU/RAM usage and low battery with cooldown-aware messages.
+- **Speech bubble history & custom messages:** stores the latest bubble logs and lets users inject their own idle messages.
+
 ---
 
 ## 🚀 Developer Highlights

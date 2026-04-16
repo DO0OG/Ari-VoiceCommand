@@ -36,6 +36,10 @@ VoiceCommand\.ari_runtime\plugins
 VoiceCommand/plugins
 ```
 
+또한 저장소에 포함된 기본 플러그인은 소스 실행 시 `VoiceCommand/.ari_runtime/plugins`로 복사되며,
+`build_exe.py`로 exe를 만들 때도 `plugins/` 디렉터리 전체가 번들에 포함됩니다.
+즉, 코어에 함께 배포할 플러그인은 `VoiceCommand/plugins/`를 기준으로 관리하는 것이 가장 안전합니다.
+
 ## 2. 플러그인으로 할 수 있는 일
 
 플러그인은 아래와 같은 런타임 훅을 통해 메뉴, 명령, 도구, UI 동작을 확장할 수 있습니다.
@@ -55,6 +59,9 @@ VoiceCommand/plugins
 
 Agent Skills는 위 훅을 직접 제공하지 않습니다.
 메뉴 등록, 런타임 코드 확장, 명령 클래스 주입이 필요하다면 플러그인을 사용해야 합니다.
+
+현재 코어에 포함된 예시로는 친밀도, 포커스 앱 반응, 시스템 모니터, 특별 날짜, 말풍선 히스토리처럼
+캐릭터 위젯과 트레이 메뉴를 연결하는 기능들이 플러그인으로 분리되어 있습니다.
 
 ## 3. 로드 방식
 
