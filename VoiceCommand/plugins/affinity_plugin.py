@@ -55,7 +55,10 @@ def _get_greeting_by_level():
 
 
 class AffinityManager:
+    _SAVE_DEBOUNCE_SEC = 30.0  # 마지막 변경 후 30초 뒤 한 번만 저장
+
     def __init__(self):
+        self._save_timer: Optional[threading.Timer] = None
         self._load()
 
     def _load(self):
@@ -85,6 +88,15 @@ class AffinityManager:
         )
         ConfigManager.save_settings(settings)
 
+    def _schedule_save(self) -> None:
+        """마지막 add_points 호출 후 30초 뒤에 한 번만 디스크에 저장한다."""
+        if self._save_timer is not None:
+            self._save_timer.cancel()
+        t = threading.Timer(self._SAVE_DEBOUNCE_SEC, self._save)
+        t.daemon = True
+        self._save_timer = t
+        t.start()
+
     def _calculate_level(self) -> int:
         for level in range(len(LEVEL_THRESHOLDS) - 1, -1, -1):
             if self.points >= LEVEL_THRESHOLDS[level]:
@@ -102,8 +114,12 @@ class AffinityManager:
 
         old_level = self.level
         self.level = self._calculate_level()
-        self._save()
-        return self.level > old_level
+        leveled_up = self.level > old_level
+        if leveled_up:
+            self._save()  # 레벨업 시 즉시 저장
+        else:
+            self._schedule_save()  # 일반 상호작용은 디바운스 저장
+        return leveled_up
 
     def get_level(self) -> int:
         return self.level
