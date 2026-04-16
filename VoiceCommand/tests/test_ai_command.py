@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 from commands.ai_command import AICommand
 from agent.agent_orchestrator import AgentRunResult
+from i18n.translator import _, get_language, set_language
 
 
 class _FakeAssistant:
@@ -101,6 +102,29 @@ class AICommandTests(unittest.TestCase):
             result = command._handle_get_current_time({})
 
         self.assertEqual(result, "현재 시간은 오후 4시 48분입니다.")
+
+    def test_get_current_time_uses_active_language_translation(self):
+        previous_language = get_language()
+        set_language("en")
+        self.addCleanup(set_language, previous_language)
+
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return cls(2026, 3, 25, 16, 48, 0)
+
+        with patch("commands.ai_command.datetime", _FixedDateTime):
+            result = command._handle_get_current_time({})
+
+        expected_time = _("{ampm} {hour}시 {minute}분").format(
+            ampm=_("오후"),
+            hour=4,
+            minute=48,
+        )
+        self.assertEqual(result, _("현재 시간은 {time}입니다.").format(time=expected_time))
 
     def test_preface_response_filters_ellipsis_placeholder(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
@@ -450,6 +474,62 @@ class AICommandTests(unittest.TestCase):
         self.assertEqual(next_run, datetime(2026, 3, 25, 3, 36, 51))
         self.assertFalse(repeat)
         self.assertEqual(repeat_seconds, 0)
+
+    def test_parse_schedule_supports_translated_daily_pattern(self):
+        previous_language = get_language()
+        set_language("en")
+        self.addCleanup(set_language, previous_language)
+
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                del tz
+                return cls(2026, 3, 25, 3, 31, 51)
+
+        schedule_text = f"{_('매일')} {_('오전')} 9{_('시')}"
+
+        with patch("commands.ai_command.datetime", _FixedDateTime):
+            next_run, repeat, repeat_seconds = command._parse_schedule(schedule_text)
+
+        self.assertEqual(next_run, datetime(2026, 3, 25, 9, 0, 0))
+        self.assertTrue(repeat)
+        self.assertEqual(repeat_seconds, 86400)
+
+    def test_handle_set_timer_localizes_missing_duration_prompt(self):
+        previous_language = get_language()
+        set_language("ja")
+        self.addCleanup(set_language, previous_language)
+
+        spoken = []
+        command = AICommand(_FakeAssistant(), spoken.append, {"enabled": False})
+
+        result = command._handle_set_timer({"minutes": 0, "seconds": 0})
+
+        self.assertIsNone(result)
+        self.assertEqual(spoken, [_("타이머 시간을 말씀해 주세요.")])
+
+    def test_handle_get_screen_status_uses_character_current_screen(self):
+        from PySide6.QtCore import QRect
+
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        current_screen = SimpleNamespace(geometry=lambda: QRect(1920, 0, 2560, 1440))
+        primary_screen = SimpleNamespace(geometry=lambda: QRect(0, 0, 1920, 1080))
+        character_widget = SimpleNamespace(
+            _current_screen=current_screen,
+            get_screen_geometry=lambda: QRect(1920, 0, 2560, 1400),
+        )
+        fake_state = SimpleNamespace(character_widget=character_widget)
+
+        with (
+            patch("core.VoiceCommand._state", fake_state),
+            patch("PySide6.QtWidgets.QApplication.primaryScreen", return_value=primary_screen),
+        ):
+            result = command._handle_get_screen_status({})
+
+        self.assertIn("2560x1400", result)
+        self.assertIn("2560x1440", result)
 
     def test_parse_schedule_interprets_minute_e_as_next_matching_clock_minute(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

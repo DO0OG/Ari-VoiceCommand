@@ -1916,3 +1916,78 @@ msgstr "ん？笑"
 msgid "내일은 크리스마스예요!"
 msgstr "明日はクリスマスですよ！"
 
+msgid "매일"
+msgstr "毎日"
+
+msgid "매주"
+msgstr "毎週"
+
+msgid "매시간"
+msgstr "毎時間"
+
+msgid "오늘"
+msgstr "今日"
+
+msgid "내일"
+msgstr "明日"
+
+msgid "스케줄"
+msgstr "スケジュール"
+
+msgid "예약"
+msgstr "予約"
+
+msgid "반복"
+msgstr "繰り返し"
+
+msgid "알려줘"
+msgstr "教えて"
+
+msgid "확인해줘"
+msgstr "確認して"
+
+msgid "타이머 시간을 말씀해 주세요."
+msgstr "タイマー時間を教えてください。"
+
+msgid "'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
+msgstr "「{when}」という時間表現を理解できませんでした。「5分後」「11時30分に」「毎日 午前9時」のように話してください。"
+
+msgid "예약할 작업과 시간을 알려주세요."
+msgstr "予約する作業と時間を教えてください。"
+
+msgid "스케줄러를 사용할 수 없습니다."
+msgstr "スケジューラーを利用できません。"
+
+msgid " (반복)"
+msgstr " (繰り返し)"
+
+msgid "작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다."
+msgstr "予約完了 (ID: {task_id}){repeat}。{formatted}に実行されます。"
+
+msgid "취소할 작업 ID를 알려주세요."
+msgstr "取り消す作業IDを教えてください。"
+
+msgid "작업 {task_id}가 취소되었습니다."
+msgstr "作業 {task_id} を取り消しました。"
+
+msgid "ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
+msgstr "ID '{task_id}' に対応する作業が見つかりません。"
+
+msgid "현재 예약된 작업이 없습니다."
+msgstr "現在、予約された作業はありません。"
+
+msgid "예약된 작업 {count}개:"
+msgstr "予約された作業 {count}件:"
+
+msgid "  [{task_id}] {time}{repeat} — {goal}"
+msgstr "  [{task_id}] {time}{repeat} — {goal}"
+
+msgid "{month}월 {day}일 {time}"
+msgstr "{month}月{day}日 {time}"
+
+msgid "{when}에 컴퓨터 꺼줘"
+msgstr "{when}にコンピューターをシャットダウンして"
+
+msgid "{when}에 컴퓨터 재시작해줘"
+msgstr "{when}にコンピューターを再起動して"
+

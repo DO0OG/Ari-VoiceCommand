@@ -162,12 +162,13 @@ class CharacterWidgetHelperTests(unittest.TestCase):
 
         with (
             patch.object(widget, "get_screen_geometry", return_value=screen),
+            patch.object(widget, "get_ground_y", return_value=432),
             patch("ui.character_widget._RNG.randint", return_value=123) as randint_mock,
         ):
             widget.move_to_bottom()
 
-        randint_mock.assert_called_once_with(100, 700)
-        self.assertEqual(widget.pos(), QPoint(123, 450))
+        randint_mock.assert_called_once_with(100, screen.x() + screen.width() - widget.width())
+        self.assertEqual(widget.pos(), QPoint(123, 432))
 
     def test_mouse_move_event_clamps_to_offset_screen_bounds(self):
         widget = self._make_widget()
@@ -245,6 +246,7 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             widget._update_current_screen()
 
         self.assertIs(widget._current_screen, secondary)
+        self.assertIsNone(widget._screen_geom_cache)
         self.assertEqual(widget._screen_geom_cache_time, 0)
 
     def test_update_current_screen_falls_back_to_nearest_screen_in_gap(self):
@@ -259,6 +261,7 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             widget._update_current_screen()
 
         self.assertIs(widget._current_screen, secondary)
+        self.assertIsNone(widget._screen_geom_cache)
         self.assertEqual(widget._screen_geom_cache_time, 0)
 
     def test_get_screen_geometry_uses_current_screen_instead_of_primary_screen(self):

@@ -11,6 +11,18 @@ from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask
 
 
 class ProactiveSchedulerTests(unittest.TestCase):
+    def test_scheduler_instances_keep_distinct_storage_paths(self):
+        with patch("agent.proactive_scheduler._init_schedule_file", side_effect=["first.json", "second.json"]):
+            with patch("agent.proactive_scheduler._init_schedule_log_file", side_effect=["first.log", "second.log"]):
+                with patch.object(ProactiveScheduler, "_start_ticker"):
+                    first = ProactiveScheduler()
+                    second = ProactiveScheduler()
+
+        self.assertEqual(first._schedule_file, "first.json")
+        self.assertEqual(second._schedule_file, "second.json")
+        self.assertEqual(first._schedule_run_log_file, "first.log")
+        self.assertEqual(second._schedule_run_log_file, "second.log")
+
     def test_compute_next_run_respects_daily_repeat_and_except_dates(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         task = ScheduledTask(
