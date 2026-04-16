@@ -59,6 +59,7 @@ from ui import theme as theme_module
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
+_LIVE_PROCESSING_THREADS: set[QThread] = set()
 
 # 단계 상태별 아이콘
 _STEP_ICON = {
@@ -704,14 +705,41 @@ class TextInterface(QMainWindow):
             self._stream_tts_sentence_batch = []
             self._stream_tts_spoken = False
             self.processing_thread = TextInterfaceThread(self.ai_assistant, query)
-            self.processing_thread.response_ready.connect(self._handle_response)
-            self.processing_thread.progress_event.connect(self._on_progress_event)
-            self.processing_thread.stream_chunk.connect(self._handle_stream_chunk)
-            self.processing_thread.finished.connect(lambda: self._set_ui_enabled(True))
+            self._bind_processing_thread(self.processing_thread)
             self.processing_thread.start()
         else:
             self._handle_response(_("AI 엔진이 연결되지 않았습니다."))
             self._set_ui_enabled(True)
+
+    def _bind_processing_thread(self, thread: TextInterfaceThread) -> None:
+        _LIVE_PROCESSING_THREADS.add(thread)
+        thread.response_ready.connect(self._handle_response)
+        thread.progress_event.connect(self._on_progress_event)
+        thread.stream_chunk.connect(self._handle_stream_chunk)
+        thread.finished.connect(lambda: self._set_ui_enabled(True))
+        thread.finished.connect(lambda: _LIVE_PROCESSING_THREADS.discard(thread))
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda: self._clear_processing_thread(thread))
+
+    def _clear_processing_thread(self, thread: TextInterfaceThread) -> None:
+        if self.processing_thread is thread:
+            self.processing_thread = None
+
+    def _detach_processing_thread(self) -> Optional[TextInterfaceThread]:
+        thread = self.processing_thread
+        if thread is None:
+            return None
+        self.processing_thread = None
+        for signal, slot in (
+            (thread.response_ready, self._handle_response),
+            (thread.progress_event, self._on_progress_event),
+            (thread.stream_chunk, self._handle_stream_chunk),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
+        return thread
 
     def _send_suggestion(self, goal: str) -> None:
         self.input_field.setText(goal)
@@ -949,8 +977,12 @@ class TextInterface(QMainWindow):
         self.opacity_anim.start()
 
     def cleanup(self) -> None:
-        if self.processing_thread and self.processing_thread.isRunning():
-            self.processing_thread.wait(1000)
+        thread = self._detach_processing_thread()
+        if thread and thread.isRunning():
+            thread.requestInterruption()
+            if not thread.wait(3000):
+                logger.warning("TextInterfaceThread 종료 대기 초과 — 백그라운드 추적 유지")
+                _LIVE_PROCESSING_THREADS.add(thread)
         for panel in (self._scheduler_panel, self._memory_panel):
             if panel:
                 panel.close()
