@@ -1820,8 +1820,8 @@ msgstr "You're so sociable~"
 msgid "배터리가 {pct}%예요!"
 msgstr "Battery is {pct}%!"
 
-msgid "쓰다듬지 마세요... (좋아요)"
-msgstr "Stop petting me... (I like it)"
+msgid "쓰다듬지 마세요... 😊"
+msgstr "Stop petting me... 😊"
 
 msgid "파일 정리 중이세요?"
 msgstr "Organizing files?"

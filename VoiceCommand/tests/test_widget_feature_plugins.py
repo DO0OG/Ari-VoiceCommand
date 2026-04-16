@@ -93,6 +93,19 @@ class WidgetFeaturePluginTests(unittest.TestCase):
 
         self.assertTrue(widget.say_calls)
 
+    def test_affinity_register_does_not_wrap_widget_say(self):
+        widget = _FakeWidget()
+        original_func = widget.say.__func__
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value={}),
+            patch("core.config_manager.ConfigManager.save_settings", return_value=True),
+        ):
+            affinity_plugin.register(types.SimpleNamespace(character_widget=widget, register_menu_action=None))
+
+        self.assertIs(widget.say.__func__, original_func)
+        self.assertFalse(getattr(widget, "_affinity_chat_tracking_installed", False))
+
 
 if __name__ == "__main__":
     unittest.main()

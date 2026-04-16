@@ -161,27 +161,6 @@ def _notify_level_up() -> None:
         name="ari-affinity-level-up",
     ).start()
 
-
-def _install_chat_tracking(widget) -> None:
-    if getattr(widget, "_affinity_chat_tracking_installed", False):
-        return
-
-    original_say = widget.say
-    widget._affinity_original_say = original_say
-
-    def _tracked_say(text, duration=5000):
-        result = original_say(text, duration)
-        manager = getattr(widget, "_affinity_manager", None)
-        if manager:
-            leveled_up = manager.add_points(2, "chat")
-            if leveled_up:
-                _notify_level_up()
-        return result
-
-    widget.say = _tracked_say
-    widget._affinity_chat_tracking_installed = True
-
-
 def _on_show_affinity():
     from i18n.translator import _
 
@@ -211,7 +190,6 @@ def register(context):
     if _widget_ref:
         _widget_ref._affinity_manager = _affinity_manager
         _widget_ref._affinity_on_level_up = _notify_level_up
-        _install_chat_tracking(_widget_ref)
         if _affinity_manager.record_daily_login():
             _notify_level_up()
 
