@@ -607,7 +607,7 @@ class CharacterWidget(QWidget):
             _("으으... 눈이 감겨요."),
             _("꾸벅..."),
             _("잠깐 쉬어도 될까요..."),
-            _("하아암... 주무세요, 주인님~"),
+            _("하아암... 주무실 시간이에요."),
         ]
         self.say(_RNG.choice(yawn_messages), duration=3000)
         self.set_animation("sleep")
@@ -629,12 +629,12 @@ class CharacterWidget(QWidget):
 
         self.set_emotion(_RNG.choice(["수줍", "기쁨"]))
         pet_messages = [
-            _("흐응~ 좋아요..."),
-            _("헤헤, 간지러워요~"),
-            _("기분 좋다~"),
-            _("쓰다듬지 마세요... 😊"),
+            _("...알겠어요."),
+            _("좀 간지럽네요."),
+            _("그만해요."),
+            _("쓰다듬지 마세요."),
             _("으... 쑥스러워요."),
-            _("또 해줘요~"),
+            _("적당히 해요."),
         ]
         # pet 반응은 original_say로 chat 포인트 중복 방지
         _say = getattr(self, "_affinity_original_say", self.say)
@@ -863,19 +863,16 @@ class CharacterWidget(QWidget):
 
                 if affinity_mgr:
                     reaction = affinity_mgr.get_greeting()
-                    # 첫 클릭 release +1, 더블클릭 press 추가 +1 → 합계 +2
-                    leveled_up = affinity_mgr.add_points(1, "click")
-                    if leveled_up and callable(on_level_up):
-                        on_level_up()
-                    # monkey-patch된 say 대신 original_say로 chat 포인트 중복 방지
+                    # 더블클릭 press에서는 추가 저장 없이 반응만 표시
+                    # (첫 클릭 release에서 이미 +1 저장됨)
                     _say = getattr(self, "_affinity_original_say", self.say)
                 else:
                     reactions = [
                         _("왜요?"),
                         _("뭐예요?"),
                         _("네?"),
-                        _("간지러워요!"),
-                        _("헤헤"),
+                        _("왜 그러세요."),
+                        _("그냥 두세요."),
                     ]
                     reaction = _RNG.choice(reactions)
                     _say = self.say
