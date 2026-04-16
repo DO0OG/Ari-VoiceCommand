@@ -15,7 +15,7 @@ def compile_po(po_path: str, mo_path: str) -> None:
     msgid = msgstr = None
     in_msgid = in_msgstr = False
 
-    with open(po_path, encoding="utf-8") as f:
+    with open(po_path, encoding="utf-8-sig") as f:
         for raw in f:
             line = raw.strip()
             if not line or line.startswith("#"):
