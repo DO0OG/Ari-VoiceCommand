@@ -25,13 +25,13 @@ class WidgetFeaturePluginTests(unittest.TestCase):
     def test_affinity_manager_levels_up_at_threshold(self):
         saved = {}
 
-        def _store(key, value):
-            saved[key] = value
+        def _save(payload):
+            saved.update(payload)
             return True
 
         with (
             patch("core.config_manager.ConfigManager.load_settings", return_value={}),
-            patch("core.config_manager.ConfigManager.set_value", side_effect=_store),
+            patch("core.config_manager.ConfigManager.save_settings", side_effect=_save),
         ):
             manager = affinity_plugin.AffinityManager()
             leveled_up = manager.add_points(50, "click")

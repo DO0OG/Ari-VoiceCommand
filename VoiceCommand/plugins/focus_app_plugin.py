@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import secrets
-import sys
 import time
 
 
@@ -77,42 +76,6 @@ def _get_app_rules():
     ]
 
 
-def _get_foreground_window_title() -> str:
-    if sys.platform != "win32":
-        return ""
-    try:
-        import ctypes
-
-        hwnd = ctypes.windll.user32.GetForegroundWindow()
-        if not hwnd:
-            return ""
-        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-        if length == 0:
-            return ""
-        buf = ctypes.create_unicode_buffer(length + 1)
-        ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
-        return buf.value.lower()
-    except Exception:
-        return ""
-
-
-def _get_foreground_process_name() -> str:
-    if sys.platform != "win32":
-        return ""
-    try:
-        import ctypes
-        import psutil
-
-        hwnd = ctypes.windll.user32.GetForegroundWindow()
-        if not hwnd:
-            return ""
-        pid = ctypes.c_ulong()
-        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        return psutil.Process(pid.value).name().lower()
-    except Exception:
-        return ""
-
-
 def _classify_app(title: str, process: str):
     combined = f"{title} {process}"
     for rule_key, keywords, emotion, messages, cooldown in _get_app_rules():
@@ -125,12 +88,16 @@ def _check_focus_app():
     global _last_app_class
 
     from core.config_manager import ConfigManager
+    from core.window_inspector import (
+        get_foreground_process_name,
+        get_foreground_window_title,
+    )
 
     if not ConfigManager.get("focus_app_reaction_enabled", True):
         return
 
-    title = _get_foreground_window_title()
-    process = _get_foreground_process_name()
+    title = get_foreground_window_title()
+    process = get_foreground_process_name()
     if not title and not process:
         return
 

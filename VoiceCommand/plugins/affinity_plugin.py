@@ -72,12 +72,18 @@ class AffinityManager:
     def _save(self):
         from core.config_manager import ConfigManager
 
-        ConfigManager.set_value("affinity_points", self.points)
-        ConfigManager.set_value("affinity_level", self.level)
-        ConfigManager.set_value("affinity_total_clicks", self.total_clicks)
-        ConfigManager.set_value("affinity_total_pets", self.total_pets)
-        ConfigManager.set_value("affinity_total_chats", self.total_chats)
-        ConfigManager.set_value("affinity_last_login", self.last_login)
+        settings = ConfigManager.load_settings()
+        settings.update(
+            {
+                "affinity_points": self.points,
+                "affinity_level": self.level,
+                "affinity_total_clicks": self.total_clicks,
+                "affinity_total_pets": self.total_pets,
+                "affinity_total_chats": self.total_chats,
+                "affinity_last_login": self.last_login,
+            }
+        )
+        ConfigManager.save_settings(settings)
 
     def _calculate_level(self) -> int:
         for level in range(len(LEVEL_THRESHOLDS) - 1, -1, -1):
