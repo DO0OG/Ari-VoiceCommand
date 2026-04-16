@@ -10,7 +10,7 @@ import sys
 import logging
 import ctypes
 from collections import OrderedDict
-from typing import Optional
+from typing import Callable, Optional, cast
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
@@ -640,8 +640,11 @@ class CharacterWidget(QWidget):
         affinity_mgr = getattr(self, "_affinity_manager", None)
         if affinity_mgr:
             leveled_up = affinity_mgr.add_points(3, "pet")
-            on_level_up = getattr(self, "_affinity_on_level_up", None)
-            if leveled_up and callable(on_level_up):
+            on_level_up = cast(
+                Optional[Callable[[], None]],
+                getattr(self, "_affinity_on_level_up", None),
+            )
+            if leveled_up and on_level_up is not None:
                 on_level_up()
 
     def random_behavior(self):
