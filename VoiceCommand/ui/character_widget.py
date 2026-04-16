@@ -10,7 +10,7 @@ import sys
 import logging
 import ctypes
 from collections import OrderedDict
-from typing import Callable, Optional, cast
+from typing import Callable, Optional
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
@@ -94,6 +94,12 @@ def _load_random_custom_message() -> str:
     except Exception as exc:
         logging.debug("커스텀 메시지 로드 실패: %s", exc)
         return ""
+
+
+def _invoke_level_up_callback(callback_obj: object) -> None:
+    callback = getattr(callback_obj, "__call__", None)
+    if callable(callback):
+        callback()
 
 
 class LRUCache:
@@ -643,9 +649,8 @@ class CharacterWidget(QWidget):
         affinity_mgr = getattr(self, "_affinity_manager", None)
         if affinity_mgr:
             leveled_up = affinity_mgr.add_points(3, "pet")
-            on_level_up = getattr(self, "_affinity_on_level_up", None)
-            if leveled_up and callable(on_level_up):
-                cast(Callable[[], None], on_level_up)()
+            if leveled_up:
+                _invoke_level_up_callback(getattr(self, "_affinity_on_level_up", None))
 
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
@@ -956,8 +961,8 @@ class CharacterWidget(QWidget):
 
             if should_reward_click and affinity_mgr:
                 leveled_up = affinity_mgr.add_points(1, "click")
-                if leveled_up and callable(on_level_up):
-                    cast(Callable[[], None], on_level_up)()
+                if leveled_up:
+                    _invoke_level_up_callback(on_level_up)
 
             # 던지기 속도 계산 (계수 0.02로 약간 약화시켜 안정성 확보)
             current_time = time.time()
