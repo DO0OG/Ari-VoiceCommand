@@ -58,6 +58,15 @@ class _FakeScreen:
         return self._available_geometry
 
 
+class _FakeAffinityManager:
+    def __init__(self):
+        self.calls = []
+
+    def add_points(self, points, reason=""):
+        self.calls.append((points, reason))
+        return False
+
+
 class CharacterWidgetHelperTests(unittest.TestCase):
     def _make_widget(self):
         app = QApplication.instance() or QApplication([])
@@ -375,6 +384,29 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             widget.track_mouse()
 
         widget._trigger_pet.assert_called_once()
+
+    def test_mouse_release_rewards_click_without_drag_motion(self):
+        widget = self._make_widget()
+        affinity = _FakeAffinityManager()
+        widget._affinity_manager = affinity
+        widget.mousePressEvent(_FakeMouseEvent(QPoint(150, 150)))
+
+        with patch.object(widget, "_update_current_screen"):
+            widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(150, 150)))
+
+        self.assertEqual(affinity.calls, [(1, "click")])
+
+    def test_mouse_release_does_not_reward_drag_motion(self):
+        widget = self._make_widget()
+        affinity = _FakeAffinityManager()
+        widget._affinity_manager = affinity
+        widget.mousePressEvent(_FakeMouseEvent(QPoint(150, 150)))
+        widget.mouseMoveEvent(_FakeMouseEvent(QPoint(170, 170)))
+
+        with patch.object(widget, "_update_current_screen"):
+            widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(170, 170)))
+
+        self.assertEqual(affinity.calls, [])
 
 
 if __name__ == "__main__":

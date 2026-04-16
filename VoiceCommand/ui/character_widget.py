@@ -150,6 +150,9 @@ class CharacterWidget(QWidget):
         self.dragging = False
         self.offset = QPoint()
         self.target_pos = QPoint() # 드래그 시 목표 위치
+        self._drag_start_global_pos = QPoint()
+        self._drag_moved = False
+        self._suppress_release_click = False
         self.current_animation = "idle"
         self.frame_index = 0
         self.animations = {}
@@ -850,10 +853,6 @@ class CharacterWidget(QWidget):
         if event.button() == Qt.LeftButton:
             affinity_mgr = getattr(self, "_affinity_manager", None)
             on_level_up = getattr(self, "_affinity_on_level_up", None)
-            if affinity_mgr:
-                leveled_up = affinity_mgr.add_points(1, "click")
-                if leveled_up and callable(on_level_up):
-                    on_level_up()
 
             # 더블클릭 감지
             if not hasattr(self, '_last_click'):
@@ -864,8 +863,10 @@ class CharacterWidget(QWidget):
 
                 if affinity_mgr:
                     reaction = affinity_mgr.get_greeting()
-                    # 더블클릭 추가 +1 → 두 번의 클릭 이벤트 합계 +2
-                    affinity_mgr.add_points(1, "click")
+                    # 첫 클릭 release +1, 더블클릭 press 추가 +1 → 합계 +2
+                    leveled_up = affinity_mgr.add_points(1, "click")
+                    if leveled_up and callable(on_level_up):
+                        on_level_up()
                     # monkey-patch된 say 대신 original_say로 chat 포인트 중복 방지
                     _say = getattr(self, "_affinity_original_say", self.say)
                 else:
@@ -882,11 +883,14 @@ class CharacterWidget(QWidget):
                 self.set_animation("surprised")
                 QTimer.singleShot(1000, lambda: self.set_animation("idle"))
                 self._last_click = 0
+                self._suppress_release_click = True
                 return
             self._last_click = now
 
             self.dragging = True
             self._is_landing = False # 드래그 시 착지 플래그 초기화
+            self._drag_start_global_pos = event.globalPos()
+            self._drag_moved = False
             self.offset = event.globalPos() - self.pos()
             self.set_animation("drag")
 
@@ -910,6 +914,10 @@ class CharacterWidget(QWidget):
     def mouseMoveEvent(self, event):
         """마우스 드래그 (즉각적인 1:1 이동 및 방향 전환)"""
         if self.dragging:
+            moved_delta = event.globalPos() - self._drag_start_global_pos
+            if abs(moved_delta.x()) >= 3 or abs(moved_delta.y()) >= 3:
+                self._drag_moved = True
+
             # 목표 위치 계산 (Lerp 제거, 즉시 이동)
             nx = event.globalPos().x() - self.offset.x()
             ny = event.globalPos().y() - self.offset.y()
@@ -940,13 +948,23 @@ class CharacterWidget(QWidget):
     def mouseReleaseEvent(self, event):
         """마우스 릴리즈"""
         if event.button() == Qt.LeftButton:
+            affinity_mgr = getattr(self, "_affinity_manager", None)
+            on_level_up = getattr(self, "_affinity_on_level_up", None)
+            should_reward_click = self.dragging and not self._drag_moved and not self._suppress_release_click
+
             self.dragging = False
+            self._suppress_release_click = False
             self._update_current_screen()
 
             # 타이머 재시작
             self.animation_timer.start(70)
             self.physics_timer.start(33)
             self.start_behavior_timer()
+
+            if should_reward_click and affinity_mgr:
+                leveled_up = affinity_mgr.add_points(1, "click")
+                if leveled_up and callable(on_level_up):
+                    on_level_up()
 
             # 던지기 속도 계산 (계수 0.02로 약간 약화시켜 안정성 확보)
             current_time = time.time()
