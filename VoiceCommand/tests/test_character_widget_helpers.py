@@ -1,13 +1,18 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import tempfile
+import os
+import json
 
 from PySide6.QtCore import QPoint, QRect, QPropertyAnimation, Qt
 from PySide6.QtWidgets import QApplication
 
 from ui.character_widget import (
     CharacterWidget,
+    _append_bubble_history,
     _is_geometry_animation_running,
     _is_thinking_bubble_text,
+    _load_random_custom_message,
     _sync_walk_animation_end_value,
 )
 
@@ -257,6 +262,7 @@ class CharacterWidgetHelperTests(unittest.TestCase):
         with (
             patch("ui.character_widget.QApplication.primaryScreen", return_value=primary),
             patch("ui.character_widget.QApplication.screens", return_value=[primary, secondary]),
+            patch("ui.character_widget.sys.platform", "linux"),
             patch("ui.character_widget.time.time", side_effect=[1.0, 1.0]),
         ):
             screen_geom = widget.get_screen_geometry()
@@ -315,6 +321,60 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             widget.update_physics()
 
         self.assertIs(widget._current_screen, secondary)
+
+    def test_append_bubble_history_keeps_latest_50_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bubble_history.json")
+            with patch("core.resource_manager.ResourceManager.get_writable_path", return_value=path):
+                for index in range(55):
+                    _append_bubble_history(f"msg-{index}")
+
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+
+        self.assertEqual(len(payload["history"]), 50)
+        self.assertEqual(payload["history"][0]["text"], "msg-54")
+        self.assertEqual(payload["history"][-1]["text"], "msg-5")
+
+    def test_load_random_custom_message_reads_saved_messages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "custom_messages.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"messages": ["alpha", "beta"]}, handle, ensure_ascii=False)
+
+            with (
+                patch("core.resource_manager.ResourceManager.get_writable_path", return_value=path),
+                patch("ui.character_widget.secrets.SystemRandom.choice", return_value="beta"),
+            ):
+                self.assertEqual(_load_random_custom_message(), "beta")
+
+    def test_update_sleepy_mode_adjusts_animation_interval_and_yawn_timer(self):
+        widget = self._make_widget()
+        widget._sleepy_mode = False
+
+        with (
+            patch("ui.character_widget.CharacterWidget._schedule_yawn") as schedule_mock,
+            patch("datetime.datetime") as datetime_mock,
+        ):
+            datetime_mock.now.return_value.hour = 23
+            widget._update_sleepy_mode()
+
+        self.assertTrue(widget._sleepy_mode)
+        self.assertEqual(widget.animation_timer.interval(), 110)
+        schedule_mock.assert_called_once()
+
+    def test_track_mouse_triggers_pet_when_hovering_slowly(self):
+        widget = self._make_widget()
+        widget._trigger_pet = MagicMock()
+        widget.move(100, 100)
+        widget.resize(120, 120)
+        widget._pet_hover_duration = 1.4
+        widget._prev_cursor_pos = QPoint(120, 120)
+
+        with patch("ui.character_widget.QCursor.pos", return_value=QPoint(121, 121)):
+            widget.track_mouse()
+
+        widget._trigger_pet.assert_called_once()
 
 
 if __name__ == "__main__":

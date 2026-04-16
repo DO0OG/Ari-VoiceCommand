@@ -218,6 +218,7 @@ nuitka_args = [
     "--include-data-dir=images=images",
     "--include-data-dir=theme=theme",
     "--include-data-dir=i18n/locales=i18n/locales",
+    "--include-data-dir=plugins=plugins",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
@@ -225,7 +226,6 @@ nuitka_args = [
     f"--include-data-files={SETTINGS_TEMPLATE_FILE}={SETTINGS_TEMPLATE_FILE}",
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
-    *(["--include-data-files=plugins/sample_plugin.py=plugins/sample_plugin.py"] if os.path.exists(os.path.join(HERE, "plugins", "sample_plugin.py")) else []),
 
     # 아이콘 설정
     *( ["--windows-icon-from-ico=icon.ico"] if os.path.exists("icon.ico") else [] ),

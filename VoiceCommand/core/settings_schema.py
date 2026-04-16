@@ -71,6 +71,17 @@ DEFAULT_SETTINGS = {
     "ui_theme_scale": 1.0,
     "ui_font_family": "",
     "language": "ko",               # 인터페이스 언어 (ko | en | ja)
+    # ── 캐릭터 위젯 확장 기능 ────────────────────────────────────────────────
+    "affinity_points": 0,
+    "affinity_level": 0,
+    "affinity_total_clicks": 0,
+    "affinity_total_pets": 0,
+    "affinity_total_chats": 0,
+    "affinity_last_login": "",      # YYYY-MM-DD
+    "focus_app_reaction_enabled": True,
+    "system_monitor_enabled": True,
+    "user_birthday": "",            # MM-DD
+    "special_date_events_enabled": True,
     # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────
     "llm_router_enabled": True,          # LLMRouter 작업 유형별 자동 라우팅
     "few_shot_max_examples": 3,          # FewShotInjector 최대 예시 수

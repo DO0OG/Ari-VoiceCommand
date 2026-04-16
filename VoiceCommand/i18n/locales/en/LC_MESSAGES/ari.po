@@ -1,4 +1,4 @@
-msgid ""
+﻿msgid ""
 msgstr ""
 "Project-Id-Version: Ari 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1528,4 +1528,391 @@ msgstr "[serious] Changing the approach and trying again."
 
 msgid "[진지] 목표를 아직 달성하지 못했어요. 다시 시도합니다."
 msgstr "[serious] The goal has not been achieved yet. Trying again."
+
+msgid "헤헤, 간지러워요~"
+msgstr "Hehe, that tickles~"
+
+msgid "아직 히스토리가 없어요!"
+msgstr "No history yet!"
+
+msgid "새해 복 많이 받으세요!"
+msgstr "Happy New Year!"
+
+msgid "BOO! 깜짝이야~"
+msgstr "BOO! Gotcha~"
+
+msgid "저녁 시간이에요"
+msgstr "It's evening"
+
+msgid "이제 제일 좋아해요!"
+msgstr "You're my favorite now!"
+
+msgid "현재 친밀도: {level_name} (Lv.{level}) — {points}pt"
+msgstr "Current Affinity: {level_name} (Lv.{level}) — {points}pt"
+
+msgid "개천절이에요!"
+msgstr "It's National Foundation Day!"
+
+msgid "💝 친밀도 확인"
+msgstr "💝 Check Affinity"
+
+msgid "늦은 시간이네요"
+msgstr "It's getting late"
+
+msgid "헤헤"
+msgstr "Hehe"
+
+msgid "새해가 밝았어요!"
+msgstr "The new year has arrived!"
+
+msgid "초면"
+msgstr "Stranger"
+
+msgid "부르셨나요, 주인님?"
+msgstr "Did you call me, Master?"
+
+msgid "올해 마지막 날이에요! 잘 마무리해요~"
+msgstr "It's the last day of the year! Let's wrap it up~"
+
+msgid "친구"
+msgstr "Friend"
+
+msgid "화이트데이예요!"
+msgstr "It's White Day!"
+
+msgid "깔끔하게요~"
+msgstr "Keeping it neat~"
+
+msgid "CPU가 너무 바빠요! 좀 쉬게 해줘요!"
+msgstr "CPU is too busy! Give it a rest!"
+
+msgid "밤이 깊었어요"
+msgstr "The night is deep"
+
+msgid "CPU가 힘들어하고 있어요!"
+msgstr "CPU is struggling!"
+
+msgid "생일을 입력하세요 (MM-DD 형식, 예: 03-15):"
+msgstr "Enter your birthday (MM-DD format, e.g. 03-15):"
+
+msgid "재미있겠다~"
+msgstr "Looks fun~"
+
+msgid "오늘 생일이세요?! 축하해요!!"
+msgstr "Is today your birthday?! Congratulations!!"
+
+msgid "배터리가 얼마 없어요!"
+msgstr "Battery is running low!"
+
+msgid "현충일이에요. 감사한 마음 가져요."
+msgstr "It's Memorial Day. Let's be grateful."
+
+msgid "어버이날이에요. 부모님께 연락해보세요 :)"
+msgstr "It's Parents' Day. Contact your parents :)"
+
+msgid "방전되면 안 돼요!"
+msgstr "Can't let it die!"
+
+msgid "최근 말풍선 기록 (최대 50개)"
+msgstr "Recent records (up to 50)"
+
+msgid "하암~... 졸려요."
+msgstr "Yawn~... I'm sleepy."
+
+msgid "왜~?"
+msgstr "Why~?"
+
+msgid "맛있게 드세요!"
+msgstr "Enjoy your meal!"
+
+msgid "응?"
+msgstr "Hmm?"
+
+msgid "메리 크리스마스!"
+msgstr "Merry Christmas!"
+
+msgid "메모리가 꽉 찼어요..."
+msgstr "Memory is full..."
+
+msgid "램이 부족해요!"
+msgstr "RAM is low!"
+
+msgid "푹 쉬세요!"
+msgstr "Get some good rest!"
+
+msgid "빨리 주무세요..."
+msgstr "Please get some rest soon..."
+
+msgid "말풍선 히스토리"
+msgstr "Speech History"
+
+msgid "파이팅이에요!"
+msgstr "You can do it!"
+
+msgid "왜요?"
+msgstr "What's up?"
+
+msgid "지인"
+msgstr "Acquaintance"
+
+msgid "이제 쉬세요~"
+msgstr "Please rest now~"
+
+msgid "올해도 잘 부탁해요~"
+msgstr "Looking forward to this year~"
+
+msgid "즐거운 성탄절 되세요!"
+msgstr "Have a joyful Christmas!"
+
+msgid "생일 등록"
+msgstr "Birthday Registration"
+
+msgid "창을 좀 닫아주세요~"
+msgstr "Please close some windows~"
+
+msgid "저도 어린이예요 헤헤"
+msgstr "I'm a child too hehe"
+
+msgid "컴퓨터가 뜨거워요!"
+msgstr "The computer is hot!"
+
+msgid "화이팅!"
+msgstr "Keep it up!"
+
+msgid "으스스~ 할로윈이에요!"
+msgstr "Spooky~ It's Halloween!"
+
+msgid "하암... 밤이 깊었어요."
+msgstr "Yawn... The night is deep."
+
+msgid "뭐예요?"
+msgstr "What is it?"
+
+msgid "저한테 사탕 주실 건가요?"
+msgstr "Will you give me candy?"
+
+msgid "충전기 꽂아주세요~"
+msgstr "Please plug in the charger~"
+
+msgid "간지러워요!"
+msgstr "That tickles!"
+
+msgid "힘내세요!"
+msgstr "Hang in there!"
+
+msgid "앞으로 잘 부탁드려요!"
+msgstr "Nice to meet you!"
+
+msgid "누구랑 얘기 중이에요?"
+msgstr "Who are you talking to?"
+
+msgid "헤헤, 생일 축하드려요! 좋은 하루 되세요!"
+msgstr "Hehe, happy birthday! Have a great day!"
+
+msgid "잘 주무셨어요?"
+msgstr "Did you sleep well?"
+
+msgid "많이 친해졌어요!"
+msgstr "We've gotten really close!"
+
+msgid "오늘은 발렌타인데이예요~"
+msgstr "Today is Valentine's Day~"
+
+msgid "광복절이에요! 대한민국 만세~"
+msgstr "It's Liberation Day! Hooray for Korea~"
+
+msgid "열심히 코딩 중~"
+msgstr "Coding hard~"
+
+msgid "이기세요!"
+msgstr "Win it!"
+
+msgid "인터넷 서핑 중~"
+msgstr "Surfing the web~"
+
+msgid "네, 주인님?"
+msgstr "Yes, Master?"
+
+msgid "열심히 하시네요."
+msgstr "Working hard."
+
+msgid "🎂 생일 등록"
+msgstr "🎂 Register Birthday"
+
+msgid "💻 시스템 모니터"
+msgstr "💻 System Monitor"
+
+msgid "기분 좋다~"
+msgstr "That feels good~"
+
+msgid "뭐 찾고 계세요?"
+msgstr "Looking for something?"
+
+msgid "오후네요~"
+msgstr "It's afternoon~"
+
+msgid "또 해줘요~"
+msgstr "Do it again~"
+
+msgid "생일이에요! 케이크 드세요~"
+msgstr "It's your birthday! Have some cake~"
+
+msgid "과부하예요, 조심해요!"
+msgstr "Overloaded, be careful!"
+
+msgid "하루 어떠셨어요?"
+msgstr "How was your day?"
+
+msgid "뭐 보세요?"
+msgstr "What are you watching?"
+
+msgid "업무 중이시군요."
+msgstr "You're working."
+
+msgid "커스텀 메시지 관리"
+msgstr "Custom Message Management"
+
+msgid "이제 편하게 얘기해요~"
+msgstr "Let's talk comfortably now~"
+
+msgid "프로그램이 너무 많아요~"
+msgstr "Too many programs running~"
+
+msgid "생일 축하해요~ 오늘 주인공은 당신이에요!"
+msgstr "Happy birthday~ Today's star is you!"
+
+msgid "졸려요... 같이 쉬어요."
+msgstr "Sleepy... let's rest together."
+
+msgid "초콜릿... 드릴게요 헤헤"
+msgstr "Chocolate... I'll give you some hehe"
+
+msgid "등록된 메시지 목록"
+msgstr "Registered message list"
+
+msgid "한글날이에요. 한글은 정말 멋져요!"
+msgstr "It's Hangul Day. Hangul is truly amazing!"
+
+msgid "아침이네요!"
+msgstr "It's morning!"
+
+msgid "절친"
+msgstr "Best Friend"
+
+msgid "새 메시지 입력..."
+msgstr "Enter new message..."
+
+msgid "생일 등록 완료! {date}"
+msgstr "Birthday registered! {date}"
+
+msgid "네?"
+msgstr "Yes?"
+
+msgid "게임 하세요? 저도 보고 싶어요!"
+msgstr "Playing games? I want to watch!"
+
+msgid "좋은 아침이에요!"
+msgstr "Good morning!"
+
+msgid "사교적이시네요~"
+msgstr "You're so sociable~"
+
+msgid "배터리가 {pct}%예요!"
+msgstr "Battery is {pct}%!"
+
+msgid "쓰다듬지 마세요... (좋아요)"
+msgstr "Stop petting me... (I like it)"
+
+msgid "파일 정리 중이세요?"
+msgstr "Organizing files?"
+
+msgid "어린이날이에요!"
+msgstr "It's Children's Day!"
+
+msgid "꾸벅..."
+msgstr "Nodding off..."
+
+msgid "충전 빨리요!!"
+msgstr "Charge it quickly!!"
+
+msgid "...자고 있었는데."
+msgstr "...I was sleeping."
+
+msgid "저도 보고 싶어요!"
+msgstr "I want to watch too!"
+
+msgid "절친이에요!! 헤헤"
+msgstr "We're best friends!! Hehe"
+
+msgid "꺼지기 전에 충전해요!"
+msgstr "Charge before it dies!"
+
+msgid "친한친구"
+msgstr "Close Friend"
+
+msgid "나무 심어요~"
+msgstr "Let's plant trees~"
+
+msgid "점심 시간이에요!"
+msgstr "It's lunchtime!"
+
+msgid "하아암... 주무세요, 주인님~"
+msgstr "Yaaawn... Please rest, Master~"
+
+msgid "이제 그만 자요~"
+msgstr "Time to sleep now~"
+
+msgid "흐응~ 좋아요..."
+msgstr "Mmm~ That's nice..."
+
+msgid "조금 친해진 것 같아요~"
+msgstr "We're getting closer~"
+
+msgid "📜 최근 말풍선 히스토리"
+msgstr "📜 Recent Speech History"
+
+msgid "지금 당장 뭔가 닫아야 해요!"
+msgstr "You need to close something right now!"
+
+msgid "메모리가 위험해요!"
+msgstr "Memory is in danger!"
+
+msgid "선물 기대돼요~"
+msgstr "Looking forward to presents~"
+
+msgid "잠깐 쉬어도 될까요..."
+msgstr "Can I rest for a moment..."
+
+msgid "으으... 눈이 감겨요."
+msgstr "Ugh... my eyes are closing."
+
+msgid "이제 친구네요!"
+msgstr "We're friends now!"
+
+msgid "으... 쑥스러워요."
+msgstr "Ugh... I'm embarrassed."
+
+msgid "집중하고 계시는군요!"
+msgstr "You're focused!"
+
+msgid "같이 있으니 좋아요 :)"
+msgstr "I'm glad to be with you :)"
+
+msgid "🖥️ 앱 전환 반응"
+msgstr "🖥️ App Switch Reactions"
+
+msgid "✏️ 커스텀 메시지 관리"
+msgstr "✏️ Manage Custom Messages"
+
+msgid "왜ㅋ"
+msgstr "Why lol"
+
+msgid "오늘은 식목일이에요!"
+msgstr "Today is Arbor Day!"
+
+msgid "응?ㅋ"
+msgstr "Hmm? lol"
+
+msgid "내일은 크리스마스예요!"
+msgstr "Tomorrow is Christmas!"
 

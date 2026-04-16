@@ -1,8 +1,10 @@
 """
 Shimeji 스타일 캐릭터 위젯 (최적화 버전)
 """
+import json
 import os
 import secrets
+import threading
 import time
 import sys
 import logging
@@ -50,6 +52,48 @@ def _sync_walk_animation_end_value(
         QRect(end_value.x(), int(ground_y), end_value.width(), end_value.height())
     )
     return int(ground_y)
+
+
+def _append_bubble_history(text: str) -> None:
+    from core.resource_manager import ResourceManager
+    from datetime import datetime
+
+    path = ResourceManager.get_writable_path("bubble_history.json")
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        else:
+            data = {"history": []}
+        history = data.setdefault("history", [])
+        history.insert(
+            0,
+            {
+                "text": str(text),
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
+        data["history"] = history[:50]
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        logging.debug("히스토리 저장 실패: %s", exc)
+
+
+def _load_random_custom_message() -> str:
+    from core.resource_manager import ResourceManager
+
+    path = ResourceManager.get_writable_path("custom_messages.json")
+    if not os.path.exists(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        messages = data.get("messages", [])
+        return secrets.SystemRandom().choice(messages) if messages else ""
+    except Exception as exc:
+        logging.debug("커스텀 메시지 로드 실패: %s", exc)
+        return ""
 
 
 class LRUCache:
@@ -136,6 +180,10 @@ class CharacterWidget(QWidget):
         self.mouse_tracker.timeout.connect(self.track_mouse)
         self.mouse_tracker.start(100)
         self.mouse_tracking_enabled = False
+        self._pet_hover_duration: float = 0.0
+        self._prev_cursor_pos: QPoint = QPoint()
+        self._pet_cooldown: float = 0.0
+        self._is_being_petted: bool = False
 
         # 말풍선
         self.speech_bubble = None
@@ -160,6 +208,13 @@ class CharacterWidget(QWidget):
         self.greeting_timer = QTimer(self)
         self.greeting_timer.timeout.connect(self.time_based_greeting)
         self.greeting_timer.start(GREETING_INTERVAL)
+        self._sleepy_mode: bool = False
+        self._sleepy_check_timer = QTimer(self)
+        self._sleepy_check_timer.timeout.connect(self._update_sleepy_mode)
+        self._sleepy_check_timer.start(60_000)
+        self._yawn_timer = QTimer(self)
+        self._yawn_timer.setSingleShot(True)
+        self._yawn_timer.timeout.connect(self._do_yawn)
 
         # 윈도우 설정
         self.setWindowFlags(
@@ -201,6 +256,7 @@ class CharacterWidget(QWidget):
         # 화면 하단으로 이동
         self.move_to_bottom()
         self.show()
+        self._update_sleepy_mode()
 
         # Windows에서 HWND_TOPMOST 강제 적용
         if sys.platform == 'win32':
@@ -222,7 +278,7 @@ class CharacterWidget(QWidget):
             if not _is_thinking_bubble_text(current_text):
                 self.say("생각 중...", duration=0)
         else:
-            self.animation_timer.setInterval(70)
+            self.animation_timer.setInterval(110 if self._sleepy_mode else 70)
             current_text = self.speech_bubble.text if self.speech_bubble else ""
             if _is_thinking_bubble_text(current_text):
                 self._hide_speech_bubble_slot()
@@ -515,6 +571,79 @@ class CharacterWidget(QWidget):
         interval = _RNG.randint(3000, 10000)  # 3~10초
         self.behavior_timer.start(interval)
 
+    def _update_sleepy_mode(self):
+        from datetime import datetime
+
+        hour = datetime.now().hour
+        should_be_sleepy = hour >= 22 or hour < 6
+        if should_be_sleepy == self._sleepy_mode:
+            return
+        self._sleepy_mode = should_be_sleepy
+        if should_be_sleepy:
+            if not self.is_thinking:
+                self.animation_timer.setInterval(110)
+            self._schedule_yawn()
+        else:
+            if not self.is_thinking:
+                self.animation_timer.setInterval(70)
+            self._yawn_timer.stop()
+
+    def _schedule_yawn(self):
+        if not self._sleepy_mode:
+            return
+        delay_ms = _RNG.randint(3 * 60_000, 8 * 60_000)
+        self._yawn_timer.start(delay_ms)
+
+    def _do_yawn(self):
+        from i18n.translator import _
+
+        if not self._sleepy_mode or self.dragging or self.is_climbing:
+            return
+        yawn_messages = [
+            _("하암~... 졸려요."),
+            _("으으... 눈이 감겨요."),
+            _("꾸벅..."),
+            _("잠깐 쉬어도 될까요..."),
+            _("하아암... 주무세요, 주인님~"),
+        ]
+        self.say(_RNG.choice(yawn_messages), duration=3000)
+        self.set_animation("sleep")
+        recover_ms = _RNG.randint(5000, 15000)
+        QTimer.singleShot(
+            recover_ms,
+            lambda: self.set_animation("idle") if not self.dragging else None,
+        )
+        self._schedule_yawn()
+
+    def _trigger_pet(self):
+        from i18n.translator import _
+
+        if self._pet_cooldown > 0 or self.dragging:
+            return
+
+        self._is_being_petted = True
+        self._pet_cooldown = 3.0
+
+        self.set_emotion(_RNG.choice(["수줍", "기쁨"]))
+        pet_messages = [
+            _("흐응~ 좋아요..."),
+            _("헤헤, 간지러워요~"),
+            _("기분 좋다~"),
+            _("쓰다듬지 마세요... (좋아요)"),
+            _("으... 쑥스러워요."),
+            _("또 해줘요~"),
+        ]
+        # pet 반응은 original_say로 chat 포인트 중복 방지
+        _say = getattr(self, "_affinity_original_say", self.say)
+        _say(_RNG.choice(pet_messages), duration=3000)
+
+        affinity_mgr = getattr(self, "_affinity_manager", None)
+        if affinity_mgr:
+            leveled_up = affinity_mgr.add_points(3, "pet")
+            on_level_up = getattr(self, "_affinity_on_level_up", None)
+            if leveled_up and callable(on_level_up):
+                on_level_up()
+
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
         # 이미 다른 작업을 수행 중이면 타이머를 재시작하지 않고 리턴.
@@ -532,6 +661,22 @@ class CharacterWidget(QWidget):
         if (at_left_edge or at_right_edge) and _RNG.random() < 0.3:
             self.climbing_direction = -1 if at_left_edge else 1
             self.smooth_climb()
+            return
+
+        if self._sleepy_mode:
+            rand = _RNG.random()
+            if rand < 0.5:
+                behavior = "sleep"
+            elif rand < 0.8:
+                behavior = "sit"
+            else:
+                behavior = "idle"
+            self.set_animation(behavior)
+            if behavior in ("idle", "sit") and _RNG.random() < 0.2:
+                message = _load_random_custom_message()
+                if message:
+                    self.say(message, duration=4000)
+            self.start_behavior_timer()
             return
 
         # 행동 선택 (확률 기반)
@@ -555,6 +700,10 @@ class CharacterWidget(QWidget):
         elif behavior == "ceiling":
             self.smooth_ceiling()
         else:
+            if behavior in ("idle", "sit") and _RNG.random() < 0.2:
+                message = _load_random_custom_message()
+                if message:
+                    self.say(message, duration=4000)
             # idle, sit, sleep 등은 다음 타이머까지 대기
             self.start_behavior_timer()
 
@@ -696,13 +845,37 @@ class CharacterWidget(QWidget):
     def mousePressEvent(self, event):
         """마우스 클릭"""
         if event.button() == Qt.LeftButton:
+            affinity_mgr = getattr(self, "_affinity_manager", None)
+            on_level_up = getattr(self, "_affinity_on_level_up", None)
+            if affinity_mgr:
+                leveled_up = affinity_mgr.add_points(1, "click")
+                if leveled_up and callable(on_level_up):
+                    on_level_up()
+
             # 더블클릭 감지
             if not hasattr(self, '_last_click'):
                 self._last_click = 0
             now = time.time()
             if now - self._last_click < 0.3:
-                reactions = ["왜요?", "뭐예요?", "네?", "간지러워요!", "헤헤"]
-                self.say(_RNG.choice(reactions), duration=2000)
+                from i18n.translator import _
+
+                if affinity_mgr:
+                    reaction = affinity_mgr.get_greeting()
+                    # 더블클릭 추가 +1 → 두 번의 클릭 이벤트 합계 +2
+                    affinity_mgr.add_points(1, "click")
+                    # monkey-patch된 say 대신 original_say로 chat 포인트 중복 방지
+                    _say = getattr(self, "_affinity_original_say", self.say)
+                else:
+                    reactions = [
+                        _("왜요?"),
+                        _("뭐예요?"),
+                        _("네?"),
+                        _("간지러워요!"),
+                        _("헤헤"),
+                    ]
+                    reaction = _RNG.choice(reactions)
+                    _say = self.say
+                _say(reaction, duration=2000)
                 self.set_animation("surprised")
                 QTimer.singleShot(1000, lambda: self.set_animation("idle"))
                 self._last_click = 0
@@ -1022,16 +1195,45 @@ class CharacterWidget(QWidget):
             if abs(self.velocity_x) < 0.5:
                 self.velocity_x = 0
 
+        if self._pet_cooldown > 0:
+            self._pet_cooldown -= 0.033
+            if self._pet_cooldown <= 0:
+                self._pet_cooldown = 0.0
+                self._is_being_petted = False
+
         # 말풍선 위치 업데이트
         if moved and self.speech_bubble:
             self.speech_bubble.update_position()
 
     def track_mouse(self):
         """마우스 반응 — 거리에 따라 호기심/도망 행동"""
-        if not self.mouse_tracking_enabled or self.dragging or self.is_climbing:
+        if self.dragging or self.is_climbing:
             return
 
         cursor_pos = QCursor.pos()
+        char_rect = self.geometry()
+
+        if char_rect.contains(cursor_pos):
+            dx = cursor_pos.x() - self._prev_cursor_pos.x()
+            dy = cursor_pos.y() - self._prev_cursor_pos.y()
+            speed = ((dx * dx + dy * dy) ** 0.5) / 0.1 if self._prev_cursor_pos != QPoint() else 0.0
+
+            if speed < 30:
+                self._pet_hover_duration += 0.1
+                if self._pet_hover_duration >= 1.5 and self._pet_cooldown <= 0:
+                    self._trigger_pet()
+                    self._pet_hover_duration = 0.0
+            else:
+                self._pet_hover_duration = 0.0
+
+            self._prev_cursor_pos = cursor_pos
+            return
+
+        self._pet_hover_duration = 0.0
+        self._prev_cursor_pos = cursor_pos
+        if not self.mouse_tracking_enabled:
+            return
+
         char_center = self.geometry().center()
 
         dx = cursor_pos.x() - char_center.x()
@@ -1130,6 +1332,13 @@ class CharacterWidget(QWidget):
             self.bubble_hide_timer.start(60000)
             logging.debug("말풍선 대기 모드 (60초 안전장치 작동)")
 
+        threading.Thread(
+            target=_append_bubble_history,
+            args=(text,),
+            daemon=True,
+            name="ari-bubble-hist",
+        ).start()
+
     def hide_speech_bubble(self):
         """말풍선 숨기기 (외부에서 호출)"""
         self.hide_speech_bubble_signal.emit()
@@ -1147,15 +1356,17 @@ class CharacterWidget(QWidget):
     def time_based_greeting(self):
         """시간대별 인사"""
         from datetime import datetime
+        from i18n.translator import _
+
         hour = datetime.now().hour
 
         greetings = {
-            (6, 11): ["좋은 아침이에요!", "잘 주무셨어요?", "아침이네요!"],
-            (12, 13): ["점심 시간이에요!", "맛있게 드세요!"],
-            (14, 17): ["오후네요~", "힘내세요!"],
-            (18, 21): ["저녁 시간이에요", "하루 어떠셨어요?"],
-            (22, 23): ["밤이 깊었어요", "이제 쉬세요~"],
-            (0, 5): ["늦은 시간이네요", "푹 쉬세요!"]
+            (6, 11): [_("좋은 아침이에요!"), _("잘 주무셨어요?"), _("아침이네요!")],
+            (12, 13): [_("점심 시간이에요!"), _("맛있게 드세요!")],
+            (14, 17): [_("오후네요~"), _("힘내세요!")],
+            (18, 21): [_("저녁 시간이에요"), _("하루 어떠셨어요?")],
+            (22, 23): [_("하암... 밤이 깊었어요."), _("졸려요... 같이 쉬어요."), _("이제 그만 자요~")],
+            (0, 5): [_("꾸벅..."), _("...자고 있었는데."), _("빨리 주무세요...")],
         }
 
         for (start, end), messages in greetings.items():
@@ -1178,6 +1389,10 @@ class CharacterWidget(QWidget):
             self.mouse_tracker.stop()
         if hasattr(self, 'greeting_timer'):
             self.greeting_timer.stop()
+        if hasattr(self, "_sleepy_check_timer"):
+            self._sleepy_check_timer.stop()
+        if hasattr(self, "_yawn_timer"):
+            self._yawn_timer.stop()
         if hasattr(self, 'bubble_hide_timer'):
             self.bubble_hide_timer.stop()
         if self.speech_bubble:
