@@ -10,7 +10,7 @@ from typing import Optional
 
 PLUGIN_INFO = {
     "name": "affinity_plugin",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "api_version": "1.0",
     "description": "사용자와의 상호작용을 추적하여 친밀도 레벨을 관리한다",
 }
@@ -19,6 +19,8 @@ LEVEL_THRESHOLDS = [0, 50, 200, 500, 1000]
 _RNG = secrets.SystemRandom()
 _widget_ref = None
 _affinity_manager: Optional["AffinityManager"] = None
+# GC 방지: 오버레이 위젯을 모듈 레벨에서 참조 유지
+_active_overlay = None
 
 
 def _get_widget():
@@ -55,7 +57,7 @@ def _get_greeting_by_level():
 
 
 class AffinityManager:
-    _SAVE_DEBOUNCE_SEC = 30.0  # 마지막 변경 후 30초 뒤 한 번만 저장
+    _SAVE_DEBOUNCE_SEC = 30.0
 
     def __init__(self):
         self._save_timer: Optional[threading.Timer] = None
@@ -89,7 +91,6 @@ class AffinityManager:
         ConfigManager.save_settings(settings)
 
     def _schedule_save(self) -> None:
-        """마지막 add_points 호출 후 30초 뒤에 한 번만 디스크에 저장한다."""
         if self._save_timer is not None:
             self._save_timer.cancel()
         t = threading.Timer(self._SAVE_DEBOUNCE_SEC, self._save)
@@ -116,9 +117,9 @@ class AffinityManager:
         self.level = self._calculate_level()
         leveled_up = self.level > old_level
         if leveled_up:
-            self._save()  # 레벨업 시 즉시 저장
+            self._save()
         else:
-            self._schedule_save()  # 일반 상호작용은 디바운스 저장
+            self._schedule_save()
         return leveled_up
 
     def get_level(self) -> int:
@@ -144,7 +145,13 @@ class AffinityManager:
         if self.last_login == today:
             return False
         self.last_login = today
-        return self.add_points(10, "login")
+        leveled_up = self.add_points(10, "login")
+        if not leveled_up:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+            self._save()
+        return leveled_up
 
 
 def _call_original_say(widget, text: str, duration: int = 5000) -> None:
@@ -164,35 +171,325 @@ def _notify_level_up() -> None:
     if not message:
         return
 
-    def _delayed_bubble():
+    def _delayed_feedback():
         time.sleep(0.8)
         try:
-            _call_original_say(widget, message, 3000)
+            _call_original_say(widget, message, 3500)
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(500, _on_show_affinity)
         except Exception as exc:
-            logging.debug("[AffinityPlugin] 레벨업 말풍선 표시 실패: %s", exc)
+            logging.debug("[AffinityPlugin] 레벨업 알림 표시 실패: %s", exc)
 
     threading.Thread(
-        target=_delayed_bubble,
+        target=_delayed_feedback,
         daemon=True,
         name="ari-affinity-level-up",
     ).start()
 
-def _on_show_affinity():
+
+def _enforce_overlay_topmost(overlay) -> None:
+    """Qt 레벨에서 오버레이를 재상단으로 올린다."""
+    if overlay is None:
+        return
+    try:
+        overlay.show()
+        overlay.raise_()
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] 오버레이 최상위 설정 실패: %s", exc)
+
+
+def _dispose_overlay(overlay) -> None:
+    if overlay is None:
+        return
+    for attr in ("_anim_bar", "_anim_out", "_follow_timer"):
+        candidate = getattr(overlay, attr, None)
+        if candidate is None:
+            continue
+        try:
+            candidate.stop()
+        except Exception:
+            pass
+    try:
+        overlay.close()
+    except Exception:
+        pass
+    try:
+        overlay.deleteLater()
+    except Exception:
+        pass
+
+
+def _schedule_overlay_reassertion(overlay, *, attempts: int = 6, interval_ms: int = 80) -> None:
+    if overlay is None or attempts <= 0:
+        return
+
+    from PySide6.QtCore import QTimer
+
+    def _reapply(remaining: int) -> None:
+        if _active_overlay is not overlay:
+            return
+        try:
+            overlay.raise_()
+            _enforce_overlay_topmost(overlay)
+        except Exception as exc:
+            logging.debug("[AffinityPlugin] 오버레이 최상위 재적용 실패: %s", exc)
+        if remaining > 1:
+            QTimer.singleShot(interval_ms, lambda: _reapply(remaining - 1))
+
+    QTimer.singleShot(interval_ms, lambda: _reapply(attempts))
+
+
+def _get_widget_screen(widget):
+    from PySide6.QtWidgets import QApplication
+
+    if widget is None:
+        return QApplication.primaryScreen()
+
+    try:
+        center_global = widget.mapToGlobal(widget.rect().center())
+        screen = QApplication.screenAt(center_global)
+        if screen is not None:
+            return screen
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] screenAt 조회 실패: %s", exc)
+
+    current_screen = getattr(widget, "_current_screen", None)
+    if current_screen is not None:
+        return current_screen
+
+    try:
+        widget_screen = getattr(widget, "screen", None)
+        if callable(widget_screen):
+            screen = widget_screen()
+            if screen is not None:
+                return screen
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] widget.screen 조회 실패: %s", exc)
+
+    try:
+        window_handle_fn = getattr(widget, "windowHandle", None)
+        if callable(window_handle_fn):
+            window_handle = window_handle_fn()
+            screen_fn = getattr(window_handle, "screen", None)
+            if callable(screen_fn):
+                screen = screen_fn()
+                if screen is not None:
+                    return screen
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] windowHandle.screen 조회 실패: %s", exc)
+
+    return QApplication.primaryScreen()
+
+
+def _calculate_overlay_position(widget, overlay) -> tuple[int, int]:
+    from PySide6.QtWidgets import QApplication
+
+    origin = widget.mapToGlobal(widget.rect().topLeft())
+    wx, wy, ww = origin.x(), origin.y(), widget.width()
+    ow, oh = overlay.width(), overlay.height()
+    ox = wx + (ww - ow) // 2
+    oy = wy - oh - 14
+
+    screen = _get_widget_screen(widget)
+    if screen:
+        sg = screen.availableGeometry()
+        ox = max(sg.left() + 4, min(ox, sg.right() - ow - 4))
+        oy = max(sg.top() + 4, min(oy, sg.bottom() - oh - 4))
+    else:
+        screen = QApplication.primaryScreen()
+        if screen:
+            sg = screen.availableGeometry()
+            ox = max(sg.left() + 4, min(ox, sg.right() - ow - 4))
+            oy = max(sg.top() + 4, min(oy, sg.bottom() - oh - 4))
+
+    return ox, oy
+
+
+def _sync_overlay_position(overlay, widget) -> None:
+    if overlay is None or widget is None:
+        return
+    try:
+        ox, oy = _calculate_overlay_position(widget, overlay)
+        if overlay.x() != ox or overlay.y() != oy:
+            overlay.move(ox, oy)
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] 오버레이 위치 갱신 실패: %s", exc)
+
+
+def _show_affinity_overlay(widget, level: int, level_name: str, points: int, next_threshold: int) -> None:
+    """캐릭터 위에 친밀도 게이지를 표시한다 (메인 스레드에서 호출)."""
+    global _active_overlay
+
+    from PySide6.QtWidgets import (
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar,
+    )
+    from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+    from PySide6.QtGui import QFont, QPainter, QColor, QPainterPath, QLinearGradient
     from i18n.translator import _
+
+    # ── 기존 오버레이 닫기 ────────────────────────────────────────────────
+    if _active_overlay is not None:
+        try:
+            _dispose_overlay(_active_overlay)
+        except Exception:
+            pass
+        _active_overlay = None
+
+    # ── 오버레이 위젯 ────────────────────────────────────────────────────
+    class AffinityGauge(QWidget):
+        def __init__(self):
+            super().__init__(None)
+            # BypassWindowManagerHint 제거 — Windows에서 이 플래그는
+            # 창 관리자가 Z-order를 무시하게 만들어 show 후 즉시 가려지는 원인
+            self.setWindowFlags(
+                Qt.FramelessWindowHint
+                | Qt.WindowStaysOnTopHint
+                | Qt.Tool
+                | Qt.WindowDoesNotAcceptFocus
+            )
+            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setAttribute(Qt.WA_ShowWithoutActivating)
+            self.setFixedWidth(240)
+
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(18, 14, 18, 14)
+            layout.setSpacing(10)
+
+            # ── 헤더 ─────────────────────────────────────────
+            header = QHBoxLayout()
+            header.setSpacing(8)
+
+            heart = QLabel("♥")
+            heart.setStyleSheet(
+                "color: #ff5e7e; font-size: 20pt; font-weight: bold; background: transparent;"
+            )
+            header.addWidget(heart)
+
+            info = QVBoxLayout()
+            info.setSpacing(2)
+
+            title = QLabel(_("친밀도 · Lv.{level} {level_name}", level=level, level_name=level_name))
+            fnt = QFont()
+            fnt.setPointSize(12)
+            fnt.setBold(True)
+            title.setFont(fnt)
+            title.setStyleSheet("color: #ffffff; background: transparent;")
+            info.addWidget(title)
+
+            max_val = str(next_threshold) if next_threshold > 0 else _("최대")
+            pts = QLabel(_("{points} / {max_val} 포인트", points=points, max_val=max_val))
+            pts.setStyleSheet("color: #d1c4e9; font-size: 9pt; background: transparent;")
+            info.addWidget(pts)
+
+            header.addLayout(info)
+            header.addStretch()
+            layout.addLayout(header)
+
+            # ── 게이지 바 ────────────────────────────────────
+            self.bar = QProgressBar()
+            bar_max = next_threshold if next_threshold > 0 else max(1, points)
+            self.bar.setRange(0, bar_max)
+            self.bar.setValue(0)
+            self.bar.setTextVisible(False)
+            self.bar.setFixedHeight(12)
+            self.bar.setStyleSheet("""
+                QProgressBar {
+                    background: rgba(255,255,255,30);
+                    border-radius: 6px;
+                    border: none;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #ff758c, stop:1 #ff7eb3
+                    );
+                    border-radius: 6px;
+                }
+            """)
+            layout.addWidget(self.bar)
+
+        def paintEvent(self, _event):
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            path = QPainterPath()
+            path.addRoundedRect(0.0, 0.0, float(self.width()), float(self.height()), 14.0, 14.0)
+            grad = QLinearGradient(0, 0, 0, self.height())
+            grad.setColorAt(0, QColor(50, 20, 75, 245))
+            grad.setColorAt(1, QColor(25, 12, 40, 252))
+            p.fillPath(path, grad)
+            p.setPen(QColor(255, 120, 180, 60))
+            p.drawPath(path)
+
+    # ── 생성 + 레이아웃 강제 계산 ───────────────────────────────────────
+    overlay = AffinityGauge()
+    _active_overlay = overlay
+
+    # layout().activate() 없이 sizeHint()를 호출하면 -1 반환 → 크기 0
+    overlay.layout().activate()
+    overlay.adjustSize()
+
+    overlay.setWindowOpacity(1.0)
+    _sync_overlay_position(overlay, widget)
+    overlay.show()
+    overlay.raise_()
+    _enforce_overlay_topmost(overlay)
+    _schedule_overlay_reassertion(overlay)
+
+    overlay._follow_timer = QTimer(overlay)
+    overlay._follow_timer.timeout.connect(lambda: _sync_overlay_position(overlay, widget))
+    overlay._follow_timer.start(50)
+
+    # ── 게이지 바 채우기 애니메이션 ──────────────────────────────────────
+    target_val = min(points, next_threshold) if next_threshold > 0 else points
+    overlay._anim_bar = QPropertyAnimation(overlay.bar, b"value")
+    overlay._anim_bar.setDuration(1200)
+    overlay._anim_bar.setStartValue(0)
+    overlay._anim_bar.setEndValue(max(0, target_val))
+    overlay._anim_bar.setEasingCurve(QEasingCurve.OutQuart)
+    overlay._anim_bar.start()
+
+    # ── 5초 후 페이드아웃 (setWindowOpacity) ─────────────────────────────
+    def _start_fade_out():
+        global _active_overlay
+        if _active_overlay is None:
+            return
+        overlay_ref = _active_overlay
+        overlay_ref._anim_out = QPropertyAnimation(overlay_ref, b"windowOpacity")
+        overlay_ref._anim_out.setDuration(600)
+        overlay_ref._anim_out.setStartValue(1.0)
+        overlay_ref._anim_out.setEndValue(0.0)
+
+        def _cleanup():
+            global _active_overlay
+            if _active_overlay is overlay_ref:
+                _dispose_overlay(overlay_ref)
+                _active_overlay = None
+
+        overlay_ref._anim_out.finished.connect(_cleanup)
+        overlay_ref._anim_out.start()
+
+    QTimer.singleShot(5000, _start_fade_out)
+    ox, oy = overlay.x(), overlay.y()
+    logging.info("[AffinityPlugin] 오버레이 표시: Lv.%d %s, %dpt (pos=%d,%d)", level, level_name, points, ox, oy)
+
+
+def _on_show_affinity():
+    """메뉴에서 '💝 친밀도 확인' 클릭 시 호출."""
+    from PySide6.QtCore import QTimer
 
     widget = _get_widget()
     if not widget or not _affinity_manager:
+        logging.warning("[AffinityPlugin] _on_show_affinity: widget=%s, manager=%s", widget, _affinity_manager)
         return
 
     level = _affinity_manager.get_level()
     level_name = _affinity_manager.get_level_name()
     points = _affinity_manager.points
-    _call_original_say(
-        widget,
-        _("현재 친밀도: {level_name} (Lv.{level}) — {points}pt",
-          level_name=level_name, level=level, points=points),
-        4000,
-    )
+    next_idx = level + 1
+    next_threshold = LEVEL_THRESHOLDS[next_idx] if next_idx < len(LEVEL_THRESHOLDS) else 0
+
+    # 메뉴가 완전히 닫힌 후 표시 — 메뉴 닫힘 이벤트가 Z-order를 덮어쓰지 않도록
+    QTimer.singleShot(80, lambda: _show_affinity_overlay(widget, level, level_name, points, next_threshold))
 
 
 def register(context):
@@ -212,7 +509,7 @@ def register(context):
     if callable(getattr(context, "register_menu_action", None)):
         context.register_menu_action(_("💝 친밀도 확인"), _on_show_affinity)
 
-    logging.info("[AffinityPlugin] 로드 완료")
+    logging.info("[AffinityPlugin] 로드 완료 (포인트=%d, 레벨=%d)", _affinity_manager.points, _affinity_manager.level)
     return {
         "message": "affinity_plugin loaded",
         "has_widget": _widget_ref is not None,

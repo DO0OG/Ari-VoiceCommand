@@ -6,6 +6,8 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
+from PySide6.QtCore import QPoint, QRect
+
 from plugins import affinity_plugin, bubble_history_plugin, focus_app_plugin, special_date_plugin, system_monitor_plugin
 
 
@@ -19,6 +21,55 @@ class _FakeWidget:
 
     def set_emotion(self, emotion):
         self.emotions.append(emotion)
+
+
+class _FakeOverlayWidget(_FakeWidget):
+    def __init__(self, origin: QPoint, *, size: tuple[int, int] = (120, 180), current_screen=None):
+        super().__init__()
+        self._origin = origin
+        self._rect = QRect(0, 0, size[0], size[1])
+        self._current_screen = current_screen
+
+    def rect(self):
+        return QRect(self._rect)
+
+    def width(self):
+        return self._rect.width()
+
+    def mapToGlobal(self, point: QPoint):
+        return QPoint(self._origin.x() + point.x(), self._origin.y() + point.y())
+
+
+class _FakeScreen:
+    def __init__(self, rect: QRect):
+        self._rect = rect
+
+    def availableGeometry(self):
+        return QRect(self._rect)
+
+
+class _FakeOverlay:
+    def __init__(self, *, width: int = 240, height: int = 100):
+        self._width = width
+        self._height = height
+        self._x = 0
+        self._y = 0
+
+    def width(self):
+        return self._width
+
+    def height(self):
+        return self._height
+
+    def x(self):
+        return self._x
+
+    def y(self):
+        return self._y
+
+    def move(self, x, y):
+        self._x = x
+        self._y = y
 
 
 class WidgetFeaturePluginTests(unittest.TestCase):
@@ -105,6 +156,114 @@ class WidgetFeaturePluginTests(unittest.TestCase):
 
         self.assertIs(widget.say.__func__, original_func)
         self.assertFalse(getattr(widget, "_affinity_chat_tracking_installed", False))
+
+    def test_affinity_daily_login_persists_immediately_across_reload(self):
+        saved = {}
+
+        def _load():
+            return dict(saved)
+
+        def _save(payload):
+            saved.update(payload)
+            return True
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", side_effect=_load),
+            patch("core.config_manager.ConfigManager.save_settings", side_effect=_save),
+        ):
+            manager = affinity_plugin.AffinityManager()
+            first = manager.record_daily_login()
+            reloaded = affinity_plugin.AffinityManager()
+            second = reloaded.record_daily_login()
+
+        self.assertFalse(first)
+        self.assertFalse(second)
+        self.assertEqual(saved["affinity_last_login"], date.today().isoformat())
+        self.assertEqual(saved["affinity_points"], 10)
+
+    def test_affinity_menu_action_schedules_overlay_instead_of_bubble(self):
+        widget = _FakeWidget()
+        affinity_plugin._widget_ref = widget
+        affinity_plugin._affinity_manager = types.SimpleNamespace(
+            get_level=lambda: 2,
+            get_level_name=lambda: "친구",
+            points=220,
+        )
+
+        with (
+            patch("PySide6.QtCore.QTimer.singleShot", side_effect=lambda _ms, callback: callback()),
+            patch("plugins.affinity_plugin._show_affinity_overlay") as overlay_mock,
+        ):
+            affinity_plugin._on_show_affinity()
+
+        overlay_mock.assert_called_once_with(widget, 2, "친구", 220, 500)
+        self.assertEqual(widget.say_calls, [])
+
+    def test_system_monitor_menu_action_schedules_overlay(self):
+        widget = _FakeWidget()
+        system_monitor_plugin._widget_ref = widget
+
+        with (
+            patch("PySide6.QtCore.QTimer.singleShot", side_effect=lambda _ms, callback: callback()),
+            patch("plugins.system_monitor_plugin._show_system_overlay") as overlay_mock,
+        ):
+            system_monitor_plugin._on_show_system_monitor()
+
+        overlay_mock.assert_called_once_with(widget)
+
+    def test_affinity_overlay_uses_screen_at_character_position(self):
+        primary = object()
+        secondary = object()
+        widget = _FakeOverlayWidget(QPoint(2050, 120), current_screen=primary)
+
+        with (
+            patch("PySide6.QtWidgets.QApplication.screenAt", return_value=secondary),
+            patch("PySide6.QtWidgets.QApplication.primaryScreen", return_value=primary),
+        ):
+            screen = affinity_plugin._get_widget_screen(widget)
+
+        self.assertIs(screen, secondary)
+
+    def test_system_monitor_overlay_falls_back_to_character_current_screen(self):
+        primary = object()
+        secondary = object()
+        widget = _FakeOverlayWidget(QPoint(2050, 120), current_screen=secondary)
+
+        with (
+            patch("PySide6.QtWidgets.QApplication.screenAt", return_value=None),
+            patch("PySide6.QtWidgets.QApplication.primaryScreen", return_value=primary),
+        ):
+            screen = system_monitor_plugin._get_widget_screen(widget)
+
+        self.assertIs(screen, secondary)
+
+    def test_affinity_overlay_position_updates_when_character_moves(self):
+        widget = _FakeOverlayWidget(QPoint(100, 200))
+        overlay = _FakeOverlay(width=240, height=100)
+        screen = _FakeScreen(QRect(0, 0, 1920, 1080))
+
+        with patch("plugins.affinity_plugin._get_widget_screen", return_value=screen):
+            affinity_plugin._sync_overlay_position(overlay, widget)
+            first = (overlay.x(), overlay.y())
+            widget._origin = QPoint(450, 260)
+            affinity_plugin._sync_overlay_position(overlay, widget)
+
+        self.assertNotEqual(first, (overlay.x(), overlay.y()))
+        self.assertEqual((overlay.x(), overlay.y()), (390, 146))
+
+    def test_system_monitor_overlay_position_updates_when_character_moves(self):
+        widget = _FakeOverlayWidget(QPoint(300, 260))
+        overlay = _FakeOverlay(width=260, height=120)
+        screen = _FakeScreen(QRect(0, 0, 2560, 1440))
+
+        with patch("plugins.system_monitor_plugin._get_widget_screen", return_value=screen):
+            system_monitor_plugin._sync_overlay_position(overlay, widget)
+            first = (overlay.x(), overlay.y())
+            widget._origin = QPoint(700, 360)
+            system_monitor_plugin._sync_overlay_position(overlay, widget)
+
+        self.assertNotEqual(first, (overlay.x(), overlay.y()))
+        self.assertEqual((overlay.x(), overlay.y()), (630, 226))
 
 
 if __name__ == "__main__":
