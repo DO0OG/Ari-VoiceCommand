@@ -643,12 +643,9 @@ class CharacterWidget(QWidget):
         affinity_mgr = getattr(self, "_affinity_manager", None)
         if affinity_mgr:
             leveled_up = affinity_mgr.add_points(3, "pet")
-            on_level_up = cast(
-                Optional[Callable[[], None]],
-                getattr(self, "_affinity_on_level_up", None),
-            )
+            on_level_up = getattr(self, "_affinity_on_level_up", None)
             if leveled_up and callable(on_level_up):
-                on_level_up()
+                cast(Callable[[], None], on_level_up)()
 
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
@@ -960,7 +957,7 @@ class CharacterWidget(QWidget):
             if should_reward_click and affinity_mgr:
                 leveled_up = affinity_mgr.add_points(1, "click")
                 if leveled_up and callable(on_level_up):
-                    on_level_up()
+                    cast(Callable[[], None], on_level_up)()
 
             # 던지기 속도 계산 (계수 0.02로 약간 약화시켜 안정성 확보)
             current_time = time.time()
