@@ -207,16 +207,16 @@ def _dispose_overlay(overlay) -> None:
             continue
         try:
             candidate.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug("[AffinityPlugin] 오버레이 컴포넌트 중지 실패(%s): %s", attr, exc)
     try:
         overlay.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] 오버레이 close 실패: %s", exc)
     try:
         overlay.deleteLater()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("[AffinityPlugin] 오버레이 deleteLater 실패: %s", exc)
 
 
 def _schedule_overlay_reassertion(overlay, *, attempts: int = 6, interval_ms: int = 80) -> None:
@@ -329,10 +329,7 @@ def _show_affinity_overlay(widget, level: int, level_name: str, points: int, nex
 
     # ── 기존 오버레이 닫기 ────────────────────────────────────────────────
     if _active_overlay is not None:
-        try:
-            _dispose_overlay(_active_overlay)
-        except Exception:
-            pass
+        _dispose_overlay(_active_overlay)
         _active_overlay = None
 
     # ── 오버레이 위젯 ────────────────────────────────────────────────────
@@ -450,7 +447,6 @@ def _show_affinity_overlay(widget, level: int, level_name: str, points: int, nex
 
     # ── 5초 후 페이드아웃 (setWindowOpacity) ─────────────────────────────
     def _start_fade_out():
-        global _active_overlay
         if _active_overlay is None:
             return
         overlay_ref = _active_overlay

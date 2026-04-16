@@ -171,16 +171,16 @@ def _dispose_overlay(overlay) -> None:
             continue
         try:
             candidate.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug("[SystemMonitorPlugin] 오버레이 컴포넌트 중지 실패(%s): %s", attr, exc)
     try:
         overlay.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("[SystemMonitorPlugin] 오버레이 close 실패: %s", exc)
     try:
         overlay.deleteLater()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("[SystemMonitorPlugin] 오버레이 deleteLater 실패: %s", exc)
 
 
 def _schedule_overlay_reassertion(overlay, *, attempts: int = 6, interval_ms: int = 80) -> None:
@@ -299,8 +299,9 @@ def _show_system_overlay(widget) -> None:
     """캐릭터 위에 실시간 시스템 현황 오버레이를 표시한다."""
     global _active_overlay
 
+    psutil_module = None
     try:
-        import psutil  # noqa: F401
+        import psutil as psutil_module
     except ImportError:
         from i18n.translator import _
         if widget:
@@ -310,16 +311,13 @@ def _show_system_overlay(widget) -> None:
     from PySide6.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar,
     )
-    from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+    from PySide6.QtCore import Qt, QTimer, QPropertyAnimation
     from PySide6.QtGui import QFont, QPainter, QColor, QPainterPath, QLinearGradient
     from i18n.translator import _
 
     # ── 기존 오버레이 닫기 ────────────────────────────────────────────────
     if _active_overlay is not None:
-        try:
-            _dispose_overlay(_active_overlay)
-        except Exception:
-            pass
+        _dispose_overlay(_active_overlay)
         _active_overlay = None
 
     # ── 오버레이 위젯 ────────────────────────────────────────────────────
@@ -428,10 +426,9 @@ def _show_system_overlay(widget) -> None:
 
     # priming (첫 cpu_percent 호출)
     try:
-        import psutil
-        psutil.cpu_percent(interval=None)
-    except Exception:
-        pass
+        psutil_module.cpu_percent(interval=None)
+    except Exception as exc:
+        logging.debug("[SystemMonitorPlugin] CPU priming 실패: %s", exc)
 
     # ── 레이아웃 강제 계산 후 위치 결정 ────────────────────────────────
     overlay.layout().activate()
@@ -456,13 +453,12 @@ def _show_system_overlay(widget) -> None:
 
     # ── 8초 후 페이드아웃 ────────────────────────────────────────────────
     def _start_fade_out():
-        global _active_overlay
         if _active_overlay is None:
             return
         try:
             overlay._update_timer.stop()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug("[SystemMonitorPlugin] 업데이트 타이머 중지 실패: %s", exc)
         overlay_ref = overlay
         overlay_ref._anim_out = QPropertyAnimation(overlay_ref, b"windowOpacity")
         overlay_ref._anim_out.setDuration(600)

@@ -647,7 +647,7 @@ class CharacterWidget(QWidget):
                 Optional[Callable[[], None]],
                 getattr(self, "_affinity_on_level_up", None),
             )
-            if leveled_up and on_level_up is not None:
+            if leveled_up and callable(on_level_up):
                 on_level_up()
 
     def random_behavior(self):
@@ -852,7 +852,6 @@ class CharacterWidget(QWidget):
         """마우스 클릭"""
         if event.button() == Qt.LeftButton:
             affinity_mgr = getattr(self, "_affinity_manager", None)
-            on_level_up = getattr(self, "_affinity_on_level_up", None)
 
             # 더블클릭 감지
             if not hasattr(self, '_last_click'):

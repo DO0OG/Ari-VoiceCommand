@@ -11,6 +11,13 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-16 최신):
+  plugins/affinity_plugin.py   — 친밀도 오버레이 follow timer + i18n 문자열 적용
+  plugins/system_monitor_plugin.py — 시스템 모니터 오버레이 follow timer + 다중 화면 위치 보정
+  ui/character_widget.py       — 친밀도 레벨업 콜백 callable 검증 + 미사용 지역 변수 정리
+  ui/text_interface.py         — 종료 시 처리 스레드 추적/정리 보강으로 QThread 경고 완화
+  docs/USAGE.md / README*.md   — 오버레이 추적 동작과 사용자 안내 문구 최신화
+
 포함 모듈 (2026-04-14 최신):
   agent/agent_orchestrator.py — shared context 캐시, 동적 계획 반복, 반복 실패 조기 종료
   agent/execution_engine.py   — 반복 동일 오류 중단, 회복 전략 다변화, 단계 타임아웃 힌트

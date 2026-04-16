@@ -86,6 +86,7 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 ### Character Widget Highlights
 
 - **Affinity system:** tracks clicks, petting, chats, and daily logins to change greetings and relationship level.
+- **Head-anchored overlay UI:** affinity and system-monitor overlays stay above the character and keep following it across multi-monitor moves.
 - **Petting interaction:** slow hover over the character triggers affectionate reactions and affinity gain.
 - **Focus-aware reactions:** detects foreground app categories such as coding, browser, media, chat, office, and games.
 - **Night mode & yawn behavior:** slows animation pacing late at night and injects sleepy idle reactions.
