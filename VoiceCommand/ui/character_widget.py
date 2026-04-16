@@ -26,6 +26,32 @@ def _is_thinking_bubble_text(text: str) -> bool:
     return normalized == "생각 중..."
 
 
+def _is_geometry_animation_running(animation: Optional[QPropertyAnimation]) -> bool:
+    return animation is not None and animation.state() == QPropertyAnimation.Running
+
+
+def _sync_walk_animation_end_value(
+    animation: Optional[QPropertyAnimation],
+    walk_target_y: Optional[int],
+    ground_y: int,
+    *,
+    threshold: int = 2,
+) -> Optional[int]:
+    if animation is None or walk_target_y is None:
+        return walk_target_y
+    if abs(walk_target_y - ground_y) <= threshold:
+        return walk_target_y
+
+    end_value = animation.endValue()
+    if end_value is None:
+        return walk_target_y
+
+    animation.setEndValue(
+        QRect(end_value.x(), int(ground_y), end_value.width(), end_value.height())
+    )
+    return int(ground_y)
+
+
 class LRUCache:
     """LRU 캐시 구현"""
     def __init__(self, capacity=IMAGE_CACHE_CAPACITY):
@@ -145,6 +171,12 @@ class CharacterWidget(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
 
+        # 이동 애니메이션 상태는 첫 update_frame() 전에 준비되어 있어야 한다.
+        self.move_animation = None
+        self._walk_target_y: Optional[int] = None
+        # 현재 캐릭터가 위치한 화면 (멀티모니터 지원)
+        self._current_screen = QApplication.primaryScreen()
+
         # 애니메이션 로드
         # 레이블 생성
         self.label = QLabel(self)
@@ -160,9 +192,6 @@ class CharacterWidget(QWidget):
         self.behavior_timer = QTimer(self)
         self.behavior_timer.timeout.connect(self.random_behavior)
         self.start_behavior_timer()
-
-        # 이동 애니메이션
-        self.move_animation = None
 
         # 물리 타이머 (30 FPS로 최적화)
         self.physics_timer = QTimer(self)
@@ -317,10 +346,50 @@ class CharacterWidget(QWidget):
             self._reload_animation_set(self._base_images_dir)
         return True
 
+    def _get_virtual_desktop_rect(self) -> QRect:
+        """모든 화면을 포함하는 가상 데스크톱 전체 영역을 반환한다."""
+        screens = QApplication.screens()
+        if not screens:
+            primary = QApplication.primaryScreen()
+            return primary.geometry() if primary else QRect()
+
+        left = min(screen.geometry().left() for screen in screens)
+        top = min(screen.geometry().top() for screen in screens)
+        right = max(screen.geometry().right() for screen in screens)
+        bottom = max(screen.geometry().bottom() for screen in screens)
+        return QRect(left, top, right - left + 1, bottom - top + 1)
+
+    def _update_current_screen(self) -> None:
+        """캐릭터 중심이 속한 화면으로 _current_screen을 갱신한다."""
+        screens = QApplication.screens()
+        if not screens:
+            return
+
+        center = self.geometry().center()
+        for screen in screens:
+            if screen.geometry().contains(center):
+                if screen is not self._current_screen:
+                    self._current_screen = screen
+                    self._screen_geom_cache_time = 0
+                return
+
+        nearest = min(
+            screens,
+            key=lambda screen: (
+                (screen.geometry().center().x() - center.x()) ** 2
+                + (screen.geometry().center().y() - center.y()) ** 2
+            ),
+        )
+        if nearest is not self._current_screen:
+            self._current_screen = nearest
+            self._screen_geom_cache_time = 0
+
     def get_screen_geometry(self):
         """작업표시줄 숨김/가려짐 상태를 감지하여 가용 화면 정보를 동적으로 반환"""
-        if not hasattr(self, '_screen_geom_cache_time') or time.time() - self._screen_geom_cache_time > 1.0:
-            screen = QApplication.primaryScreen()
+        if not hasattr(self, '_screen_geom_cache_time') or time.time() - self._screen_geom_cache_time > 0.25:
+            screen = self._current_screen or QApplication.primaryScreen()
+            if screen is None:
+                return QRect()
             full_geom = screen.geometry()
             avail_geom = screen.availableGeometry()
             
@@ -370,7 +439,8 @@ class CharacterWidget(QWidget):
         ground_bottom = screen.y() + screen.height()
         
         # 전체화면 상태(가용영역==전체영역)일 때는 오프셋을 줄여서 바닥에 딱 붙게 함
-        screen_full = QApplication.primaryScreen().geometry()
+        current_screen = self._current_screen or QApplication.primaryScreen()
+        screen_full = current_screen.geometry() if current_screen else screen
         is_full_screen = screen.height() >= screen_full.height() - 10
         
         offset = 24 if self.current_animation == "sit" else 4
@@ -404,7 +474,8 @@ class CharacterWidget(QWidget):
             self.setFixedSize(pixmap.width(), pixmap.height())
         
         # 바닥에 있을 때 위치 보정 (update_physics와 동기화)
-        if not self.dragging and not self.is_falling and not self.is_climbing:
+        anim_running = _is_geometry_animation_running(self.move_animation)
+        if not self.dragging and not self.is_falling and not self.is_climbing and not anim_running:
             target_y = self.get_ground_y(pixmap.height())
             screen = self.get_screen_geometry()
             margin = max(0, (pixmap.width() // 2) - 30)
@@ -448,14 +519,14 @@ class CharacterWidget(QWidget):
         """랜덤 행동 (벽 타기 확률 추가)"""
         # 이미 다른 작업을 수행 중이면 타이머를 재시작하지 않고 리턴.
         # 작업이 끝나는 시점(on_walk_finished, stop_climbing 등)에서 타이머가 다시 시작됨.
-        if self.dragging or self.is_climbing or getattr(self, '_is_landing', False) or (self.move_animation and self.move_animation.state() == QPropertyAnimation.Running):
+        if self.dragging or self.is_climbing or getattr(self, '_is_landing', False) or _is_geometry_animation_running(self.move_animation):
             return
 
-        screen = self.get_screen_geometry()
+        vd = self._get_virtual_desktop_rect()
         margin = max(0, (self.width() // 2) - 30)
         # 벽 밀착 판정 (캐릭터 너비의 40% 이상 나갔을 때)
-        at_left_edge = self.x() <= screen.x() - margin + 10
-        at_right_edge = self.x() >= screen.x() + screen.width() - self.width() + margin - 10
+        at_left_edge = self.x() <= vd.x() - margin + 10
+        at_right_edge = self.x() >= vd.x() + vd.width() - self.width() + margin - 10
 
         # 벽 타기 시도 (화면 끝에서 30% 확률)
         if (at_left_edge or at_right_edge) and _RNG.random() < 0.3:
@@ -499,10 +570,11 @@ class CharacterWidget(QWidget):
         if self.move_animation:
             self.move_animation.stop()
 
+        self._walk_target_y = None
         self.move_animation = QPropertyAnimation(self, b"geometry")
         # 현재 위치에서 상단까지의 거리에 비례한 시간 (최대 5초)
         distance = abs(self.y() - target_y)
-        self.move_animation.setDuration(min(5000, distance * 10)) 
+        self.move_animation.setDuration(max(100, min(5000, distance * 10)))
         self.move_animation.setStartValue(self.geometry())
         self.move_animation.setEndValue(QRect(self.x(), target_y, self.width(), self.height()))
         self.move_animation.setEasingCurve(QEasingCurve.InOutQuad)
@@ -527,6 +599,7 @@ class CharacterWidget(QWidget):
         if self.move_animation:
             self.move_animation.stop()
 
+        self._walk_target_y = None
         self.move_animation = QPropertyAnimation(self, b"geometry")
         self.move_animation.setDuration(climb_height * 10) # 속도 조절
         self.move_animation.setStartValue(self.geometry())
@@ -560,10 +633,12 @@ class CharacterWidget(QWidget):
         new_x = self.x() + (distance * direction)
 
         # 화면 경계 체크
-        new_x = max(screen.x() - margin, min(new_x, screen.x() + screen.width() - self.width() + margin))
+        vd = self._get_virtual_desktop_rect()
+        new_x = max(vd.x() - margin, min(new_x, vd.x() + vd.width() - self.width() + margin))
         
         # 현재 바닥 높이 유지
         target_y = self.get_ground_y()
+        self._walk_target_y = int(target_y)
 
         # 캐릭터 방향 설정 및 프레임 업데이트
         self.facing_right = (new_x > self.x())
@@ -580,6 +655,7 @@ class CharacterWidget(QWidget):
         self.move_animation.setEasingCurve(QEasingCurve.InOutQuad)
         
         def on_walk_finished():
+            self._walk_target_y = None
             self.set_animation("idle")
             if not self.dragging and not self.is_climbing:
                 self.start_behavior_timer()
@@ -612,9 +688,9 @@ class CharacterWidget(QWidget):
     def move_to_bottom(self):
         """화면 하단으로 이동"""
         screen = self.get_screen_geometry()
-        x = _RNG.randint(0, max(0, screen.width() - 200))
+        x = _RNG.randint(screen.x(), max(screen.x(), screen.x() + screen.width() - 200))
         # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
-        y = screen.height() - 200  # 하단에서 200px 위
+        y = screen.y() + screen.height() - 200  # 하단에서 200px 위
         self.move(x, y)
 
     def mousePressEvent(self, event):
@@ -644,6 +720,7 @@ class CharacterWidget(QWidget):
 
             if self.move_animation:
                 self.move_animation.stop()
+                self._walk_target_y = None
 
             # 벽/천장 타기 도중 드래그 시 is_climbing 리셋
             # (move_animation.stop()은 finished 시그널을 발생시키지 않으므로
@@ -662,10 +739,10 @@ class CharacterWidget(QWidget):
             ny = event.globalPos().y() - self.offset.y()
             
             # 화면 경계 제한 (좌우는 절반까지 밖으로, 상단은 0, 하단은 바닥까지)
-            screen = self.get_screen_geometry()
+            vd = self._get_virtual_desktop_rect()
             margin = max(0, (self.width() // 2) - 30)
-            nx = max(-margin, min(nx, screen.width() - self.width() + margin))
-            ny = max(0, min(ny, screen.height() - self.height() + 25))
+            nx = max(vd.x() - margin, min(nx, vd.x() + vd.width() - self.width() + margin))
+            ny = max(vd.y(), min(ny, vd.y() + vd.height() - self.height() + 25))
 
             # 방향 감지 및 프레임 업데이트
             dx = nx - self.x()
@@ -688,9 +765,10 @@ class CharacterWidget(QWidget):
         """마우스 릴리즈"""
         if event.button() == Qt.LeftButton:
             self.dragging = False
+            self._update_current_screen()
 
             # 타이머 재시작
-            self.animation_timer.start(100)
+            self.animation_timer.start(70)
             self.physics_timer.start(33)
             self.start_behavior_timer()
 
@@ -841,13 +919,23 @@ class CharacterWidget(QWidget):
         if self.dragging or self.is_climbing:
             return
 
-        screen = self.get_screen_geometry()
+        self._update_current_screen()
         target_y = self.get_ground_y()
         current_y = self.y()
         moved = False
+        anim_running = _is_geometry_animation_running(self.move_animation)
+
+        if anim_running and self._walk_target_y is not None:
+            self._walk_target_y = _sync_walk_animation_end_value(
+                self.move_animation,
+                self._walk_target_y,
+                int(target_y),
+            )
+
+        lock_vertical_position = anim_running and self._walk_target_y is not None and self.velocity_y == 0
 
         # 중력 적용 로직 (임계값을 10px로 줄여 더 정확한 스냅 지원)
-        if current_y < target_y - 10 or self.velocity_y < 0:
+        if not lock_vertical_position and (current_y < target_y - 10 or self.velocity_y < 0):
             self.is_falling = True
             self.velocity_y = min(self.velocity_y + self.gravity, 20)
             new_y = current_y + self.velocity_y
@@ -882,23 +970,27 @@ class CharacterWidget(QWidget):
             if int(new_y) != current_y:
                 self.move(self.x(), int(new_y))
                 moved = True
+                self._update_current_screen()
 
         else:
             # 바닥에 안정적으로 붙어있을 때 (Snap)
-            if abs(current_y - target_y) > 0.5:
-                self.move(self.x(), int(target_y))
-                moved = True
+            if not anim_running:
+                if abs(current_y - target_y) > 0.5:
+                    self.move(self.x(), int(target_y))
+                    moved = True
 
-            if self.is_falling or self.current_animation == "fall":
+                if self.is_falling or self.current_animation == "fall":
+                    self.is_falling = False
+                    self._is_landing = True
+                    self.set_animation("sit")
+                    def finish_landing():
+                        self._is_landing = False
+                        if not self.is_falling and not self.dragging:
+                            self.set_animation("idle")
+                            self.start_behavior_timer()
+                    QTimer.singleShot(700, finish_landing)
+            else:
                 self.is_falling = False
-                self._is_landing = True
-                self.set_animation("sit")
-                def finish_landing():
-                    self._is_landing = False
-                    if not self.is_falling and not self.dragging:
-                        self.set_animation("idle")
-                        self.start_behavior_timer()
-                QTimer.singleShot(700, finish_landing)
             
             self.velocity_y = 0
 
@@ -906,18 +998,20 @@ class CharacterWidget(QWidget):
         if self.velocity_x != 0:
             new_x = int(self.x() + self.velocity_x)
             margin = max(0, (self.width() // 2) - 30)
+            vd = self._get_virtual_desktop_rect()
             
             # 벽 충돌 및 튕기기 (화면 밖 절반까지 허용)
-            if new_x < -margin:
-                new_x = -margin
+            if new_x < vd.x() - margin:
+                new_x = vd.x() - margin
                 self.velocity_x *= self.bounce_x
-            elif new_x > screen.width() - self.width() + margin:
-                new_x = screen.width() - self.width() + margin
+            elif new_x > vd.x() + vd.width() - self.width() + margin:
+                new_x = vd.x() + vd.width() - self.width() + margin
                 self.velocity_x *= self.bounce_x
 
             if new_x != self.x():
                 self.move(new_x, self.y())
                 moved = True
+                self._update_current_screen()
 
             # 마찰 적용
             if self.is_falling:
@@ -943,9 +1037,9 @@ class CharacterWidget(QWidget):
         dx = cursor_pos.x() - char_center.x()
         distance = abs(dx)
 
-        screen = self.get_screen_geometry()
         margin = max(0, (self.width() // 2) - 30)
-        at_edge = self.x() <= -margin + 5 or self.x() >= screen.width() - self.width() + margin - 5
+        vd = self._get_virtual_desktop_rect()
+        at_edge = self.x() <= vd.x() - margin + 5 or self.x() >= vd.x() + vd.width() - self.width() + margin - 5
 
         if distance < 80:
             # 매우 가까움 — 놀라서 도망 (속도 강하게)
