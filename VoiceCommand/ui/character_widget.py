@@ -10,6 +10,7 @@ import sys
 import logging
 import ctypes
 from collections import OrderedDict
+from queue import Queue
 from typing import Callable, Optional
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
@@ -21,6 +22,10 @@ from core.constants import (
 )
 
 _RNG = secrets.SystemRandom()
+_BUBBLE_HISTORY_LOCK = threading.Lock()
+_BUBBLE_HISTORY_QUEUE: Queue[str] = Queue()
+_BUBBLE_HISTORY_WORKER_LOCK = threading.Lock()
+_BUBBLE_HISTORY_WORKER: Optional[threading.Thread] = None
 
 
 def _is_thinking_bubble_text(text: str) -> bool:
@@ -60,24 +65,52 @@ def _append_bubble_history(text: str) -> None:
 
     path = ResourceManager.get_writable_path("bubble_history.json")
     try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        else:
-            data = {"history": []}
-        history = data.setdefault("history", [])
-        history.insert(
-            0,
-            {
-                "text": str(text),
-                "timestamp": datetime.now().isoformat(timespec="seconds"),
-            },
-        )
-        data["history"] = history[:50]
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, ensure_ascii=False, indent=2)
+        with _BUBBLE_HISTORY_LOCK:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+            else:
+                data = {"history": []}
+            history = data.setdefault("history", [])
+            history.insert(
+                0,
+                {
+                    "text": str(text),
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+            data["history"] = history[:50]
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, ensure_ascii=False, indent=2)
     except Exception as exc:
         logging.debug("히스토리 저장 실패: %s", exc)
+
+
+def _bubble_history_worker() -> None:
+    while True:
+        text = _BUBBLE_HISTORY_QUEUE.get()
+        try:
+            _append_bubble_history(text)
+        finally:
+            _BUBBLE_HISTORY_QUEUE.task_done()
+
+
+def _ensure_bubble_history_worker() -> None:
+    global _BUBBLE_HISTORY_WORKER
+    with _BUBBLE_HISTORY_WORKER_LOCK:
+        if _BUBBLE_HISTORY_WORKER is not None and _BUBBLE_HISTORY_WORKER.is_alive():
+            return
+        _BUBBLE_HISTORY_WORKER = threading.Thread(
+            target=_bubble_history_worker,
+            daemon=True,
+            name="ari-bubble-hist",
+        )
+        _BUBBLE_HISTORY_WORKER.start()
+
+
+def _enqueue_bubble_history(text: str) -> None:
+    _ensure_bubble_history_worker()
+    _BUBBLE_HISTORY_QUEUE.put(str(text))
 
 
 def _load_random_custom_message() -> str:
@@ -435,6 +468,7 @@ class CharacterWidget(QWidget):
             if screen.geometry().contains(center):
                 if screen is not self._current_screen:
                     self._current_screen = screen
+                    self._screen_geom_cache = None
                     self._screen_geom_cache_time = 0
                 return
 
@@ -447,11 +481,16 @@ class CharacterWidget(QWidget):
         )
         if nearest is not self._current_screen:
             self._current_screen = nearest
+            self._screen_geom_cache = None
             self._screen_geom_cache_time = 0
 
     def get_screen_geometry(self):
         """작업표시줄 숨김/가려짐 상태를 감지하여 가용 화면 정보를 동적으로 반환"""
-        if not hasattr(self, '_screen_geom_cache_time') or time.time() - self._screen_geom_cache_time > 0.25:
+        if (
+            not hasattr(self, '_screen_geom_cache_time')
+            or self._screen_geom_cache is None
+            or time.time() - self._screen_geom_cache_time > 0.25
+        ):
             screen = self._current_screen or QApplication.primaryScreen()
             if screen is None:
                 return QRect()
@@ -492,9 +531,11 @@ class CharacterWidget(QWidget):
             # 3. 일반적인 가용 높이 체크 (시스템 설정상 작업표시줄이 없을 때)
             if avail_geom.height() >= full_geom.height() - 10:
                 self._screen_geom_cache = full_geom
-                
+
+            if self._screen_geom_cache is None:
+                self._screen_geom_cache = avail_geom
             self._screen_geom_cache_time = time.time()
-        return self._screen_geom_cache
+        return self._screen_geom_cache or QRect()
 
     def get_ground_y(self, height=None):
         """바닥 Y 좌표 계산 (동적 화면 정보 반영)"""
@@ -845,9 +886,8 @@ class CharacterWidget(QWidget):
     def move_to_bottom(self):
         """화면 하단으로 이동"""
         screen = self.get_screen_geometry()
-        x = _RNG.randint(screen.x(), max(screen.x(), screen.x() + screen.width() - 200))
-        # 캐릭터 크기를 고려한 바닥 위치 (약 150px 높이 예상)
-        y = screen.y() + screen.height() - 200  # 하단에서 200px 위
+        x = _RNG.randint(screen.x(), max(screen.x(), screen.x() + screen.width() - self.width()))
+        y = int(self.get_ground_y(self.height()))
         self.move(x, y)
 
     def mousePressEvent(self, event):
@@ -1106,6 +1146,15 @@ class CharacterWidget(QWidget):
         if app:
             app.quit()
 
+    def _schedule_finish_landing(self, delay_ms: int) -> None:
+        def _finish_landing_animation():
+            self._is_landing = False
+            if not self.is_falling and not self.dragging:
+                self.set_animation("idle")
+                self.start_behavior_timer()
+
+        QTimer.singleShot(delay_ms, _finish_landing_animation)
+
     def update_physics(self):
         """물리 엔진 (착지 판정 및 모션 싱크 강화)"""
         if self.dragging or self.is_climbing:
@@ -1149,12 +1198,7 @@ class CharacterWidget(QWidget):
                         if impact_vel > 8: # 강한 추락 기준
                             self._is_landing = True
                             self.set_animation("sit")
-                            def finish_landing():
-                                self._is_landing = False
-                                if not self.is_falling and not self.dragging:
-                                    self.set_animation("idle")
-                                    self.start_behavior_timer()
-                            QTimer.singleShot(600, finish_landing)
+                            self._schedule_finish_landing(600)
                         else: # 살짝 떨어짐
                             self.set_animation("idle")
                             self.start_behavior_timer()
@@ -1175,12 +1219,7 @@ class CharacterWidget(QWidget):
                     self.is_falling = False
                     self._is_landing = True
                     self.set_animation("sit")
-                    def finish_landing():
-                        self._is_landing = False
-                        if not self.is_falling and not self.dragging:
-                            self.set_animation("idle")
-                            self.start_behavior_timer()
-                    QTimer.singleShot(700, finish_landing)
+                    self._schedule_finish_landing(700)
             else:
                 self.is_falling = False
             
@@ -1351,12 +1390,7 @@ class CharacterWidget(QWidget):
             self.bubble_hide_timer.start(60000)
             logging.debug("말풍선 대기 모드 (60초 안전장치 작동)")
 
-        threading.Thread(
-            target=_append_bubble_history,
-            args=(text,),
-            daemon=True,
-            name="ari-bubble-hist",
-        ).start()
+        _enqueue_bubble_history(text)
 
     def hide_speech_bubble(self):
         """말풍선 숨기기 (외부에서 호출)"""

@@ -1,8 +1,12 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
-from core.threads import TTSThread, _wait_for_tts_playback_completion
+from core.threads import (
+    CommandExecutionThread,
+    TTSThread,
+    _wait_for_tts_playback_completion,
+)
 
 
 class TTSThreadTests(unittest.TestCase):
@@ -55,6 +59,16 @@ class TTSThreadTests(unittest.TestCase):
 
         self.assertFalse(completed)
         mocked_warning.assert_called_once()
+
+    def test_command_execution_thread_marks_failed_command_done(self):
+        thread = CommandExecutionThread()
+        thread.queue = MagicMock()
+        thread.queue.get.side_effect = ["boom", None]
+
+        with patch("VoiceCommand.execute_command", side_effect=RuntimeError("fail")):
+            thread.run()
+
+        self.assertEqual(thread.queue.task_done.call_count, 2)
 
 
 if __name__ == "__main__":

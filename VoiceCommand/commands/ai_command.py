@@ -1,4 +1,5 @@
 from commands.base_command import BaseCommand
+import inspect
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ from agent.assistant_text_utils import (
 )
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
+from i18n.translator import _, get_language
 
 
 class AICommand(BaseCommand):
@@ -58,29 +60,6 @@ class AICommand(BaseCommand):
         "shutdown", "shut down", "turn off", "power off",
         "シャットダウン", "終了", "オフ", "切",
     )
-    _SCHEDULE_PATTERN_STRINGS = (
-        # 복합 상대 시간 (순서 중요: 긴 표현을 먼저 매칭)
-        r'(\d+\s*시간\s*\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
-        r'(\d+\s*시간\s*\d+\s*분\s*(?:후|뒤))',
-        r'(\d+\s*시간\s*\d+\s*초\s*(?:후|뒤))',
-        r'(\d+\s*분\s*\d+\s*초\s*(?:후|뒤))',
-        # 단일 상대 시간
-        r'(\d+\s*일\s*(?:후|뒤))',
-        r'(반\s*시간\s*(?:후|뒤))',
-        r'([한두세네다섯여섯일곱여덟아홉열]\s*시간\s*(?:후|뒤))',
-        r'(\d+\s*시간\s*(?:후|뒤))',
-        r'(\d+\s*분\s*(?:후|뒤))',
-        r'(\d+\s*초\s*(?:후|뒤))',
-        r'(매시간)',
-        r'(매일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
-        r'(내일\s*(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
-        r'((?:오늘\s*)?(?:오전|오후)\s*\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
-        r'((?:오늘\s*)?\d{1,2}시(?:\s*\d{1,2}분)?\s*에?)',
-        r'(\d{1,2}\s*분에)',
-    )
-    # 매 호출마다 재컴파일을 방지하기 위해 클래스 로드 시 한 번만 컴파일
-    _SCHEDULE_PATTERNS = tuple(re.compile(p, re.IGNORECASE) for p in _SCHEDULE_PATTERN_STRINGS)
-
     def __init__(self, ai_assistant, tts_func, learning_mode_ref):
         self.ai_assistant = ai_assistant
         self.tts_wrapper = tts_func
@@ -101,6 +80,8 @@ class AICommand(BaseCommand):
 
         self._plugin_handlers: Dict[str, Callable] = {}
         self._dispatch = self._build_dispatch_table()
+        self._schedule_patterns_cache: tuple[re.Pattern[str], ...] = ()
+        self._schedule_patterns_lang: str = ""
 
     def matches(self, text: str) -> bool:
         return True
@@ -131,6 +112,78 @@ class AICommand(BaseCommand):
             if name not in table:
                 table[name] = handler
         return table
+
+    def _schedule_terms(self) -> Dict[str, str]:
+        return {
+            "daily": _("매일"),
+            "weekly": _("매주"),
+            "every_hour": _("매시간"),
+            "today": _("오늘"),
+            "tomorrow": _("내일"),
+            "am": _("오전"),
+            "pm": _("오후"),
+            "clock_hour": _("시"),
+            "duration_hour": _("시간"),
+            "minute": _("분"),
+            "second": _("초"),
+            "day": _("일"),
+            "at": _("에"),
+            "after": _("후"),
+            "later": _("뒤"),
+        }
+
+    def _build_schedule_patterns(self) -> tuple[re.Pattern[str], ...]:
+        lang = get_language()
+        if self._schedule_patterns_lang == lang and self._schedule_patterns_cache:
+            return self._schedule_patterns_cache
+        terms = {key: re.escape(value) for key, value in self._schedule_terms().items()}
+        after = rf"(?:{terms['after']}|{terms['later']})"
+        am_pm = rf"(?:{terms['am']}|{terms['pm']})"
+        patterns = (
+            re.compile(rf"(\d+\s*{terms['duration_hour']}\s*\d+\s*{terms['minute']}\s*\d+\s*{terms['second']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['duration_hour']}\s*\d+\s*{terms['minute']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['duration_hour']}\s*\d+\s*{terms['second']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['minute']}\s*\d+\s*{terms['second']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['day']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(반\s*{terms['duration_hour']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"([한두세네다섯여섯일곱여덟아홉열]\s*{terms['duration_hour']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['duration_hour']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['minute']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"(\d+\s*{terms['second']}\s*{after})", re.IGNORECASE),
+            re.compile(rf"({terms['every_hour']})", re.IGNORECASE),
+            re.compile(rf"({terms['daily']}\s*(?:{am_pm})?\s*\d{{1,2}}{terms['clock_hour']}(?:\s*\d{{1,2}}{terms['minute']})?\s*(?:{terms['at']})?)", re.IGNORECASE),
+            re.compile(rf"({terms['tomorrow']}\s*(?:{am_pm})?\s*\d{{1,2}}{terms['clock_hour']}(?:\s*\d{{1,2}}{terms['minute']})?\s*(?:{terms['at']})?)", re.IGNORECASE),
+            re.compile(rf"((?:{terms['today']}\s*)?(?:{am_pm})\s*\d{{1,2}}{terms['clock_hour']}(?:\s*\d{{1,2}}{terms['minute']})?\s*(?:{terms['at']})?)", re.IGNORECASE),
+            re.compile(rf"((?:{terms['today']}\s*)?\d{{1,2}}{terms['clock_hour']}(?:\s*\d{{1,2}}{terms['minute']})?\s*(?:{terms['at']})?)", re.IGNORECASE),
+            re.compile(rf"(\d{{1,2}}\s*{terms['minute']}{terms['at']})", re.IGNORECASE),
+        )
+        self._schedule_patterns_cache = patterns
+        self._schedule_patterns_lang = lang
+        return patterns
+
+    def _format_time_of_day(self, dt: datetime) -> str:
+        ampm = _("오전") if dt.hour < 12 else _("오후")
+        hour = dt.hour if dt.hour <= 12 else dt.hour - 12
+        if hour == 0:
+            hour = 12
+        if dt.minute:
+            return _("{ampm} {hour}시 {minute}분").format(
+                ampm=ampm,
+                hour=hour,
+                minute=dt.minute,
+            )
+        return _("{ampm} {hour}시").format(ampm=ampm, hour=hour)
+
+    def _translated_complex_keywords(self) -> tuple[str, ...]:
+        return (
+            _("스케줄"),
+            _("예약"),
+            _("반복"),
+            _("매일"),
+            _("매주"),
+            _("알려줘"),
+            _("확인해줘"),
+        )
 
     def register_plugin_tool_handler(self, tool_name: str, handler: Callable) -> None:
         """플러그인 도구 핸들러를 등록하고 디스패치 테이블을 갱신한다."""
@@ -166,7 +219,7 @@ class AICommand(BaseCommand):
         name = str(args.get("name", "") or "").strip()
         total_minutes = minutes + (seconds / 60.0)
         if total_minutes <= 0:
-            self.tts_wrapper("타이머 시간을 말씀해 주세요.")
+            self.tts_wrapper(_("타이머 시간을 말씀해 주세요."))
             return None
         try:
             timer_manager.set_timer(total_minutes, name=name)
@@ -194,13 +247,7 @@ class AICommand(BaseCommand):
 
     def _handle_get_current_time(self, args: dict) -> Optional[str]:
         now = datetime.now()
-        am_pm = "오전" if now.hour < 12 else "오후"
-        hour = now.hour if now.hour <= 12 else now.hour - 12
-        if hour == 0:
-            hour = 12
-        if now.minute:
-            return f"현재 시간은 {am_pm} {hour}시 {now.minute}분입니다."
-        return f"현재 시간은 {am_pm} {hour}시입니다."
+        return _("현재 시간은 {time}입니다.").format(time=self._format_time_of_day(now))
 
     def _handle_shutdown_computer(self, args: dict) -> Optional[str]:
         scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
@@ -214,13 +261,17 @@ class AICommand(BaseCommand):
         """현재 화면 상태 (작업표시줄, 전체화면 등) 정보를 수집하여 반환"""
         try:
             from core.VoiceCommand import _state
+            from PySide6.QtWidgets import QApplication
+
             character_widget = _state.character_widget
             if not character_widget:
                 return "캐릭터 위젯이 아직 초기화되지 않았습니다."
 
             geom = character_widget.get_screen_geometry()
-            from PySide6.QtWidgets import QApplication
-            full_geom = QApplication.primaryScreen().geometry()
+            current_screen = getattr(character_widget, "_current_screen", None) or QApplication.primaryScreen()
+            if current_screen is None:
+                return "현재 화면 정보를 확인할 수 없습니다."
+            full_geom = current_screen.geometry()
             
             is_full = (geom.width() >= full_geom.width() - 10 and 
                        geom.height() >= full_geom.height() - 10)
@@ -335,27 +386,45 @@ class AICommand(BaseCommand):
         goal = args.get("goal", "").strip()
         when = args.get("when", "").strip()
         if not goal or not when:
-            return "예약할 작업과 시간을 알려주세요."
+            return _("예약할 작업과 시간을 알려주세요.")
 
         # 종료/재시작 goal → 에이전트 루프 대신 SystemCommand 직접 라우팅
-        _SHUTDOWN_GOALS = ("컴퓨터 종료", "pc 종료", "시스템 종료", "전원 끄기", "shutdown")
-        _RESTART_GOALS  = ("컴퓨터 재시작", "재부팅", "restart")
+        _SHUTDOWN_GOALS = (
+            _("컴퓨터 종료"),
+            "컴퓨터 종료",
+            "pc 종료",
+            _("시스템 종료"),
+            "시스템 종료",
+            _("전원 끄기"),
+            "전원 끄기",
+            "shutdown",
+        )
+        _RESTART_GOALS = (
+            _("컴퓨터 재시작"),
+            "컴퓨터 재시작",
+            _("재부팅"),
+            "재부팅",
+            "restart",
+        )
         goal_lower = goal.lower()
         if any(k in goal_lower for k in _SHUTDOWN_GOALS):
             from core.VoiceCommand import execute_command
-            execute_command(f"{when}에 컴퓨터 꺼줘")
+            execute_command(_("{when}에 컴퓨터 꺼줘").format(when=when))
             return None
         if any(k in goal_lower for k in _RESTART_GOALS):
             from core.VoiceCommand import execute_command
-            execute_command(f"{when}에 컴퓨터 재시작해줘")
+            execute_command(_("{when}에 컴퓨터 재시작해줘").format(when=when))
             return None
 
         if self.scheduler is None:
-            return "스케줄러를 사용할 수 없습니다."
+            return _("스케줄러를 사용할 수 없습니다.")
 
         next_run, repeat, repeat_seconds = self._parse_schedule(when)
         if next_run is None:
-            return f"'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
+            return _(
+                "'{when}' 시간 표현을 이해하지 못했어요. "
+                "'5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
+            ).format(when=when)
 
         task_id = self.scheduler.schedule(
             goal=goal,
@@ -364,28 +433,34 @@ class AICommand(BaseCommand):
             repeat=repeat,
             repeat_sec=repeat_seconds,
         )
-        repeat_str = " (반복)" if repeat else ""
+        repeat_str = _(" (반복)") if repeat else ""
         formatted = self._format_datetime_kr(next_run)
-        return f"작업 예약 완료 (ID: {task_id}){repeat_str}. {formatted}에 실행됩니다."
+        return _("작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다.").format(
+            task_id=task_id,
+            repeat=repeat_str,
+            formatted=formatted,
+        )
 
     def _handle_cancel_scheduled_task(self, args: dict) -> Optional[str]:
         """예약 작업 취소"""
         task_id = args.get("task_id", "").strip()
         if not task_id:
-            return "취소할 작업 ID를 알려주세요."
+            return _("취소할 작업 ID를 알려주세요.")
         if self.scheduler is None:
-            return "스케줄러를 사용할 수 없습니다."
+            return _("스케줄러를 사용할 수 없습니다.")
         success = self.scheduler.cancel(task_id)
-        return f"작업 {task_id}가 취소되었습니다." if success else f"ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
+        if success:
+            return _("작업 {task_id}가 취소되었습니다.").format(task_id=task_id)
+        return _("ID '{task_id}'에 해당하는 작업을 찾을 수 없어요.").format(task_id=task_id)
 
     def _handle_list_scheduled_tasks(self, args: dict) -> Optional[str]:
         """예약 작업 목록 조회"""
         if self.scheduler is None:
-            return "스케줄러를 사용할 수 없습니다."
+            return _("스케줄러를 사용할 수 없습니다.")
         tasks = self.scheduler.list_tasks()
         if not tasks:
-            return "현재 예약된 작업이 없습니다."
-        lines = [f"예약된 작업 {len(tasks)}개:"]
+            return _("현재 예약된 작업이 없습니다.")
+        lines = [_("예약된 작업 {count}개:").format(count=len(tasks))]
         for t in tasks:
             try:
                 dt = datetime.fromisoformat(t.next_run)
@@ -393,19 +468,25 @@ class AICommand(BaseCommand):
             except Exception as exc:
                 logging.debug("[AICommand] 예약 시간 파싱 실패, 원본 문자열 사용: %s", exc)
                 time_str = t.next_run
-            repeat_str = " [반복]" if t.repeat else ""
-            lines.append(f"  [{t.task_id}] {time_str}{repeat_str} — {t.goal[:40]}")
+            repeat_str = _(" [반복]") if t.repeat else ""
+            lines.append(_("  [{task_id}] {time}{repeat} — {goal}").format(
+                task_id=t.task_id,
+                time=time_str,
+                repeat=repeat_str,
+                goal=t.goal[:40],
+            ))
         return "\n".join(lines)
 
     # ── 스케줄 파싱 ──────────────────────────────────────────────────────────────
 
     def _parse_schedule(self, when_kr: str) -> Tuple[Optional[datetime], bool, int]:
         """
-        한국어 시간 표현을 (next_run_dt, repeat, repeat_seconds) 튜플로 변환.
+        현행 언어의 시간 표현을 (next_run_dt, repeat, repeat_seconds) 튜플로 변환.
         파싱 실패 시 (None, False, 0) 반환.
         """
         now = datetime.now()
         normalized = re.sub(r"\s+", " ", (when_kr or "").strip())
+        terms = self._schedule_terms()
 
         relative_target = self._parse_relative_schedule(normalized, now)
         if relative_target is not None:
@@ -416,11 +497,19 @@ class AICommand(BaseCommand):
             return minute_target, False, 0
             
         # "매시간" (1시간 마다 반복)
-        if "매시간" in normalized.replace(" ", ""):
+        if terms["every_hour"].replace(" ", "") in normalized.replace(" ", ""):
             return now + timedelta(hours=1), True, 3600
 
         # "매일 [오전|오후] N시 [M분]" → 반복 (매 24시간)
-        m = re.search(r'매일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
+        m = re.search(
+            rf"{re.escape(terms['daily'])}\s*"
+            rf"({re.escape(terms['am'])}|{re.escape(terms['pm'])})?\s*"
+            rf"(\d{{1,2}}){re.escape(terms['clock_hour'])}"
+            rf"(?:\s*(\d{{1,2}}){re.escape(terms['minute'])})?\s*"
+            rf"(?:{re.escape(terms['at'])})?",
+            normalized,
+            flags=re.IGNORECASE,
+        )
         if m:
             hour = self._resolve_hour(m.group(1), int(m.group(2)))
             minute = int(m.group(3) or 0)
@@ -432,7 +521,15 @@ class AICommand(BaseCommand):
             return target, True, 86400
 
         # "내일 [오전|오후] N시 [M분]"
-        m = re.search(r'내일\s*(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
+        m = re.search(
+            rf"{re.escape(terms['tomorrow'])}\s*"
+            rf"({re.escape(terms['am'])}|{re.escape(terms['pm'])})?\s*"
+            rf"(\d{{1,2}}){re.escape(terms['clock_hour'])}"
+            rf"(?:\s*(\d{{1,2}}){re.escape(terms['minute'])})?\s*"
+            rf"(?:{re.escape(terms['at'])})?",
+            normalized,
+            flags=re.IGNORECASE,
+        )
         if m:
             hour = self._resolve_hour(m.group(1), int(m.group(2)))
             minute = int(m.group(3) or 0)
@@ -442,46 +539,66 @@ class AICommand(BaseCommand):
             return target, False, 0
 
         # "[오늘] [오전|오후] N시 [M분]"
-        m = re.search(r'(?:오늘\s*)?(오전|오후)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?\s*에?', normalized)
+        m = re.search(
+            rf"(?:{re.escape(terms['today'])}\s*)?"
+            rf"({re.escape(terms['am'])}|{re.escape(terms['pm'])})?\s*"
+            rf"(\d{{1,2}}){re.escape(terms['clock_hour'])}"
+            rf"(?:\s*(\d{{1,2}}){re.escape(terms['minute'])})?\s*"
+            rf"(?:{re.escape(terms['at'])})?",
+            normalized,
+            flags=re.IGNORECASE,
+        )
         if m:
             hour = self._resolve_hour(m.group(1), int(m.group(2)))
             minute = int(m.group(3) or 0)
             if hour is None or minute > 59:
                 return None, False, 0
             target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            if target <= now and "오늘" not in normalized:
+            if target <= now and terms["today"] not in normalized:
                 target += timedelta(days=1)
             return target, False, 0
 
         return None, False, 0
 
     def _parse_relative_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
-        if re.search(r'반\s*시간\s*(?:후|뒤)', when_kr):
+        terms = self._schedule_terms()
+        after = rf"(?:{re.escape(terms['after'])}|{re.escape(terms['later'])})"
+
+        if re.search(rf"반\s*{re.escape(terms['duration_hour'])}\s*{after}", when_kr, flags=re.IGNORECASE):
             return now + timedelta(minutes=30)
 
         patterns = (
-            (r'(\d+)\s*일\s*(?:후|뒤)', "days"),
-            (r'(\d+)\s*시간\s*(?:후|뒤)', "hours"),
-            (r'(\d+)\s*분\s*(?:후|뒤)', "minutes"),
-            (r'(\d+)\s*초\s*(?:후|뒤)', "seconds"),
+            (rf"(\d+)\s*{re.escape(terms['day'])}\s*{after}", "days"),
+            (rf"(\d+)\s*{re.escape(terms['duration_hour'])}\s*{after}", "hours"),
+            (rf"(\d+)\s*{re.escape(terms['minute'])}\s*{after}", "minutes"),
+            (rf"(\d+)\s*{re.escape(terms['second'])}\s*{after}", "seconds"),
         )
         total = timedelta()
         found = False
         for pattern, unit in patterns:
-            match = re.search(pattern, when_kr)
+            match = re.search(pattern, when_kr, flags=re.IGNORECASE)
             if match:
                 total += timedelta(**{unit: int(match.group(1))})
                 found = True
-        kr_hour = re.search(r'([한두세네다섯여섯일곱여덟아홉열])\s*시간\s*(?:후|뒤)', when_kr)
+        kr_hour = re.search(
+            rf"([한두세네다섯여섯일곱여덟아홉열])\s*{re.escape(terms['duration_hour'])}\s*{after}",
+            when_kr,
+            flags=re.IGNORECASE,
+        )
         if kr_hour:
             total += timedelta(hours=self._KR_NUM.get(kr_hour.group(1), 0))
             found = True
         return now + total if found else None
 
     def _parse_minute_of_hour_schedule(self, when_kr: str, now: datetime) -> Optional[datetime]:
-        if "시" in when_kr:
+        terms = self._schedule_terms()
+        if terms["clock_hour"] in when_kr:
             return None
-        match = re.search(r'(\d{1,2})\s*분에', when_kr)
+        match = re.search(
+            rf"(\d{{1,2}})\s*{re.escape(terms['minute'])}{re.escape(terms['at'])}",
+            when_kr,
+            flags=re.IGNORECASE,
+        )
         if not match:
             return None
         minute = int(match.group(1))
@@ -495,22 +612,20 @@ class AICommand(BaseCommand):
     def _resolve_hour(self, ampm: Optional[str], hour: int) -> Optional[int]:
         if hour < 0 or hour > 23:
             return None
-        if ampm == "오전":
+        if ampm == _("오전"):
             return 0 if hour == 12 else hour
-        if ampm == "오후":
+        if ampm == _("오후"):
             if hour == 12:
                 return 12
             return hour + 12 if hour < 12 else None
         return hour
 
     def _format_datetime_kr(self, dt: datetime) -> str:
-        ampm = "오전" if dt.hour < 12 else "오후"
-        hour = dt.hour if dt.hour <= 12 else dt.hour - 12
-        if hour == 0:
-            hour = 12
-        if dt.minute:
-            return f"{dt.month}월 {dt.day}일 {ampm} {hour}시 {dt.minute}분"
-        return f"{dt.month}월 {dt.day}일 {ampm} {hour}시"
+        return _("{month}월 {day}일 {time}").format(
+            month=dt.month,
+            day=dt.day,
+            time=self._format_time_of_day(dt),
+        )
 
     def _is_developer_agent_goal(self, goal: str) -> bool:
         try:
@@ -698,8 +813,6 @@ class AICommand(BaseCommand):
 
     def _get_current_language(self) -> str:
         try:
-            from i18n.translator import get_language
-
             return get_language()
         except Exception as exc:
             logging.debug("[AICommand] 언어 조회 실패, ko 기본값 사용: %s", exc)
@@ -898,7 +1011,7 @@ class AICommand(BaseCommand):
         normalized = (text or "").strip()
         if not normalized:
             return ""
-        for pattern in self._SCHEDULE_PATTERNS:
+        for pattern in self._build_schedule_patterns():
             match = pattern.search(normalized)
             if match:
                 return match.group(1).strip()
@@ -927,7 +1040,7 @@ class AICommand(BaseCommand):
             return None
         if not self._is_shutdown_request(goal_text):
             return None
-        return self._handle_schedule_task({"goal": "컴퓨터 종료", "when": when})
+        return self._handle_schedule_task({"goal": _("컴퓨터 종료"), "when": when})
 
     def _should_escalate_to_agent_task(self, user_text: str, response: Optional[str]) -> bool:
         """도구 호출이 없을 때 복잡한 작업 요청을 에이전트 태스크로 승격할지 판단."""
@@ -940,7 +1053,9 @@ class AICommand(BaseCommand):
         if len(normalized) < 8:
             return False
 
-        has_complex_keyword = any(token in normalized for token in self._COMPLEX_TASK_KEYWORDS)
+        has_complex_keyword = any(token in normalized for token in self._COMPLEX_TASK_KEYWORDS) or any(
+            token in normalized for token in self._translated_complex_keywords()
+        )
         has_complex_phrase = any(
             phrase in normalized for phrase in (
                 "시스템 상태",
@@ -1148,11 +1263,23 @@ class AICommand(BaseCommand):
     def _invoke_with_optional_stream(self, func: Callable, *args, stream_callback=None, **kwargs):
         if stream_callback:
             try:
+                signature = inspect.signature(func)
+            except (TypeError, ValueError):
+                signature = None
+
+            if signature is not None:
+                parameters = signature.parameters.values()
+                if (
+                    "stream_callback" in signature.parameters
+                    or any(param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters)
+                ):
+                    return func(*args, stream_callback=stream_callback, **kwargs)
+                return func(*args, **kwargs)
+
+            try:
                 return func(*args, stream_callback=stream_callback, **kwargs)
-            except TypeError as exc:
-                message = str(exc)
-                if "stream_callback" not in message and "unexpected keyword argument" not in message:
-                    raise
+            except TypeError:
+                pass
         return func(*args, **kwargs)
 
     def _should_emit_preface_response(self, response: str) -> bool:

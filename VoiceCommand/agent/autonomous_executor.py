@@ -14,6 +14,8 @@ import re
 import json
 import tempfile
 import textwrap
+import io
+import tokenize
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Callable
 
@@ -33,6 +35,16 @@ _SENSITIVE_ENV_PREFIXES = (
 _SUBPROCESS_TIMEOUT_SECONDS = 30
 _PROCESS_KILL_WAIT_SECONDS = 5
 _PDF_BOTTOM_MARGIN_PX = 50
+_PDF_FONT_CANDIDATES = (
+    ("MalgunGothic", r"C:\Windows\Fonts\malgun.ttf"),
+    ("AppleGothic", "/System/Library/Fonts/AppleGothic.ttf"),
+    ("NotoSansCJK", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    ("NotoSansKR", "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf"),
+)
+_ONE_LINE_SUITE_KEYWORDS = {
+    "with", "for", "if", "elif", "else", "try", "except",
+    "finally", "while", "def", "class", "match", "case",
+}
 
 
 def _build_child_env() -> dict:
@@ -41,6 +53,76 @@ def _build_child_env() -> dict:
         k: v for k, v in os.environ.items()
         if not any(k.upper().startswith(p) for p in _SENSITIVE_ENV_PREFIXES)
     }
+
+
+def _split_top_level_semicolons(code: str) -> str:
+    """문자열/괄호 내부를 제외한 최상위 세미콜론만 줄바꿈으로 변환한다."""
+    lines = code.splitlines(keepends=True)
+    if not lines:
+        return code
+
+    line_offsets: list[int] = []
+    offset = 0
+    for line in lines:
+        line_offsets.append(offset)
+        offset += len(line)
+
+    def to_index(position: tuple[int, int]) -> int:
+        line_no, column = position
+        return line_offsets[line_no - 1] + column
+
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(code).readline))
+    except tokenize.TokenError:
+        return code
+
+    replacements: list[tuple[int, int]] = []
+    depth = 0
+    current_line = 1
+    first_name_on_line = ""
+    one_line_suite_active = False
+
+    for index, token in enumerate(tokens):
+        token_line = token.start[0]
+        if token_line != current_line:
+            current_line = token_line
+            first_name_on_line = ""
+            one_line_suite_active = False
+
+        if token.type == tokenize.NAME and not first_name_on_line:
+            first_name_on_line = token.string
+
+        if token.type != tokenize.OP:
+            continue
+
+        if token.string in "([{":
+            depth += 1
+            continue
+        if token.string in ")]}":
+            depth = max(0, depth - 1)
+            continue
+        if token.string == ":" and depth == 0 and first_name_on_line in _ONE_LINE_SUITE_KEYWORDS:
+            one_line_suite_active = True
+            continue
+        if token.string != ";" or depth != 0 or one_line_suite_active:
+            continue
+
+        start_index = to_index(token.start)
+        end_index = start_index + 1
+        for next_token in tokens[index + 1:]:
+            if next_token.start[0] != token_line:
+                break
+            end_index = to_index(next_token.start)
+            break
+        replacements.append((start_index, end_index))
+
+    if not replacements:
+        return code
+
+    normalized = code
+    for start_index, end_index in reversed(replacements):
+        normalized = f"{normalized[:start_index]}\n{normalized[end_index:]}"
+    return normalized
 
 
 @dataclass
@@ -177,42 +259,41 @@ class AutonomousExecutor:
 
     def run_python(self, code: str, extra_globals: Optional[dict] = None) -> ExecutionResult:
         """파이썬 코드를 안전하게 실행하고 결과를 반환한다."""
-        self._python_slots.acquire()
+        with self._python_slots:
+            start = time.monotonic()
+            state_before: Dict[str, Any] = {}
+            result = ExecutionResult(success=False, code_or_cmd=code)
+            try:
+                state_before = self._capture_runtime_state()
+                report = self._safety.check_python(code)
+                logging.info(
+                    "[Executor] Python 안전 검사: %s — %s",
+                    report.level.value,
+                    report.summary,
+                )
 
-        start = time.monotonic()
-        state_before = self._capture_runtime_state()
-        result = ExecutionResult(success=False, code_or_cmd=code)
-        try:
-            report = self._safety.check_python(code)
-            logging.info(
-                "[Executor] Python 안전 검사: %s — %s",
-                report.level.value,
-                report.summary,
-            )
-
-            if report.level == DangerLevel.DANGEROUS:
-                if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary}")
-                confirmed = self._ask_confirmation(f"Python 코드 실행\n\n{code[:200]}", report)
-                if not confirmed:
-                    result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
+                if report.level == DangerLevel.DANGEROUS:
                     if self.tts_wrapper:
-                        self.tts_wrapper(_("실행을 취소했습니다."))
-                    self._attach_state_snapshot(result, state_before)
-                    self._record_history(result)
-                    return result
+                        self.tts_wrapper(f"주의! {report.summary}")
+                    confirmed = self._ask_confirmation(f"Python 코드 실행\n\n{code[:200]}", report)
+                    if not confirmed:
+                        result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
+                        if self.tts_wrapper:
+                            self.tts_wrapper(_("실행을 취소했습니다."))
+                        self._attach_state_snapshot(result, state_before)
+                        self._record_history(result)
+                        return result
 
-            elif report.level == DangerLevel.CAUTION:
-                if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
+                elif report.level == DangerLevel.CAUTION:
+                    if self.tts_wrapper:
+                        self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
-            result = self._do_run_python(code, extra_globals=extra_globals)
-        except Exception as exc:
-            logging.error("[Executor] Python 실행 준비 실패: %s", exc, exc_info=True)
-            result = ExecutionResult(success=False, error=str(exc), code_or_cmd=code)
-        finally:
-            duration_ms = int((time.monotonic() - start) * 1000)
-            self._python_slots.release()
+                result = self._do_run_python(code, extra_globals=extra_globals)
+            except Exception as exc:
+                logging.error("[Executor] Python 실행 준비 실패: %s", exc, exc_info=True)
+                result = ExecutionResult(success=False, error=str(exc), code_or_cmd=code)
+            finally:
+                duration_ms = int((time.monotonic() - start) * 1000)
 
         result.duration_ms = duration_ms
         result.code_or_cmd = code
@@ -222,42 +303,41 @@ class AutonomousExecutor:
 
     def run_shell(self, command: str) -> ExecutionResult:
         """쉘 명령을 안전하게 실행하고 결과를 반환한다."""
-        self._shell_slots.acquire()
+        with self._shell_slots:
+            start = time.monotonic()
+            state_before: Dict[str, Any] = {}
+            result = ExecutionResult(success=False, code_or_cmd=command)
+            try:
+                state_before = self._capture_runtime_state()
+                report = self._safety.check_shell(command)
+                logging.info(
+                    "[Executor] Shell 안전 검사: %s — %s",
+                    report.level.value,
+                    report.summary,
+                )
 
-        start = time.monotonic()
-        state_before = self._capture_runtime_state()
-        result = ExecutionResult(success=False, code_or_cmd=command)
-        try:
-            report = self._safety.check_shell(command)
-            logging.info(
-                "[Executor] Shell 안전 검사: %s — %s",
-                report.level.value,
-                report.summary,
-            )
-
-            if report.level == DangerLevel.DANGEROUS:
-                if self.tts_wrapper:
-                    self.tts_wrapper(f"주의! {report.summary}")
-                confirmed = self._ask_confirmation(f"Shell 명령 실행\n\n{command}", report)
-                if not confirmed:
-                    result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
+                if report.level == DangerLevel.DANGEROUS:
                     if self.tts_wrapper:
-                        self.tts_wrapper(_("실행을 취소했습니다."))
-                    self._attach_state_snapshot(result, state_before)
-                    self._record_history(result)
-                    return result
+                        self.tts_wrapper(f"주의! {report.summary}")
+                    confirmed = self._ask_confirmation(f"Shell 명령 실행\n\n{command}", report)
+                    if not confirmed:
+                        result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
+                        if self.tts_wrapper:
+                            self.tts_wrapper(_("실행을 취소했습니다."))
+                        self._attach_state_snapshot(result, state_before)
+                        self._record_history(result)
+                        return result
 
-            elif report.level == DangerLevel.CAUTION:
-                if self.tts_wrapper:
-                    self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
+                elif report.level == DangerLevel.CAUTION:
+                    if self.tts_wrapper:
+                        self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
 
-            result = self._do_run_shell(command)
-        except Exception as exc:
-            logging.error("[Executor] Shell 실행 준비 실패: %s", exc, exc_info=True)
-            result = ExecutionResult(success=False, error=str(exc), code_or_cmd=command)
-        finally:
-            duration_ms = int((time.monotonic() - start) * 1000)
-            self._shell_slots.release()
+                result = self._do_run_shell(command)
+            except Exception as exc:
+                logging.error("[Executor] Shell 실행 준비 실패: %s", exc, exc_info=True)
+                result = ExecutionResult(success=False, error=str(exc), code_or_cmd=command)
+            finally:
+                duration_ms = int((time.monotonic() - start) * 1000)
 
         result.duration_ms = duration_ms
         result.code_or_cmd = command
@@ -475,7 +555,7 @@ class AutonomousExecutor:
         process = None
         try:
             shell_command = self._build_shell_command(command)
-            child_env = os.environ.copy()
+            child_env = _build_child_env()
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(
@@ -683,11 +763,7 @@ class AutonomousExecutor:
         from reportlab.pdfgen import canvas
 
         font_name = "Helvetica"
-        font_candidates = [
-            ("MalgunGothic", r"C:\Windows\Fonts\malgun.ttf"),
-            ("AppleGothic", r"C:\Windows\Fonts\malgun.ttf"),
-        ]
-        for candidate_name, candidate_path in font_candidates:
+        for candidate_name, candidate_path in _PDF_FONT_CANDIDATES:
             if os.path.exists(candidate_path):
                 try:
                     pdfmetrics.registerFont(TTFont(candidate_name, candidate_path))
@@ -723,13 +799,7 @@ class AutonomousExecutor:
             return code
 
         normalized = code.replace("\r\n", "\n").strip()
-        compound_keywords = ("with ", "for ", "if ", "elif ", "else:", "try:", "except ", "finally:", "while ", "def ", "class ")
-
-        for keyword in compound_keywords:
-            normalized = re.sub(rf";\s*{re.escape(keyword)}", f"\n{keyword}", normalized)
-
-        normalized = re.sub(r";\s*(#.*)", r"\n\1", normalized)
-        return normalized
+        return _split_top_level_semicolons(normalized)
 
     def _write_python_runner(self, code: str, extra_globals: Optional[dict] = None) -> str:
         runner = self._build_python_runner_script(code, extra_globals=extra_globals)
