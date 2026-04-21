@@ -145,7 +145,7 @@ class ConfirmationManager:
             dialog.exec()
             holder["result"] = dialog.confirmed
         except Exception as e:
-            logging.error(f"확인 다이얼로그 오류: {e}")
+            logging.error("확인 다이얼로그 오류: %s", e)
             holder["result"] = False
         finally:
             holder["event"].set()
@@ -166,7 +166,7 @@ class ConfirmationManager:
             try:
                 tts_func(_("위험한 작업이 감지됐어요. {summary}. 실행할까요?", summary=report.summary))
             except Exception as e:
-                logging.debug(f"확인 안내 TTS 실패: {e}")
+                logging.debug("확인 안내 TTS 실패: %s", e)
 
         holder: dict = {"event": threading.Event(), "result": False}
         self._bridge.request_dialog.emit(action_desc, report, holder)
