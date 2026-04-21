@@ -2117,3 +2117,22 @@ msgid "{when}에 컴퓨터 꺼줘"
 msgstr "Shut down the computer at {when}"
 msgid "{when}에 컴퓨터 재시작해줘"
 msgstr "Restart the computer at {when}"
+
+msgid "전원 끄기"
+msgstr "Power off"
+
+msgid " [반복]"
+msgstr " [Repeat]"
+
+msgid "{mins}분"
+msgstr "{mins}m"
+
+msgid "{mins}분 {secs}초"
+msgstr "{mins}m {secs}s"
+
+msgid "{secs}초"
+msgstr "{secs}s"
+
+msgid "주의: {msg}"
+msgstr "Warning: {msg}"
+
