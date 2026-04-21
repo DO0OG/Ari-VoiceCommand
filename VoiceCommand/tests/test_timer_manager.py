@@ -61,6 +61,15 @@ class TimerManagerTests(unittest.TestCase):
         self.assertTrue(cancelled)
         self.assertEqual([item["name"] for item in manager.list_timers()], ["첫번째"])
 
+    def test_parse_timer_command_supports_english_and_japanese_units(self):
+        manager = TimerManager(tts_callback=lambda message: None)
+
+        english = manager.parse_timer_command("set timer for 1 hour 2 minutes 3 seconds")
+        japanese = manager.parse_timer_command("1時間 5分 10秒 タイマー")
+
+        self.assertAlmostEqual(english or 0.0, 62.05, places=2)
+        self.assertAlmostEqual(japanese or 0.0, 65.1666, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

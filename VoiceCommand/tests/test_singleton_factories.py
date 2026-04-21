@@ -46,6 +46,7 @@ class SingletonFactoryTests(unittest.TestCase):
 
     def test_thread_safe_singleton_factories_create_one_instance(self):
         cases = [
+            ("agent.confirmation_manager", "_manager_instance", "ConfirmationManager", "get_confirmation_manager"),
             ("agent.few_shot_injector", "_injector", "FewShotInjector", "get_few_shot_injector"),
             ("agent.goal_predictor", "_predictor", "GoalPredictor", "get_goal_predictor"),
             ("agent.learning_metrics", "_metrics", "LearningMetrics", "get_learning_metrics"),

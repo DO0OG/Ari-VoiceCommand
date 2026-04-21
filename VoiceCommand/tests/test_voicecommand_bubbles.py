@@ -99,6 +99,15 @@ class VoiceCommandBubbleTests(unittest.TestCase):
         self.assertIsNotNone(provider)
         self.assertIn(voicecommand._handle_tts_playback_finished, provider.playback_finished.connected)
 
+    def test_parse_emotion_text_supports_english_and_japanese_tags(self):
+        emotion_en, pure_en = voicecommand.parse_emotion_text("[happy] hello")
+        emotion_ja, pure_ja = voicecommand.parse_emotion_text("(心配) 大丈夫?")
+
+        self.assertEqual(emotion_en, "기쁨")
+        self.assertEqual(pure_en, "hello")
+        self.assertEqual(emotion_ja, "걱정")
+        self.assertEqual(pure_ja, "大丈夫?")
+
 
 if __name__ == "__main__":
     unittest.main()

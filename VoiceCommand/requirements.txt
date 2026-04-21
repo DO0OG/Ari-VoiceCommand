@@ -1,4 +1,9 @@
 # AI-Assistant (Ari) 의존성
+# 업데이트: 2026-04-22
+#   i18n 종합 보완: 타이머·확인 다이얼로그·안전 점검기 문자열 국제화 / ko·en·ja .po 54개 키 추가
+#   안전 강화: autonomous_executor 민감 환경변수 부분 문자열 필터링 / safety_checker 스레드 안전 캐시
+#   안정성: conversation_history 백그라운드 압축 / constants get_wake_responses() 함수화
+#   이번 업데이트는 새 런타임 의존성 추가 없음
 # 업데이트: 2026-04-14
 #   자기개선 루프 기준선 갱신: shared context 캐시 / 동적 계획 반복 / 반복 실패 조기 종료 /
 #   회복 전략 다변화 / lift 기반 컴포넌트 게이팅 / 임베딩 기반 skill matching / i18n locale 동기화

@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QTimer, Signal, QObject
 from PySide6.QtGui import QFont
 
 from agent.safety_checker import SafetyReport
+from i18n.translator import _
 
 
 class ConfirmationDialog(QDialog):
@@ -24,7 +25,7 @@ class ConfirmationDialog(QDialog):
         self._confirmed = False
         self._remaining = self.COUNTDOWN_SECONDS
 
-        self.setWindowTitle("⚠️ 위험한 작업 확인")
+        self.setWindowTitle(_("⚠️ 위험한 작업 확인"))
         self.setWindowFlags(
             Qt.WindowStaysOnTopHint | Qt.Dialog
         )
@@ -44,7 +45,7 @@ class ConfirmationDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
 
         # 경고 헤더
-        header = QLabel("⚠️  위험한 작업이 감지되었습니다")
+        header = QLabel(_("⚠️  위험한 작업이 감지되었습니다"))
         font = QFont()
         font.setPointSize(12)
         font.setBold(True)
@@ -59,7 +60,7 @@ class ConfirmationDialog(QDialog):
         layout.addWidget(line)
 
         # 작업 설명
-        desc_label = QLabel(f"<b>요청된 작업:</b><br>{action_desc}")
+        desc_label = QLabel(_("<b>요청된 작업:</b><br>{action_desc}", action_desc=action_desc))
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 
@@ -67,7 +68,7 @@ class ConfirmationDialog(QDialog):
         if report.matched_patterns:
             patterns_items = "".join([f"<li>{p}</li>" for p in report.matched_patterns])
             patterns_html = f"<ul style='margin-top: 4px; margin-bottom: 4px; padding-left: 20px;'>{patterns_items}</ul>"
-            pattern_label = QLabel(f"<b>감지된 위험 항목:</b><br>{patterns_html}")
+            pattern_label = QLabel(_("<b>감지된 위험 항목:</b><br>{patterns_html}", patterns_html=patterns_html))
             pattern_label.setWordWrap(True)
             pattern_label.setStyleSheet("color: #b71c1c; background: #fff3f3; padding: 8px; border-radius: 4px; font-size: 13px;")
             layout.addWidget(pattern_label)
@@ -82,14 +83,14 @@ class ConfirmationDialog(QDialog):
         # 버튼 영역
         btn_layout = QHBoxLayout()
 
-        self._cancel_btn = QPushButton("취소")
+        self._cancel_btn = QPushButton(_("취소"))
         self._cancel_btn.setStyleSheet(
             "QPushButton { background: #e0e0e0; padding: 8px 24px; border-radius: 4px; font-size: 13px; }"
             "QPushButton:hover { background: #bdbdbd; }"
         )
         self._cancel_btn.clicked.connect(self._on_cancel)
 
-        self._confirm_btn = QPushButton(f"실행 ({self.COUNTDOWN_SECONDS}초)")
+        self._confirm_btn = QPushButton(_("실행 ({seconds}초)", seconds=self.COUNTDOWN_SECONDS))
         self._confirm_btn.setStyleSheet(
             "QPushButton { background: #d32f2f; color: white; padding: 8px 24px; border-radius: 4px; font-size: 13px; }"
             "QPushButton:hover { background: #b71c1c; }"
@@ -103,7 +104,7 @@ class ConfirmationDialog(QDialog):
 
     def _tick(self):
         self._remaining -= 1
-        self._confirm_btn.setText(f"실행 ({self._remaining}초)")
+        self._confirm_btn.setText(_("실행 ({seconds}초)", seconds=self._remaining))
         if self._remaining <= 0:
             self._timer.stop()
             self._confirmed = False
@@ -144,7 +145,7 @@ class ConfirmationManager:
             dialog.exec()
             holder["result"] = dialog.confirmed
         except Exception as e:
-            logging.error(f"확인 다이얼로그 오류: {e}")
+            logging.error("확인 다이얼로그 오류: %s", e)
             holder["result"] = False
         finally:
             holder["event"].set()
@@ -163,9 +164,9 @@ class ConfirmationManager:
         """
         if tts_func:
             try:
-                tts_func(f"위험한 작업이 감지됐어요. {report.summary}. 실행할까요?")
+                tts_func(_("위험한 작업이 감지됐어요. {summary}. 실행할까요?", summary=report.summary))
             except Exception as e:
-                logging.debug(f"확인 안내 TTS 실패: {e}")
+                logging.debug("확인 안내 TTS 실패: %s", e)
 
         holder: dict = {"event": threading.Event(), "result": False}
         self._bridge.request_dialog.emit(action_desc, report, holder)
@@ -188,8 +189,7 @@ _manager_lock = threading.Lock()
 
 def get_confirmation_manager() -> ConfirmationManager:
     global _manager_instance
-    if _manager_instance is None:
-        with _manager_lock:
-            if _manager_instance is None:
-                _manager_instance = ConfirmationManager()
+    with _manager_lock:
+        if _manager_instance is None:
+            _manager_instance = ConfirmationManager()
     return _manager_instance

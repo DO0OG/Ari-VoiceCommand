@@ -11,7 +11,7 @@ from queue import Queue
 from PySide6.QtCore import QThread, Signal
 from audio.audio_manager import _audio_lock
 from core.constants import (
-    WAKE_WORDS, WAKE_RESPONSES
+    WAKE_WORDS, get_wake_responses
 )
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
@@ -146,7 +146,7 @@ class VoiceRecognitionThread(QThread):
             set_listening_indicator,
         )
         
-        response = _RNG.choice(WAKE_RESPONSES)
+        response = _RNG.choice(get_wake_responses())
         tts_wrapper(response)
         
         # TTS 재생 완료 대기 (유동적 대기)

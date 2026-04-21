@@ -257,8 +257,6 @@ msgstr "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된
 msgid "실패 기록"
 msgstr "실패 기록"
 
-msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
-msgstr "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
 
 msgid "'{model}' 모델 준비가 완료되었습니다."
 msgstr "'{model}' 모델 준비가 완료되었습니다."
@@ -1916,78 +1914,206 @@ msgstr "응?ㅋ"
 msgid "내일은 크리스마스예요!"
 msgstr "내일은 크리스마스예요!"
 
+msgid "부르셨나요?"
+msgstr "부르셨나요?"
+
+msgid "타이머는 최대 {max}개까지 설정할 수 있습니다."
+msgstr "타이머는 최대 {max}개까지 설정할 수 있습니다."
+
+msgid "{label} 타이머를 설정했습니다."
+msgstr "{label} 타이머를 설정했습니다."
+
+msgid "'{name}' 타이머를 설정했습니다. ({label})"
+msgstr "'{name}' 타이머를 설정했습니다. ({label})"
+
+msgid "'{name}' 타이머를 찾지 못했습니다."
+msgstr "'{name}' 타이머를 찾지 못했습니다."
+
+msgid "타이머가 취소되었습니다."
+msgstr "타이머가 취소되었습니다."
+
+msgid "'{name}' 타이머를 취소했습니다."
+msgstr "'{name}' 타이머를 취소했습니다."
+
+msgid "{label} 타이머가 완료되었습니다."
+msgstr "{label} 타이머가 완료되었습니다."
+
+msgid "'{name}' 타이머가 완료되었습니다."
+msgstr "'{name}' 타이머가 완료되었습니다."
+
+msgid "타이머 {index}"
+msgstr "타이머 {index}"
+
+msgid "⚠️ 위험한 작업 확인"
+msgstr "⚠️ 위험한 작업 확인"
+
+msgid "⚠️  위험한 작업이 감지되었습니다"
+msgstr "⚠️  위험한 작업이 감지되었습니다"
+
+msgid "<b>요청된 작업:</b><br>{action_desc}"
+msgstr "<b>요청된 작업:</b><br>{action_desc}"
+
+msgid "<b>감지된 위험 항목:</b><br>{patterns_html}"
+msgstr "<b>감지된 위험 항목:</b><br>{patterns_html}"
+
+msgid "실행 ({seconds}초)"
+msgstr "실행 ({seconds}초)"
+
+msgid "위험한 작업이 감지됐어요. {summary}. 실행할까요?"
+msgstr "위험한 작업이 감지됐어요. {summary}. 실행할까요?"
+
+msgid "위험한 시스템 명령 감지: {matched}"
+msgstr "위험한 시스템 명령 감지: {matched}"
+
+msgid "주의가 필요한 파이썬 작업: {matched}"
+msgstr "주의가 필요한 파이썬 작업: {matched}"
+
+msgid "안전한 코드입니다."
+msgstr "안전한 코드입니다."
+
+msgid "안전한 명령입니다."
+msgstr "안전한 명령입니다."
+
+msgid "주의가 필요한 명령: {matched}"
+msgstr "주의가 필요한 명령: {matched}"
+
+msgid "민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({blocked})."
+msgstr "민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({blocked})."
+
+msgid "민감한 페이지 접근 감지 ({matched}). 자동화 시 보안 위험이 있습니다."
+msgstr "민감한 페이지 접근 감지 ({matched}). 자동화 시 보안 위험이 있습니다."
+
+msgid "암호화되지 않은(HTTP) 사이트 접근입니다."
+msgstr "암호화되지 않은(HTTP) 사이트 접근입니다."
+
+msgid "신뢰 정책에 포함된 사이트입니다."
+msgstr "신뢰 정책에 포함된 사이트입니다."
+
+msgid "안전한 URL입니다."
+msgstr "안전한 URL입니다."
+
+msgid "위험 앱 정책에 의해 차단된 대상입니다: {app}"
+msgstr "위험 앱 정책에 의해 차단된 대상입니다: {app}"
+
+msgid "신뢰할 수 있는 앱입니다."
+msgstr "신뢰할 수 있는 앱입니다."
+
+msgid "알 수 없는 외부 앱({app}) 실행 시도입니다."
+msgstr "알 수 없는 외부 앱({app}) 실행 시도입니다."
+
+msgid "파일/폴더 삭제"
+msgstr "파일/폴더 삭제"
+
+msgid "폴더 강제 삭제"
+msgstr "폴더 강제 삭제"
+
+msgid "저수준 시스템 접근"
+msgstr "저수준 시스템 접근"
+
+msgid "Windows API/레지스트리 접근"
+msgstr "Windows API/레지스트리 접근"
+
+msgid "데이터 외부 전송/수정"
+msgstr "데이터 외부 전송/수정"
+
+msgid "파일 쓰기"
+msgstr "파일 쓰기"
+
+msgid "외부 프로세스 실행"
+msgstr "외부 프로세스 실행"
+
+msgid "GUI 직접 제어"
+msgstr "GUI 직접 제어"
+
+msgid "세션 종료"
+msgstr "세션 종료"
+
+msgid "디스크 포맷"
+msgstr "디스크 포맷"
+
+msgid "강제 파일 삭제"
+msgstr "강제 파일 삭제"
+
+msgid "레지스트리 삭제"
+msgstr "레지스트리 삭제"
+
+msgid "방화벽 설정 변경"
+msgstr "방화벽 설정 변경"
+
+msgid "부트 설정 변경"
+msgstr "부트 설정 변경"
+
+msgid "디스크 파티션 조작"
+msgstr "디스크 파티션 조작"
+
+msgid "외부 데이터 전송"
+msgstr "외부 데이터 전송"
+
+msgid "프로세스 강제 종료"
+msgstr "프로세스 강제 종료"
+
+msgid "사용자 계정 변경"
+msgstr "사용자 계정 변경"
+
+msgid "서비스 중지/시작"
+msgstr "서비스 중지/시작"
+
+msgid "로그인 자동화"
+msgstr "로그인 자동화"
+
+msgid "민감 정보 입력 자동화"
+msgstr "민감 정보 입력 자동화"
+
+msgid "상태 인식 자동화"
+msgstr "상태 인식 자동화"
+
 msgid "매일"
 msgstr "매일"
-
 msgid "매주"
 msgstr "매주"
-
 msgid "매시간"
 msgstr "매시간"
-
 msgid "오늘"
 msgstr "오늘"
-
 msgid "내일"
 msgstr "내일"
-
 msgid "스케줄"
 msgstr "스케줄"
-
 msgid "예약"
 msgstr "예약"
-
 msgid "반복"
 msgstr "반복"
-
 msgid "알려줘"
 msgstr "알려줘"
-
 msgid "확인해줘"
 msgstr "확인해줘"
-
 msgid "타이머 시간을 말씀해 주세요."
 msgstr "타이머 시간을 말씀해 주세요."
-
 msgid "'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
 msgstr "'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
-
 msgid "예약할 작업과 시간을 알려주세요."
 msgstr "예약할 작업과 시간을 알려주세요."
-
 msgid "스케줄러를 사용할 수 없습니다."
 msgstr "스케줄러를 사용할 수 없습니다."
-
 msgid " (반복)"
 msgstr " (반복)"
-
 msgid "작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다."
 msgstr "작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다."
-
 msgid "취소할 작업 ID를 알려주세요."
 msgstr "취소할 작업 ID를 알려주세요."
-
 msgid "작업 {task_id}가 취소되었습니다."
 msgstr "작업 {task_id}가 취소되었습니다."
-
 msgid "ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
 msgstr "ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
-
 msgid "현재 예약된 작업이 없습니다."
 msgstr "현재 예약된 작업이 없습니다."
-
 msgid "예약된 작업 {count}개:"
 msgstr "예약된 작업 {count}개:"
-
 msgid "  [{task_id}] {time}{repeat} — {goal}"
 msgstr "  [{task_id}] {time}{repeat} — {goal}"
-
 msgid "{month}월 {day}일 {time}"
 msgstr "{month}월 {day}일 {time}"
-
 msgid "{when}에 컴퓨터 꺼줘"
 msgstr "{when}에 컴퓨터 꺼줘"
-
 msgid "{when}에 컴퓨터 재시작해줘"
 msgstr "{when}에 컴퓨터 재시작해줘"
-

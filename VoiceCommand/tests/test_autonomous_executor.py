@@ -18,6 +18,8 @@ class AutonomousExecutorTests(unittest.TestCase):
             "AZURE_OPENAI_KEY": "blocked",
             "GOOGLE_API_KEY": "blocked",
             "GITHUB_TOKEN": "blocked",
+            "MY_OPENAI_API_KEY": "blocked",
+            "FISH_API_KEY": "blocked",
             "PRIVATE_TOKEN": "blocked",
             "CUSTOM_VALUE": "allowed",
         }
@@ -31,6 +33,8 @@ class AutonomousExecutorTests(unittest.TestCase):
         self.assertNotIn("AZURE_OPENAI_KEY", child_env)
         self.assertNotIn("GOOGLE_API_KEY", child_env)
         self.assertNotIn("GITHUB_TOKEN", child_env)
+        self.assertNotIn("MY_OPENAI_API_KEY", child_env)
+        self.assertNotIn("FISH_API_KEY", child_env)
         self.assertNotIn("PRIVATE_TOKEN", child_env)
 
     def test_runner_script_exposes_learned_strategies_helpers(self):

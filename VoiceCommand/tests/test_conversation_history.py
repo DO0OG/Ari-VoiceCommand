@@ -19,6 +19,8 @@ class ConversationHistoryTests(unittest.TestCase):
         history._lock = threading.RLock()
         history._save_timer = None
         history._save_delay_seconds = 0.05
+        history._compression_in_progress = False
+        history._compression_thread = None
         return history
 
     def test_add_debounces_and_persists_history(self):
@@ -137,6 +139,34 @@ class ConversationHistoryTests(unittest.TestCase):
 
             self.assertEqual(len(history.active), 1)
             self.assertEqual(history.active[0]["user"], "실사용 질문")
+
+    def test_async_compression_keeps_active_entries_until_summary_finishes(self):
+        history = self._make_history(tempfile.gettempdir())
+        history.MAX_ACTIVE = 2
+        history.COMPRESS_UNIT = 1
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_summary(items):
+            started.set()
+            release.wait(timeout=1.0)
+            return f"요약:{items[0]['user']}"
+
+        history._summarize_chunk = slow_summary
+        history.add("첫 질문", "첫 답변")
+        history.add("둘 질문", "둘 답변")
+        history.add("셋 질문", "셋 답변")
+
+        self.assertTrue(started.wait(timeout=0.5))
+        self.assertEqual(len(history.active), 3)
+        self.assertEqual(history.summaries, [])
+
+        release.set()
+        history.flush()
+
+        self.assertEqual(len(history.active), 2)
+        self.assertEqual(history.active[0]["user"], "둘 질문")
+        self.assertEqual(history.summaries, ["요약:첫 질문"])
 
 
 if __name__ == "__main__":

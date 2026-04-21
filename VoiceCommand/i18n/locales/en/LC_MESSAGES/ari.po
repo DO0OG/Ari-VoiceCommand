@@ -257,8 +257,6 @@ msgstr "\n* Refer to above cases to avoid mistakes and use proven methods."
 msgid "실패 기록"
 msgstr "Failure Record"
 
-msgid "\n※ 위 사례를 참고하여 동일한 실수를 피하고 검증된 방식을 사용하세요."
-msgstr "\n※ Refer to the above examples to avoid the same mistakes and use proven approaches."
 
 msgid "'{model}' 모델 준비가 완료되었습니다."
 msgstr "'{model}' model is ready."
@@ -1916,78 +1914,206 @@ msgstr "Hmm? lol"
 msgid "내일은 크리스마스예요!"
 msgstr "Tomorrow is Christmas!"
 
+msgid "부르셨나요?"
+msgstr "Did you call me?"
+
+msgid "타이머는 최대 {max}개까지 설정할 수 있습니다."
+msgstr "You can set up to {max} timers."
+
+msgid "{label} 타이머를 설정했습니다."
+msgstr "Set a {label} timer."
+
+msgid "'{name}' 타이머를 설정했습니다. ({label})"
+msgstr "Set the '{name}' timer. ({label})"
+
+msgid "'{name}' 타이머를 찾지 못했습니다."
+msgstr "Could not find the '{name}' timer."
+
+msgid "타이머가 취소되었습니다."
+msgstr "The timer was canceled."
+
+msgid "'{name}' 타이머를 취소했습니다."
+msgstr "Canceled the '{name}' timer."
+
+msgid "{label} 타이머가 완료되었습니다."
+msgstr "The {label} timer is complete."
+
+msgid "'{name}' 타이머가 완료되었습니다."
+msgstr "The '{name}' timer is complete."
+
+msgid "타이머 {index}"
+msgstr "Timer {index}"
+
+msgid "⚠️ 위험한 작업 확인"
+msgstr "⚠️ Confirm Risky Action"
+
+msgid "⚠️  위험한 작업이 감지되었습니다"
+msgstr "⚠️  A Risky Action Was Detected"
+
+msgid "<b>요청된 작업:</b><br>{action_desc}"
+msgstr "<b>Requested action:</b><br>{action_desc}"
+
+msgid "<b>감지된 위험 항목:</b><br>{patterns_html}"
+msgstr "<b>Detected risk items:</b><br>{patterns_html}"
+
+msgid "실행 ({seconds}초)"
+msgstr "Run ({seconds}s)"
+
+msgid "위험한 작업이 감지됐어요. {summary}. 실행할까요?"
+msgstr "A risky action was detected. {summary}. Should I proceed?"
+
+msgid "위험한 시스템 명령 감지: {matched}"
+msgstr "Dangerous system command detected: {matched}"
+
+msgid "주의가 필요한 파이썬 작업: {matched}"
+msgstr "Python activity requiring caution: {matched}"
+
+msgid "안전한 코드입니다."
+msgstr "The code looks safe."
+
+msgid "안전한 명령입니다."
+msgstr "The command looks safe."
+
+msgid "주의가 필요한 명령: {matched}"
+msgstr "Command requiring caution: {matched}"
+
+msgid "민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({blocked})."
+msgstr "This address may lead to sensitive or destructive web actions ({blocked})."
+
+msgid "민감한 페이지 접근 감지 ({matched}). 자동화 시 보안 위험이 있습니다."
+msgstr "Sensitive page access detected ({matched}). Automation may be unsafe."
+
+msgid "암호화되지 않은(HTTP) 사이트 접근입니다."
+msgstr "This is an unencrypted (HTTP) site."
+
+msgid "신뢰 정책에 포함된 사이트입니다."
+msgstr "This site is included in the trust policy."
+
+msgid "안전한 URL입니다."
+msgstr "The URL looks safe."
+
+msgid "위험 앱 정책에 의해 차단된 대상입니다: {app}"
+msgstr "Blocked by the risky-app policy: {app}"
+
+msgid "신뢰할 수 있는 앱입니다."
+msgstr "This app is trusted."
+
+msgid "알 수 없는 외부 앱({app}) 실행 시도입니다."
+msgstr "Attempting to launch an unknown external app ({app})."
+
+msgid "파일/폴더 삭제"
+msgstr "Delete files/folders"
+
+msgid "폴더 강제 삭제"
+msgstr "Force-delete folder"
+
+msgid "저수준 시스템 접근"
+msgstr "Low-level system access"
+
+msgid "Windows API/레지스트리 접근"
+msgstr "Windows API/registry access"
+
+msgid "데이터 외부 전송/수정"
+msgstr "External data transfer/modification"
+
+msgid "파일 쓰기"
+msgstr "File write"
+
+msgid "외부 프로세스 실행"
+msgstr "Run external process"
+
+msgid "GUI 직접 제어"
+msgstr "Direct GUI control"
+
+msgid "세션 종료"
+msgstr "End session"
+
+msgid "디스크 포맷"
+msgstr "Format disk"
+
+msgid "강제 파일 삭제"
+msgstr "Force-delete files"
+
+msgid "레지스트리 삭제"
+msgstr "Delete registry entries"
+
+msgid "방화벽 설정 변경"
+msgstr "Modify firewall settings"
+
+msgid "부트 설정 변경"
+msgstr "Modify boot settings"
+
+msgid "디스크 파티션 조작"
+msgstr "Modify disk partitions"
+
+msgid "외부 데이터 전송"
+msgstr "Transfer external data"
+
+msgid "프로세스 강제 종료"
+msgstr "Force-stop process"
+
+msgid "사용자 계정 변경"
+msgstr "Modify user account"
+
+msgid "서비스 중지/시작"
+msgstr "Stop/start service"
+
+msgid "로그인 자동화"
+msgstr "Login automation"
+
+msgid "민감 정보 입력 자동화"
+msgstr "Sensitive input automation"
+
+msgid "상태 인식 자동화"
+msgstr "State-aware automation"
+
 msgid "매일"
 msgstr "every day"
-
 msgid "매주"
 msgstr "every week"
-
 msgid "매시간"
 msgstr "every hour"
-
 msgid "오늘"
 msgstr "today"
-
 msgid "내일"
 msgstr "tomorrow"
-
 msgid "스케줄"
 msgstr "schedule"
-
 msgid "예약"
 msgstr "schedule"
-
 msgid "반복"
 msgstr "repeat"
-
 msgid "알려줘"
 msgstr "tell me"
-
 msgid "확인해줘"
 msgstr "check it"
-
 msgid "타이머 시간을 말씀해 주세요."
 msgstr "Please tell me the timer duration."
-
 msgid "'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
 msgstr "I couldn't understand '{when}' as a time expression. Please say it like 'in 5 minutes', 'at 11:30', or 'every day 9 AM'."
-
 msgid "예약할 작업과 시간을 알려주세요."
 msgstr "Please tell me what to schedule and when."
-
 msgid "스케줄러를 사용할 수 없습니다."
 msgstr "The scheduler is unavailable."
-
 msgid " (반복)"
 msgstr " (repeat)"
-
 msgid "작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다."
 msgstr "Scheduled task created (ID: {task_id}){repeat}. It will run at {formatted}."
-
 msgid "취소할 작업 ID를 알려주세요."
 msgstr "Please tell me the task ID to cancel."
-
 msgid "작업 {task_id}가 취소되었습니다."
 msgstr "Task {task_id} has been cancelled."
-
 msgid "ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
 msgstr "Couldn't find a task with ID '{task_id}'."
-
 msgid "현재 예약된 작업이 없습니다."
 msgstr "There are no scheduled tasks right now."
-
 msgid "예약된 작업 {count}개:"
 msgstr "{count} scheduled task(s):"
-
 msgid "  [{task_id}] {time}{repeat} — {goal}"
 msgstr "  [{task_id}] {time}{repeat} — {goal}"
-
 msgid "{month}월 {day}일 {time}"
 msgstr "{month}/{day} {time}"
-
 msgid "{when}에 컴퓨터 꺼줘"
 msgstr "Shut down the computer at {when}"
-
 msgid "{when}에 컴퓨터 재시작해줘"
 msgstr "Restart the computer at {when}"
-

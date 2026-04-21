@@ -85,6 +85,10 @@ def _scan(rules: List[_CompiledRule], text: str) -> List[str]:
     return [desc for pattern, desc in rules if pattern.search(text)]
 
 
+def _translate_matches(items: List[str]) -> List[str]:
+    return [_(item) for item in items]
+
+
 class SafetyChecker:
     """코드/명령/URL의 위험 수준을 분류하는 검사기 (Phase 1.3 고도화)"""
 
@@ -93,10 +97,12 @@ class SafetyChecker:
         self._shell_cache: dict[str, SafetyReport] = {}
         self._url_cache: dict[str, SafetyReport] = {}
         self._app_cache: dict[str, SafetyReport] = {}
+        self._cache_lock = threading.Lock()
 
     def check_python(self, code: str) -> SafetyReport:
-        if code in self._python_cache:
-            return self._clone_report(self._python_cache[code])
+        cached = self._get_cached(self._python_cache, code)
+        if cached is not None:
+            return cached
         matched = _scan(_DANGEROUS_PYTHON, code)
         if "browser_login" in code:
             matched.append("로그인 자동화")
@@ -105,102 +111,98 @@ class SafetyChecker:
         ):
             matched.append("민감 정보 입력 자동화")
         if matched:
+            translated = _translate_matches(matched)
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
-                matched_patterns=matched,
-                summary=_("위험한 파이썬 작업 감지: {matched}", matched=", ".join(matched)),
+                matched_patterns=translated,
+                summary=_("위험한 파이썬 작업 감지: {matched}", matched=", ".join(translated)),
                 category="web" if "로그인" in "".join(matched) else ("file_system" if "삭제" in "".join(matched) else "system")
             )
-            self._python_cache[code] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._python_cache, code, report)
         caution = _scan(_CAUTION_PYTHON, code)
         if any(token in code for token in ("click_image", "focus_window", "wait_for_download")):
             caution.append("상태 인식 자동화")
         if caution:
+            translated = _translate_matches(caution)
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
-                matched_patterns=caution,
-                summary=f"주의가 필요한 파이썬 작업: {', '.join(caution)}",
+                matched_patterns=translated,
+                summary=_("주의가 필요한 파이썬 작업: {matched}", matched=", ".join(translated)),
                 category="automation" if "GUI" in "".join(caution) else "file_system"
             )
-            self._python_cache[code] = report
-            return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 코드입니다.")
-        self._python_cache[code] = report
-        return self._clone_report(report)
+            return self._store_and_clone(self._python_cache, code, report)
+        report = SafetyReport(level=DangerLevel.SAFE, summary=_("안전한 코드입니다."))
+        return self._store_and_clone(self._python_cache, code, report)
 
     def check_shell(self, command: str) -> SafetyReport:
-        if command in self._shell_cache:
-            return self._clone_report(self._shell_cache[command])
+        cached = self._get_cached(self._shell_cache, command)
+        if cached is not None:
+            return cached
         matched = _scan(_DANGEROUS_SHELL, command)
         if matched:
+            translated = _translate_matches(matched)
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
-                matched_patterns=matched,
-                summary=f"위험한 시스템 명령 감지: {', '.join(matched)}",
+                matched_patterns=translated,
+                summary=_("위험한 시스템 명령 감지: {matched}", matched=", ".join(translated)),
                 category="system"
             )
-            self._shell_cache[command] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._shell_cache, command, report)
         caution = _scan(_CAUTION_SHELL, command)
         if caution:
+            translated = _translate_matches(caution)
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
-                matched_patterns=caution,
-                summary=f"주의가 필요한 명령: {', '.join(caution)}",
+                matched_patterns=translated,
+                summary=_("주의가 필요한 명령: {matched}", matched=", ".join(translated)),
                 category="system"
             )
-            self._shell_cache[command] = report
-            return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 명령입니다.")
-        self._shell_cache[command] = report
-        return self._clone_report(report)
+            return self._store_and_clone(self._shell_cache, command, report)
+        report = SafetyReport(level=DangerLevel.SAFE, summary=_("안전한 명령입니다."))
+        return self._store_and_clone(self._shell_cache, command, report)
 
     def check_url(self, url: str) -> SafetyReport:
         """URL의 안전성을 검사한다."""
-        if url in self._url_cache:
-            return self._clone_report(self._url_cache[url])
+        cached = self._get_cached(self._url_cache, url)
+        if cached is not None:
+            return cached
         url_lower = url.lower()
         blocked = [kw for kw in _BLOCKED_SITE_KEYWORDS if kw in url_lower]
         if blocked:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=blocked,
-                summary=f"민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({', '.join(blocked)}).",
+                summary=_("민감하거나 파괴적인 웹 작업 가능성이 있는 주소입니다 ({blocked}).", blocked=", ".join(blocked)),
                 category="web"
             )
-            self._url_cache[url] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._url_cache, url, report)
         matched = [kw for kw in _DANGEROUS_URL_KEYWORDS if kw in url_lower]
         if matched:
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=matched,
-                summary=f"민감한 페이지 접근 감지 ({', '.join(matched)}). 자동화 시 보안 위험이 있습니다.",
+                summary=_("민감한 페이지 접근 감지 ({matched}). 자동화 시 보안 위험이 있습니다.", matched=", ".join(matched)),
                 category="web"
             )
-            self._url_cache[url] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._url_cache, url, report)
         if not url_lower.startswith("https://"):
             report = SafetyReport(
                 level=DangerLevel.CAUTION,
-                summary="암호화되지 않은(HTTP) 사이트 접근입니다.",
+                summary=_("암호화되지 않은(HTTP) 사이트 접근입니다."),
                 category="web"
             )
-            self._url_cache[url] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._url_cache, url, report)
         if any(keyword in url_lower for keyword in _TRUSTED_SITE_KEYWORDS):
-            report = SafetyReport(level=DangerLevel.SAFE, summary="신뢰 정책에 포함된 사이트입니다.", category="web")
-            self._url_cache[url] = report
-            return self._clone_report(report)
-        report = SafetyReport(level=DangerLevel.SAFE, summary="안전한 URL입니다.")
-        self._url_cache[url] = report
-        return self._clone_report(report)
+            report = SafetyReport(level=DangerLevel.SAFE, summary=_("신뢰 정책에 포함된 사이트입니다."), category="web")
+            return self._store_and_clone(self._url_cache, url, report)
+        report = SafetyReport(level=DangerLevel.SAFE, summary=_("안전한 URL입니다."))
+        return self._store_and_clone(self._url_cache, url, report)
 
     def check_app_launch(self, app_name: str) -> SafetyReport:
         """앱 실행의 안전성을 검사한다."""
-        if app_name in self._app_cache:
-            return self._clone_report(self._app_cache[app_name])
+        cached = self._get_cached(self._app_cache, app_name)
+        if cached is not None:
+            return cached
         # Path.resolve() 기반 정규화로 대소문자/유니코드 우회 방지
         try:
             resolved_stem = Path(app_name).resolve().stem.lower()
@@ -211,22 +213,29 @@ class SafetyChecker:
         if any(blocked in normalized for blocked in _BLOCKED_APPS):
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
-                summary=f"위험 앱 정책에 의해 차단된 대상입니다: {app_name}",
+                summary=_("위험 앱 정책에 의해 차단된 대상입니다: {app}", app=app_name),
                 category="app"
             )
-            self._app_cache[app_name] = report
-            return self._clone_report(report)
+            return self._store_and_clone(self._app_cache, app_name, report)
         if any(allowed in app_lower for allowed in _ALWAYS_ALLOWED_APPS):
-            report = SafetyReport(level=DangerLevel.SAFE, summary="신뢰할 수 있는 앱입니다.")
-            self._app_cache[app_name] = report
-            return self._clone_report(report)
+            report = SafetyReport(level=DangerLevel.SAFE, summary=_("신뢰할 수 있는 앱입니다."))
+            return self._store_and_clone(self._app_cache, app_name, report)
         
         report = SafetyReport(
             level=DangerLevel.CAUTION,
-            summary=f"알 수 없는 외부 앱({app_name}) 실행 시도입니다.",
+            summary=_("알 수 없는 외부 앱({app}) 실행 시도입니다.", app=app_name),
             category="app"
         )
-        self._app_cache[app_name] = report
+        return self._store_and_clone(self._app_cache, app_name, report)
+
+    def _get_cached(self, cache: dict[str, SafetyReport], key: str) -> SafetyReport | None:
+        with self._cache_lock:
+            report = cache.get(key)
+        return self._clone_report(report) if report is not None else None
+
+    def _store_and_clone(self, cache: dict[str, SafetyReport], key: str, report: SafetyReport) -> SafetyReport:
+        with self._cache_lock:
+            cache[key] = report
         return self._clone_report(report)
 
     def _clone_report(self, report: SafetyReport) -> SafetyReport:
@@ -244,8 +253,7 @@ _checker_lock = threading.Lock()
 
 def get_safety_checker() -> SafetyChecker:
     global _checker_instance
-    if _checker_instance is None:
-        with _checker_lock:
-            if _checker_instance is None:
-                _checker_instance = SafetyChecker()
+    with _checker_lock:
+        if _checker_instance is None:
+            _checker_instance = SafetyChecker()
     return _checker_instance

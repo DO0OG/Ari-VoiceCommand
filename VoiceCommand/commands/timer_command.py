@@ -31,7 +31,7 @@ class TimerCommand(BaseCommand):
                 secs = int(remaining % 60)
                 
                 # 타이머 이름 처리 (번역된 접두사 사용)
-                prefix = _("타이머") if name.startswith("타이머 ") else _("'{name}' 타이머").format(name=name)
+                prefix = _("타이머") if target.get("auto_named") else _("'{name}' 타이머").format(name=name)
                 
                 if mins > 0 and secs > 0:
                     self.tts_wrapper(_("{prefix} {mins}분 {secs}초 남았습니다.").format(prefix=prefix, mins=mins, secs=secs))

@@ -11,6 +11,17 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-22 최신):
+  agent/confirmation_manager.py — 모든 UI 문자열 i18n 적용 + Codacy W1202 f-string 로깅 수정
+  agent/safety_checker.py      — 스레드 안전 캐시(_cache_lock) + _translate_matches() i18n
+  agent/autonomous_executor.py — _SENSITIVE_ENV_SUBSTRINGS 민감 환경변수 부분 문자열 필터링
+  core/VoiceCommand.py         — LearningModeState TypedDict + _EMOTION_ALIASES ko/en/ja
+  core/constants.py            — WAKE_RESPONSES 제거 → get_wake_responses() 함수로 i18n 지원
+  core/stt_provider.py         — 내부 로그 메시지 영문화
+  memory/conversation_history.py — _compress_oldest() 백그라운드 스레드 처리 + flush() 대기
+  services/timer_manager.py    — 타이머 전체 i18n + 한/영/일 시간 단위 파싱(_iter_duration_matches)
+  i18n/locales/*.po            — ko/en/ja 54개 번역 키 추가 (타이머·확인 다이얼로그·안전 점검기)
+
 포함 모듈 (2026-04-14 최신):
   agent/agent_orchestrator.py — shared context 캐시, 동적 계획 반복, 반복 실패 조기 종료
   agent/execution_engine.py   — 반복 동일 오류 중단, 회복 전략 다변화, 단계 타임아웃 힌트
