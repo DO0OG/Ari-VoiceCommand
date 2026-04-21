@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 from collections import deque
-from typing import Tuple
+from typing import Tuple, TypedDict
 import speech_recognition as sr
 
 # SSL 인증서 경로 설정 (PyInstaller 환경)
@@ -27,11 +27,15 @@ from services.weather_service import WeatherService
 from services.timer_manager import TimerManager
 from i18n.translator import _
 
+
+class LearningModeState(TypedDict):
+    enabled: bool
+
 class AppState:
     """앱 전체 가변 상태를 한 곳에서 관리하는 컨테이너."""
     def __init__(self):
         self.ai_assistant = None
-        self.learning_mode = {'enabled': False}
+        self.learning_mode: LearningModeState = {'enabled': False}
         self.fish_tts = None
         self.rp_gen = None
         self.character_widget = None
@@ -87,7 +91,7 @@ def set_character_widget(widget: object) -> None:
         from agent.agent_orchestrator import get_orchestrator
         orch = get_orchestrator()
         orch.set_thinking_callback(widget.thinking_signal.emit)
-    except Exception as e:
+    except (ImportError, AttributeError, RuntimeError) as e:
         logging.warning("오케스트레이터 생각 콜백 연결 실패: %s", e)
         
     reconnect_tts_signals()
@@ -109,14 +113,14 @@ def start_tts_background():
                     _state.fish_tts.wait_until_warmup_done()
                 _state.tts_init_event.set()
                 tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
-            except Exception as e:
+            except (ImportError, OSError, RuntimeError, ValueError) as e:
                 logging.error("TTS 초기화 실패: %s", e)
                 _state.tts_init_event.set()
         threading.Thread(target=_run, daemon=True).start()
     else:
         try:
             initialize_tts()
-        except Exception as e:
+        except (ImportError, OSError, RuntimeError, ValueError) as e:
             logging.error("TTS 초기화 실패 (동기): %s", e)
         finally:
             _state.tts_init_event.set()
@@ -133,11 +137,11 @@ def initialize_tts():
         if _state.fish_tts and hasattr(_state.fish_tts, "cleanup"):
             try:
                 _state.fish_tts.cleanup()
-            except Exception as e:
+            except (AttributeError, OSError, RuntimeError) as e:
                 logging.debug("기존 TTS 정리 중 무시된 오류: %s", e)
         try:
             _state.fish_tts, _ = create_tts_provider()
-        except Exception as exc:
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
             logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
             fallback = settings.get("tts_fallback_provider", "edge")
             fallback_settings = dict(settings)
@@ -150,10 +154,10 @@ def initialize_tts():
         try:
             try:
                 _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
-            except Exception as exc:
+            except (AttributeError, RuntimeError, TypeError) as exc:
                 logging.debug("기존 TTS 시그널 분리 생략: %s", exc)
             _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
-        except Exception as exc:
+        except (AttributeError, RuntimeError, TypeError) as exc:
             logging.debug("TTS 시그널 연결 실패: %s", exc)
 
     _state.rp_gen = RPGenerator()
@@ -172,18 +176,67 @@ def reconnect_tts_signals():
     try:
         try:
             _state.fish_tts.playback_finished.disconnect(_handle_tts_playback_finished)
-        except Exception as exc:
+        except (AttributeError, RuntimeError, TypeError) as exc:
             logging.debug("기존 재생 완료 시그널 해제 생략: %s", exc)
         _state.fish_tts.playback_finished.connect(_handle_tts_playback_finished)
-    except Exception as e:
+    except (AttributeError, RuntimeError, TypeError) as e:
         logging.debug("TTS 시그널 재연결 실패: %s", e)
 
 
 # ── 실행 로직 ───────────────────────────────────────────────────────────────
 
 # 감정 태그 파싱용 정규표현식 사전 컴파일 (성능 최적화)
-_EMOTION_NAMES = "기쁨|슬픔|화남|놀람|평온|수줍|기대|진지|걱정"
-EMOTION_PATTERN = re.compile(rf'[\(\[]({_EMOTION_NAMES})[\)\]]')
+_EMOTION_ALIASES = {
+    "기쁨": "기쁨",
+    "happy": "기쁨",
+    "joy": "기쁨",
+    "嬉しい": "기쁨",
+    "喜び": "기쁨",
+    "슬픔": "슬픔",
+    "sad": "슬픔",
+    "sadness": "슬픔",
+    "悲しい": "슬픔",
+    "悲しみ": "슬픔",
+    "화남": "화남",
+    "angry": "화남",
+    "anger": "화남",
+    "怒り": "화남",
+    "怒った": "화남",
+    "놀람": "놀람",
+    "surprised": "놀람",
+    "surprise": "놀람",
+    "驚き": "놀람",
+    "びっくり": "놀람",
+    "평온": "평온",
+    "calm": "평온",
+    "neutral": "평온",
+    "serene": "평온",
+    "穏やか": "평온",
+    "平穏": "평온",
+    "수줍": "수줍",
+    "shy": "수줍",
+    "embarrassed": "수줍",
+    "照れ": "수줍",
+    "恥ずかしい": "수줍",
+    "기대": "기대",
+    "excited": "기대",
+    "anticipation": "기대",
+    "期待": "기대",
+    "楽しみ": "기대",
+    "진지": "진지",
+    "serious": "진지",
+    "focused": "진지",
+    "seriousness": "진지",
+    "真剣": "진지",
+    "걱정": "걱정",
+    "worried": "걱정",
+    "worry": "걱정",
+    "anxious": "걱정",
+    "心配": "걱정",
+    "不安": "걱정",
+}
+_EMOTION_NAMES = "|".join(sorted((re.escape(name) for name in _EMOTION_ALIASES), key=len, reverse=True))
+EMOTION_PATTERN = re.compile(rf'[\(\[]({_EMOTION_NAMES})[\)\]]', re.IGNORECASE)
 
 # 감정별 이모지 매핑 (이미지 제작 부담 완화 및 표현력 강화)
 EMOTION_EMOJI = {
@@ -197,7 +250,7 @@ def parse_emotion_text(text: str) -> Tuple[str, str]:
     emotion = "평온"
     matches = EMOTION_PATTERN.findall(text or "")
     if matches:
-        emotion = matches[-1]
+        emotion = _EMOTION_ALIASES.get(matches[-1].casefold(), _EMOTION_ALIASES.get(matches[-1], emotion))
     pure_text = EMOTION_PATTERN.sub("", text or "")
     pure_text = re.sub(r'\s+', ' ', pure_text).strip()
     return emotion, pure_text
@@ -289,7 +342,7 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
         return ok
-    except Exception as e:
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as e:
         logging.error("TTS 오류: %s", e)
         if show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
@@ -371,14 +424,14 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
         signal.emit(text)
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")
-    except Exception as e:
+    except (sr.RequestError, OSError, RuntimeError, ValueError) as e:
         logging.error("음성 인식 오류: %s", e)
 
 
 def wake_detector_recalibrate_helper(detector, source):
     try:
         detector.recalibrate(source)
-    except Exception as exc:  # nosec B110
+    except (AttributeError, OSError, RuntimeError) as exc:  # nosec B110
         logging.debug("웨이크 디텍터 재보정 실패, 계속 진행: %s", exc)
         pass
 
@@ -400,7 +453,7 @@ def adjust_volume(change):
         new_v = max(0.0, min(1.0, curr + change))
         volume.SetMasterVolumeLevelScalar(new_v, None)
         tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
-    except Exception as exc:
+    except (AttributeError, ImportError, OSError, RuntimeError, ValueError) as exc:
         logging.debug("시스템 볼륨 조절 실패: %s", exc)
         tts_wrapper(_("볼륨 조절 실패"))
 

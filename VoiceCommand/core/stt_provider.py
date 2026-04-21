@@ -40,7 +40,7 @@ class GoogleSTTProvider(STTProvider):
         except sr.UnknownValueError:
             return None
         except sr.RequestError as exc:
-            logging.error(f"[GoogleSTT] 요청 실패: {exc}")
+            logging.error("[GoogleSTT] request failed: %s", exc)
             return None
 
 
@@ -69,7 +69,7 @@ class WhisperSTTProvider(STTProvider):
             wav_bytes = audio_data.get_wav_data()
             b64 = base64.b64encode(wav_bytes).decode("ascii")
         except Exception as exc:
-            logging.error("[WhisperSTT] 오디오 직렬화 실패: %s", exc)
+            logging.error("[WhisperSTT] audio serialization failed: %s", exc)
             return None
 
         with self._lock:
@@ -81,7 +81,7 @@ class WhisperSTTProvider(STTProvider):
                 self._proc.stdin.flush()
                 line = self._read_process_line(self._proc.stdout, self._TRANSCRIBE_TIMEOUT_SECONDS)
                 if line is None:
-                    logging.error("[WhisperSTT] 전사 응답 timeout — 워커를 재시작합니다.")
+                    logging.error("[WhisperSTT] transcription timeout; restarting worker.")
                     self._restart_worker_locked("transcribe timeout")
                     return None
                 line = line.strip()
@@ -89,7 +89,7 @@ class WhisperSTTProvider(STTProvider):
                     return None
                 return line
             except Exception as exc:
-                logging.error("[WhisperSTT] 전사 실패: %s", exc)
+                logging.error("[WhisperSTT] transcription failed: %s", exc)
                 self._restart_worker_locked("transcribe failure")
                 return None
 
@@ -118,8 +118,8 @@ class WhisperSTTProvider(STTProvider):
         if ready_line != "READY":
             stderr_out = self._read_stderr_snapshot()
             self._terminate_worker_locked()
-            reason = stderr_out or "READY 신호를 받지 못했습니다."
-            raise RuntimeError(f"[WhisperSTT] 워커 초기화 실패:\n{reason}")
+            reason = stderr_out or "Did not receive READY signal."
+            raise RuntimeError(f"[WhisperSTT] worker initialization failed:\n{reason}")
         logging.info("[WhisperSTT] 워커 준비 완료")
 
     def _ensure_worker_locked(self) -> bool:
@@ -216,7 +216,7 @@ def _wav_bytes_to_numpy(wav_bytes: bytes):
         elif sample_width == 4:
             audio = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
         else:
-            raise ValueError(f"지원하지 않는 오디오 샘플 너비: {sample_width}바이트")
+            raise ValueError(f"Unsupported audio sample width: {sample_width} bytes")
 
         if channels > 1:
             audio = audio.reshape(-1, channels).mean(axis=1)

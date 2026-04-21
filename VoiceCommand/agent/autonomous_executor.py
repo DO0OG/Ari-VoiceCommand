@@ -30,16 +30,24 @@ _SENSITIVE_ENV_PREFIXES = (
     "DATABASE_", "DB_", "MONGO_", "REDIS_", "POSTGRES_",
     "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_", "PRIVATE_",
 )
+_SENSITIVE_ENV_SUBSTRINGS = ("API_KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE")
 _SUBPROCESS_TIMEOUT_SECONDS = 30
 _PROCESS_KILL_WAIT_SECONDS = 5
 _PDF_BOTTOM_MARGIN_PX = 50
+
+
+def _is_sensitive_env_var(name: str) -> bool:
+    normalized = (name or "").upper()
+    return any(normalized.startswith(prefix) for prefix in _SENSITIVE_ENV_PREFIXES) or any(
+        token in normalized for token in _SENSITIVE_ENV_SUBSTRINGS
+    )
 
 
 def _build_child_env() -> dict:
     """민감한 환경변수를 제외한 안전한 자식 프로세스 환경 반환."""
     return {
         k: v for k, v in os.environ.items()
-        if not any(k.upper().startswith(p) for p in _SENSITIVE_ENV_PREFIXES)
+        if not _is_sensitive_env_var(k)
     }
 
 

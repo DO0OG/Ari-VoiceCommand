@@ -26,6 +26,8 @@ class ConversationHistory:
         self._lock = threading.RLock()
         self._save_timer: threading.Timer | None = None
         self._save_delay_seconds = 0.15
+        self._compression_in_progress = False
+        self._compression_thread: threading.Thread | None = None
         self.load()
 
     def add(
@@ -56,12 +58,37 @@ class ConversationHistory:
     def _compress_oldest(self):
         if len(self.active) <= self.MAX_ACTIVE:
             return
-        to_compress = self.active[:self.COMPRESS_UNIT]
+        if not hasattr(self, "_compression_in_progress"):
+            self._compression_in_progress = False
+        if not hasattr(self, "_compression_thread"):
+            self._compression_thread = None
+        if self._compression_in_progress:
+            return
+        to_compress = [dict(item) for item in self.active[:self.COMPRESS_UNIT]]
+        self._compression_in_progress = True
+        self._compression_thread = threading.Thread(
+            target=self._compress_oldest_worker,
+            args=(to_compress,),
+            daemon=True,
+            name="ConversationHistoryCompress",
+        )
+        self._compression_thread.start()
+
+    def _compress_oldest_worker(self, to_compress: List[Dict[str, object]]) -> None:
         summary = self._summarize_chunk(to_compress)
-        if summary:
-            self.summaries.append(summary)
-            self.summaries = self.summaries[-self.MAX_SUMMARIES:]
-        self.active = self.active[self.COMPRESS_UNIT:]
+        with self._lock:
+            if self.active[:len(to_compress)] == to_compress:
+                if summary:
+                    self.summaries.append(summary)
+                    self.summaries = self.summaries[-self.MAX_SUMMARIES:]
+                self.active = self.active[len(to_compress):]
+            self._compression_in_progress = False
+            self._compression_thread = None
+            needs_more = len(self.active) > self.MAX_ACTIVE
+            self._schedule_save()
+        if needs_more:
+            with self._lock:
+                self._compress_oldest()
 
     def _summarize_chunk(self, items: List[Dict[str, object]]) -> str:
         if not items:
@@ -197,8 +224,11 @@ class ConversationHistory:
         with self._lock:
             timer = self._save_timer
             self._save_timer = None
+            compression_thread = getattr(self, "_compression_thread", None)
         if timer is not None:
             timer.cancel()
+        if compression_thread is not None and compression_thread.is_alive():
+            compression_thread.join(timeout=2.0)
         self.save()
 
 

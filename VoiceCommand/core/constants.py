@@ -1,5 +1,7 @@
 """프로젝트 상수 정의"""
 
+from i18n.translator import _
+
 # 음성 인식 설정
 SPEECH_LANGUAGE = "ko-KR"
 SPEECH_TIMEOUT = 5  # 초
@@ -8,7 +10,14 @@ AMBIENT_NOISE_DURATION = 0.5  # 초
 
 # 웨이크워드
 WAKE_WORDS = ["아리야", "시작"]
-WAKE_RESPONSES = ["네?", "부르셨나요?"]
+
+
+def get_wake_responses() -> list[str]:
+    """현재 언어 설정에 맞는 웨이크 응답 목록을 반환한다."""
+    return [
+        _("네?"),
+        _("부르셨나요?"),
+    ]
 
 # 캐릭터 물리 설정
 GRAVITY = 0.8
