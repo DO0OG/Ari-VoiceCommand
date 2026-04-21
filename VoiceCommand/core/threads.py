@@ -300,12 +300,14 @@ class CommandExecutionThread(QThread):
         while True:
             try:
                 command = self.queue.get(timeout=1.0)
-                if command is None:
-                    break
-                
-                from VoiceCommand import execute_command
-                execute_command(command)
-                self.queue.task_done()
+                try:
+                    if command is None:
+                        break
+
+                    from VoiceCommand import execute_command
+                    execute_command(command)
+                finally:
+                    self.queue.task_done()
             except queue.Empty:
                 continue
             except Exception as e:

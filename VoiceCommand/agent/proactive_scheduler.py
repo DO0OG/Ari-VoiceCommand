@@ -87,12 +87,9 @@ class ProactiveScheduler:
     _WEEKDAY_KO = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
     def __init__(self, tts_func: Optional[Callable] = None):
-        global _SCHEDULE_FILE, _SCHEDULE_RUN_LOG_FILE
-        if not _SCHEDULE_FILE:
-            _SCHEDULE_FILE = _init_schedule_file()
-        if not _SCHEDULE_RUN_LOG_FILE:
-            _SCHEDULE_RUN_LOG_FILE = _init_schedule_log_file()
         self.tts = tts_func
+        self._schedule_file = _init_schedule_file()
+        self._schedule_run_log_file = _init_schedule_log_file()
         self._tasks: Dict[str, ScheduledTask] = {}
         self._lock = threading.Lock()
         self._run_log_lock = threading.Lock()
@@ -103,6 +100,22 @@ class ProactiveScheduler:
 
     def set_orchestrator_func(self, func: Callable):
         self._orchestrator_func = func
+
+    def _get_schedule_file(self) -> str:
+        path = getattr(self, "_schedule_file", "") or _SCHEDULE_FILE
+        if path:
+            return path
+        path = _init_schedule_file()
+        self._schedule_file = path
+        return path
+
+    def _get_schedule_run_log_file(self) -> str:
+        path = getattr(self, "_schedule_run_log_file", "") or _SCHEDULE_RUN_LOG_FILE
+        if path:
+            return path
+        path = _init_schedule_log_file()
+        self._schedule_run_log_file = path
+        return path
 
     # ── 스케줄 관리 ────────────────────────────────────────────────────────────
 
@@ -228,11 +241,12 @@ class ProactiveScheduler:
             return list(self._tasks.values())
 
     def get_task_runs(self, task_id: str = "", limit: int = 20) -> List[Dict[str, Any]]:
-        if not _SCHEDULE_RUN_LOG_FILE or not os.path.exists(_SCHEDULE_RUN_LOG_FILE):
+        run_log_file = self._get_schedule_run_log_file()
+        if not run_log_file or not os.path.exists(run_log_file):
             return []
         rows: List[Dict[str, Any]] = []
         try:
-            with open(_SCHEDULE_RUN_LOG_FILE, "r", encoding="utf-8") as handle:
+            with open(run_log_file, "r", encoding="utf-8") as handle:
                 for raw in handle:
                     text = raw.strip()
                     if not text:
@@ -410,9 +424,10 @@ class ProactiveScheduler:
             ).start()
 
     def _load(self):
-        if os.path.exists(_SCHEDULE_FILE):
+        schedule_file = self._get_schedule_file()
+        if os.path.exists(schedule_file):
             try:
-                with open(_SCHEDULE_FILE, encoding="utf-8") as f:
+                with open(schedule_file, encoding="utf-8") as f:
                     data = json.load(f)
                 self._tasks = {it["task_id"]: self._normalize_task(it) for it in data}
             except Exception as e:
@@ -420,8 +435,10 @@ class ProactiveScheduler:
 
     def _save(self):
         try:
+            schedule_file = self._get_schedule_file()
+            os.makedirs(os.path.dirname(schedule_file), exist_ok=True)
             data = [asdict(t) for t in list(self._tasks.values())[:_MAX_TASKS]]
-            with open(_SCHEDULE_FILE, "w", encoding="utf-8") as f:
+            with open(schedule_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logging.error("[Scheduler] 저장 실패: %s", e)
@@ -591,12 +608,13 @@ class ProactiveScheduler:
         self._record_learning_artifacts(task, started_at, finished_at, success, error, summary)
 
     def _append_task_run(self, record: ScheduledTaskRun) -> None:
-        if not _SCHEDULE_RUN_LOG_FILE:
+        run_log_file = self._get_schedule_run_log_file()
+        if not run_log_file:
             return
         try:
-            os.makedirs(os.path.dirname(_SCHEDULE_RUN_LOG_FILE), exist_ok=True)
+            os.makedirs(os.path.dirname(run_log_file), exist_ok=True)
             with self._run_log_lock:
-                with open(_SCHEDULE_RUN_LOG_FILE, "a", encoding="utf-8") as handle:
+                with open(run_log_file, "a", encoding="utf-8") as handle:
                     handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
         except OSError as exc:
             logging.error("[Scheduler] 실행 로그 저장 실패: %s", exc)

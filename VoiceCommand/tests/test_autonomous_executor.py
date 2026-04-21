@@ -3,7 +3,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 import agent.autonomous_executor as autonomous_executor_module
@@ -227,6 +227,55 @@ class AutonomousExecutorTests(unittest.TestCase):
 
         self.assertFalse(result.success)
         self.assertIn("boom", result.error)
+
+    def test_run_python_releases_semaphore_when_state_capture_fails(self):
+        executor = AutonomousExecutor()
+        executor._capture_runtime_state = lambda: (_ for _ in ()).throw(RuntimeError("state boom"))
+        executor._attach_state_snapshot = lambda result, state_before: None
+        executor._record_history = lambda result: None
+
+        result = executor.run_python("print('x')")
+
+        self.assertFalse(result.success)
+        self.assertIn("state boom", result.error)
+        self.assertTrue(executor._python_slots.acquire(blocking=False))
+        executor._python_slots.release()
+
+    def test_normalize_python_code_splits_simple_semicolon_chain(self):
+        executor = AutonomousExecutor()
+
+        normalized = executor._normalize_python_code(
+            "import os; x = os.getcwd(); y = x.split('\\\\'); print(y[-1])"
+        )
+
+        self.assertEqual(
+            normalized,
+            "import os\nx = os.getcwd()\ny = x.split('\\\\')\nprint(y[-1])",
+        )
+
+    def test_normalize_python_code_preserves_one_line_suite_semicolons(self):
+        executor = AutonomousExecutor()
+
+        normalized = executor._normalize_python_code("if ready: step_one(); step_two()")
+
+        self.assertEqual(normalized, "if ready: step_one(); step_two()")
+
+    def test_do_run_shell_uses_filtered_child_environment(self):
+        executor = AutonomousExecutor()
+        fake_process = MagicMock()
+        fake_process.communicate.return_value = ("ok", "")
+        fake_process.returncode = 0
+
+        with (
+            patch("agent.autonomous_executor._build_child_env", return_value={"PATH": "safe"}) as env_mock,
+            patch("agent.autonomous_executor.subprocess.Popen", return_value=fake_process) as popen_mock,
+        ):
+            result = executor._do_run_shell("echo ok")
+
+        self.assertTrue(result.success)
+        env_mock.assert_called_once()
+        self.assertEqual(popen_mock.call_args.kwargs["env"]["PATH"], "safe")
+        self.assertNotIn("OPENAI_API_KEY", popen_mock.call_args.kwargs["env"])
 
     def test_get_runtime_state_falls_back_when_automation_helpers_raise(self):
         executor = AutonomousExecutor()
