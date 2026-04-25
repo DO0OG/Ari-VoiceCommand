@@ -82,7 +82,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             ("말씀해주세요", 0),
         )
         self.assertEqual(voicecommand._state.character_widget.hide_calls, 0)
-        self.assertEqual(voicecommand._state.tts_resume_guard_until, 101.2)
+        self.assertEqual(voicecommand._state.tts_resume_guard_until, 101.7)
 
     def test_should_pause_wake_detection_during_resume_guard(self):
         voicecommand._state.tts_resume_guard_until = 101.2

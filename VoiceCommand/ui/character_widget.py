@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
 from ui.speech_bubble import SpeechBubble, register_fonts
+from i18n.translator import _
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL, IMAGE_CACHE_CAPACITY
@@ -26,11 +27,12 @@ _BUBBLE_HISTORY_LOCK = threading.Lock()
 _BUBBLE_HISTORY_QUEUE: Queue[str] = Queue()
 _BUBBLE_HISTORY_WORKER_LOCK = threading.Lock()
 _BUBBLE_HISTORY_WORKER: Optional[threading.Thread] = None
+_THINKING_TEXTS = frozenset(("생각 중...", "Thinking...", "考え中..."))
 
 
 def _is_thinking_bubble_text(text: str) -> bool:
     normalized = (text or "").strip()
-    return normalized == "생각 중..."
+    return normalized in _THINKING_TEXTS or normalized == _("생각 중...")
 
 
 def _is_geometry_animation_running(animation: Optional[QPropertyAnimation]) -> bool:

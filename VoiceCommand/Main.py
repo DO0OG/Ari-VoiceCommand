@@ -368,6 +368,8 @@ def main():
             ai_command.register_plugin_tool_handler(tool_name, handler)
 
         plugin_manager = get_plugin_manager()
+        if cmd_registry and hasattr(cmd_registry, "set_event_emitter"):
+            cmd_registry.set_event_emitter(plugin_manager.emit_event)
         plugin_manager.load_plugins(
             PluginContext(
                 app=app,

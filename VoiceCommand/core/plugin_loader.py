@@ -15,6 +15,7 @@ import sys
 import threading
 import unicodedata
 import zipfile
+import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import FunctionType
@@ -34,6 +35,9 @@ ToolRegistrar = Callable[[dict[str, object], Callable[[dict[str, object]], Optio
 CharacterPackRegistrar = Callable[[str, object], object]
 SandboxRunner = Callable[[str, int], object]
 CharacterMenuToggle = Callable[[bool], object]
+PluginEventHandler = Callable[[dict], None]
+PluginEventEmitter = Callable[[str, dict], None]
+PluginEventSubscriber = Callable[[str, PluginEventHandler], Callable[[], None]]
 
 
 def _get_unregister_character_pack(widget: object) -> Optional[Callable[[str], None]]:
@@ -55,6 +59,8 @@ class PluginContext:
     register_character_pack: Optional[CharacterPackRegistrar] = None
     run_sandboxed: Optional[SandboxRunner] = None
     set_character_menu_enabled: Optional[CharacterMenuToggle] = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
+    emit_event: Optional[PluginEventEmitter] = None
+    subscribe_event: Optional[PluginEventSubscriber] = None
 
 
 @dataclass
@@ -75,16 +81,54 @@ class PluginInfo:
     registered_commands: List[object] = field(default_factory=list)
     registered_tools: List[str] = field(default_factory=list)
     registered_character_packs: List[str] = field(default_factory=list)
+    registered_event_unsubscribers: List[Callable[[], None]] = field(default_factory=list)
     character_menu_disabled: bool = False  # 이 플러그인이 캐릭터 우클릭 메뉴를 비활성화했는지
 
 
-class PluginManager:
-    _load_lock = threading.RLock()
+class _PluginEventBus:
+    """플러그인 간 통신을 위한 가벼운 인-프로세스 이벤트 버스."""
 
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[PluginEventHandler]] = {}
+        self._lock = threading.RLock()
+
+    def subscribe(self, event_name: str, handler: PluginEventHandler) -> Callable[[], None]:
+        name = str(event_name or "").strip()
+        if not name or not callable(handler):
+            return lambda: None
+        with self._lock:
+            self._subscribers.setdefault(name, []).append(handler)
+
+        def _unsubscribe() -> None:
+            with self._lock:
+                handlers = self._subscribers.get(name, [])
+                self._subscribers[name] = [item for item in handlers if item is not handler]
+                if not self._subscribers[name]:
+                    self._subscribers.pop(name, None)
+
+        return _unsubscribe
+
+    def emit(self, event_name: str, payload: dict) -> None:
+        name = str(event_name or "").strip()
+        if not name:
+            return
+        event_payload = dict(payload or {})
+        with self._lock:
+            handlers = list(self._subscribers.get(name, []))
+        for handler in handlers:
+            try:
+                handler(event_payload)
+            except Exception as exc:
+                logger.debug("[PluginLoader] 이벤트 핸들러 실패 (%s): %s", name, exc)
+
+
+class PluginManager:
     def __init__(self):
+        self._load_lock = threading.RLock()
         self._plugins: List[PluginInfo] = []
         self._modules: Dict[str, ModuleType] = {}
         self._context: Optional[PluginContext] = None
+        self._event_bus = _PluginEventBus()
 
     def plugin_dir(self) -> str:
         try:
@@ -153,9 +197,30 @@ class PluginManager:
         except UnicodeDecodeError as exc:
             raise RuntimeError(f"플러그인 소스 인코딩을 읽을 수 없습니다: {module_path}") from exc
         from agent.safety_checker import DangerLevel, get_safety_checker
-        report = get_safety_checker().check_python(source)
+        report = get_safety_checker().check_python(
+            source,
+            trust_level=self._extract_trust_level(source),
+        )
         if report.level == DangerLevel.DANGEROUS:
             raise RuntimeError(f"플러그인 안전 검사 실패: {report.summary}")
+
+    def _extract_trust_level(self, source: str) -> str:
+        try:
+            module_ast = ast.parse(source)
+        except SyntaxError:
+            return ""
+        for node in module_ast.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(isinstance(target, ast.Name) and target.id == "PLUGIN_INFO" for target in node.targets):
+                continue
+            try:
+                metadata = ast.literal_eval(node.value)
+            except (ValueError, TypeError):
+                return ""
+            if isinstance(metadata, dict):
+                return str(metadata.get("trust_level", "") or "")
+        return ""
 
     def _plugin_stub(self, path: str) -> PluginInfo:
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -200,6 +265,7 @@ class PluginManager:
             if context.run_sandboxed is None:
                 from core.plugin_sandbox import run_sandboxed as _sandbox_fn
                 context.run_sandboxed = _sandbox_fn
+            context = self._with_event_bus(context)
             self._context = context
             loaded_plugins: List[PluginInfo] = []
             for plugin in self.discover_plugins():
@@ -224,6 +290,7 @@ class PluginManager:
             if active_context.run_sandboxed is None:
                 from core.plugin_sandbox import run_sandboxed as _sandbox_fn
                 active_context.run_sandboxed = _sandbox_fn
+            active_context = self._with_event_bus(active_context)
             self._context = active_context
             plugin = self._plugin_stub(path)
             existing = next(
@@ -249,6 +316,32 @@ class PluginManager:
             self.unload_plugin(plugin_name)
             return self.load_plugin(path)
 
+    def reload_batch(self, paths: List[str]) -> List[Optional[PluginInfo]]:
+        """같은 debounce 구간의 플러그인 변경을 한 번의 락 범위에서 처리한다."""
+        results: List[Optional[PluginInfo]] = []
+        with self._load_lock:
+            for path in paths:
+                plugin_name = Path(path).stem
+                if os.path.exists(path):
+                    results.append(self.reload_plugin(plugin_name) or self.load_plugin(path))
+                else:
+                    self.unload_plugin(plugin_name)
+                    results.append(None)
+        return results
+
+    def emit_event(self, event_name: str, payload: Optional[dict] = None) -> None:
+        self._event_bus.emit(event_name, payload or {})
+
+    def subscribe_event(self, event_name: str, handler: PluginEventHandler) -> Callable[[], None]:
+        return self._event_bus.subscribe(event_name, handler)
+
+    def _with_event_bus(self, context: PluginContext) -> PluginContext:
+        if context.emit_event is None:
+            context.emit_event = self.emit_event
+        if context.subscribe_event is None:
+            context.subscribe_event = self.subscribe_event
+        return context
+
     def unload_plugin(self, plugin_name: str) -> bool:
         with self._load_lock:
             plugin = next((item for item in self._plugins if item.name == plugin_name), None)
@@ -265,6 +358,11 @@ class PluginManager:
                         registry_owner.unregister_command(command)
             for tool_name in plugin.registered_tools:
                 self._unregister_tool(tool_name)
+            for unsubscribe in plugin.registered_event_unsubscribers:
+                try:
+                    unsubscribe()
+                except Exception as exc:
+                    logger.debug("[PluginLoader] 이벤트 구독 해제 실패 (%s): %s", plugin_name, exc)
             if self._context and getattr(self._context, "character_widget", None):
                 widget = self._context.character_widget
                 unregister_character_pack = _get_unregister_character_pack(widget)
@@ -430,6 +528,13 @@ class PluginManager:
             # 비활성화 시 추적 (언로드 시 자동 복원에 사용)
             plugin.character_menu_disabled = not enabled
 
+        def _subscribe_event(event_name: str, handler: PluginEventHandler):
+            if not context.subscribe_event:
+                return lambda: None
+            unsubscribe = context.subscribe_event(event_name, handler)
+            plugin.registered_event_unsubscribers.append(unsubscribe)
+            return unsubscribe
+
         return PluginContext(
             app=context.app,
             tray_icon=context.tray_icon,
@@ -441,6 +546,8 @@ class PluginManager:
             register_character_pack=_register_character_pack,
             run_sandboxed=context.run_sandboxed,
             set_character_menu_enabled=_set_character_menu_enabled,
+            emit_event=context.emit_event,
+            subscribe_event=_subscribe_event,
         )
 
     def _find_plugin_path(self, plugin_name: str) -> str:
