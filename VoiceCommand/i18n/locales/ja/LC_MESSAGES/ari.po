@@ -2136,3 +2136,130 @@ msgstr "{secs}秒"
 msgid "주의: {msg}"
 msgstr "注意: {msg}"
 
+
+# ── ari_gamify プラグイン ─────────────────────────────────────────────────────
+msgid "입문자"
+msgstr "入門者"
+
+msgid "탐험가"
+msgstr "探検家"
+
+msgid "모험가"
+msgstr "冒険者"
+
+msgid "영웅"
+msgstr "英雄"
+
+msgid "전설"
+msgstr "伝説"
+
+msgid "신화"
+msgstr "神話"
+
+msgid "아리의 동반자"
+msgstr "アリの同伴者"
+
+msgid "아리의 친구"
+msgstr "アリの友達"
+
+msgid "아리의 단짝"
+msgstr "アリの相棒"
+
+msgid "아리의 파트너"
+msgstr "アリのソウルメイト"
+
+msgid "첫 명령"
+msgstr "初めての命令"
+
+msgid "3일 연속"
+msgstr "3日連続"
+
+msgid "일주일 동반자"
+msgstr "一週間の同伴者"
+
+msgid "야행성"
+msgstr "夜行性"
+
+msgid "새벽형 인간"
+msgstr "早起き型"
+
+msgid "에이전트 마스터"
+msgstr "エージェントマスター"
+
+msgid "게임 입문"
+msgstr "ゲーム入門"
+
+msgid "명령 3회 사용"
+msgstr "コマンドを3回使用"
+
+msgid "날씨 확인하기"
+msgstr "天気を確認"
+
+msgid "타이머 사용하기"
+msgstr "タイマーを使用"
+
+msgid "에이전트 작업 완료"
+msgstr "エージェントタスクを完了"
+
+msgid "미니게임 1판"
+msgstr "ミニゲームを1回プレイ"
+
+msgid "에이전트 작업 5회"
+msgstr "エージェントタスクを5回完了"
+
+msgid "5일 연속 사용"
+msgstr "5日連続で使用"
+
+msgid "일일 퀘스트 7회 완료"
+msgstr "デイリークエストを7回完了"
+
+msgid "없음"
+msgstr "なし"
+
+msgid "1부터 {high} 사이 숫자를 맞춰보세요!"
+msgstr "1から{high}の間の数字を当ててください！"
+
+msgid "진행 중인 숫자 게임이 없어요."
+msgstr "進行中の数字ゲームはありません。"
+
+msgid "[기쁨]정답이에요! {attempts}번 만에 맞추셨어요. +30 XP!"
+msgstr "[기쁨]正解！{attempts}回で当てました。+30 XP！"
+
+msgid "더 높아요! [힌트: {low}~{high}]"
+msgstr "もっと大きい！[ヒント: {low}~{high}]"
+
+msgid "더 낮아요! [힌트: {low}~{high}]"
+msgstr "もっと小さい！[ヒント: {low}~{high}]"
+
+msgid "[기쁨]정답! {explanation} +10 XP"
+msgstr "[기쁨]正解！{explanation} +10 XP"
+
+msgid "아쉬워요. 문제: {question} 정답은 {answer}예요. {explanation}"
+msgstr "残念。問題：{question} 答えは{answer}です。{explanation}"
+
+msgid "현재 레벨 {level} ({title}), {xp}XP예요. 다음 목표는 {next_threshold}XP입니다."
+msgstr "現在レベル{level}（{title}）、{xp} XP。次の目標：{next_threshold} XP。"
+
+msgid "오늘의 퀘스트: {daily_desc} {progress}/{goal}. 주간 퀘스트: {weekly_desc} {weekly_progress}/{weekly_goal}."
+msgstr "今日のクエスト：{daily_desc} {progress}/{goal}。週間クエスト：{weekly_desc} {weekly_progress}/{weekly_goal}。"
+
+msgid "달성 업적: {list}"
+msgstr "達成済み実績：{list}"
+
+msgid "달성 업적: 아직 없어요."
+msgstr "まだ実績がありません。"
+
+msgid "[기쁨]레벨 업! 이제 {title}예요."
+msgstr "[기쁨]レベルアップ！今は{title}です。"
+
+msgid "[기쁨]업적 달성! '{name}'"
+msgstr "[기쁨]実績解除！'{name}'"
+
+msgid "문제입니다. '{question}' O 또는 X?"
+msgstr "問題です。'{question}' ○か×か？"
+
+msgid "[흥분]게임 모드 활성화! 오늘도 열심히 해봐요~ 🎮"
+msgstr "[흥분]ゲームモード起動！今日も頑張りましょう～ 🎮"
+
+msgid "게임 모드를 종료합니다. 현재 총 {xp}XP예요!"
+msgstr "ゲームモードを終了します。今までの合計：{xp} XP！"

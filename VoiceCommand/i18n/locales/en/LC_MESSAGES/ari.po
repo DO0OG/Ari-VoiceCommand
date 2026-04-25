@@ -2136,3 +2136,130 @@ msgstr "{secs}s"
 msgid "주의: {msg}"
 msgstr "Warning: {msg}"
 
+
+# ── ari_gamify plugin ─────────────────────────────────────────────────────────
+msgid "입문자"
+msgstr "Beginner"
+
+msgid "탐험가"
+msgstr "Explorer"
+
+msgid "모험가"
+msgstr "Adventurer"
+
+msgid "영웅"
+msgstr "Hero"
+
+msgid "전설"
+msgstr "Legend"
+
+msgid "신화"
+msgstr "Myth"
+
+msgid "아리의 동반자"
+msgstr "Ari's Companion"
+
+msgid "아리의 친구"
+msgstr "Ari's Friend"
+
+msgid "아리의 단짝"
+msgstr "Ari's Partner"
+
+msgid "아리의 파트너"
+msgstr "Ari's Soulmate"
+
+msgid "첫 명령"
+msgstr "First Command"
+
+msgid "3일 연속"
+msgstr "3-Day Streak"
+
+msgid "일주일 동반자"
+msgstr "Week Companion"
+
+msgid "야행성"
+msgstr "Night Owl"
+
+msgid "새벽형 인간"
+msgstr "Early Bird"
+
+msgid "에이전트 마스터"
+msgstr "Agent Master"
+
+msgid "게임 입문"
+msgstr "Gaming Debut"
+
+msgid "명령 3회 사용"
+msgstr "Use 3 commands"
+
+msgid "날씨 확인하기"
+msgstr "Check the weather"
+
+msgid "타이머 사용하기"
+msgstr "Use a timer"
+
+msgid "에이전트 작업 완료"
+msgstr "Complete an agent task"
+
+msgid "미니게임 1판"
+msgstr "Play a mini-game"
+
+msgid "에이전트 작업 5회"
+msgstr "Complete 5 agent tasks"
+
+msgid "5일 연속 사용"
+msgstr "Use for 5 days in a row"
+
+msgid "일일 퀘스트 7회 완료"
+msgstr "Complete 7 daily quests"
+
+msgid "없음"
+msgstr "None"
+
+msgid "1부터 {high} 사이 숫자를 맞춰보세요!"
+msgstr "Guess a number between 1 and {high}!"
+
+msgid "진행 중인 숫자 게임이 없어요."
+msgstr "No number guessing game in progress."
+
+msgid "[기쁨]정답이에요! {attempts}번 만에 맞추셨어요. +30 XP!"
+msgstr "[기쁨]Correct! You got it in {attempts} tries. +30 XP!"
+
+msgid "더 높아요! [힌트: {low}~{high}]"
+msgstr "Higher! [Hint: {low}~{high}]"
+
+msgid "더 낮아요! [힌트: {low}~{high}]"
+msgstr "Lower! [Hint: {low}~{high}]"
+
+msgid "[기쁨]정답! {explanation} +10 XP"
+msgstr "[기쁨]Correct! {explanation} +10 XP"
+
+msgid "아쉬워요. 문제: {question} 정답은 {answer}예요. {explanation}"
+msgstr "Wrong. The question: {question} The answer is {answer}. {explanation}"
+
+msgid "현재 레벨 {level} ({title}), {xp}XP예요. 다음 목표는 {next_threshold}XP입니다."
+msgstr "Level {level} ({title}), {xp} XP. Next goal: {next_threshold} XP."
+
+msgid "오늘의 퀘스트: {daily_desc} {progress}/{goal}. 주간 퀘스트: {weekly_desc} {weekly_progress}/{weekly_goal}."
+msgstr "Today's Quest: {daily_desc} {progress}/{goal}. Weekly Quest: {weekly_desc} {weekly_progress}/{weekly_goal}."
+
+msgid "달성 업적: {list}"
+msgstr "Achievements: {list}"
+
+msgid "달성 업적: 아직 없어요."
+msgstr "No achievements yet."
+
+msgid "[기쁨]레벨 업! 이제 {title}예요."
+msgstr "[기쁨]Level up! You are now {title}."
+
+msgid "[기쁨]업적 달성! '{name}'"
+msgstr "[기쁨]Achievement unlocked! '{name}'"
+
+msgid "문제입니다. '{question}' O 또는 X?"
+msgstr "Here's a question: '{question}' True or False?"
+
+msgid "[흥분]게임 모드 활성화! 오늘도 열심히 해봐요~ 🎮"
+msgstr "[흥분]Game mode activated! Let's give it our best today~ 🎮"
+
+msgid "게임 모드를 종료합니다. 현재 총 {xp}XP예요!"
+msgstr "Exiting game mode. Total XP so far: {xp}!"
