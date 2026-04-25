@@ -1,5 +1,16 @@
 """명령 기본 인터페이스"""
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class CommandResult:
+    """명령 실행 결과 표준 형식."""
+
+    success: bool
+    response: str = ""
+    data: dict[str, Any] | None = field(default=None)
 
 
 class BaseCommand(ABC):
@@ -16,6 +27,6 @@ class BaseCommand(ABC):
         pass
 
     @abstractmethod
-    def execute(self, text: str) -> None:
+    def execute(self, text: str) -> CommandResult | None:
         """명령 실행"""
         pass

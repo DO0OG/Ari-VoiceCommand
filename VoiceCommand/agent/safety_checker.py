@@ -99,11 +99,16 @@ class SafetyChecker:
         self._app_cache: dict[str, SafetyReport] = {}
         self._cache_lock = threading.Lock()
 
-    def check_python(self, code: str) -> SafetyReport:
-        cached = self._get_cached(self._python_cache, code)
+    def check_python(self, code: str, trust_level: str = "") -> SafetyReport:
+        cache_key = f"{trust_level}\0{code}"
+        cached = self._get_cached(self._python_cache, cache_key)
         if cached is not None:
             return cached
         matched = _scan(_DANGEROUS_PYTHON, code)
+        caution_from_trust: List[str] = []
+        if str(trust_level or "").casefold() == "verified" and "저수준 시스템 접근" in matched:
+            matched = [item for item in matched if item != "저수준 시스템 접근"]
+            caution_from_trust.append("저수준 시스템 접근")
         if "browser_login" in code:
             matched.append("로그인 자동화")
         if any(token in code.lower() for token in _SENSITIVE_INPUT_KEYWORDS) and any(
@@ -118,8 +123,8 @@ class SafetyChecker:
                 summary=_("위험한 파이썬 작업 감지: {matched}", matched=", ".join(translated)),
                 category="web" if "로그인" in "".join(matched) else ("file_system" if "삭제" in "".join(matched) else "system")
             )
-            return self._store_and_clone(self._python_cache, code, report)
-        caution = _scan(_CAUTION_PYTHON, code)
+            return self._store_and_clone(self._python_cache, cache_key, report)
+        caution = _scan(_CAUTION_PYTHON, code) + caution_from_trust
         if any(token in code for token in ("click_image", "focus_window", "wait_for_download")):
             caution.append("상태 인식 자동화")
         if caution:
@@ -130,9 +135,9 @@ class SafetyChecker:
                 summary=_("주의가 필요한 파이썬 작업: {matched}", matched=", ".join(translated)),
                 category="automation" if "GUI" in "".join(caution) else "file_system"
             )
-            return self._store_and_clone(self._python_cache, code, report)
+            return self._store_and_clone(self._python_cache, cache_key, report)
         report = SafetyReport(level=DangerLevel.SAFE, summary=_("안전한 코드입니다."))
-        return self._store_and_clone(self._python_cache, code, report)
+        return self._store_and_clone(self._python_cache, cache_key, report)
 
     def check_shell(self, command: str) -> SafetyReport:
         cached = self._get_cached(self._shell_cache, command)

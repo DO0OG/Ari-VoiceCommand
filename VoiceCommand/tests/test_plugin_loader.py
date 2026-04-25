@@ -209,6 +209,39 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertEqual(max_concurrent, 1)
             self.assertEqual(sorted(plugin.name for plugin in manager.list_plugins()), ["first", "second"])
 
+    def test_plugin_event_bus_emit_subscribe_and_unsubscribe(self):
+        manager = _TempPluginManager(tempfile.mkdtemp())
+        received = []
+
+        unsubscribe = manager.subscribe_event("sample.event", received.append)
+        manager.emit_event("sample.event", {"value": 1})
+        unsubscribe()
+        manager.emit_event("sample.event", {"value": 2})
+
+        self.assertEqual(received, [{"value": 1}])
+
+    def test_plugin_context_exposes_event_bus(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "event_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "PLUGIN_INFO = {'name': 'eventer', 'version': '1.0.0', 'api_version': '1.0'}\n"
+                    "def register(context):\n"
+                    "    seen = []\n"
+                    "    context.subscribe_event('ping', seen.append)\n"
+                    "    context.emit_event('ready', {'ok': True})\n"
+                    "    return {'seen': seen}\n"
+                )
+
+            manager = _TempPluginManager(tmp)
+            ready = []
+            manager.subscribe_event("ready", ready.append)
+            plugin = manager.load_plugins(PluginContext())[0]
+            manager.emit_event("ping", {"n": 1})
+
+            self.assertEqual(ready, [{"ok": True}])
+            self.assertEqual(plugin.exports["seen"], [{"n": 1}])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -36,23 +36,37 @@ class _PluginEventHandler(FileSystemEventHandler):
 
     def flush_pending(self):
         now = time.time()
-        completed = []
+        ready: dict[str, str] = {}
         for path, (scheduled_at, action) in list(self._pending.items()):
             if now - scheduled_at < self._debounce_seconds:
                 continue
-            plugin_name = Path(path).stem
+            ready[path] = action
+
+        if not ready:
+            return
+
+        batch_paths = list(ready)
+        if hasattr(self._plugin_manager, "reload_batch"):
             try:
-                if action == "load":
-                    self._plugin_manager.load_plugin(path)
-                elif action == "reload":
-                    self._plugin_manager.reload_plugin(plugin_name)
-                elif action == "unload":
-                    self._plugin_manager.unload_plugin(plugin_name)
-                logging.info("[PluginWatcher] %s: %s", action, plugin_name)
+                self._plugin_manager.reload_batch(batch_paths)
+                logging.info("[PluginWatcher] batch: %d개 변경 처리", len(batch_paths))
             except Exception as exc:
-                logging.error("[PluginWatcher] %s 실패 (%s): %s", action, plugin_name, exc)
-            completed.append(path)
-        for path in completed:
+                logging.error("[PluginWatcher] batch 실패: %s", exc)
+        else:
+            for path, action in ready.items():
+                plugin_name = Path(path).stem
+                try:
+                    if action == "load":
+                        self._plugin_manager.load_plugin(path)
+                    elif action == "reload":
+                        self._plugin_manager.reload_plugin(plugin_name)
+                    elif action == "unload":
+                        self._plugin_manager.unload_plugin(plugin_name)
+                    logging.info("[PluginWatcher] %s: %s", action, plugin_name)
+                except Exception as exc:
+                    logging.error("[PluginWatcher] %s 실패 (%s): %s", action, plugin_name, exc)
+
+        for path in ready:
             self._pending.pop(path, None)
 
 

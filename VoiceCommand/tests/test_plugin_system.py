@@ -5,7 +5,7 @@ import unittest
 
 from agent.llm_provider import LLMProvider
 from commands.ai_command import AICommand
-from commands.base_command import BaseCommand
+from commands.base_command import BaseCommand, CommandResult
 from commands.command_registry import CommandRegistry
 from core.plugin_loader import PluginContext, PluginManager
 from core.plugin_sandbox import run_sandboxed
@@ -35,8 +35,9 @@ class _DummyCommand(BaseCommand):
     def matches(self, text: str) -> bool:
         return text == "dummy"
 
-    def execute(self, text: str) -> None:
+    def execute(self, text: str) -> CommandResult:
         del text
+        return CommandResult(True, "ok")
 
 
 class PluginSystemTests(unittest.TestCase):
@@ -83,6 +84,26 @@ class PluginSystemTests(unittest.TestCase):
         registry = CommandRegistry(None, object(), object(), lambda *_: None, lambda *_: None, {"enabled": False})
         registry.register_command(_DummyCommand())
         self.assertIsInstance(registry.commands[0], _DummyCommand)
+
+    def test_command_registry_emits_standard_result_event(self):
+        events = []
+        registry = CommandRegistry(
+            None,
+            object(),
+            object(),
+            lambda *_: None,
+            lambda *_: None,
+            {"enabled": False},
+            emit_event=lambda name, payload: events.append((name, payload)),
+        )
+        registry.register_command(_DummyCommand())
+
+        result = registry.execute("dummy")
+
+        self.assertTrue(result.success)
+        self.assertEqual(events[0][0], "command.executed")
+        self.assertEqual(events[0][1]["command_type"], "dummy")
+        self.assertEqual(events[0][1]["response"], "ok")
 
     def test_llm_provider_register_plugin_tool_extends_tools(self):
         provider = LLMProvider()

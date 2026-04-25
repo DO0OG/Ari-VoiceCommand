@@ -53,6 +53,7 @@ class AppState:
 
 _state = AppState()
 _TTS_WAKE_GUARD_SECONDS = 1.2
+_TTS_WAKE_GUARD_BUFFER_SECONDS = 0.5
 
 
 class SharedMicrophone(sr.Microphone):
@@ -290,11 +291,30 @@ def set_listening_indicator(active: bool, text: str | None = None) -> None:
         _state.character_widget.hide_speech_bubble()
 
 
+def _estimate_tts_duration(text: str) -> float:
+    """오디오 길이를 알 수 없는 TTS 제공자를 위한 보수적 재생 시간 추정."""
+    normalized = re.sub(r"\s+", " ", text or "").strip()
+    if not normalized:
+        return _TTS_WAKE_GUARD_SECONDS
+    # 한국어/일본어 등 공백이 적은 문장을 고려해 글자 수 기반으로 추정한다.
+    return max(_TTS_WAKE_GUARD_SECONDS, min(30.0, len(normalized) / 8.0))
+
+
+def emit_plugin_event(event_name: str, payload: dict | None = None) -> None:
+    """플러그인 이벤트 버스가 준비된 경우 이벤트를 발행한다."""
+    try:
+        from core.plugin_loader import get_plugin_manager
+        get_plugin_manager().emit_event(event_name, payload or {})
+    except Exception as exc:
+        logging.debug("플러그인 이벤트 발행 생략 (%s): %s", event_name, exc)
+
+
 def extend_tts_resume_guard(duration: float = _TTS_WAKE_GUARD_SECONDS) -> None:
-    """TTS 직후 웨이크워드 감지 보호 구간을 연장한다."""
+    """TTS 재생 예상 시간(초)과 버퍼를 반영해 웨이크워드 보호 구간을 연장한다."""
+    guard_duration = max(0.0, duration) + _TTS_WAKE_GUARD_BUFFER_SECONDS
     _state.tts_resume_guard_until = max(
         _state.tts_resume_guard_until,
-        time.monotonic() + max(0.0, duration),
+        time.monotonic() + guard_duration,
     )
 
 
@@ -338,6 +358,12 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
     try:
         if _state.rp_gen:
             text = _state.rp_gen.generate(text)
+        estimated_duration = _estimate_tts_duration(text)
+        extend_tts_resume_guard(estimated_duration)
+        emit_plugin_event(
+            "tts.playback.started",
+            {"text": text, "estimated_duration": estimated_duration},
+        )
         ok = _state.fish_tts.speak(text, emotion=emotion)
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()

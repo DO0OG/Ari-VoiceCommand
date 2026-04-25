@@ -28,6 +28,13 @@ class SafetyCheckerTests(unittest.TestCase):
         self.assertEqual(first.level, second.level)
         self.assertEqual(len(self.checker._url_cache), 1)
 
+    def test_verified_plugin_ctypes_is_caution_not_dangerous(self):
+        code = "PLUGIN_INFO = {'trust_level': 'verified'}\nimport ctypes\nctypes.windll.user32.GetForegroundWindow()\n"
+
+        report = self.checker.check_python(code, trust_level="verified")
+
+        self.assertEqual(report.level, DangerLevel.CAUTION)
+
 
 if __name__ == "__main__":
     unittest.main()

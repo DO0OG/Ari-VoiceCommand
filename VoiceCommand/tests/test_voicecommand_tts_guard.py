@@ -32,6 +32,16 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         self.assertTrue(VoiceCommand.should_pause_wake_detection(now=9.5))
         self.assertFalse(VoiceCommand.should_pause_wake_detection(now=10.5))
 
+    def test_extend_tts_resume_guard_uses_duration_plus_buffer(self):
+        old_monotonic = VoiceCommand.time.monotonic
+        try:
+            VoiceCommand.time.monotonic = lambda: 100.0
+            VoiceCommand.extend_tts_resume_guard(3.0)
+        finally:
+            VoiceCommand.time.monotonic = old_monotonic
+
+        self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 103.5)
+
 
 if __name__ == "__main__":
     unittest.main()

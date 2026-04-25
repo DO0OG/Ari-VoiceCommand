@@ -23,6 +23,7 @@ from agent.learning_engine import LearningEngine
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
+MAX_TOTAL_TIMEOUT = 120.0
 
 # StepResult를 execution_engine에서 임포트하여 re-export한다.
 # 기존 코드의 `from agent.agent_orchestrator import StepResult` 는 계속 동작한다.
@@ -109,7 +110,7 @@ class AgentOrchestrator:
         res, _, _ = self._exec.execute_step_with_retry(step, goal, {})
         return res
 
-    def run(self, goal: str) -> AgentRunResult:
+    def run(self, goal: str, timeout: float = MAX_TOTAL_TIMEOUT) -> AgentRunResult:
         """복잡한 목표를 다층 루프로 자율 달성."""
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
@@ -119,11 +120,14 @@ class AgentOrchestrator:
         start_time = time.time()
         self._set_thinking(True)
         try:
+            deadline = start_time + max(0.1, float(timeout))
             shared_context = self._build_shared_context(goal)
-            run_result = self._run_loop(goal, shared_context=shared_context)
+            if self._is_timeout_exceeded(deadline):
+                return AgentRunResult(goal=goal, achieved=False, summary=_("실행 시간 초과"))
+            run_result = self._run_loop(goal, shared_context=shared_context, deadline=deadline)
             lesson = ""
             reflection = None
-            if not run_result.achieved:
+            if not run_result.achieved and not self._is_timeout_exceeded(deadline):
                 reflection = self._learn.reflect_on_failure(goal, run_result)
                 run_result.learning_components["ReflectionEngine"] = True
                 lesson = getattr(reflection, "lesson", "") or ""
@@ -139,6 +143,7 @@ class AgentOrchestrator:
                         goal,
                         reflection_context=retry_context,
                         shared_context=shared_context,
+                        deadline=deadline,
                     )
                     if retry_result.achieved:
                         retry_result.learning_components["ReflectionEngine"] = True
@@ -163,6 +168,11 @@ class AgentOrchestrator:
                 lesson=lesson,
                 failure_kind_override=getattr(reflection, "root_cause", ""),
             )
+            if run_result.achieved:
+                self._emit_plugin_event(
+                    "agent.task.completed",
+                    {"goal": goal, "summary": run_result.summary},
+                )
             return run_result
         finally:
             self._set_thinking(False)
@@ -175,6 +185,7 @@ class AgentOrchestrator:
         goal: str,
         reflection_context: Optional[Dict[str, str]] = None,
         shared_context: Optional[Dict[str, str]] = None,
+        deadline: Optional[float] = None,
     ) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
@@ -220,6 +231,9 @@ class AgentOrchestrator:
         replan_reasons: list[str] = []
 
         for iteration in range(max_iterations):
+            if self._is_timeout_exceeded(deadline):
+                run_result.summary = _("실행 시간 초과")
+                break
             run_result.total_iterations = iteration + 1
             logger.info(
                 f"[Orchestrator] 계획 수립 (반복 {iteration+1}/{max_iterations})"
@@ -233,6 +247,9 @@ class AgentOrchestrator:
                         f"{context.get('재계획_힌트', '')} {timeout_hint}"
                     ).strip()
             steps = self.planner.decompose(goal, context)
+            if self._is_timeout_exceeded(deadline):
+                run_result.summary = _("실행 시간 초과")
+                break
             self._merge_learning_components(
                 learning_components, self.planner.get_last_learning_signals()
             )
@@ -269,6 +286,9 @@ class AgentOrchestrator:
             all_success, step_results = self._execute_plan(
                 steps, context, goal
             )
+            if self._is_timeout_exceeded(deadline):
+                run_result.summary = _("실행 시간 초과")
+                break
             run_result.step_results.extend(step_results)
 
             if not all_success:
@@ -535,6 +555,16 @@ class AgentOrchestrator:
                 self.thinking_callback(thinking)
             except Exception as e:
                 logger.debug("[Orchestrator] 생각 콜백 오류: %s", e)
+
+    def _is_timeout_exceeded(self, deadline: Optional[float]) -> bool:
+        return deadline is not None and time.time() > deadline
+
+    def _emit_plugin_event(self, event_name: str, payload: dict) -> None:
+        try:
+            from core.plugin_loader import get_plugin_manager
+            get_plugin_manager().emit_event(event_name, payload)
+        except Exception as exc:
+            logger.debug("[Orchestrator] 플러그인 이벤트 발행 생략 (%s): %s", event_name, exc)
 
     def _say(self, msg: str) -> None:
         if self.tts:
