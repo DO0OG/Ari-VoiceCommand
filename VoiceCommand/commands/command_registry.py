@@ -66,7 +66,7 @@ class CommandRegistry:
                     logging.warning(f"[CommandRegistry] 사용자 컨텍스트 기록 실패: {e}")
                 
                 raw_result = command.execute(text)
-                result = raw_result if isinstance(raw_result, CommandResult) else CommandResult(success=True)
+                result = raw_result if isinstance(raw_result, CommandResult) else CommandResult(success=raw_result is not False)
                 self._publish_command_event(text, command, cmd_type, result)
                 return result
         result = CommandResult(success=False, response="")

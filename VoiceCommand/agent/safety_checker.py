@@ -59,10 +59,11 @@ _DANGEROUS_SHELL: List[_CompiledRule] = [
     (_c(r'netsh\s+.*firewall', re.I), "방화벽 설정 변경"),
     (_c(r'\bbcdedit\b',     re.I), "부트 설정 변경"),
     (_c(r'\bdiskpart\b',    re.I), "디스크 파티션 조작"),
-    (_c(r'\bcurl\b|\bwget\b', re.I), "외부 데이터 전송"),
 ]
 
 _CAUTION_SHELL: List[_CompiledRule] = [
+    (_c(r'\bcurl\b.*(?:--data|-d\s|-X\s+(?:POST|PUT|DELETE|PATCH)|--upload-file)', re.I), "외부 데이터 전송"),
+    (_c(r'\bcurl\b|\bwget\b', re.I), "외부 URL 요청"),
     (_c(r'\btaskkill\b',        re.I), "프로세스 강제 종료"),
     (_c(r'\bnet\s+user\b',      re.I), "사용자 계정 변경"),
     (_c(r'\bsc\s+(stop|start)\b', re.I), "서비스 중지/시작"),

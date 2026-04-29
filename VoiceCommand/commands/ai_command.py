@@ -234,15 +234,19 @@ class AICommand(BaseCommand):
         return None
 
     def _handle_get_weather(self, args: dict) -> Optional[str]:
-        from core.VoiceCommand import execute_command
-        execute_command("날씨 알려줘")
-        return None
+        try:
+            from core.VoiceCommand import weather_service
+
+            return weather_service.get_weather_from_text(str(args.get("location", "") or ""))
+        except Exception as exc:
+            logging.error("날씨 도구 실행 실패: %s", exc, exc_info=True)
+            return _("날씨 정보를 가져오는 데 실패했습니다.")
 
     def _handle_adjust_volume(self, args: dict) -> Optional[str]:
-        from core.VoiceCommand import execute_command
+        from core.VoiceCommand import adjust_volume
+
         direction = args.get("direction", "up")
-        cmd_map = {"up": "볼륨 올려", "down": "볼륨 내려", "mute": "볼륨 음소거"}
-        execute_command(cmd_map.get(direction, "볼륨 올려"))
+        adjust_volume(str(direction or "up"))
         return None
 
     def _handle_get_current_time(self, args: dict) -> Optional[str]:
@@ -317,7 +321,7 @@ class AICommand(BaseCommand):
         goal = self._resolve_agent_task_goal(args)
         if not goal:
             return None
-        self.tts_wrapper("복잡한 목표를 단계별로 처리할게요.")
+        self.tts_wrapper(_("복잡한 목표를 단계별로 처리할게요."))
         run_result: AgentRunResult = self.orchestrator.run(goal)
         report_path = ""
         if self._is_developer_agent_goal(goal):
@@ -365,10 +369,12 @@ class AICommand(BaseCommand):
             try:
                 raw_arguments = json.loads(raw_arguments)
             except json.JSONDecodeError:
+                logging.warning("[AICommand] MCP arguments JSON 파싱 실패, input 래핑: %r", raw_arguments)
                 raw_arguments = {"input": raw_arguments}
         if raw_arguments is None:
             raw_arguments = {}
         if not isinstance(raw_arguments, dict):
+            logging.warning("[AICommand] MCP arguments 타입 보정: %s", type(raw_arguments).__name__)
             raw_arguments = {"input": raw_arguments}
 
         try:
@@ -697,48 +703,55 @@ class AICommand(BaseCommand):
         if not report_path:
             return ""
         path = Path(report_path)
-        user_home = Path(os.environ.get("USERPROFILE", str(Path.home())))
-        desktop = user_home / "Desktop"
-        if desktop.is_dir():
-            try:
-                path.relative_to(desktop)
-                return f"바탕화면 {path.parent.name} 폴더의 {path.name}"
-            except ValueError:
-                return f"{path.parent.name} 폴더의 {path.name}"
-        return f"{path.parent.name} 폴더의 {path.name}"
+        return _("{folder} 폴더의 {file}").format(folder=path.parent.name, file=path.name)
 
     # ── 결과 변환 ────────────────────────────────────────────────────────────────
 
     def _result_to_korean(self, result: ExecutionResult) -> Optional[str]:
         if not result.success:
-            if result.error == "사용자 취소":
-                return "사용자가 실행을 취소했습니다."
-            return f"실행 실패: {result.error[:80]}" if result.error else "실행에 실패했습니다."
+            if result.error == _("사용자 취소") or result.error == "사용자 취소":
+                return _("사용자가 실행을 취소했습니다.")
+            return _("실행 실패: {error}").format(error=result.error[:80]) if result.error else _("실행에 실패했습니다.")
         if result.output:
-            return f"실행 완료. 출력: {result.output[:200]}"
-        return "실행이 완료되었습니다."
+            return _("실행 완료. 출력: {output}").format(output=result.output[:200])
+        return _("실행이 완료되었습니다.")
 
     def _agent_run_to_korean(self, run: AgentRunResult, report_path: str = "") -> str:
         steps_done = len(run.step_results)
         saved_path = self._extract_saved_path_from_agent_run(run)
         if run.achieved:
             if saved_path:
-                folder_name = saved_path.rsplit("\\", 1)[0].rsplit("\\", 1)[-1]
-                file_name = saved_path.rsplit("\\", 1)[-1]
-                message = f"작업 완료. {folder_name} 폴더에 {file_name}를 저장했습니다."
+                path = Path(saved_path)
+                message = _("작업 완료. {folder} 폴더에 {file}를 저장했습니다.").format(
+                    folder=path.parent.name,
+                    file=path.name,
+                )
             else:
-                message = f"작업 완료 ({steps_done}단계). {self._shorten_user_summary(run.summary)}"
+                message = _("작업 완료 ({steps}단계). {summary}").format(
+                    steps=steps_done,
+                    summary=self._shorten_user_summary(run.summary),
+                )
         else:
-            message = f"작업 실패 ({run.total_iterations}회 시도). {self._shorten_user_summary(run.summary)}"
+            message = _("작업 실패 ({count}회 시도). {summary}").format(
+                count=run.total_iterations,
+                summary=self._shorten_user_summary(run.summary),
+            )
         if report_path:
-            message += f" 실행 보고서는 {self._describe_report_location(report_path)}에 저장했습니다."
+            message += " " + _("실행 보고서는 {location}에 저장했습니다.").format(
+                location=self._describe_report_location(report_path)
+            )
         return message
 
     def _shorten_user_summary(self, summary: str, limit: int = 90) -> str:
         normalized = re.sub(r'\s+', ' ', (summary or '').strip())
         if len(normalized) <= limit:
             return normalized
-        for separator in (". ", "입니다.", "어요.", "했다."):
+        separators_by_lang = {
+            "ko": (". ", "입니다.", "어요.", "했다."),
+            "en": (". ", "! ", "? "),
+            "ja": ("。", "！", "？"),
+        }
+        for separator in separators_by_lang.get(get_language(), (". ",)):
             idx = normalized.find(separator)
             if 0 < idx < limit:
                 return normalized[:idx + len(separator)].strip()

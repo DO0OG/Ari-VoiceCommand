@@ -18,9 +18,21 @@ class LLMRouter:
         "code_gen": "execution",
         "long_analysis": "planner",
     }
-    CODE_KEYWORDS = ("코드", "파이썬", "버그", "리팩토링", "테스트", "shell", "cmd")
-    PLAN_KEYWORDS = ("계획", "단계", "자동화", "정리", "분석", "보고서", "설계")
-    LONG_KEYWORDS = ("비교", "분석", "자세히", "깊게", "길게", "정리해줘")
+    CODE_KEYWORDS = (
+        "코드", "파이썬", "버그", "리팩토링", "테스트",
+        "code", "python", "bug", "refactor", "test", "shell", "cmd",
+        "コード", "バグ", "リファクタ",
+    )
+    PLAN_KEYWORDS = (
+        "계획", "단계", "자동화", "정리", "분석", "보고서", "설계",
+        "plan", "step", "automate", "organize", "analyze", "report", "design",
+        "計画", "自動化", "分析", "レポート",
+    )
+    LONG_KEYWORDS = (
+        "비교", "자세히", "깊게", "길게", "정리해줘",
+        "compare", "detail", "in-depth", "elaborate", "summarize",
+        "比較", "詳しく", "まとめ",
+    )
 
     def route(self, message: str, context: dict | None = None) -> RouteResult:
         task_type = self._classify_task(message)
