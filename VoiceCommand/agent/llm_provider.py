@@ -149,7 +149,7 @@ class LLMProvider:
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
         self._plugin_tools: list = []
-        self._response_cache = ResponseCache()
+        self._response_cache = ResponseCache.from_config()
         from core.rp_generator import RPGenerator
         self.rp_generator = RPGenerator()
         self.rp_generator.set_config(

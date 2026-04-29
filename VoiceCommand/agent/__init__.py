@@ -31,6 +31,7 @@ __all__ = [
     "reflection_engine",
     "regression_guard",
     "response_cache",
+    "task_queue",
     "safety_checker",
     "skill_library",
     "skill_optimizer",

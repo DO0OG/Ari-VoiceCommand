@@ -11,6 +11,17 @@ nofollow 정책:
 
 출력: dist/Ari/
 
+포함 모듈 (2026-04-29 최신):
+  agent/response_cache.py — from_config() 팩토리 + _coerce_positive_int() 헬퍼 추가
+  agent/task_queue.py     — AgentTaskQueue PriorityQueue + worker thread 비동기 큐 (신규)
+  agent/llm_router.py     — 영어·일본어 키워드 추가 (CODE/PLAN/LONG 다국어 라우팅)
+  agent/safety_checker.py — curl/wget DANGEROUS → CAUTION 재분류
+  commands/weather_command.py — 다국어 키워드 + CommandResult 반환
+  assistant/ai_assistant.py   — _responses() 지연 번역 적용
+  commands/ai_command.py      — 툴 핸들러 직접 서비스 호출, i18n 완성
+  commands/command_registry.py — CommandResult 반환 표준화 + f-string 로깅 수정
+  i18n/locales/*.po           — ko/en/ja 24개 ai_command/SimpleAIAssistant 번역 키 추가
+
 포함 모듈 (2026-04-22 최신):
   agent/confirmation_manager.py — 모든 UI 문자열 i18n 적용 + Codacy W1202 f-string 로깅 수정
   agent/safety_checker.py      — 스레드 안전 캐시(_cache_lock) + _translate_matches() i18n
@@ -266,6 +277,8 @@ nuitka_args = [
     "--include-module=agent.automation_helpers",
     "--include-module=agent.planner_json_utils",
     "--include-module=agent.few_shot_injector",
+    "--include-module=agent.response_cache",
+    "--include-module=agent.task_queue",
     "--include-module=agent.skill_library",
     "--include-module=agent.skill_optimizer",
     "--include-module=agent.reflection_engine",

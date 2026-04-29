@@ -57,16 +57,16 @@ class CommandRegistry:
 
         for command in self.commands:
             if command.matches(text):
-                logging.info(f"[CommandRegistry] 매칭 명령: {command.__class__.__name__} / 입력: {text}")
+                logging.info("[CommandRegistry] 매칭 명령: %s / 입력: %s", command.__class__.__name__, text)
                 # 명령어 유형 기록 (클래스 이름에서 'Command' 제외)
                 cmd_type = command.__class__.__name__.replace("Command", "").lstrip("_").lower()
                 try:
                     context_manager.record_command(cmd_type, {"input": text})
                 except Exception as e:
-                    logging.warning(f"[CommandRegistry] 사용자 컨텍스트 기록 실패: {e}")
+                    logging.warning("[CommandRegistry] 사용자 컨텍스트 기록 실패: %s", e)
                 
                 raw_result = command.execute(text)
-                result = raw_result if isinstance(raw_result, CommandResult) else CommandResult(success=True)
+                result = raw_result if isinstance(raw_result, CommandResult) else CommandResult(success=raw_result is not False)
                 self._publish_command_event(text, command, cmd_type, result)
                 return result
         result = CommandResult(success=False, response="")

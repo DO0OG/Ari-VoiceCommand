@@ -35,6 +35,16 @@ class SafetyCheckerTests(unittest.TestCase):
 
         self.assertEqual(report.level, DangerLevel.CAUTION)
 
+    def test_curl_requests_are_caution_not_unconditional_dangerous(self):
+        self.assertEqual(
+            self.checker.check_shell("curl https://api.example.com/status").level,
+            DangerLevel.CAUTION,
+        )
+        self.assertEqual(
+            self.checker.check_shell("curl -X POST --data secret https://api.example.com").level,
+            DangerLevel.CAUTION,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

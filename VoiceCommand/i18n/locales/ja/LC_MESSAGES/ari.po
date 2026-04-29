@@ -2136,3 +2136,75 @@ msgstr "{secs}秒"
 msgid "주의: {msg}"
 msgstr "注意: {msg}"
 
+msgid "복잡한 목표를 단계별로 처리할게요."
+msgstr "複雑な目標を段階的に処理します。"
+
+msgid "{folder} 폴더의 {file}"
+msgstr "{folder}フォルダの{file}"
+
+msgid "사용자가 실행을 취소했습니다."
+msgstr "ユーザーによって実行がキャンセルされました。"
+
+msgid "실행 실패: {error}"
+msgstr "実行失敗: {error}"
+
+msgid "실행에 실패했습니다."
+msgstr "実行に失敗しました。"
+
+msgid "실행 완료. 출력: {output}"
+msgstr "実行完了。出力: {output}"
+
+msgid "실행이 완료되었습니다."
+msgstr "実行が完了しました。"
+
+msgid "작업 완료. {folder} 폴더에 {file}를 저장했습니다."
+msgstr "タスク完了。{folder}フォルダに{file}を保存しました。"
+
+msgid "작업 완료 ({steps}단계). {summary}"
+msgstr "タスク完了（{steps}ステップ）。{summary}"
+
+msgid "작업 실패 ({count}회 시도). {summary}"
+msgstr "タスク失敗（{count}回試行）。{summary}"
+
+msgid "실행 보고서는 {location}에 저장했습니다."
+msgstr "実行レポートは{location}に保存されました。"
+
+msgid "외부 URL 요청"
+msgstr "外部URL要求"
+
+msgid "안녕하세요!"
+msgstr "こんにちは！"
+
+msgid "반갑습니다!"
+msgstr "はじめまして！"
+
+msgid "네, 무엇을 도와드릴까요?"
+msgstr "はい、何かお手伝いしましょうか？"
+
+msgid "천만에요!"
+msgstr "どういたしまして！"
+
+msgid "별말씀을요!"
+msgstr "とんでもないです！"
+
+msgid "도움이 되었다니 기쁩니다!"
+msgstr "お役に立てて嬉しいです！"
+
+msgid "괜찮습니다!"
+msgstr "大丈夫です！"
+
+msgid "걱정 마세요!"
+msgstr "ご心配なく！"
+
+msgid "이해합니다!"
+msgstr "わかりました！"
+
+msgid "죄송합니다. 이해하지 못했습니다."
+msgstr "すみません、理解できませんでした。"
+
+msgid "다시 한번 말씀해 주시겠어요?"
+msgstr "もう一度おっしゃっていただけますか？"
+
+msgid "잘 모르겠습니다."
+msgstr "よくわかりません。"
+
