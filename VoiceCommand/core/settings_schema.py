@@ -84,6 +84,8 @@ DEFAULT_SETTINGS = {
     "special_date_events_enabled": True,
     # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────
     "llm_router_enabled": True,          # LLMRouter 작업 유형별 자동 라우팅
+    "agent_response_cache_ttl": 600,     # LLM 응답 캐시 만료 시간(초)
+    "agent_response_cache_max_size": 50, # LLM 응답 캐시 최대 항목 수
     "few_shot_max_examples": 3,          # FewShotInjector 최대 예시 수
     "skill_library_enabled": True,       # SkillLibrary 성공 패턴 자동 추출
     "reflection_engine_enabled": True,   # ReflectionEngine 실패 자동 반성

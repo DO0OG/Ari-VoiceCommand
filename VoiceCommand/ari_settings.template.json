@@ -49,6 +49,8 @@
   "ui_theme_scale": 1.0,
   "ui_font_family": "",
   "llm_router_enabled": true,
+  "agent_response_cache_ttl": 600,
+  "agent_response_cache_max_size": 50,
   "few_shot_max_examples": 3,
   "skill_library_enabled": true,
   "reflection_engine_enabled": true,

@@ -9,13 +9,22 @@ class ConfigManagerTests(unittest.TestCase):
         with patch.object(
             ConfigManager,
             "DEFAULT_SETTINGS",
-            {"stt_energy_threshold": 300, "weekly_report_enabled": False},
+            {
+                "stt_energy_threshold": 300,
+                "weekly_report_enabled": False,
+                "agent_response_cache_ttl": 600,
+            },
         ):
             normalized = ConfigManager._normalize_settings(
-                {"stt_energy_threshold": True, "weekly_report_enabled": False}
+                {
+                    "stt_energy_threshold": True,
+                    "weekly_report_enabled": False,
+                    "agent_response_cache_ttl": "fast",
+                }
             )
 
         self.assertEqual(normalized["stt_energy_threshold"], 300)
+        self.assertEqual(normalized["agent_response_cache_ttl"], 600)
 
     def test_normalize_settings_rejects_non_bool_for_bool_field(self):
         with patch.object(
