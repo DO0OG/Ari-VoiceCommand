@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 TaskCallable = Callable[[threading.Event], object]
 
 
+def _noop_runner(_cancel_event: threading.Event) -> None:
+    """셧다운 sentinel용 no-op runner."""
+
+
 @dataclass
 class AgentQueuedTask:
     task_id: str
@@ -124,7 +128,7 @@ class AgentTaskQueue:
                     task.cancel_event.set()
         self._shutdown.set()
         for _ in self._workers:
-            self._queue.put((10**9, next(self._counter), AgentQueuedTask("", "", lambda _event: None)))
+            self._queue.put((10**9, next(self._counter), AgentQueuedTask("", "", _noop_runner)))
         for worker in self._workers:
             worker.join(timeout=1.0)
 

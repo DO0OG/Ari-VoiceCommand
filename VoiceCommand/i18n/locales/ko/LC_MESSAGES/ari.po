@@ -2136,3 +2136,75 @@ msgstr "{secs}초"
 msgid "주의: {msg}"
 msgstr "주의: {msg}"
 
+msgid "복잡한 목표를 단계별로 처리할게요."
+msgstr "복잡한 목표를 단계별로 처리할게요."
+
+msgid "{folder} 폴더의 {file}"
+msgstr "{folder} 폴더의 {file}"
+
+msgid "사용자가 실행을 취소했습니다."
+msgstr "사용자가 실행을 취소했습니다."
+
+msgid "실행 실패: {error}"
+msgstr "실행 실패: {error}"
+
+msgid "실행에 실패했습니다."
+msgstr "실행에 실패했습니다."
+
+msgid "실행 완료. 출력: {output}"
+msgstr "실행 완료. 출력: {output}"
+
+msgid "실행이 완료되었습니다."
+msgstr "실행이 완료되었습니다."
+
+msgid "작업 완료. {folder} 폴더에 {file}를 저장했습니다."
+msgstr "작업 완료. {folder} 폴더에 {file}를 저장했습니다."
+
+msgid "작업 완료 ({steps}단계). {summary}"
+msgstr "작업 완료 ({steps}단계). {summary}"
+
+msgid "작업 실패 ({count}회 시도). {summary}"
+msgstr "작업 실패 ({count}회 시도). {summary}"
+
+msgid "실행 보고서는 {location}에 저장했습니다."
+msgstr "실행 보고서는 {location}에 저장했습니다."
+
+msgid "외부 URL 요청"
+msgstr "외부 URL 요청"
+
+msgid "안녕하세요!"
+msgstr "안녕하세요!"
+
+msgid "반갑습니다!"
+msgstr "반갑습니다!"
+
+msgid "네, 무엇을 도와드릴까요?"
+msgstr "네, 무엇을 도와드릴까요?"
+
+msgid "천만에요!"
+msgstr "천만에요!"
+
+msgid "별말씀을요!"
+msgstr "별말씀을요!"
+
+msgid "도움이 되었다니 기쁩니다!"
+msgstr "도움이 되었다니 기쁩니다!"
+
+msgid "괜찮습니다!"
+msgstr "괜찮습니다!"
+
+msgid "걱정 마세요!"
+msgstr "걱정 마세요!"
+
+msgid "이해합니다!"
+msgstr "이해합니다!"
+
+msgid "죄송합니다. 이해하지 못했습니다."
+msgstr "죄송합니다. 이해하지 못했습니다."
+
+msgid "다시 한번 말씀해 주시겠어요?"
+msgstr "다시 한번 말씀해 주시겠어요?"
+
+msgid "잘 모르겠습니다."
+msgstr "잘 모르겠습니다."
+

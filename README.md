@@ -97,18 +97,21 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 - **Open integration surface:** OpenAI-compatible providers, Ollama, MCP servers, plugins, and installable skills.
 - **Learning-oriented runtime:** strategy memory, immediate failure reflection retry, embedding-based skill matching, and skill compilation improve repeated task execution.
 
-### Recent Self-Improvement Loop Updates
+### Recent Updates
 
+- **Multilingual command routing:** LLMRouter, WeatherCommand, and tool handlers now recognise Korean, English, and Japanese keywords — the agent activates correctly in all supported locales.
+- **Configurable response cache:** LLM response cache TTL and maximum size are now readable from `ari_settings.json` (`agent_response_cache_ttl`, `agent_response_cache_max_size`).
+- **Async agent task queue:** `AgentTaskQueue` provides priority-based background task scheduling with per-task cancellation support.
+- **Full i18n for agent result messages:** execution status, agent run summaries, and report location strings are now properly translated across Korean, English, and Japanese.
+- **safety_checker refinement:** `curl`/`wget` commands are reclassified from DANGEROUS to CAUTION (data-sending flags remain DANGEROUS), allowing agents to make read-only HTTP requests.
+- **Fallback assistant i18n:** `SimpleAIAssistant` responses now use runtime translation so the correct language is used even during Groq initialisation failures.
+- **CommandResult propagation:** `WeatherCommand` and other commands now return `CommandResult` so success/failure is accurately reflected in plugin events.
 - **Immediate same-run recovery:** failed runs can now inject reflection lessons directly into a one-time retry within the same orchestration session.
 - **Background reflection path:** when a run succeeds, reflection can be scheduled asynchronously so user-visible completion is not blocked.
 - **Shared-context caching:** expensive Episode Memory and Goal Predictor lookups are now collected once per run and reused across reflection retries.
 - **Adaptive planning depth:** orchestration now estimates goal difficulty and adjusts the maximum replan iterations dynamically instead of relying on a fixed loop count.
-- **Failure-pattern early exit:** repeated replan reasons and repeated step-level error signatures now stop earlier to avoid wasteful loops.
-- **Recovery strategy diversification:** execution recovery can escalate from LLM fixes to simplification and optional-step skipping when appropriate.
 - **Lift-based activation gating:** learning metrics can temporarily disable components whose measured lift turns meaningfully negative.
-- **Better reusable skill matching:** skill lookup now combines trigger/tag heuristics with embedding similarity for paraphrased goals.
-- **Weekly learning visibility:** weekly reports now summarize learning-component activity, newly created skills, compiled skills, and estimated self-improvement token usage.
-- **Consistent i18n maintenance:** newly added self-improvement strings are aligned across Korean, English, and Japanese locale files.
+- **Consistent i18n maintenance:** newly added strings are aligned across Korean, English, and Japanese locale files.
 
 ---
 

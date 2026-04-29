@@ -16,6 +16,9 @@
 #              LLMRouter, FewShotInjector, SkillLibrary, ReflectionEngine, MemoryConsolidator,
 #              execution policy / episode memory / backup-recovery guidance
 #   Phase 1-8: GoalPredictor, LearningMetrics, RegressionGuard, stream TTS, clean env validate smoke
+#   2026-04-29: AgentTaskQueue(비동기 작업 큐), ResponseCache.from_config(설정 외부화),
+#              다국어 LLMRouter/WeatherCommand 키워드, safety_checker curl 세분화,
+#              i18n 24개 신규 키(ai_command/SimpleAIAssistant 결과 문자열)
 #   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
 #   런타임 상태(로그/스케줄/메모리/플러그인 캐시)는 소스 실행 시 VoiceCommand/.ari_runtime,
 #   빌드된 exe 실행 시 %AppData%/Ari 에 저장
