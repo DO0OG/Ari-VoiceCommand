@@ -64,5 +64,11 @@
   "audit_log_enabled": true,
   "mcp_server_enabled": false,
   "mcp_server_port": 8765,
-  "agent_dashboard_enabled": true
+  "agent_dashboard_enabled": true,
+  "max_subagents": 3,
+  "google_calendar_enabled": false,
+  "google_client_id": "",
+  "google_client_secret": "",
+  "image_generation_enabled": false,
+  "image_gen_provider": "openai"
 }

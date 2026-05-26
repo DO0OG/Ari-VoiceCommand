@@ -13,6 +13,7 @@ SENSITIVE_SETTINGS_KEYS = (
     "gemini_api_key",
     "openrouter_api_key",
     "nvidia_nim_api_key",
+    "google_client_secret",
     "fish_api_key",
     "fish_reference_id",
     "openai_tts_api_key",
@@ -100,6 +101,12 @@ DEFAULT_SETTINGS = {
     "mcp_server_port": 8765,
     "agent_dashboard_enabled": True,
     "tts_wake_guard_seconds": 1.2,
+    "max_subagents": 3,
+    "google_calendar_enabled": False,
+    "google_client_id": "",
+    "google_client_secret": "",
+    "image_generation_enabled": False,
+    "image_gen_provider": "openai",
 }
 
 _TTS_VOICE_BY_LANG = {

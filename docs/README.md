@@ -51,3 +51,5 @@ README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필�
 - 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
 - `reference.wav`는 소스/테스트 실행 시 런타임 경로를 우선하고, exe 실행 시에는 `%AppData%/Ari/` 경로를 우선합니다.
 - `VoiceCommand/validate_repo.py`는 compile + unittest 외에 clean runtime 환경과 marketplace SHA256 계약 smoke까지 함께 확인합니다.
+
+- [자율 에이전트 고급 기능](AGENT_ADVANCED.md)

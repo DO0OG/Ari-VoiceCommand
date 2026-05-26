@@ -2,6 +2,7 @@
 # 업데이트: 2026-05-26
 #   자율 에이전트 핵심 확장: 스트리밍/비전/로컬 MCP 서버/감사 로그/직접 파일·앱 도구
 #   신규 런타임 의존성: fastapi, uvicorn, sentence-transformers 기본 승격
+#   고급 도구 확장: Google/REST API는 기존 requests, 이미지 생성은 기존 openai SDK 사용
 # 업데이트: 2026-04-22
 #   i18n 종합 보완: 타이머·확인 다이얼로그·안전 점검기 문자열 국제화 / ko·en·ja .po 54개 키 추가
 #   안전 강화: autonomous_executor 민감 환경변수 부분 문자열 필터링 / safety_checker 스레드 안전 캐시
