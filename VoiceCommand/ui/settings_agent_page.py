@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QGroupBox, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QGroupBox, QLabel, QLineEdit, QSlider, QSpinBox, QVBoxLayout, QWidget
 
 from i18n.translator import _
 
@@ -40,6 +40,29 @@ class _AgentSettingsPage(QWidget):
         self.mcp_checkbox.setChecked(bool(settings.get("mcp_server_enabled", False)))
         box.addWidget(self.mcp_checkbox)
 
+        self.subagent_spin = QSpinBox()
+        self.subagent_spin.setRange(1, 8)
+        self.subagent_spin.setValue(int(settings.get("max_subagents", 3)))
+        box.addWidget(QLabel(_("settings.agent.max_subagents")))
+        box.addWidget(self.subagent_spin)
+
+        self.google_checkbox = QCheckBox(_("settings.agent.google_tools"))
+        self.google_checkbox.setChecked(bool(settings.get("google_calendar_enabled", False)))
+        box.addWidget(self.google_checkbox)
+        self.google_client_id = QLineEdit(str(settings.get("google_client_id", "") or ""))
+        self.google_client_id.setPlaceholderText(_("settings.agent.google_client_id"))
+        box.addWidget(self.google_client_id)
+        self.google_client_secret = QLineEdit(str(settings.get("google_client_secret", "") or ""))
+        self.google_client_secret.setPlaceholderText(_("settings.agent.google_client_secret"))
+        self.google_client_secret.setEchoMode(QLineEdit.Password)
+        box.addWidget(self.google_client_secret)
+
+        self.image_checkbox = QCheckBox(_("settings.agent.image_generation"))
+        self.image_checkbox.setChecked(bool(settings.get("image_generation_enabled", False)))
+        box.addWidget(self.image_checkbox)
+        self.image_provider = QLineEdit(str(settings.get("image_gen_provider", "openai") or "openai"))
+        box.addWidget(self.image_provider)
+
         layout.addWidget(group)
         layout.addStretch(1)
         self._update_timeout_label(self.timeout_slider.value())
@@ -53,4 +76,10 @@ class _AgentSettingsPage(QWidget):
             "agent_dashboard_enabled": self.dashboard_checkbox.isChecked(),
             "audit_log_enabled": self.audit_checkbox.isChecked(),
             "mcp_server_enabled": self.mcp_checkbox.isChecked(),
+            "max_subagents": int(self.subagent_spin.value()),
+            "google_calendar_enabled": self.google_checkbox.isChecked(),
+            "google_client_id": self.google_client_id.text().strip(),
+            "google_client_secret": self.google_client_secret.text().strip(),
+            "image_generation_enabled": self.image_checkbox.isChecked(),
+            "image_gen_provider": self.image_provider.text().strip() or "openai",
         }

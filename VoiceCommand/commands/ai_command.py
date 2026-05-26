@@ -101,9 +101,11 @@ class AICommand(BaseCommand):
             "execute_python_code":      self._handle_python,
             "execute_shell_command":    self._handle_shell,
             "run_agent_task":           self._handle_agent_task,
+            "delegate_to_subagent":      self._handle_delegate_to_subagent,
             "web_search":               self._handle_web_search,
             "web_fetch":                self._handle_web_fetch,
             "mcp_call":                 self._handle_mcp_call,
+            "api_call":                 self._handle_api_call,
             "read_file":                self._handle_read_file,
             "write_file":               self._handle_write_file,
             "edit_file":                self._handle_edit_file,
@@ -120,6 +122,11 @@ class AICommand(BaseCommand):
             "take_screenshot":          self._handle_take_screenshot,
             "get_clipboard":            self._handle_get_clipboard,
             "set_clipboard":            self._handle_set_clipboard,
+            "get_calendar_events":       self._handle_get_calendar_events,
+            "create_calendar_event":     self._handle_create_calendar_event,
+            "send_email":                self._handle_send_email,
+            "read_emails":               self._handle_read_emails,
+            "generate_image":            self._handle_generate_image,
             "schedule_task":            self._handle_schedule_task,
             "cancel_scheduled_task":    self._handle_cancel_scheduled_task,
             "list_scheduled_tasks":     self._handle_list_scheduled_tasks,
@@ -356,6 +363,15 @@ class AICommand(BaseCommand):
             report_path = self._save_agent_run_report(goal, run_result)
         return self._agent_run_to_korean(run_result, report_path=report_path)
 
+    def _handle_delegate_to_subagent(self, args: dict) -> Optional[str]:
+        goal = str(args.get("goal", "") or "").strip()
+        if not goal:
+            return _("subagent.goal_required")
+        context = str(args.get("context", "") or "")
+        timeout = float(args.get("timeout", 60) or 60)
+        result = self.orchestrator.spawn_subagent(goal, context=context, timeout=timeout)
+        return self._agent_run_to_korean(result)
+
     def _maybe_show_agent_dashboard(self, goal: str):
         try:
             from core.config_manager import ConfigManager
@@ -430,6 +446,19 @@ class AICommand(BaseCommand):
 
             logging.error("mcp_call 오류: %s", exc, exc_info=True)
             return _("MCP 도구 호출 중 오류가 발생했습니다: {error}").format(error=exc)
+
+    def _handle_api_call(self, args: dict) -> Optional[str]:
+        try:
+            from agent.api_connector import get_api_connector
+            service = str(args.get("service", "") or "default")
+            operation = str(args.get("operation", "") or "")
+            params = args.get("params", {}) or {}
+            if not isinstance(params, dict):
+                params = {"input": params}
+            return get_api_connector().call(operation, params=params, service=service)
+        except Exception as exc:
+            logging.error("api_call 오류: %s", exc, exc_info=True)
+            return _("api_call.failed").format(error=exc)
 
     def _format_tool_payload(self, payload: object) -> str:
         return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
@@ -567,6 +596,71 @@ class AICommand(BaseCommand):
         result = self.executor._automation.write_clipboard(text)
         self.executor._log_audit("clipboard", "[set_clipboard]", "success", f"{len(result)} chars", self._current_goal)
         return _("클립보드에 저장했습니다.")
+
+    def _handle_get_calendar_events(self, args: dict) -> Optional[str]:
+        try:
+            from services.google_calendar import get_calendar_service
+            events = get_calendar_service().get_events(
+                calendar_id=str(args.get("calendar_id", "primary") or "primary"),
+                days=int(args.get("days", 7) or 7),
+                max_results=int(args.get("max_results", 10) or 10),
+            )
+            return self._format_tool_payload({"events": events})
+        except Exception as exc:
+            logging.error("캘린더 조회 실패: %s", exc, exc_info=True)
+            return _("calendar.events.failed").format(error=exc)
+
+    def _handle_create_calendar_event(self, args: dict) -> Optional[str]:
+        try:
+            from services.google_calendar import get_calendar_service
+            event = get_calendar_service().create_event(
+                summary=str(args.get("summary", "") or ""),
+                start=str(args.get("start", "") or ""),
+                end=str(args.get("end", "") or ""),
+                description=str(args.get("description", "") or ""),
+                calendar_id=str(args.get("calendar_id", "primary") or "primary"),
+            )
+            return self._format_tool_payload(event)
+        except Exception as exc:
+            logging.error("캘린더 생성 실패: %s", exc, exc_info=True)
+            return _("calendar.create.failed").format(error=exc)
+
+    def _handle_send_email(self, args: dict) -> Optional[str]:
+        try:
+            from services.gmail_service import get_gmail_service
+            result = get_gmail_service().send_email(
+                to=str(args.get("to", "") or ""),
+                subject=str(args.get("subject", "") or ""),
+                body=str(args.get("body", "") or ""),
+            )
+            return self._format_tool_payload(result)
+        except Exception as exc:
+            logging.error("이메일 발송 실패: %s", exc, exc_info=True)
+            return _("email.send.failed").format(error=exc)
+
+    def _handle_read_emails(self, args: dict) -> Optional[str]:
+        try:
+            from services.gmail_service import get_gmail_service
+            result = get_gmail_service().read_emails(
+                max_results=int(args.get("max_results", 5) or 5),
+                query=str(args.get("query", "in:inbox") or "in:inbox"),
+            )
+            return self._format_tool_payload({"messages": result})
+        except Exception as exc:
+            logging.error("이메일 조회 실패: %s", exc, exc_info=True)
+            return _("email.read.failed").format(error=exc)
+
+    def _handle_generate_image(self, args: dict) -> Optional[str]:
+        try:
+            from services.image_generator import get_image_generator
+            result = get_image_generator().generate_image(
+                prompt=str(args.get("prompt", "") or ""),
+                size=str(args.get("size", "1024x1024") or "1024x1024"),
+            )
+            return self._format_tool_payload(result)
+        except Exception as exc:
+            logging.error("이미지 생성 실패: %s", exc, exc_info=True)
+            return _("image.generate.failed").format(error=exc)
 
     def _handle_schedule_task(self, args: dict) -> Optional[str]:
         """작업 예약"""

@@ -12,6 +12,7 @@ Plan → Execute+Self-Fix → Verify 다층 루프로 목표를 자율적으로 
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field, asdict
 from typing import Callable, Dict, List, Optional
 
@@ -71,6 +72,11 @@ class AgentOrchestrator:
         self._interrupt_requested = threading.Event()
         self._last_checkpoint: dict | None = None
         self.default_timeout = self._load_timeout_seconds()
+        self.max_subagents = self._load_max_subagents()
+        self._subagent_pool = ThreadPoolExecutor(
+            max_workers=max(1, self.max_subagents),
+            thread_name_prefix="AriSubagent",
+        )
 
         self._exec = ExecutionEngine(
             executor=executor,
@@ -104,6 +110,13 @@ class AgentOrchestrator:
         except Exception:
             return MAX_TOTAL_TIMEOUT
 
+    def _load_max_subagents(self) -> int:
+        try:
+            from core.config_manager import ConfigManager
+            return max(1, int(ConfigManager.get("max_subagents", 3) or 3))
+        except Exception:
+            return 3
+
     def interrupt(self) -> None:
         """진행 중인 에이전트 루프를 다음 안전 지점에서 중단하도록 요청한다."""
         self._interrupt_requested.set()
@@ -124,6 +137,47 @@ class AgentOrchestrator:
         if not goal:
             return AgentRunResult(goal=additional_goal, achieved=False, summary=_("재개할 작업이 없습니다."))
         return self.run(goal)
+
+    def spawn_subagent(
+        self,
+        goal: str,
+        context: dict | str | None = None,
+        timeout: float = 60.0,
+    ) -> AgentRunResult:
+        """독립 목표를 별도 에이전트 실행 컨텍스트에서 처리한다."""
+        goal = str(goal or "").strip()
+        if not goal:
+            return AgentRunResult(goal="", achieved=False, summary=_("subagent.goal_required"))
+        if isinstance(context, dict):
+            context_text = "\n".join(f"{key}: {value}" for key, value in context.items() if value)
+        else:
+            context_text = str(context or "").strip()
+        delegated_goal = goal
+        if context_text:
+            delegated_goal = f"{goal}\n\n[전달 컨텍스트]\n{context_text[:2000]}"
+
+        def _run() -> AgentRunResult:
+            child = AgentOrchestrator(
+                executor=AutonomousExecutor(self.tts),
+                planner=get_planner(),
+                tts_func=self.tts,
+            )
+            return child.run(delegated_goal, timeout=timeout)
+
+        self._emit_progress("subagent_start", goal=goal)
+        future = self._subagent_pool.submit(_run)
+        try:
+            result = future.result(timeout=max(1.0, float(timeout) + 5.0))
+            self._emit_progress("subagent_complete", goal=goal, achieved=result.achieved)
+            return result
+        except FuturesTimeoutError:
+            future.cancel()
+            self._emit_progress("subagent_timeout", goal=goal)
+            return AgentRunResult(goal=goal, achieved=False, summary=_("subagent.timeout"))
+        except Exception as exc:
+            logger.error("[Orchestrator] 하위 에이전트 실패: %s", exc, exc_info=True)
+            self._emit_progress("subagent_error", goal=goal, error=str(exc))
+            return AgentRunResult(goal=goal, achieved=False, summary=_("subagent.failed").format(error=exc))
 
     def execute_with_self_fix(
         self,

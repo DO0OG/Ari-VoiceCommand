@@ -434,6 +434,119 @@ CORE_TOOL_SCHEMAS.extend([
     },
 ])
 
+CORE_TOOL_SCHEMAS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_to_subagent",
+            "description": _("tool.delegate_to_subagent.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": _("tool.subagent.goal")},
+                    "context": {"type": "string", "description": _("tool.subagent.context")},
+                    "timeout": {"type": "integer", "description": _("tool.timeout_seconds")},
+                },
+                "required": ["goal"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "api_call",
+            "description": _("tool.api_call.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": _("tool.api_call.service")},
+                    "operation": {"type": "string", "description": _("tool.api_call.operation")},
+                    "params": {"type": "object", "description": _("tool.api_call.params")},
+                },
+                "required": ["service", "operation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_calendar_events",
+            "description": _("tool.get_calendar_events.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": _("tool.calendar.days")},
+                    "max_results": {"type": "integer", "description": _("tool.max_results")},
+                    "calendar_id": {"type": "string", "description": _("tool.calendar.id")},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_calendar_event",
+            "description": _("tool.create_calendar_event.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "start": {"type": "string"},
+                    "end": {"type": "string"},
+                    "description": {"type": "string"},
+                    "calendar_id": {"type": "string"},
+                },
+                "required": ["summary", "start", "end"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": _("tool.send_email.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "body": {"type": "string"},
+                },
+                "required": ["to", "subject", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_emails",
+            "description": _("tool.read_emails.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_results": {"type": "integer"},
+                    "query": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": _("tool.generate_image.description"),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "size": {"type": "string", "description": _("tool.image.size_example")},
+                },
+                "required": ["prompt"],
+            },
+        },
+    },
+])
+
 
 def build_available_tools(plugin_tools: list[dict]) -> list[dict]:
     tools = deepcopy(CORE_TOOL_SCHEMAS)

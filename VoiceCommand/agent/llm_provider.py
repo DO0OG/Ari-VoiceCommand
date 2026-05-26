@@ -103,6 +103,8 @@ _TOOL_NAMES_BY_INTENT = {
         "web_search",
         "web_fetch",
         "list_scheduled_tasks",
+        "get_calendar_events",
+        "read_emails",
     },
     "memory": {
         "get_weather",
@@ -149,6 +151,13 @@ _TOOL_NAMES_BY_INTENT = {
         "delete_file",
         "analyze_screenshot",
         "analyze_image_file",
+        "delegate_to_subagent",
+        "api_call",
+        "get_calendar_events",
+        "create_calendar_event",
+        "send_email",
+        "read_emails",
+        "generate_image",
     },
     "schedule": {
         "set_timer",
@@ -1095,6 +1104,13 @@ class LLMProvider:
                     parts.append(facts_prompt)
             except Exception as e:
                 logging.debug("[LLM] 사실 주입 실패: %s", e)
+            try:
+                from memory.knowledge_base import get_knowledge_base
+                kb_prompt = get_knowledge_base().prompt_for(user_message, top_k=3)
+                if kb_prompt:
+                    parts.append(kb_prompt)
+            except Exception as e:
+                logging.debug("[LLM] 지식 베이스 주입 실패: %s", e)
         parts.append(self.rp_generator.build_system_prompt(base_prompt))
         if include_context:
             try:

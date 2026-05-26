@@ -21,12 +21,15 @@ log = logging.getLogger(__name__)
 
 
 class Embedder:
-    def __init__(self, preferred: str = "auto"):
+    DEFAULT_LOCAL_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+
+    def __init__(self, preferred: str = "auto", progress_callback=None):
         self.backend: str = "fallback"
         self.dim: int = _EMBED_DIM_FALLBACK
         self._model = None
         self._client = None
         self._warmup_started = False
+        self.progress_callback = progress_callback
         self._init_backend(preferred)
 
     def _init_backend(self, preferred: str):
@@ -46,13 +49,30 @@ class Embedder:
     def _try_sentence_transformers(self) -> bool:
         try:
             from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+            cache_folder = self._model_cache_dir()
+            self._emit_progress("download_start", model=self.DEFAULT_LOCAL_MODEL, cache_folder=cache_folder)
+            self._model = SentenceTransformer(self.DEFAULT_LOCAL_MODEL, cache_folder=cache_folder)
+            self._emit_progress("download_complete", model=self.DEFAULT_LOCAL_MODEL, cache_folder=cache_folder)
             self.backend = "sentence_transformers"
             self.dim = _EMBED_DIM_MINILM
             return True
         except Exception as exc:
             log.debug("[Embedder] sentence_transformers 비활성: %s", exc)
             return False
+
+    def _model_cache_dir(self) -> str:
+        try:
+            from core.resource_manager import ResourceManager
+            return ResourceManager.get_runtime_path("models")
+        except Exception:
+            return os.path.join(os.getcwd(), ".ari_runtime", "models")
+
+    def _emit_progress(self, event: str, **payload) -> None:
+        if callable(self.progress_callback):
+            try:
+                self.progress_callback(event, **payload)
+            except Exception as exc:
+                log.debug("[Embedder] progress callback 실패: %s", exc)
 
     def _try_openai(self) -> bool:
         api_key = self._get_api_key("openai_api_key")
