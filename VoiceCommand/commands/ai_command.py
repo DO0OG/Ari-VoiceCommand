@@ -101,9 +101,32 @@ class AICommand(BaseCommand):
             "execute_python_code":      self._handle_python,
             "execute_shell_command":    self._handle_shell,
             "run_agent_task":           self._handle_agent_task,
+            "delegate_to_subagent":      self._handle_delegate_to_subagent,
             "web_search":               self._handle_web_search,
             "web_fetch":                self._handle_web_fetch,
             "mcp_call":                 self._handle_mcp_call,
+            "api_call":                 self._handle_api_call,
+            "read_file":                self._handle_read_file,
+            "write_file":               self._handle_write_file,
+            "edit_file":                self._handle_edit_file,
+            "list_directory":           self._handle_list_directory,
+            "search_in_files":          self._handle_search_in_files,
+            "move_file":                self._handle_move_file,
+            "delete_file":              self._handle_delete_file,
+            "analyze_screenshot":       self._handle_analyze_screenshot,
+            "analyze_image_file":       self._handle_analyze_image_file,
+            "launch_app":               self._handle_launch_app,
+            "close_app":                self._handle_close_app,
+            "get_running_apps":         self._handle_get_running_apps,
+            "focus_window":             self._handle_focus_window,
+            "take_screenshot":          self._handle_take_screenshot,
+            "get_clipboard":            self._handle_get_clipboard,
+            "set_clipboard":            self._handle_set_clipboard,
+            "get_calendar_events":       self._handle_get_calendar_events,
+            "create_calendar_event":     self._handle_create_calendar_event,
+            "send_email":                self._handle_send_email,
+            "read_emails":               self._handle_read_emails,
+            "generate_image":            self._handle_generate_image,
             "schedule_task":            self._handle_schedule_task,
             "cancel_scheduled_task":    self._handle_cancel_scheduled_task,
             "list_scheduled_tasks":     self._handle_list_scheduled_tasks,
@@ -322,11 +345,48 @@ class AICommand(BaseCommand):
         if not goal:
             return None
         self.tts_wrapper(_("복잡한 목표를 단계별로 처리할게요."))
-        run_result: AgentRunResult = self.orchestrator.run(goal)
+        dashboard = self._maybe_show_agent_dashboard(goal)
+        previous_callback = getattr(self.orchestrator, "progress_callback", None)
+        if dashboard is not None:
+            def _progress(event_type: str, **payload):
+                if previous_callback:
+                    previous_callback(event_type, **payload)
+                dashboard.handle_progress(event_type, **payload)
+            self.orchestrator.set_progress_callback(_progress)
+        try:
+            run_result: AgentRunResult = self.orchestrator.run(goal)
+        finally:
+            if dashboard is not None:
+                self.orchestrator.set_progress_callback(previous_callback)
         report_path = ""
         if self._is_developer_agent_goal(goal):
             report_path = self._save_agent_run_report(goal, run_result)
         return self._agent_run_to_korean(run_result, report_path=report_path)
+
+    def _handle_delegate_to_subagent(self, args: dict) -> Optional[str]:
+        goal = str(args.get("goal", "") or "").strip()
+        if not goal:
+            return _("subagent.goal_required")
+        context = str(args.get("context", "") or "")
+        timeout = float(args.get("timeout", 60) or 60)
+        result = self.orchestrator.spawn_subagent(goal, context=context, timeout=timeout)
+        return self._agent_run_to_korean(result)
+
+    def _maybe_show_agent_dashboard(self, goal: str):
+        try:
+            from core.config_manager import ConfigManager
+            if not bool(ConfigManager.get("agent_dashboard_enabled", True)):
+                return None
+            from PySide6.QtWidgets import QApplication
+            if QApplication.instance() is None:
+                return None
+            from ui.agent_dashboard import AgentDashboard
+            dashboard = AgentDashboard(self.orchestrator, goal)
+            dashboard.show()
+            return dashboard
+        except Exception as exc:
+            logging.debug("에이전트 대시보드 표시 생략: %s", exc)
+            return None
 
     def _handle_web_search(self, args: dict) -> Optional[str]:
         """인터넷 검색 후 결과 반환"""
@@ -386,6 +446,221 @@ class AICommand(BaseCommand):
 
             logging.error("mcp_call 오류: %s", exc, exc_info=True)
             return _("MCP 도구 호출 중 오류가 발생했습니다: {error}").format(error=exc)
+
+    def _handle_api_call(self, args: dict) -> Optional[str]:
+        try:
+            from agent.api_connector import get_api_connector
+            service = str(args.get("service", "") or "default")
+            operation = str(args.get("operation", "") or "")
+            params = args.get("params", {}) or {}
+            if not isinstance(params, dict):
+                params = {"input": params}
+            return get_api_connector().call(operation, params=params, service=service)
+        except Exception as exc:
+            logging.error("api_call 오류: %s", exc, exc_info=True)
+            return _("api_call.failed").format(error=exc)
+
+    def _format_tool_payload(self, payload: object) -> str:
+        return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+    def _handle_read_file(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        return self._format_tool_payload(file_tools.read_file(
+            str(args.get("file_path", "") or ""),
+            int(args.get("start_line", 1) or 1),
+            args.get("end_line"),
+        ))
+
+    def _handle_write_file(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        result = file_tools.write_file(
+            str(args.get("file_path", "") or ""),
+            str(args.get("content", "") or ""),
+            str(args.get("mode", "overwrite") or "overwrite"),
+        )
+        self.executor._log_audit("file_write", str(args.get("file_path", "") or ""), "success" if "error" not in result else "error", result, self._current_goal)
+        return self._format_tool_payload(result)
+
+    def _handle_edit_file(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        result = file_tools.edit_file(
+            str(args.get("file_path", "") or ""),
+            str(args.get("old_string", "") or ""),
+            str(args.get("new_string", "") or ""),
+        )
+        self.executor._log_audit("file_edit", str(args.get("file_path", "") or ""), "success" if "error" not in result else "error", result, self._current_goal)
+        return self._format_tool_payload(result)
+
+    def _handle_list_directory(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        return self._format_tool_payload(file_tools.list_directory(
+            str(args.get("path", "") or ""),
+            str(args.get("pattern", "*") or "*"),
+            bool(args.get("recursive", False)),
+        ))
+
+    def _handle_search_in_files(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        return self._format_tool_payload(file_tools.search_in_files(
+            str(args.get("path", "") or ""),
+            str(args.get("pattern", "") or ""),
+            str(args.get("file_glob", "*") or "*"),
+        ))
+
+    def _handle_move_file(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        result = file_tools.move_file(
+            str(args.get("src", "") or ""),
+            str(args.get("dst", "") or ""),
+        )
+        self.executor._log_audit("file_move", f"{args.get('src', '')} -> {args.get('dst', '')}", "success" if "error" not in result else "error", result, self._current_goal)
+        return self._format_tool_payload(result)
+
+    def _handle_delete_file(self, args: dict) -> Optional[str]:
+        from agent import file_tools
+        result = file_tools.delete_file(
+            str(args.get("path", "") or ""),
+            bool(args.get("confirmed", False)),
+        )
+        self.executor._log_audit("file_delete", str(args.get("path", "") or ""), "success" if "error" not in result else "error", result, self._current_goal)
+        return self._format_tool_payload(result)
+
+    def _handle_analyze_screenshot(self, args: dict) -> Optional[str]:
+        try:
+            prompt = str(args.get("prompt", "") or _("현재 화면을 설명해 주세요."))
+            path = self.executor._automation.screenshot()
+            from agent.llm_provider import get_llm_provider
+            return get_llm_provider().analyze_image(path, prompt)
+        except Exception as exc:
+            logging.error("스크린샷 분석 실패: %s", exc, exc_info=True)
+            return _("스크린샷 분석 실패: {error}").format(error=exc)
+
+    def _handle_analyze_image_file(self, args: dict) -> Optional[str]:
+        try:
+            prompt = str(args.get("prompt", "") or _("이미지 내용을 설명해 주세요."))
+            image_path = str(args.get("image_path", "") or "")
+            from agent.llm_provider import get_llm_provider
+            return get_llm_provider().analyze_image(image_path, prompt)
+        except Exception as exc:
+            logging.error("이미지 분석 실패: %s", exc, exc_info=True)
+            return _("이미지 분석 실패: {error}").format(error=exc)
+
+    def _handle_launch_app(self, args: dict) -> Optional[str]:
+        name = str(args.get("name", "") or "")
+        result = self.executor._automation.launch_app(name)
+        self.executor._log_audit("app", name, "success", result, self._current_goal)
+        return result
+
+    def _handle_close_app(self, args: dict) -> Optional[str]:
+        process_name = str(args.get("process_name", "") or "").lower().strip()
+        if not process_name:
+            return _("종료할 앱 이름이 필요합니다.")
+        closed = []
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                name = (proc.info.get("name") or "").lower()
+                if process_name in name:
+                    proc.terminate()
+                    closed.append(name)
+            result = {"closed": closed, "count": len(closed)}
+            self.executor._log_audit("app", process_name, "success", result, self._current_goal)
+            return self._format_tool_payload(result)
+        except Exception as exc:
+            self.executor._log_audit("app", process_name, "error", str(exc), self._current_goal)
+            return _("앱 종료 실패: {error}").format(error=exc)
+
+    def _handle_get_running_apps(self, args: dict) -> Optional[str]:
+        try:
+            import psutil
+            apps = sorted({proc.info.get("name") or "" for proc in psutil.process_iter(["name"]) if proc.info.get("name")})
+            return self._format_tool_payload({"apps": apps[:200], "count": len(apps)})
+        except Exception as exc:
+            return _("실행 앱 목록 조회 실패: {error}").format(error=exc)
+
+    def _handle_focus_window(self, args: dict) -> Optional[str]:
+        title = str(args.get("title", "") or "")
+        return self._format_tool_payload({"focused": self.executor._automation.focus_window(title), "title": title})
+
+    def _handle_take_screenshot(self, args: dict) -> Optional[str]:
+        path = str(args.get("path", "") or "") or None
+        result = self.executor._automation.screenshot(path)
+        self.executor._log_audit("screenshot", result, "success", result, self._current_goal)
+        return result
+
+    def _handle_get_clipboard(self, args: dict) -> Optional[str]:
+        return self.executor._automation.read_clipboard()
+
+    def _handle_set_clipboard(self, args: dict) -> Optional[str]:
+        text = str(args.get("text", "") or "")
+        result = self.executor._automation.write_clipboard(text)
+        self.executor._log_audit("clipboard", "[set_clipboard]", "success", f"{len(result)} chars", self._current_goal)
+        return _("클립보드에 저장했습니다.")
+
+    def _handle_get_calendar_events(self, args: dict) -> Optional[str]:
+        try:
+            from services.google_calendar import get_calendar_service
+            events = get_calendar_service().get_events(
+                calendar_id=str(args.get("calendar_id", "primary") or "primary"),
+                days=int(args.get("days", 7) or 7),
+                max_results=int(args.get("max_results", 10) or 10),
+            )
+            return self._format_tool_payload({"events": events})
+        except Exception as exc:
+            logging.error("캘린더 조회 실패: %s", exc, exc_info=True)
+            return _("calendar.events.failed").format(error=exc)
+
+    def _handle_create_calendar_event(self, args: dict) -> Optional[str]:
+        try:
+            from services.google_calendar import get_calendar_service
+            event = get_calendar_service().create_event(
+                summary=str(args.get("summary", "") or ""),
+                start=str(args.get("start", "") or ""),
+                end=str(args.get("end", "") or ""),
+                description=str(args.get("description", "") or ""),
+                calendar_id=str(args.get("calendar_id", "primary") or "primary"),
+            )
+            return self._format_tool_payload(event)
+        except Exception as exc:
+            logging.error("캘린더 생성 실패: %s", exc, exc_info=True)
+            return _("calendar.create.failed").format(error=exc)
+
+    def _handle_send_email(self, args: dict) -> Optional[str]:
+        try:
+            from services.gmail_service import get_gmail_service
+            result = get_gmail_service().send_email(
+                to=str(args.get("to", "") or ""),
+                subject=str(args.get("subject", "") or ""),
+                body=str(args.get("body", "") or ""),
+            )
+            return self._format_tool_payload(result)
+        except Exception as exc:
+            logging.error("이메일 발송 실패: %s", exc, exc_info=True)
+            return _("email.send.failed").format(error=exc)
+
+    def _handle_read_emails(self, args: dict) -> Optional[str]:
+        try:
+            from services.gmail_service import get_gmail_service
+            result = get_gmail_service().read_emails(
+                max_results=int(args.get("max_results", 5) or 5),
+                query=str(args.get("query", "in:inbox") or "in:inbox"),
+            )
+            return self._format_tool_payload({"messages": result})
+        except Exception as exc:
+            logging.error("이메일 조회 실패: %s", exc, exc_info=True)
+            return _("email.read.failed").format(error=exc)
+
+    def _handle_generate_image(self, args: dict) -> Optional[str]:
+        try:
+            from services.image_generator import get_image_generator
+            result = get_image_generator().generate_image(
+                prompt=str(args.get("prompt", "") or ""),
+                size=str(args.get("size", "1024x1024") or "1024x1024"),
+            )
+            return self._format_tool_payload(result)
+        except Exception as exc:
+            logging.error("이미지 생성 실패: %s", exc, exc_info=True)
+            return _("image.generate.failed").format(error=exc)
 
     def _handle_schedule_task(self, args: dict) -> Optional[str]:
         """작업 예약"""
@@ -1094,7 +1369,14 @@ class AICommand(BaseCommand):
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
     def execute(self, text: str) -> None:
-        self._run_interaction(text, self.tts_wrapper)
+        from core.VoiceCommand import _state
+        from core.config_manager import ConfigManager
+        stream_cb = None
+        cw = getattr(_state, "character_widget", None)
+        if cw is not None and ConfigManager.get("llm_streaming_enabled", True):
+            def stream_cb(delta: str) -> None:
+                cw.stream_token_signal.emit(delta)
+        self._run_interaction(text, self.tts_wrapper, stream_callback=stream_cb)
 
     def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
@@ -1109,6 +1391,14 @@ class AICommand(BaseCommand):
         return "\n".join(cleaned)
 
     def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None) -> None:
+        if self._is_interrupt_command(text):
+            self.orchestrator.interrupt()
+            output_callback(_("진행 중인 작업을 중단할게요."))
+            return
+        if self._is_resume_command(text):
+            result = self.orchestrator.resume()
+            output_callback(self._agent_run_to_korean(result))
+            return
         if not self._exec_lock.acquire(blocking=False):
             logging.warning("AI 명령 실행 중 재진입 시도 무시: %s", text)
             return
@@ -1219,6 +1509,11 @@ class AICommand(BaseCommand):
                     )
                 except Exception as exc:
                     logging.debug("대화 기록 저장 생략: %s", exc)
+                try:
+                    from core.VoiceCommand import emit_plugin_event
+                    emit_plugin_event("on_voice_command", {"text": text, "response": response})
+                except Exception as exc:
+                    logging.debug("음성 명령 이벤트 발행 생략: %s", exc)
 
         except AttributeError as e:
             logging.error("AI 어시스턴트가 초기화되지 않았습니다: %s", e)
@@ -1231,6 +1526,14 @@ class AICommand(BaseCommand):
             self.executor.tts_wrapper = original_exec_tts
             self.orchestrator.tts = original_orch_tts
             self._exec_lock.release()
+
+    def _is_interrupt_command(self, text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        return normalized in {"중지", "멈춰", "정지", "stop", "interrupt"} or normalized.endswith(" 멈춰")
+
+    def _is_resume_command(self, text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        return normalized in {"이어서 해줘", "계속해", "계속", "resume", "continue"}
 
     def _execute_tool_calls(self, tool_calls: list) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""

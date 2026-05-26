@@ -2,6 +2,12 @@
 
 `plugins/*.py`와 `plugins/*.zip` 파일을 스캔하고, 각 플러그인의
 `register(context)` 함수를 호출해 확장 기능을 로드한다.
+
+표준 이벤트명:
+- on_agent_complete: 에이전트 실행 완료
+- on_voice_command: 음성/텍스트 명령 처리 완료
+- on_tts_start / on_tts_end: TTS 재생 시작/종료
+- on_game_mode_change: 게임 모드 상태 변경
 """
 from __future__ import annotations
 
@@ -82,6 +88,7 @@ class PluginInfo:
     registered_tools: List[str] = field(default_factory=list)
     registered_character_packs: List[str] = field(default_factory=list)
     registered_event_unsubscribers: List[Callable[[], None]] = field(default_factory=list)
+    api_specs: List[str] = field(default_factory=list)
     character_menu_disabled: bool = False  # 이 플러그인이 캐릭터 우클릭 메뉴를 비활성화했는지
 
 
@@ -238,6 +245,7 @@ class PluginManager:
                 info.description = str(meta.get("description", ""))
                 info.entry = str(meta.get("entry", ""))
                 info.api_version = str(meta.get("api_version", "1.0"))
+                info.api_specs = [str(item) for item in meta.get("api_specs", []) if item]
             except Exception as exc:
                 info.error = f"plugin.json 읽기 실패: {exc}"
         return info
@@ -434,6 +442,7 @@ class PluginManager:
         plugin.name = str(metadata.get("name", plugin.name))
         plugin.version = str(metadata.get("version", "0.1.0"))
         plugin.description = str(metadata.get("description", ""))
+        plugin.api_specs = [str(item) for item in metadata.get("api_specs", []) if item]
         api_ver = str(metadata.get("api_version", "1.0"))
         if api_ver not in _COMPATIBLE_API_VERSIONS:
             raise RuntimeError(
@@ -441,6 +450,7 @@ class PluginManager:
                 f"(지원: {sorted(_COMPATIBLE_API_VERSIONS)})"
             )
         plugin.api_version = api_ver
+        self._load_plugin_api_specs(plugin)
 
         register = getattr(module, "register", None)
         if register is None:
@@ -456,6 +466,21 @@ class PluginManager:
         plugin.loaded = True
         plugin.error = ""
         return plugin
+
+    def _load_plugin_api_specs(self, plugin: PluginInfo) -> None:
+        if not plugin.api_specs:
+            return
+        try:
+            from agent.api_connector import get_api_connector
+            connector = get_api_connector()
+            base_dir = os.path.dirname(plugin.path) if plugin.path.endswith(".py") else plugin.runtime_path
+            for spec in plugin.api_specs:
+                spec_path = spec
+                if not spec.startswith(("http://", "https://")) and base_dir:
+                    spec_path = os.path.join(base_dir, spec)
+                connector.load_openapi_spec(spec_path, service=plugin.name)
+        except Exception as exc:
+            logger.warning("플러그인 API 스펙 로드 실패(%s): %s", plugin.name, exc)
 
     def _resolve_load_target(self, plugin: PluginInfo) -> Tuple[str, str]:
         if plugin.path.endswith(".py"):

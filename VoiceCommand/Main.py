@@ -274,6 +274,7 @@ def main():
     plugin_manager = None
     plugin_watcher = None
     plugin_flush_timer = None
+    mcp_server_thread = None
     try:
         setup_logging()
         icon_path = _resolve_icon_path(log_missing=True)
@@ -312,6 +313,17 @@ def main():
 
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
         start_tts_background()
+
+        try:
+            from core.config_manager import ConfigManager
+            if bool(ConfigManager.get("mcp_server_enabled", False)):
+                from agent.mcp_server import start_mcp_server_background
+                mcp_server_thread = start_mcp_server_background(
+                    tts_wrapper,
+                    int(ConfigManager.get("mcp_server_port", 8765) or 8765),
+                )
+        except Exception as exc:
+            logging.debug("로컬 MCP 서버 시작 생략: %s", exc)
 
         scheduler = get_scheduler(tts_wrapper)
         try:
@@ -418,6 +430,8 @@ def main():
             plugin_flush_timer.stop()
         if plugin_watcher:
             plugin_watcher.stop()
+        if mcp_server_thread:
+            logging.debug("MCP 서버 스레드는 데몬으로 종료됩니다.")
         logging.info("=== 앱 종료 완료 ===")
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
 # AI-Assistant (Ari) 의존성
+# 업데이트: 2026-05-26
+#   자율 에이전트 핵심 확장: 스트리밍/비전/로컬 MCP 서버/감사 로그/직접 파일·앱 도구
+#   신규 런타임 의존성: fastapi, uvicorn, sentence-transformers 기본 승격
+#   고급 도구 확장: Google/REST API는 기존 requests, 이미지 생성은 기존 openai SDK 사용
 # 업데이트: 2026-04-22
 #   i18n 종합 보완: 타이머·확인 다이얼로그·안전 점검기 문자열 국제화 / ko·en·ja .po 54개 키 추가
 #   안전 강화: autonomous_executor 민감 환경변수 부분 문자열 필터링 / safety_checker 스레드 안전 캐시
@@ -42,6 +46,7 @@ opencv-python-headless>=4.9.0.80
 groq>=0.11.0
 openai>=1.0.0
 anthropic>=0.25.0
+sentence-transformers>=2.6.0
 
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
 fish-audio-sdk>=0.1.0
@@ -61,6 +66,8 @@ requests>=2.33.0
 selenium>=4.18.0
 webdriver-manager>=4.0.1
 beautifulsoup4>=4.12.0   # HTML 파싱 (웹 스크래핑, 자율 실행 웹 작업)
+fastapi>=0.115.0         # 로컬 MCP HTTP 서버
+uvicorn>=0.30.0          # 로컬 MCP HTTP 서버 실행
 
 # ── 데이터 분석 / 시각화 ────────────────────────────────────────────────────────
 # numpy<2 와 호환: matplotlib 3.8+ (numpy>=1.21), pandas 2.x (numpy>=1.23) 모두 충족
@@ -93,9 +100,7 @@ watchdog>=4.0.0
 # easyocr>=1.7.0          # GPU/CPU 한국어 OCR (권장)
 # pytesseract>=0.3.10     # 경량 OCR (Tesseract 별도 설치 필요)
 
-# 의미 기반 전략 기억 검색 + FewShotInjector (없으면 해시 기반 폴백 자동 사용)
-# sentence-transformers>=2.7.0  # 한국어 임베딩 (paraphrase-multilingual-MiniLM-L12-v2)
-# torch>=2.0.0                  # sentence-transformers 의존
+# torch>=2.0.0                  # sentence-transformers 가 필요 시 설치
 
 # Ollama 로컬 LLM (설정의 "로컬 설치" 섹션 또는 install_ollama.py로 별도 설치)
 # Ollama 설치: https://ollama.com  →  ollama pull llama3.2

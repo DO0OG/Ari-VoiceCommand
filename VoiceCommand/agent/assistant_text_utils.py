@@ -50,6 +50,17 @@ def analyze_tool_request(user_message: str) -> dict:
         intent = "web"
         force_tool = True
         preferred = "web_fetch" if "http://" in lowered or "https://" in lowered else "web_search"
+    elif any(token in text for token in ("파일 읽", "파일 보여", "파일 내용", "폴더 목록", "디렉터리 목록")):
+        intent = "file"
+        force_tool = True
+        if "폴더" in text or "디렉터리" in text:
+            preferred = "list_directory"
+        else:
+            preferred = "read_file"
+    elif any(token in text for token in ("스크린샷 분석", "화면에 뭐", "화면 분석", "이미지 분석")):
+        intent = "vision"
+        force_tool = True
+        preferred = "analyze_screenshot" if "이미지" not in text else "analyze_image_file"
     elif any(token in text for token in ("기억해", "기억나", "저번에", "지난번", "메모해", "저장해 둔")):
         intent = "memory"
     elif any(

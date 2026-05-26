@@ -2208,3 +2208,99 @@ msgstr "もう一度おっしゃっていただけますか？"
 msgid "잘 모르겠습니다."
 msgstr "よくわかりません。"
 
+msgid "thinking"
+msgstr "考え中..."
+
+
+msgid "tool.delegate_to_subagent.description"
+msgstr "独立したサブゴールを別のエージェントに委任します。並列作業に適しています。"
+
+msgid "tool.subagent.goal"
+msgstr "サブゴール"
+
+msgid "tool.subagent.context"
+msgstr "サブエージェントに渡す背景情報"
+
+msgid "tool.timeout_seconds"
+msgstr "最大実行時間（秒）"
+
+msgid "tool.api_call.description"
+msgstr "登録済みの外部REST APIを呼び出します。"
+
+msgid "tool.api_call.service"
+msgstr "サービス名"
+
+msgid "tool.api_call.operation"
+msgstr "操作名"
+
+msgid "tool.api_call.params"
+msgstr "呼び出しパラメータ"
+
+msgid "tool.get_calendar_events.description"
+msgstr "Google Calendarから予定一覧を取得します。"
+
+msgid "tool.calendar.days"
+msgstr "照会する日数"
+
+msgid "tool.max_results"
+msgstr "最大結果数"
+
+msgid "tool.calendar.id"
+msgstr "カレンダーID"
+
+msgid "tool.create_calendar_event.description"
+msgstr "Google Calendarに予定を作成します。"
+
+msgid "tool.send_email.description"
+msgstr "Gmailでメールを送信します。"
+
+msgid "tool.read_emails.description"
+msgstr "Gmail受信トレイの最近のメールを取得します。"
+
+msgid "tool.generate_image.description"
+msgstr "プロンプトから画像を生成し、ファイルパスを返します。"
+
+msgid "tool.image.size_example"
+msgstr "例: 1024x1024"
+
+msgid "subagent.goal_required"
+msgstr "サブゴールが必要です。"
+
+msgid "subagent.timeout"
+msgstr "サブエージェントの実行がタイムアウトしました。"
+
+msgid "subagent.failed"
+msgstr "サブエージェントエラー: {error}"
+
+msgid "api_call.failed"
+msgstr "API呼び出しに失敗しました: {error}"
+
+msgid "calendar.events.failed"
+msgstr "カレンダー取得に失敗しました: {error}"
+
+msgid "calendar.create.failed"
+msgstr "カレンダー作成に失敗しました: {error}"
+
+msgid "email.send.failed"
+msgstr "メール送信に失敗しました: {error}"
+
+msgid "email.read.failed"
+msgstr "メール取得に失敗しました: {error}"
+
+msgid "image.generate.failed"
+msgstr "画像生成に失敗しました: {error}"
+
+msgid "settings.agent.max_subagents"
+msgstr "最大サブエージェント数"
+
+msgid "settings.agent.google_tools"
+msgstr "Google Calendar/Gmailツールを使用"
+
+msgid "settings.agent.google_client_id"
+msgstr "Google OAuth Client ID"
+
+msgid "settings.agent.google_client_secret"
+msgstr "Google OAuth Client Secret"
+
+msgid "settings.agent.image_generation"
+msgstr "画像生成ツールを使用"
