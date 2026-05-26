@@ -168,6 +168,44 @@ class ConversationHistory:
                     messages.append({"role": "assistant", "content": item["ai"]})
             return messages
 
+    def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
+        """대략적인 토큰 수를 계산한다(문자 수 ÷ 3)."""
+        total = 0
+        for message in messages:
+            total += max(1, len(str(message.get("content", "") or "")) // 3)
+        return total
+
+    def get_messages_for_context(self, max_tokens: int = 8000) -> List[Dict[str, str]]:
+        """토큰 예산 안에서 최신 대화부터 컨텍스트 메시지를 구성한다."""
+        with self._lock:
+            system_messages: List[Dict[str, str]] = []
+            if self.summaries:
+                combined = " | ".join(self.summaries[-3:])
+                system_messages.append({
+                    "role": "system",
+                    "content": f"[이전 대화 요약] {combined}",
+                })
+            chronological: List[Dict[str, str]] = []
+            for item in self.active:
+                if item.get("user"):
+                    chronological.append({"role": "user", "content": str(item["user"])})
+                if item.get("ai"):
+                    ai_content = str(item["ai"])
+                    if len(ai_content) > 2000:
+                        ai_content = f"[도구 결과 요약: {len(ai_content)}자]"
+                    chronological.append({"role": "assistant", "content": ai_content})
+
+        selected: List[Dict[str, str]] = []
+        used = self._estimate_tokens(system_messages)
+        for message in reversed(chronological):
+            cost = self._estimate_tokens([message])
+            if selected and used + cost > max_tokens:
+                break
+            selected.append(message)
+            used += cost
+        selected.reverse()
+        return system_messages + selected
+
     def get_recent(self, n: int = 5):
         with self._lock:
             return self.active[-n:]

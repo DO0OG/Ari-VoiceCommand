@@ -17,6 +17,7 @@ import textwrap
 import io
 import tokenize
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
@@ -163,6 +164,8 @@ class AutonomousExecutor:
         self._history: List[ExecutionResult] = []
         self._state_transitions: List[Dict[str, Any]] = []
         self._backup_history: List[Dict[str, str]] = []
+        self._process_lock = threading.Lock()
+        self._active_processes: set[subprocess.Popen] = set()
         self._safety = get_safety_checker()
         self._automation = AutomationHelpers()
 
@@ -359,6 +362,17 @@ class AutonomousExecutor:
     def get_last_execution(self) -> Optional[ExecutionResult]:
         return self._history[-1] if self._history else None
 
+    def cancel_running_processes(self) -> None:
+        """현재 실행 중인 자식 프로세스를 중단 요청한다."""
+        with self._process_lock:
+            processes = list(self._active_processes)
+        for process in processes:
+            try:
+                if process.poll() is None:
+                    process.kill()
+            except Exception as exc:
+                logging.debug("[Executor] 프로세스 중단 실패: %s", exc)
+
     def get_state_transition_history(self) -> List[Dict[str, Any]]:
         return [dict(item) for item in self._state_transitions]
 
@@ -523,27 +537,33 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
+            self._register_process(process)
             stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
+            self._unregister_process(process)
             output = (stdout or "").strip()
             error_output = (stderr or "").strip()
             if process.returncode != 0:
                 logging.error("[Executor] Python 오류:\n%s", error_output)
                 if self.tts_wrapper:
                     self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
+                self._log_audit("python", code, "error", error_output, "")
                 return ExecutionResult(success=False, error=error_output or "파이썬 실행 실패")
             if output:
                 logging.info("[Executor] Python 출력:\n%s", output)
+            self._log_audit("python", code, "success", output, "")
             return ExecutionResult(success=True, output=output)
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
             if process:
                 process.kill()
+                self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper(_("코드 실행 시간이 너무 길어 중단했습니다."))
+            self._log_audit("python", code, "timeout", "", "")
             return ExecutionResult(
                 success=False,
                 error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
@@ -553,8 +573,11 @@ class AutonomousExecutor:
             logging.error("[Executor] Python 오류:\n%s", err)
             if self.tts_wrapper:
                 self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
+            self._log_audit("python", code, "error", err, "")
             return ExecutionResult(success=False, error=err)
         finally:
+            if process:
+                self._unregister_process(process)
             if runner_path:
                 self._safe_unlink(runner_path)
 
@@ -576,26 +599,32 @@ class AutonomousExecutor:
                 env=child_env,
                 **self._build_subprocess_kwargs(),
             )
+            self._register_process(process)
             stdout, stderr = process.communicate(timeout=_SUBPROCESS_TIMEOUT_SECONDS)
+            self._unregister_process(process)
             if stdout:
                 logging.info("[Executor] Shell 출력:\n%s", stdout.strip())
             if stderr:
                 logging.warning("[Executor] Shell 에러:\n%s", stderr.strip())
-            return ExecutionResult(
+            result = ExecutionResult(
                 success=process.returncode == 0,
                 output=stdout.strip(),
                 error=stderr.strip(),
             )
+            self._log_audit("shell", command, "success" if result.success else "error", result.output or result.error, "")
+            return result
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Shell 시간 초과: %s", command)
             if process:
                 process.kill()
+                self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
                 except Exception:
                     pass
             if self.tts_wrapper:
                 self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
+            self._log_audit("shell", command, "timeout", "", "")
             return ExecutionResult(
                 success=False,
                 error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
@@ -604,7 +633,11 @@ class AutonomousExecutor:
             logging.error("[Executor] Shell 오류: %s", e)
             if self.tts_wrapper:
                 self.tts_wrapper("시스템 명령 실행 중 오류가 발생했습니다.")
+            self._log_audit("shell", command, "error", str(e), "")
             return ExecutionResult(success=False, error=str(e))
+        finally:
+            if process:
+                self._unregister_process(process)
 
     def _ask_confirmation(self, action_desc: str, report) -> bool:
         """확인 다이얼로그 요청 (Qt 환경에서만 동작, 그 외엔 False 반환)"""
@@ -630,6 +663,39 @@ class AutonomousExecutor:
             })
             if len(self._state_transitions) > self._MAX_STATE_TRANSITIONS:
                 self._state_transitions = self._state_transitions[-self._MAX_STATE_TRANSITIONS:]
+
+    def _register_process(self, process: subprocess.Popen) -> None:
+        with self._process_lock:
+            self._active_processes.add(process)
+
+    def _unregister_process(self, process: subprocess.Popen) -> None:
+        with self._process_lock:
+            self._active_processes.discard(process)
+
+    def _log_audit(self, action_type: str, code: str, result: str, output: str, goal: str = "") -> None:
+        try:
+            from core.config_manager import ConfigManager
+            if not bool(ConfigManager.get("audit_log_enabled", True)):
+                return
+            from core.resource_manager import ResourceManager
+            path = ResourceManager.get_runtime_path("audit_log.jsonl")
+            row = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "type": action_type,
+                "code": code,
+                "result": result,
+                "output_truncated": str(output or "")[:2000],
+                "goal": goal,
+            }
+            lines: list[str] = []
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as handle:
+                    lines = handle.readlines()[-999:]
+            lines.append(json.dumps(row, ensure_ascii=False) + "\n")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.writelines(lines)
+        except Exception as exc:
+            logging.debug("[Executor] 감사 로그 기록 실패: %s", exc)
 
     def _capture_runtime_state(self) -> Dict[str, Any]:
         try:

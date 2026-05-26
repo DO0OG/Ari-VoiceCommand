@@ -24,6 +24,7 @@ from ui.common import create_muted_label
 from ui.settings_llm_page import _LLMSettingsPage
 from ui.settings_tts_page import _TTSSettingsPage
 from ui.settings_plugin_page import _PluginSettingsPage
+from ui.settings_agent_page import _AgentSettingsPage
 
 
 class SettingsDialog(QDialog):
@@ -46,6 +47,7 @@ class SettingsDialog(QDialog):
         "stt_provider", "whisper_model", "whisper_device", "whisper_compute_type",
         "wake_words", "stt_energy_threshold", "stt_dynamic_energy",
     }
+    AGENT_KEYS = {"agent_timeout_seconds", "agent_dashboard_enabled", "audit_log_enabled", "mcp_server_enabled"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,6 +86,10 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._create_device_tab(), _("장치 설정"))
 
         # 5. 확장 탭
+        self._agent_page = _AgentSettingsPage(self.settings, self)
+        self.tabs.addTab(self._agent_page, _("에이전트"))
+
+        # 6. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
         self.tabs.addTab(self._plugin_page, _("확장"))
 
@@ -377,6 +383,7 @@ class SettingsDialog(QDialog):
         # LLM / TTS 값을 각 페이지에서 수집
         new_settings.update(self._llm_page.get_values())
         new_settings.update(self._tts_page.get_values())
+        new_settings.update(self._agent_page.get_values())
 
         merged_settings = {**self.original_settings, **new_settings}
         self.changed_keys = {
