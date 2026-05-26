@@ -2,6 +2,12 @@
 
 `plugins/*.py`와 `plugins/*.zip` 파일을 스캔하고, 각 플러그인의
 `register(context)` 함수를 호출해 확장 기능을 로드한다.
+
+표준 이벤트명:
+- on_agent_complete: 에이전트 실행 완료
+- on_voice_command: 음성/텍스트 명령 처리 완료
+- on_tts_start / on_tts_end: TTS 재생 시작/종료
+- on_game_mode_change: 게임 모드 상태 변경
 """
 from __future__ import annotations
 

@@ -3,11 +3,14 @@
 모든 OpenAI-호환 제공자는 openai SDK + base_url 방식으로 통일.
 Anthropic만 자체 SDK 사용.
 """
+import base64
 import json
 import logging
+import mimetypes
+import os
 import re
 import threading
-from typing import List, Any
+from typing import Callable, List, Any
 
 from agent.assistant_text_utils import (
     analyze_tool_request,
@@ -112,6 +115,41 @@ _TOOL_NAMES_BY_INTENT = {
         "web_search",
         "web_fetch",
     },
+    "file": {
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_directory",
+        "search_in_files",
+        "move_file",
+        "delete_file",
+    },
+    "vision": {
+        "analyze_screenshot",
+        "analyze_image_file",
+        "launch_app",
+        "close_app",
+        "get_running_apps",
+        "focus_window",
+        "take_screenshot",
+        "get_clipboard",
+        "set_clipboard",
+    },
+    "automation": {
+        "get_screen_status",
+        "execute_python_code",
+        "execute_shell_command",
+        "run_agent_task",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_directory",
+        "search_in_files",
+        "move_file",
+        "delete_file",
+        "analyze_screenshot",
+        "analyze_image_file",
+    },
     "schedule": {
         "set_timer",
         "cancel_timer",
@@ -145,6 +183,7 @@ class LLMProvider:
         self.conversation_history = []
         self._history_lock = threading.RLock()
         self.max_history = 10
+        self.max_context_tokens = self._load_int_setting("max_context_tokens", 8000)
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
@@ -257,6 +296,45 @@ class LLMProvider:
     def _history_snapshot(self) -> list[dict]:
         with self._history_lock:
             return list(self.conversation_history)
+
+    def _load_int_setting(self, key: str, default: int) -> int:
+        try:
+            from core.config_manager import ConfigManager
+            return int(ConfigManager.get(key, default) or default)
+        except Exception:
+            return default
+
+    def _estimate_tokens(self, messages: list[dict]) -> int:
+        total = 0
+        for message in messages:
+            content = message.get("content", "")
+            if isinstance(content, list):
+                content = json.dumps(content, ensure_ascii=False, default=str)
+            total += max(1, len(str(content or "")) // 3)
+        return total
+
+    def _compact_history_message(self, message: dict) -> dict:
+        compacted = dict(message)
+        content = compacted.get("content")
+        if isinstance(content, str) and len(content) > 2000:
+            compacted["content"] = f"[도구 결과 요약: {len(content)}자]"
+        return compacted
+
+    def _history_for_context(self, max_tokens: int | None = None) -> list[dict]:
+        budget = int(max_tokens or self.max_context_tokens or 8000)
+        with self._history_lock:
+            history = list(self.conversation_history)
+        selected: list[dict] = []
+        used = 0
+        for message in reversed(history):
+            compacted = self._compact_history_message(message)
+            cost = self._estimate_tokens([compacted])
+            if selected and used + cost > budget:
+                break
+            selected.append(compacted)
+            used += cost
+        selected.reverse()
+        return selected
 
     def _estimate_max_tokens(self, message: str) -> int:
         length = len(message or "")
@@ -391,7 +469,7 @@ class LLMProvider:
             if save_history:
                 self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context, user_message=user_message)}]
-            messages.extend(self._history_snapshot())
+            messages.extend(self._history_for_context())
 
             if provider == "anthropic":
                 resp = client.messages.create(
@@ -439,7 +517,7 @@ class LLMProvider:
             self.add_to_history("user", user_message)
             skill_ctx = self._get_skill_context(user_message)
             messages = [{"role": "system", "content": self._build_system(include_context, user_message=user_message)}]
-            messages.extend(self._history_snapshot())
+            messages.extend(self._history_for_context())
             
             request_ctx = self._analyze_request(user_message)
             if skill_ctx.get("force_web_search"):
@@ -518,6 +596,147 @@ class LLMProvider:
             logging.error("LLM chat_with_tools 오류 (%s): %s", model, e)
             return self._offline_response(user_message), []
 
+    def stream_chat(
+        self,
+        messages: list[dict],
+        on_token: Callable[[str], None] | None,
+        on_done: Callable[[str, list], None] | None,
+        **kwargs,
+    ) -> str:
+        """제공자별 스트리밍 응답을 공통 콜백 인터페이스로 전달한다."""
+        client, provider, model = self._resolve_route(
+            str(messages[-1].get("content", "")) if messages else "",
+            kwargs.get("model_override", ""),
+        )
+        if not client or not model:
+            text = self._offline_response("")
+            if on_done:
+                on_done(text, [])
+            return text
+        full_text = ""
+        tool_calls: list = []
+        try:
+            if provider == "anthropic":
+                system = ""
+                anthropic_messages = messages
+                if messages and messages[0].get("role") == "system":
+                    system = str(messages[0].get("content", ""))
+                    anthropic_messages = messages[1:]
+                with client.messages.stream(
+                    model=model,
+                    max_tokens=int(kwargs.get("max_tokens", 1000)),
+                    system=system,
+                    messages=anthropic_messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        if text:
+                            full_text += text
+                            if on_token:
+                                on_token(text)
+            else:
+                stream = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=float(kwargs.get("temperature", 0.7)),
+                    max_tokens=int(kwargs.get("max_tokens", 1000)),
+                    stream=True,
+                )
+                for chunk in stream:
+                    choice = chunk.choices[0]
+                    delta = getattr(choice, "delta", None)
+                    text = getattr(delta, "content", "") or ""
+                    if text:
+                        full_text += text
+                        if on_token:
+                            on_token(text)
+                    for tc in getattr(delta, "tool_calls", None) or []:
+                        tool_calls.append(tc)
+        except Exception as exc:
+            logging.debug("[LLMProvider] stream_chat 폴백: %s", exc)
+            full_text = self._stream_or_chat_completion(
+                client,
+                model=model,
+                messages=messages,
+                temperature=float(kwargs.get("temperature", 0.7)),
+                max_tokens=int(kwargs.get("max_tokens", 1000)),
+                stream_callback=on_token,
+            )
+        if on_done:
+            on_done(full_text, tool_calls)
+        return full_text
+
+    def analyze_image(self, image_path_or_b64: str, prompt: str = "") -> str:
+        """이미지 파일 또는 base64 문자열을 현재 제공자 비전 모델로 분석한다."""
+        try:
+            from core.config_manager import ConfigManager
+            if not bool(ConfigManager.get("vision_enabled", True)):
+                return "이미지 분석 기능이 설정에서 비활성화되어 있습니다."
+        except Exception:
+            pass
+        if not self._has_any_client():
+            return "AI 기능이 비활성화되어 있습니다."
+        prompt = prompt or "이미지 내용을 설명해 주세요."
+        try:
+            client, provider, model = self._resolve_route(prompt)
+            if not client or not model:
+                return self._offline_response(prompt)
+            data, media_type = self._load_image_base64(image_path_or_b64)
+            if provider == "anthropic":
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=800,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                            {"type": "text", "text": prompt},
+                        ],
+                    }],
+                )
+                return self._clean_response(" ".join([b.text for b in resp.content if getattr(b, "type", "") == "text"]))
+            if provider in {"openai", "groq", "mistral", "gemini", "openrouter", "nvidia_nim", "ollama"}:
+                image_url = f"data:{media_type};base64,{data}"
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}},
+                        ],
+                    }],
+                    max_tokens=800,
+                )
+                return self._clean_response(resp.choices[0].message.content or "")
+        except Exception as exc:
+            logging.warning("[LLMProvider] 비전 분석 실패, OCR 폴백 시도: %s", exc)
+        return self._ocr_image_fallback(image_path_or_b64, prompt)
+
+    def _load_image_base64(self, image_path_or_b64: str) -> tuple[str, str]:
+        raw = str(image_path_or_b64 or "").strip()
+        media_type = "image/png"
+        if os.path.exists(raw):
+            guessed = mimetypes.guess_type(raw)[0]
+            if guessed and guessed.startswith("image/"):
+                media_type = guessed
+            with open(raw, "rb") as f:
+                return base64.b64encode(f.read()).decode("ascii"), media_type
+        if raw.startswith("data:"):
+            header, _, data = raw.partition(",")
+            media = header[5:].split(";")[0]
+            return data, media or media_type
+        return raw, media_type
+
+    def _ocr_image_fallback(self, image_path_or_b64: str, prompt: str) -> str:
+        try:
+            from agent.ocr_helper import ocr_image_file
+            if os.path.exists(str(image_path_or_b64)):
+                text = ocr_image_file(str(image_path_or_b64))
+                return f"{prompt}\n\n[OCR 결과]\n{text}".strip()
+        except Exception as exc:
+            logging.debug("[LLMProvider] OCR 폴백 실패: %s", exc)
+        return "현재 제공자에서 이미지 분석을 사용할 수 없습니다."
+
     def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="", stream_callback=None) -> str:
         """도구 결과 피드백"""
         if not self._has_any_client():
@@ -563,7 +782,7 @@ class LLMProvider:
                     if part
                 ),
             }]
-            messages.extend(self._history_snapshot())
+            messages.extend(self._history_for_context())
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
@@ -583,7 +802,7 @@ class LLMProvider:
         client = client_override or self.client
         try:
             system = self._build_system(include_context, user_message=user_message)
-            messages = self._history_snapshot()
+            messages = self._history_for_context()
             kwargs = {"model": model, "max_tokens": 1000, "system": system, "messages": messages}
             if use_tools:
                 kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"]["description"], "input_schema": t["function"]["parameters"]} for t in self.get_available_tools()]
@@ -612,7 +831,7 @@ class LLMProvider:
         client = client_override or self.client
         try:
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
-            messages = self._history_snapshot()
+            messages = self._history_for_context()
             messages.append({"role": "user", "content": results_content})
             resp = client.messages.create(
                 model=model,
@@ -640,7 +859,8 @@ class LLMProvider:
         max_tokens: int,
         stream_callback=None,
     ) -> str:
-        if not stream_callback:
+        streaming_enabled = bool(self._load_int_setting("llm_streaming_enabled", 1))
+        if not stream_callback or not streaming_enabled:
             resp = client.chat.completions.create(
                 model=model,
                 messages=messages,

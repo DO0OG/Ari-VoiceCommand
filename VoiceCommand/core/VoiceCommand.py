@@ -56,6 +56,14 @@ _TTS_WAKE_GUARD_SECONDS = 1.2
 _TTS_WAKE_GUARD_BUFFER_SECONDS = 0.5
 
 
+def _tts_wake_guard_seconds() -> float:
+    try:
+        from core.config_manager import ConfigManager
+        return float(ConfigManager.get("tts_wake_guard_seconds", _TTS_WAKE_GUARD_SECONDS) or _TTS_WAKE_GUARD_SECONDS)
+    except Exception:
+        return _TTS_WAKE_GUARD_SECONDS
+
+
 class SharedMicrophone(sr.Microphone):
     """전역 PyAudio 인스턴스를 공유하는 마이크 클래스"""
     def __enter__(self):
@@ -295,9 +303,9 @@ def _estimate_tts_duration(text: str) -> float:
     """오디오 길이를 알 수 없는 TTS 제공자를 위한 보수적 재생 시간 추정."""
     normalized = re.sub(r"\s+", " ", text or "").strip()
     if not normalized:
-        return _TTS_WAKE_GUARD_SECONDS
+        return _tts_wake_guard_seconds()
     # 한국어/일본어 등 공백이 적은 문장을 고려해 글자 수 기반으로 추정한다.
-    return max(_TTS_WAKE_GUARD_SECONDS, min(30.0, len(normalized) / 8.0))
+    return max(_tts_wake_guard_seconds(), min(30.0, len(normalized) / 8.0))
 
 
 def emit_plugin_event(event_name: str, payload: dict | None = None) -> None:
@@ -309,8 +317,10 @@ def emit_plugin_event(event_name: str, payload: dict | None = None) -> None:
         logging.debug("플러그인 이벤트 발행 생략 (%s): %s", event_name, exc)
 
 
-def extend_tts_resume_guard(duration: float = _TTS_WAKE_GUARD_SECONDS) -> None:
+def extend_tts_resume_guard(duration: float | None = None) -> None:
     """TTS 재생 예상 시간(초)과 버퍼를 반영해 웨이크워드 보호 구간을 연장한다."""
+    if duration is None:
+        duration = _tts_wake_guard_seconds()
     guard_duration = max(0.0, duration) + _TTS_WAKE_GUARD_BUFFER_SECONDS
     _state.tts_resume_guard_until = max(
         _state.tts_resume_guard_until,
@@ -323,6 +333,8 @@ def _handle_tts_playback_finished() -> None:
     extend_tts_resume_guard()
     if is_tts_playing():
         return
+    emit_plugin_event("on_tts_end", {})
+    emit_plugin_event("tts.playback.finished", {})
 
     if _state.listening_indicator_active:
         _show_listening_bubble()
@@ -364,6 +376,7 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
             "tts.playback.started",
             {"text": text, "estimated_duration": estimated_duration},
         )
+        emit_plugin_event("on_tts_start", {"text": text, "estimated_duration": estimated_duration})
         ok = _state.fish_tts.speak(text, emotion=emotion)
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
@@ -381,6 +394,7 @@ def tts_wrapper(text: str, show_bubble: bool = True) -> None:
         queued = _state.tts_thread.speak(text)
         if queued and show_bubble:
             _show_tts_bubble(text)
+            emit_plugin_event("on_tts_start", {"text": text, "queued": True})
         elif not queued and _state.character_widget:
             _handle_tts_playback_finished()
     else:
@@ -495,12 +509,16 @@ _state.command_registry = CommandRegistry(
 # ── 게임 모드 ─────────────────────────────────────────────────────────────────
 
 def enable_game_mode():
-    """게임 모드 활성화: CosyVoice3 서브프로세스 종료 → VRAM 해제 → Fish Audio로 전환"""
+    """게임 모드 활성화: GPU TTS를 정리하고 Edge TTS로 전환해 VRAM을 확보한다."""
     if _state.game_mode:
         return
 
     from core.config_manager import ConfigManager
-    _state.saved_tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
+    settings = ConfigManager.load_settings()
+    _state.saved_tts_mode = settings.get("tts_mode", "fish")
+    legacy_settings_without_mode = "tts_mode" not in settings
+    settings["tts_mode"] = "edge"
+    ConfigManager.save_settings(settings)
 
     if _state.fish_tts and hasattr(_state.fish_tts, 'cleanup'):
         try:
@@ -510,18 +528,25 @@ def enable_game_mode():
     _state.fish_tts = None
 
     try:
-        from tts.fish_tts_ws import FishTTSWebSocket
-        settings = ConfigManager.load_settings()
-        _state.fish_tts = FishTTSWebSocket(
-            api_key=settings.get("fish_api_key", ""),
-            reference_id=settings.get("fish_reference_id", "")
-        )
+        if legacy_settings_without_mode:
+            from tts.fish_tts_ws import FishTTSWebSocket
+            _state.fish_tts = FishTTSWebSocket(
+                api_key=settings.get("fish_api_key", ""),
+                reference_id=settings.get("fish_reference_id", ""),
+            )
+        else:
+            initialize_tts()
         reconnect_tts_signals()
         _state.game_mode = True
-        logging.info("게임 모드 활성화: Fish Audio TTS로 전환, GPU 메모리 해제됨")
+        emit_plugin_event("on_game_mode_change", {"enabled": True})
+        logging.info("게임 모드 활성화: Edge TTS로 전환, GPU 메모리 해제됨")
     except Exception as e:
         logging.error("게임 모드 전환 실패: %s", e)
         try:
+            if _state.saved_tts_mode:
+                settings = ConfigManager.load_settings()
+                settings["tts_mode"] = _state.saved_tts_mode
+                ConfigManager.save_settings(settings)
             initialize_tts()
         except Exception as fallback_exc:
             logging.error("게임 모드 실패 후 TTS 복원 실패: %s", fallback_exc)
@@ -539,13 +564,19 @@ def disable_game_mode():
             logging.warning("Fish TTS 정리 오류 (무시): %s", e)
     _state.fish_tts = None
     _state.game_mode = False
+    from core.config_manager import ConfigManager
+    if _state.saved_tts_mode:
+        settings = ConfigManager.load_settings()
+        settings["tts_mode"] = _state.saved_tts_mode
+        ConfigManager.save_settings(settings)
+    emit_plugin_event("on_game_mode_change", {"enabled": False})
 
     def _reinit():
         try:
             initialize_tts()
             if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
                 _state.fish_tts.wait_until_warmup_done()
-            tts_wrapper(_("게임 모드 해제. CosyVoice로 복원되었습니다."))
+            tts_wrapper(_("게임 모드 해제. 원래 TTS로 복원되었습니다."))
         except Exception as e:
             logging.error("TTS 복원 실패: %s", e)
 

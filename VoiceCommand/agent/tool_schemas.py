@@ -245,6 +245,195 @@ CORE_TOOL_SCHEMAS = [
     },
 ]
 
+CORE_TOOL_SCHEMAS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": _("파일 내용을 읽어 반환합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "start_line": {"type": "integer", "description": _("시작 줄 (선택, 기본 1)")},
+                    "end_line": {"type": "integer", "description": _("끝 줄 (선택)")},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": _("파일에 내용을 씁니다 (덮어쓰기 또는 추가)."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "mode": {"type": "string", "enum": ["overwrite", "append"], "description": _("기본 overwrite")},
+                },
+                "required": ["file_path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": _("파일의 특정 문자열을 찾아 교체합니다 (diff 없이 정밀 편집)."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "old_string": {"type": "string", "description": _("교체할 원본 텍스트 (파일 내 고유해야 함)")},
+                    "new_string": {"type": "string", "description": _("새 텍스트")},
+                },
+                "required": ["file_path", "old_string", "new_string"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": _("디렉토리 내 파일/폴더 목록을 반환합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "pattern": {"type": "string", "description": _("glob 패턴 (선택, 예: *.py)")},
+                    "recursive": {"type": "boolean", "description": _("하위 폴더 포함 여부")},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_in_files",
+            "description": _("파일들 안에서 정규식 패턴을 검색합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "pattern": {"type": "string", "description": _("검색할 정규식")},
+                    "file_glob": {"type": "string", "description": _("대상 파일 glob (예: *.py)")},
+                },
+                "required": ["path", "pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_file",
+            "description": _("파일 또는 폴더를 이동하거나 이름을 변경합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {"src": {"type": "string"}, "dst": {"type": "string"}},
+                "required": ["src", "dst"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": _("파일 또는 빈 폴더를 삭제합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}, "confirmed": {"type": "boolean"}},
+                "required": ["path", "confirmed"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_screenshot",
+            "description": _("현재 화면 스크린샷을 찍어 내용을 분석합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {"prompt": {"type": "string", "description": _("분석 질문")}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_image_file",
+            "description": _("이미지 파일 내용을 분석합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image_path": {"type": "string"},
+                    "prompt": {"type": "string"},
+                },
+                "required": ["image_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "launch_app",
+            "description": _("앱 이름이나 경로로 애플리케이션을 실행합니다."),
+            "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "close_app",
+            "description": _("프로세스 이름으로 실행 중인 앱을 종료합니다."),
+            "parameters": {"type": "object", "properties": {"process_name": {"type": "string"}}, "required": ["process_name"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_running_apps",
+            "description": _("실행 중인 앱 목록을 반환합니다."),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "focus_window",
+            "description": _("제목 일부가 일치하는 창에 포커스를 맞춥니다."),
+            "parameters": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "take_screenshot",
+            "description": _("전체 화면 스크린샷을 저장하고 경로를 반환합니다."),
+            "parameters": {"type": "object", "properties": {"path": {"type": "string"}}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_clipboard",
+            "description": _("클립보드 텍스트를 반환합니다."),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_clipboard",
+            "description": _("클립보드에 텍스트를 저장합니다."),
+            "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+        },
+    },
+])
+
 
 def build_available_tools(plugin_tools: list[dict]) -> list[dict]:
     tools = deepcopy(CORE_TOOL_SCHEMAS)

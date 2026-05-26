@@ -35,6 +35,9 @@ DEFAULT_SETTINGS = {
     "openrouter_api_key": "",
     "nvidia_nim_api_key": "",
     "ollama_base_url": "http://localhost:11434/v1",
+    "llm_streaming_enabled": True,
+    "vision_enabled": True,
+    "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
     "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge
     "fish_api_key": "",
@@ -91,6 +94,12 @@ DEFAULT_SETTINGS = {
     "reflection_engine_enabled": True,   # ReflectionEngine 실패 자동 반성
     "memory_consolidation_days": 14,     # MemoryConsolidator 압축 기준 (일)
     "weekly_report_enabled": True,       # 주간 자기개선 리포트 (ProactiveScheduler 등록)
+    "agent_timeout_seconds": 120,
+    "audit_log_enabled": True,
+    "mcp_server_enabled": False,
+    "mcp_server_port": 8765,
+    "agent_dashboard_enabled": True,
+    "tts_wake_guard_seconds": 1.2,
 }
 
 _TTS_VOICE_BY_LANG = {

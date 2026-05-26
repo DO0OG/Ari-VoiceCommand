@@ -27,12 +27,18 @@ _BUBBLE_HISTORY_LOCK = threading.Lock()
 _BUBBLE_HISTORY_QUEUE: Queue[str] = Queue()
 _BUBBLE_HISTORY_WORKER_LOCK = threading.Lock()
 _BUBBLE_HISTORY_WORKER: Optional[threading.Thread] = None
-_THINKING_TEXTS = frozenset(("생각 중...", "Thinking...", "考え中..."))
 
 
 def _is_thinking_bubble_text(text: str) -> bool:
     normalized = (text or "").strip()
-    return normalized in _THINKING_TEXTS or normalized == _("생각 중...")
+    thinking_texts = {
+        _("thinking"),
+        _("생각 중..."),
+        "생각 중...",
+        "Thinking...",
+        "考え中...",
+    }
+    return normalized in thinking_texts
 
 
 def _is_geometry_animation_running(animation: Optional[QPropertyAnimation]) -> bool:
@@ -320,7 +326,7 @@ class CharacterWidget(QWidget):
             self.animation_timer.setInterval(120)
             current_text = self.speech_bubble.text if self.speech_bubble else ""
             if not _is_thinking_bubble_text(current_text):
-                self.say("생각 중...", duration=0)
+                self.say(_("thinking"), duration=0)
         else:
             self.animation_timer.setInterval(110 if self._sleepy_mode else 70)
             current_text = self.speech_bubble.text if self.speech_bubble else ""

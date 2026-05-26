@@ -63,6 +63,7 @@ class SimpleWakeWord:
         """TTS 이후 환경 변화 시 임계값 재조정"""
         try:
             self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            self._save_energy_threshold()
             logging.debug(f"재캘리브레이션 완료 (energy_threshold={self.recognizer.energy_threshold:.1f})")
         except Exception as e:
             logging.debug(f"재캘리브레이션 실패: {e}")
@@ -76,6 +77,7 @@ class SimpleWakeWord:
             if not self._calibrated:
                 self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
                 self._calibrated = True
+                self._save_energy_threshold()
                 logging.info(f"웨이크워드 캘리브레이션 완료 (energy_threshold={self.recognizer.energy_threshold:.1f})")
             audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=2)
             text = self._stt.transcribe(audio) if self._stt else None
@@ -98,3 +100,11 @@ class SimpleWakeWord:
         except Exception as e:
             logging.debug(f"음성 감지 오류: {e}")
             return False
+
+    def _save_energy_threshold(self) -> None:
+        try:
+            settings = ConfigManager.load_settings()
+            settings["stt_energy_threshold"] = int(self.recognizer.energy_threshold)
+            ConfigManager.save_settings(settings)
+        except Exception as exc:
+            logging.debug("STT 임계값 저장 실패: %s", exc)

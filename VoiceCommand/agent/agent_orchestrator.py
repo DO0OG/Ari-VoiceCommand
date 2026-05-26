@@ -68,6 +68,9 @@ class AgentOrchestrator:
         self.thinking_callback = thinking_callback
         self._run_lock = threading.Lock()
         self._context_lock = threading.Lock()
+        self._interrupt_requested = threading.Event()
+        self._last_checkpoint: dict | None = None
+        self.default_timeout = self._load_timeout_seconds()
 
         self._exec = ExecutionEngine(
             executor=executor,
@@ -94,6 +97,34 @@ class AgentOrchestrator:
         """생각 중(Thinking) 상태 콜백 설정. 캐릭터 애니메이션 제어에 사용."""
         self.thinking_callback = cb
 
+    def _load_timeout_seconds(self) -> float:
+        try:
+            from core.config_manager import ConfigManager
+            return float(ConfigManager.get("agent_timeout_seconds", MAX_TOTAL_TIMEOUT) or MAX_TOTAL_TIMEOUT)
+        except Exception:
+            return MAX_TOTAL_TIMEOUT
+
+    def interrupt(self) -> None:
+        """진행 중인 에이전트 루프를 다음 안전 지점에서 중단하도록 요청한다."""
+        self._interrupt_requested.set()
+        try:
+            cancel = getattr(self.executor, "cancel_running_processes", None)
+            if callable(cancel):
+                cancel()
+        except Exception as exc:
+            logger.debug("[Orchestrator] 실행 프로세스 중단 요청 실패: %s", exc)
+        self._emit_progress("interrupt_requested")
+
+    def resume(self, additional_goal: str = "") -> AgentRunResult:
+        """마지막 중단 체크포인트의 목표를 다시 실행한다."""
+        checkpoint = dict(self._last_checkpoint or {})
+        goal = str(checkpoint.get("goal", "") or "").strip()
+        if additional_goal:
+            goal = f"{goal}\n\n추가 지시: {additional_goal}" if goal else additional_goal
+        if not goal:
+            return AgentRunResult(goal=additional_goal, achieved=False, summary=_("재개할 작업이 없습니다."))
+        return self.run(goal)
+
     def execute_with_self_fix(
         self,
         content: str,
@@ -110,7 +141,7 @@ class AgentOrchestrator:
         res, _, _ = self._exec.execute_step_with_retry(step, goal, {})
         return res
 
-    def run(self, goal: str, timeout: float = MAX_TOTAL_TIMEOUT) -> AgentRunResult:
+    def run(self, goal: str, timeout: Optional[float] = None) -> AgentRunResult:
         """복잡한 목표를 다층 루프로 자율 달성."""
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
@@ -118,16 +149,22 @@ class AgentOrchestrator:
             return AgentRunResult(goal=goal, summary=_("다른 작업이 진행 중입니다."))
 
         start_time = time.time()
+        self._interrupt_requested.clear()
         self._set_thinking(True)
         try:
-            deadline = start_time + max(0.1, float(timeout))
+            timeout_seconds = self.default_timeout if timeout is None else float(timeout)
+            deadline = start_time + max(0.1, timeout_seconds)
             shared_context = self._build_shared_context(goal)
             if self._is_timeout_exceeded(deadline):
                 return AgentRunResult(goal=goal, achieved=False, summary=_("실행 시간 초과"))
             run_result = self._run_loop(goal, shared_context=shared_context, deadline=deadline)
             lesson = ""
             reflection = None
-            if not run_result.achieved and not self._is_timeout_exceeded(deadline):
+            if (
+                not run_result.achieved
+                and not self._is_timeout_exceeded(deadline)
+                and not self._interrupt_requested.is_set()
+            ):
                 reflection = self._learn.reflect_on_failure(goal, run_result)
                 run_result.learning_components["ReflectionEngine"] = True
                 lesson = getattr(reflection, "lesson", "") or ""
@@ -168,11 +205,10 @@ class AgentOrchestrator:
                 lesson=lesson,
                 failure_kind_override=getattr(reflection, "root_cause", ""),
             )
+            payload = {"goal": goal, "achieved": run_result.achieved, "summary": run_result.summary}
+            self._emit_plugin_event("on_agent_complete", payload)
             if run_result.achieved:
-                self._emit_plugin_event(
-                    "agent.task.completed",
-                    {"goal": goal, "summary": run_result.summary},
-                )
+                self._emit_plugin_event("agent.task.completed", payload)
             return run_result
         finally:
             self._set_thinking(False)
@@ -231,6 +267,16 @@ class AgentOrchestrator:
         replan_reasons: list[str] = []
 
         for iteration in range(max_iterations):
+            if self._interrupt_requested.is_set():
+                run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                self._last_checkpoint = {
+                    "goal": goal,
+                    "iteration": iteration,
+                    "step_results": list(run_result.step_results),
+                    "context": dict(context),
+                }
+                self._emit_progress("interrupted", iteration=iteration)
+                break
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
                 break
@@ -283,9 +329,32 @@ class AgentOrchestrator:
             )
 
             # Layer 2: Execute + Self-Fix
+            if self._interrupt_requested.is_set():
+                run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                self._last_checkpoint = {
+                    "goal": goal,
+                    "iteration": iteration,
+                    "steps": [asdict(s) for s in steps],
+                    "step_results": list(run_result.step_results),
+                    "context": dict(context),
+                }
+                self._emit_progress("interrupted", iteration=iteration)
+                break
             all_success, step_results = self._execute_plan(
                 steps, context, goal
             )
+            if self._interrupt_requested.is_set():
+                run_result.step_results.extend(step_results)
+                run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                self._last_checkpoint = {
+                    "goal": goal,
+                    "iteration": iteration,
+                    "steps": [asdict(s) for s in steps],
+                    "step_results": list(run_result.step_results),
+                    "context": dict(context),
+                }
+                self._emit_progress("interrupted", iteration=iteration)
+                break
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
                 break
