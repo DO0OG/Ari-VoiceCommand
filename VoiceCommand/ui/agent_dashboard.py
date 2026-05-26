@@ -33,14 +33,47 @@ class AgentDashboard(QDialog):
         self.stop_btn.clicked.connect(self.orchestrator.interrupt)
         layout.addWidget(self.stop_btn)
 
+        # step_id → QListWidget 행 인덱스 매핑
+        self._step_row: dict[str, int] = {}
+
     def handle_progress(self, event_type: str, **payload) -> None:
         if event_type == "plan_ready":
             self.steps.clear()
-            for step in payload.get("steps", []):
-                desc = step.get("description_kr") or step.get("content") or str(step.get("step_id", ""))
+            self._step_row.clear()
+            for idx, step in enumerate(payload.get("steps", [])):
+                step_id = str(step.get("step_id", idx))
+                desc = step.get("description_kr") or step.get("content") or step_id
                 self.steps.addItem(f"⏳ {desc}")
+                self._step_row[step_id] = idx
+
+        elif event_type == "step_start":
+            step_id = str(payload.get("step_id", ""))
+            row = self._step_row.get(step_id)
+            if row is not None:
+                item = self.steps.item(row)
+                if item:
+                    text = item.text()
+                    if text.startswith("⏳ "):
+                        item.setText("🔄 " + text[3:])
+
+        elif event_type == "step_done":
+            step_id = str(payload.get("step_id", ""))
+            row = self._step_row.get(step_id)
+            if row is not None:
+                item = self.steps.item(row)
+                if item:
+                    text = item.text()
+                    icon = "✅" if payload.get("success", True) else "❌"
+                    for prefix in ("⏳ ", "🔄 ", "✅ ", "❌ "):
+                        if text.startswith(prefix):
+                            item.setText(icon + " " + text[len(prefix):])
+                            break
+                    else:
+                        item.setText(icon + " " + text)
+
         elif event_type in {"achieved", "interrupted", "not_achieved", "replan", "verify_start"}:
             self.output.appendPlainText(f"{event_type}: {json.dumps(payload, ensure_ascii=False, default=str)}")
+
         else:
             self.output.appendPlainText(f"{event_type}: {json.dumps(payload, ensure_ascii=False, default=str)}")
 

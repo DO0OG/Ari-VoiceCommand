@@ -178,8 +178,9 @@ class CharacterWidget(QWidget):
     # 스레드 안전한 시그널
     show_speech_bubble_signal = Signal(str, int)  # text, duration
     hide_speech_bubble_signal = Signal()
-    change_emotion_signal = Signal(str)  # 추가: 감정 변경 시그널
-    thinking_signal = Signal(bool)       # 추가: 생각 중 상태 시그널
+    change_emotion_signal = Signal(str)
+    thinking_signal = Signal(bool)
+    stream_token_signal = Signal(str)  # 스트리밍 토큰 delta
 
     def get_char_x(self):
         return self.x()
@@ -248,11 +249,14 @@ class CharacterWidget(QWidget):
         # 플러그인이 우클릭 컨텍스트 메뉴를 억제할 수 있는 플래그
         self._context_menu_enabled = True
 
+        self._stream_buffer = ""
+
         # 시그널 연결
         self.show_speech_bubble_signal.connect(self._show_speech_bubble_slot)
         self.hide_speech_bubble_signal.connect(self._hide_speech_bubble_slot)
         self.change_emotion_signal.connect(self._change_emotion_slot)
         self.thinking_signal.connect(self.set_thinking)
+        self.stream_token_signal.connect(self._on_stream_token_slot)
 
         # 시간별 인사 타이머
         self.greeting_timer = QTimer(self)
@@ -1373,9 +1377,23 @@ class CharacterWidget(QWidget):
         # 시그널로 전달 (어느 스레드에서든 안전)
         self.show_speech_bubble_signal.emit(text, duration)
 
+    @Slot(str)
+    def _on_stream_token_slot(self, delta: str) -> None:
+        """스트리밍 토큰 수신 시 말풍선 텍스트를 누적 갱신합니다."""
+        self._stream_buffer += delta
+        if self.speech_bubble and self.speech_bubble.isVisible():
+            self.speech_bubble.update_text(self._stream_buffer)
+        else:
+            self.show_speech_bubble_signal.emit(self._stream_buffer, 0)
+
+    def _reset_stream_buffer(self) -> None:
+        """스트리밍 완료 후 버퍼를 초기화합니다."""
+        self._stream_buffer = ""
+
     @Slot(str, int)
     def _show_speech_bubble_slot(self, text, duration):
         """실제 말풍선 표시 (메인 스레드에서만 실행)"""
+        self._stream_buffer = ""
         # 기존 타이머 정지
         self.bubble_hide_timer.stop()
 
