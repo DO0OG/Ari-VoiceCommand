@@ -68,7 +68,43 @@ class AriMCPServer:
             return encoded
         if name == "ari_get_system_info":
             return self._system_info()
+        if name == "ari_read_file":
+            return self._read_file(
+                str(arguments.get("path", "") or ""),
+                int(arguments.get("start_line", 1) or 1),
+                arguments.get("end_line"),
+            )
+        if name == "ari_write_file":
+            return self._write_file(
+                str(arguments.get("path", "") or ""),
+                str(arguments.get("content", "") or ""),
+                str(arguments.get("mode", "overwrite") or "overwrite"),
+            )
         raise ValueError(f"Unknown tool: {name}")
+
+    def _read_file(self, path: str, start_line: int = 1, end_line: int | None = None) -> str:
+        if not path:
+            return "error: path required"
+        try:
+            from agent.file_tools import read_file
+            import json as _json
+            result = read_file(path, start_line, end_line)
+            return _json.dumps(result, ensure_ascii=False, default=str)
+        except Exception as exc:
+            log.error("[MCPServer] ari_read_file 실패: %s", exc)
+            return f"error: {exc}"
+
+    def _write_file(self, path: str, content: str, mode: str = "overwrite") -> str:
+        if not path:
+            return "error: path required"
+        try:
+            from agent.file_tools import write_file
+            import json as _json
+            result = write_file(path, content, mode)
+            return _json.dumps(result, ensure_ascii=False, default=str)
+        except Exception as exc:
+            log.error("[MCPServer] ari_write_file 실패: %s", exc)
+            return f"error: {exc}"
 
     def _notify(self, title: str, message: str) -> str:
         try:
@@ -100,6 +136,8 @@ class AriMCPServer:
             {"name": "ari_open_app", "description": "Open a local application.", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
             {"name": "ari_take_screenshot", "description": "Take screenshot and return base64.", "inputSchema": {"type": "object", "properties": {}}},
             {"name": "ari_get_system_info", "description": "Return CPU, memory and app list.", "inputSchema": {"type": "object", "properties": {}}},
+            {"name": "ari_read_file", "description": "Read file contents from the local filesystem.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}}, "required": ["path"]}},
+            {"name": "ari_write_file", "description": "Write content to a local file (overwrite or append).", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}, "mode": {"type": "string", "enum": ["overwrite", "append"]}}, "required": ["path", "content"]}},
         ]
 
     def _ok(self, request_id: Any, result: Any) -> dict[str, Any]:

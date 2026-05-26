@@ -1369,7 +1369,14 @@ class AICommand(BaseCommand):
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
     def execute(self, text: str) -> None:
-        self._run_interaction(text, self.tts_wrapper)
+        from core.VoiceCommand import _state
+        from core.config_manager import ConfigManager
+        stream_cb = None
+        cw = getattr(_state, "character_widget", None)
+        if cw is not None and ConfigManager.get("llm_streaming_enabled", True):
+            def stream_cb(delta: str) -> None:
+                cw.stream_token_signal.emit(delta)
+        self._run_interaction(text, self.tts_wrapper, stream_callback=stream_cb)
 
     def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
