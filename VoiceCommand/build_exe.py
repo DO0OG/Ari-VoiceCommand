@@ -11,7 +11,18 @@ nofollow 정책:
 
 출력: dist/Ari/
 
-포함 모듈 (2026-04-29 최신):
+포함 모듈 (2026-05-26 최신):
+  agent/mcp_server.py     — 로컬 MCP HTTP 서버
+  ui/agent_dashboard.py   — 에이전트 진행 대시보드
+  ui/settings_agent_page.py — 에이전트 타임아웃/감사 로그/MCP 설정
+  agent/file_tools.py     — LLM 직접 파일 도구(read/write/edit/list/search/move/delete)
+  agent/llm_provider.py   — stream_chat(), analyze_image(), 토큰 예산 기반 컨텍스트
+  agent/api_connector.py  — OpenAPI 기반 외부 API 호출
+  memory/knowledge_base.py — SQLite/FTS 구조화 지식 베이스
+  services/google_calendar.py / gmail_service.py / image_generator.py — 고급 도구 서비스
+  ui/conversation_search.py — 대화 검색 UI
+
+포함 모듈 (2026-04-29):
   agent/response_cache.py — from_config() 팩토리 + _coerce_positive_int() 헬퍼 추가
   agent/task_queue.py     — AgentTaskQueue PriorityQueue + worker thread 비동기 큐 (신규)
   agent/llm_router.py     — 영어·일본어 키워드 추가 (CODE/PLAN/LONG 다국어 라우팅)
@@ -265,7 +276,9 @@ nuitka_args = [
     "--include-module=agent.goal_predictor",
     "--include-module=agent.learning_metrics",
     "--include-module=agent.llm_provider",
+    "--include-module=agent.api_connector",
     "--include-module=agent.llm_router",
+    "--include-module=agent.mcp_server",
     "--include-module=agent.real_verifier",
     "--include-module=agent.record_store",
     "--include-module=agent.regression_guard",
@@ -287,15 +300,22 @@ nuitka_args = [
     "--include-module=memory.user_profile_engine",
     "--include-module=memory.memory_index",
     "--include-module=memory.memory_consolidator",
+    "--include-module=memory.knowledge_base",
     "--include-module=commands.memory_command",
     "--include-module=core.plugin_loader",
     "--include-module=core.plugin_sandbox",
     "--include-module=core.resource_manager",
     "--include-module=services.web_tools",
+    "--include-module=services.google_calendar",
+    "--include-module=services.gmail_service",
+    "--include-module=services.image_generator",
     "--include-module=ui.theme",
     "--include-module=ui.theme_runtime",
     "--include-module=ui.common",
     "--include-module=ui.scheduler_panel",
+    "--include-module=ui.agent_dashboard",
+    "--include-module=ui.settings_agent_page",
+    "--include-module=ui.conversation_search",
     "--include-package=agent",
     "--include-package=assistant",
     "--include-package=audio",
@@ -321,6 +341,8 @@ nuitka_args = [
         "watchdog",
         "requests",
         "httpx",
+        "fastapi",
+        "uvicorn",
         "psutil",
         "reportlab",
         "ddgs",

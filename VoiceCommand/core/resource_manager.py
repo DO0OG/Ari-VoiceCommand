@@ -162,6 +162,14 @@ class ResourceManager:
         return os.path.join(ResourceManager.get_app_data_dir(), relative_path)
 
     @staticmethod
+    def get_runtime_path(relative_path: str = "") -> str:
+        """런타임 상태 파일 경로를 반환하고 부모 디렉터리를 보장한다."""
+        path = ResourceManager.get_writable_path(relative_path) if relative_path else ResourceManager.get_app_data_dir()
+        parent = path if not relative_path or os.path.splitext(path)[1] == "" else os.path.dirname(path)
+        os.makedirs(parent, exist_ok=True)
+        return path
+
+    @staticmethod
     def extract_resources():
         """첫 실행 시 번들 리소스를 appdata로 추출"""
         if not getattr(sys, 'frozen', False):

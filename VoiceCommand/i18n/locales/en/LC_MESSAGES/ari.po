@@ -2208,3 +2208,99 @@ msgstr "Could you say that again?"
 msgid "잘 모르겠습니다."
 msgstr "I'm not sure."
 
+msgid "thinking"
+msgstr "Thinking..."
+
+
+msgid "tool.delegate_to_subagent.description"
+msgstr "Delegate an independent sub-goal to a separate agent. Useful for parallel work."
+
+msgid "tool.subagent.goal"
+msgstr "Sub-goal"
+
+msgid "tool.subagent.context"
+msgstr "Background context for the subagent"
+
+msgid "tool.timeout_seconds"
+msgstr "Maximum runtime in seconds"
+
+msgid "tool.api_call.description"
+msgstr "Call a registered external REST API."
+
+msgid "tool.api_call.service"
+msgstr "Service name"
+
+msgid "tool.api_call.operation"
+msgstr "Operation name"
+
+msgid "tool.api_call.params"
+msgstr "Call parameters"
+
+msgid "tool.get_calendar_events.description"
+msgstr "Fetch events from Google Calendar."
+
+msgid "tool.calendar.days"
+msgstr "Days to query"
+
+msgid "tool.max_results"
+msgstr "Maximum result count"
+
+msgid "tool.calendar.id"
+msgstr "Calendar ID"
+
+msgid "tool.create_calendar_event.description"
+msgstr "Create an event in Google Calendar."
+
+msgid "tool.send_email.description"
+msgstr "Send an email with Gmail."
+
+msgid "tool.read_emails.description"
+msgstr "Read recent Gmail inbox messages."
+
+msgid "tool.generate_image.description"
+msgstr "Generate an image from a prompt and return the file path."
+
+msgid "tool.image.size_example"
+msgstr "Example: 1024x1024"
+
+msgid "subagent.goal_required"
+msgstr "A sub-goal is required."
+
+msgid "subagent.timeout"
+msgstr "Subagent execution timed out."
+
+msgid "subagent.failed"
+msgstr "Subagent error: {error}"
+
+msgid "api_call.failed"
+msgstr "API call failed: {error}"
+
+msgid "calendar.events.failed"
+msgstr "Failed to fetch calendar events: {error}"
+
+msgid "calendar.create.failed"
+msgstr "Failed to create calendar event: {error}"
+
+msgid "email.send.failed"
+msgstr "Failed to send email: {error}"
+
+msgid "email.read.failed"
+msgstr "Failed to read email: {error}"
+
+msgid "image.generate.failed"
+msgstr "Failed to generate image: {error}"
+
+msgid "settings.agent.max_subagents"
+msgstr "Maximum subagents"
+
+msgid "settings.agent.google_tools"
+msgstr "Enable Google Calendar/Gmail tools"
+
+msgid "settings.agent.google_client_id"
+msgstr "Google OAuth Client ID"
+
+msgid "settings.agent.google_client_secret"
+msgstr "Google OAuth Client Secret"
+
+msgid "settings.agent.image_generation"
+msgstr "Enable image generation tools"

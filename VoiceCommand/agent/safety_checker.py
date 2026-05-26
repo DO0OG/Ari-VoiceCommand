@@ -37,7 +37,8 @@ def _c(pattern: str, flags: int = 0) -> re.Pattern:
 _DANGEROUS_PYTHON: List[_CompiledRule] = [
     (_c(r'os\s*\.\s*(remove|unlink|rmdir)\s*\('),  "파일/폴더 삭제"),
     (_c(r'shutil\s*\.\s*rmtree\s*\('),             "폴더 강제 삭제"),
-    (_c(r'\bctypes\b'),                             "저수준 시스템 접근"),
+    (_c(r'ctypes\s*\.\s*(windll|cdll|CDLL|WinDLL)\s*[\.\(]'), "ctypes 저수준 DLL 로드"),
+    (_c(r'ctypes\s*\.\s*cast\s*\('),                "ctypes 포인터 캐스팅"),
     (_c(r'win32api|win32con|winreg'),               "Windows API/레지스트리 접근"),
     (_c(r'requests\s*\.\s*(post|put|delete)'),      "데이터 외부 전송/수정"),
 ]
@@ -107,9 +108,12 @@ class SafetyChecker:
             return cached
         matched = _scan(_DANGEROUS_PYTHON, code)
         caution_from_trust: List[str] = []
-        if str(trust_level or "").casefold() == "verified" and "저수준 시스템 접근" in matched:
-            matched = [item for item in matched if item != "저수준 시스템 접근"]
-            caution_from_trust.append("저수준 시스템 접근")
+        if str(trust_level or "").casefold() == "verified":
+            trusted_ctypes = {"저수준 시스템 접근", "ctypes 저수준 DLL 로드", "ctypes 포인터 캐스팅"}
+            downgraded = [item for item in matched if item in trusted_ctypes]
+            if downgraded:
+                matched = [item for item in matched if item not in trusted_ctypes]
+                caution_from_trust.extend(downgraded)
         if "browser_login" in code:
             matched.append("로그인 자동화")
         if any(token in code.lower() for token in _SENSITIVE_INPUT_KEYWORDS) and any(

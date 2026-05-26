@@ -97,6 +97,13 @@ class SpeechBubble(QWidget):
 
         self.setFixedSize(self.bubble_width, self.bubble_height)
 
+    def update_text(self, text: str) -> None:
+        """말풍선 텍스트를 갱신하고 크기를 재계산합니다."""
+        self.text = text
+        self.calculate_size()
+        self.update_position()
+        self.update()
+
     def update_position(self):
         """말풍선 위치 업데이트"""
         if not self.parent_widget:

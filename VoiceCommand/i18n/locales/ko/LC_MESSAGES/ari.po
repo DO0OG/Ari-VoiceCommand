@@ -2208,3 +2208,99 @@ msgstr "다시 한번 말씀해 주시겠어요?"
 msgid "잘 모르겠습니다."
 msgstr "잘 모르겠습니다."
 
+msgid "thinking"
+msgstr "생각 중..."
+
+
+msgid "tool.delegate_to_subagent.description"
+msgstr "독립적인 하위 목표를 별도 에이전트에 위임합니다. 병렬 작업에 유리합니다."
+
+msgid "tool.subagent.goal"
+msgstr "하위 목표"
+
+msgid "tool.subagent.context"
+msgstr "하위 에이전트에게 전달할 배경 정보"
+
+msgid "tool.timeout_seconds"
+msgstr "최대 실행 시간(초)"
+
+msgid "tool.api_call.description"
+msgstr "등록된 외부 REST API를 호출합니다."
+
+msgid "tool.api_call.service"
+msgstr "서비스명"
+
+msgid "tool.api_call.operation"
+msgstr "작업명"
+
+msgid "tool.api_call.params"
+msgstr "호출 파라미터"
+
+msgid "tool.get_calendar_events.description"
+msgstr "Google Calendar에서 일정 목록을 가져옵니다."
+
+msgid "tool.calendar.days"
+msgstr "조회할 일수"
+
+msgid "tool.max_results"
+msgstr "최대 결과 수"
+
+msgid "tool.calendar.id"
+msgstr "캘린더 ID"
+
+msgid "tool.create_calendar_event.description"
+msgstr "Google Calendar에 일정을 생성합니다."
+
+msgid "tool.send_email.description"
+msgstr "Gmail로 이메일을 발송합니다."
+
+msgid "tool.read_emails.description"
+msgstr "Gmail 받은 편지함의 최근 메일을 조회합니다."
+
+msgid "tool.generate_image.description"
+msgstr "프롬프트로 이미지를 생성하고 파일 경로를 반환합니다."
+
+msgid "tool.image.size_example"
+msgstr "예: 1024x1024"
+
+msgid "subagent.goal_required"
+msgstr "하위 목표가 필요합니다."
+
+msgid "subagent.timeout"
+msgstr "하위 에이전트 실행 시간 초과"
+
+msgid "subagent.failed"
+msgstr "하위 에이전트 오류: {error}"
+
+msgid "api_call.failed"
+msgstr "API 호출 실패: {error}"
+
+msgid "calendar.events.failed"
+msgstr "캘린더 조회 실패: {error}"
+
+msgid "calendar.create.failed"
+msgstr "캘린더 생성 실패: {error}"
+
+msgid "email.send.failed"
+msgstr "이메일 발송 실패: {error}"
+
+msgid "email.read.failed"
+msgstr "이메일 조회 실패: {error}"
+
+msgid "image.generate.failed"
+msgstr "이미지 생성 실패: {error}"
+
+msgid "settings.agent.max_subagents"
+msgstr "최대 하위 에이전트 수"
+
+msgid "settings.agent.google_tools"
+msgstr "Google Calendar/Gmail 도구 사용"
+
+msgid "settings.agent.google_client_id"
+msgstr "Google OAuth Client ID"
+
+msgid "settings.agent.google_client_secret"
+msgstr "Google OAuth Client Secret"
+
+msgid "settings.agent.image_generation"
+msgstr "이미지 생성 도구 사용"

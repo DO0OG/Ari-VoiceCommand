@@ -9,6 +9,7 @@ import csv
 import logging
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -268,3 +269,182 @@ def _summarize_numeric_columns(rows: List[Dict[str, Any]], columns: List[str]) -
             "sample_outliers": outliers[:5],
         }
     return summary
+
+
+# ── LLM 직접 호출용 안전 파일 도구 ─────────────────────────────────────────────
+
+def _normalize_path(path: str) -> str:
+    if not path:
+        raise ValueError("path가 비어 있습니다.")
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def read_file(file_path: str, start_line: int = 1, end_line: Optional[int] = None) -> Dict[str, Any]:
+    """텍스트 파일 내용을 읽어 반환한다. 줄 범위는 1부터 시작한다."""
+    try:
+        path = _normalize_path(file_path)
+        if not os.path.isfile(path):
+            return {"error": "파일이 존재하지 않습니다.", "file_path": path}
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        start = max(1, int(start_line or 1))
+        end = int(end_line) if end_line else len(lines)
+        end = min(max(end, start), len(lines))
+        return {
+            "file_path": path,
+            "start_line": start,
+            "end_line": end,
+            "line_count": len(lines),
+            "content": "".join(lines[start - 1:end]),
+        }
+    except Exception as e:
+        logger.error("read_file 오류: %s", e)
+        return {"error": str(e)}
+
+
+def write_file(file_path: str, content: str, mode: str = "overwrite") -> Dict[str, Any]:
+    """파일에 내용을 쓰거나 추가한다."""
+    try:
+        path = _normalize_path(file_path)
+        file_mode = "a" if str(mode or "overwrite").lower() == "append" else "w"
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, file_mode, encoding="utf-8") as f:
+            f.write(content or "")
+        return {
+            "file_path": path,
+            "mode": "append" if file_mode == "a" else "overwrite",
+            "bytes": len((content or "").encode("utf-8")),
+        }
+    except Exception as e:
+        logger.error("write_file 오류: %s", e)
+        return {"error": str(e)}
+
+
+def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any]:
+    """파일 내 고유한 문자열 1개를 교체한다."""
+    try:
+        if not old_string:
+            return {"error": "old_string이 비어 있습니다."}
+        path = _normalize_path(file_path)
+        if not os.path.isfile(path):
+            return {"error": "파일이 존재하지 않습니다.", "file_path": path}
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        count = content.count(old_string)
+        if count != 1:
+            return {
+                "error": f"old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회",
+                "matches": count,
+            }
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content.replace(old_string, new_string, 1))
+        return {
+            "file_path": path,
+            "replaced": True,
+            "old_length": len(old_string),
+            "new_length": len(new_string),
+        }
+    except Exception as e:
+        logger.error("edit_file 오류: %s", e)
+        return {"error": str(e)}
+
+
+def list_directory(path: str, pattern: str = "*", recursive: bool = False) -> Dict[str, Any]:
+    """디렉터리 내 파일/폴더 목록을 반환한다."""
+    try:
+        base = _normalize_path(path)
+        if not os.path.isdir(base):
+            return {"error": "디렉터리가 아닙니다.", "path": base}
+        root = Path(base)
+        glob_pattern = pattern or "*"
+        entries = root.rglob(glob_pattern) if recursive else root.glob(glob_pattern)
+        items = []
+        for entry in sorted(entries, key=lambda item: str(item).lower()):
+            try:
+                stat = entry.stat()
+                items.append({
+                    "path": str(entry),
+                    "name": entry.name,
+                    "is_dir": entry.is_dir(),
+                    "size": stat.st_size,
+                })
+            except OSError:
+                continue
+        return {
+            "path": base,
+            "pattern": glob_pattern,
+            "recursive": bool(recursive),
+            "items": items[:500],
+            "count": len(items),
+        }
+    except Exception as e:
+        logger.error("list_directory 오류: %s", e)
+        return {"error": str(e)}
+
+
+def search_in_files(path: str, pattern: str, file_glob: str = "*") -> Dict[str, Any]:
+    """파일들 안에서 정규식 패턴을 검색한다."""
+    try:
+        base = _normalize_path(path)
+        regex = re.compile(pattern)
+        root = Path(base)
+        files = [root] if root.is_file() else list(root.rglob(file_glob or "*"))
+        matches = []
+        for file in files:
+            if not file.is_file():
+                continue
+            try:
+                with open(file, "r", encoding="utf-8", errors="replace") as f:
+                    for line_no, line in enumerate(f, start=1):
+                        if regex.search(line):
+                            matches.append({
+                                "file": str(file),
+                                "line": line_no,
+                                "text": line.rstrip("\n")[:300],
+                            })
+                            if len(matches) >= 500:
+                                return {
+                                    "path": base,
+                                    "pattern": pattern,
+                                    "matches": matches,
+                                    "truncated": True,
+                                }
+            except OSError:
+                continue
+        return {"path": base, "pattern": pattern, "matches": matches, "count": len(matches)}
+    except Exception as e:
+        logger.error("search_in_files 오류: %s", e)
+        return {"error": str(e)}
+
+
+def move_file(src: str, dst: str) -> Dict[str, Any]:
+    """파일 또는 폴더를 이동하거나 이름을 변경한다."""
+    try:
+        src_path = _normalize_path(src)
+        dst_path = _normalize_path(dst)
+        if not os.path.exists(src_path):
+            return {"error": "원본 경로가 존재하지 않습니다.", "src": src_path}
+        os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
+        shutil.move(src_path, dst_path)
+        return {"src": src_path, "dst": dst_path, "moved": True}
+    except Exception as e:
+        logger.error("move_file 오류: %s", e)
+        return {"error": str(e)}
+
+
+def delete_file(path: str, confirmed: bool = False) -> Dict[str, Any]:
+    """파일 또는 빈 폴더를 삭제한다. confirmed=True가 필요하다."""
+    try:
+        target = _normalize_path(path)
+        if not confirmed:
+            return {"error": "삭제하려면 confirmed=true가 필요합니다.", "path": target}
+        if os.path.isdir(target):
+            os.rmdir(target)
+        elif os.path.isfile(target):
+            os.remove(target)
+        else:
+            return {"error": "대상 경로가 존재하지 않습니다.", "path": target}
+        return {"path": target, "deleted": True}
+    except Exception as e:
+        logger.error("delete_file 오류: %s", e)
+        return {"error": str(e)}
