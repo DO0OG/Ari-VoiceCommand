@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import os
-import urllib.request
+import urllib.parse
 from datetime import datetime
 from typing import Any
 
@@ -42,13 +42,25 @@ class ImageGenerator:
             with open(path, "wb") as handle:
                 handle.write(base64.b64decode(image.b64_json))
         elif getattr(image, "url", None):
-            urllib.request.urlretrieve(image.url, path)
+            self._download_image_url(str(image.url), path)
         else:
             meta_path = path + ".json"
             with open(meta_path, "w", encoding="utf-8") as handle:
                 json.dump({"prompt": prompt}, handle, ensure_ascii=False, indent=2)
             path = meta_path
         return {"enabled": True, "provider": provider, "path": path, "size": size}
+
+    def _download_image_url(self, image_url: str, path: str) -> None:
+        parsed = urllib.parse.urlparse(str(image_url or ""))
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("이미지 다운로드 URL은 https만 허용합니다.")
+
+        import requests
+
+        response = requests.get(image_url, timeout=30)
+        response.raise_for_status()
+        with open(path, "wb") as handle:
+            handle.write(response.content)
 
 
 def get_image_generator() -> ImageGenerator:
