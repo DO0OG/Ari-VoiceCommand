@@ -275,6 +275,7 @@ def main():
     plugin_watcher = None
     plugin_flush_timer = None
     mcp_server_thread = None
+    telegram_bridge = None
     try:
         setup_logging()
         icon_path = _resolve_icon_path(log_missing=True)
@@ -368,6 +369,13 @@ def main():
 
         cmd_registry = _state.command_registry
         ai_command = next((cmd for cmd in getattr(cmd_registry, "commands", []) if isinstance(cmd, AICommand)), None)
+        try:
+            if ai_command is not None:
+                from services.telegram_bridge import start_telegram_bridge
+
+                telegram_bridge = start_telegram_bridge(ai_command.run_interaction)
+        except Exception as exc:
+            logging.debug("Telegram bridge startup skipped: %s", exc)
 
         def _register_tool_for_plugin(schema: dict, handler) -> None:
             tool_name = str(schema.get("function", {}).get("name", "") or "")
@@ -430,6 +438,8 @@ def main():
             plugin_flush_timer.stop()
         if plugin_watcher:
             plugin_watcher.stop()
+        if telegram_bridge:
+            telegram_bridge.stop()
         if mcp_server_thread:
             logging.debug("MCP 서버 스레드는 데몬으로 종료됩니다.")
         logging.info("=== 앱 종료 완료 ===")
