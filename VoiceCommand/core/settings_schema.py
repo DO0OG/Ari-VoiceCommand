@@ -16,6 +16,7 @@ SENSITIVE_SETTINGS_KEYS = (
     "google_client_secret",
     "fish_api_key",
     "fish_reference_id",
+    "telegram_bot_token",
     "openai_tts_api_key",
     "elevenlabs_api_key",
 )
@@ -99,6 +100,10 @@ DEFAULT_SETTINGS = {
     "audit_log_enabled": True,
     "mcp_server_enabled": False,
     "mcp_server_port": 8765,
+    "telegram_enabled": False,
+    "telegram_bot_token": "",
+    "telegram_allowed_chat_ids": [],
+    "telegram_poll_timeout_seconds": 25,
     "agent_dashboard_enabled": True,
     "tts_wake_guard_seconds": 1.2,
     "max_subagents": 3,

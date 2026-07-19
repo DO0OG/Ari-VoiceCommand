@@ -411,3 +411,16 @@ Ari는 한국어 외에도 **영어(English)**와 **일본어(日本語)**를 �
 | `agent_response_cache_max_size` | `50` | 캐시에 저장할 최대 항목 수. 초과 시 가장 오래된 항목부터 제거됩니다. |
 
 TTL을 `0` 이하로 설정하면 기본값(600초)이 적용됩니다. 캐시를 사실상 비활성화하려면 `agent_response_cache_ttl`을 매우 낮게(예: `1`) 설정하세요.
+
+### Telegram 원격 명령
+
+`ari_settings.json`에서 아래 값을 설정하면 허용된 Telegram 채팅에서 Ari 명령을 보낼 수 있습니다. 기본값은 비활성화이며, 허용 목록에 없는 `chat_id`는 처리하지 않고 로그만 남깁니다.
+
+| 키 | 기본값 | 설명 |
+|----|--------|------|
+| `telegram_enabled` | `false` | Telegram long-polling 브리지 활성화 여부 |
+| `telegram_bot_token` | `""` | BotFather에서 발급한 봇 토큰 |
+| `telegram_allowed_chat_ids` | `[]` | 명령을 허용할 chat_id 목록. 문자열/숫자 모두 가능 |
+| `telegram_poll_timeout_seconds` | `25` | getUpdates long-polling timeout |
+
+수신된 명령은 로컬 텍스트 UI와 같은 명령 처리 흐름으로 처리됩니다. 따라서 기존 도구 실행, 안전 확인, 메모리 기록, 스트리밍 콜백을 재사용합니다.
