@@ -55,11 +55,13 @@ class OpenAITTS(QObject):
 
             logging.info("[TTS] OpenAI 수신: %.2fs, %s bytes", time.time() - t0, f"{len(pcm_data):,}")
 
+            from audio.audio_manager import get_output_device_index
             stream = self.pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
+                output_device_index=get_output_device_index(),
             )
             stream.write(pcm_data)
             stream.stop_stream()

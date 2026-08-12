@@ -8,15 +8,23 @@ README가 프로젝트 개요를 설명한다면, 이 문서는 실제 사용과
 먼저 기본 의존성을 설치한 뒤 앱을 실행합니다.
 
 ```bash
-py -3.11 -m pip install -r VoiceCommand/requirements.txt
 cd VoiceCommand
-py -3.11 Main.py
+setup.bat
+Ari.vbs
 ```
+
+명령줄에서 설치하려면 `setup.bat` 대신
+`py -3.11 install_dependencies.py`를 실행해 주세요.
+
+일반 실행에는 콘솔 창을 띄우지 않는 `Ari.vbs`를 사용해 주세요. 시작 오류를
+콘솔에서 직접 확인할 때만 진단용 `Ari.bat`를 사용해 주세요. `Ari.vbs` 실행이
+실패하면 `VoiceCommand/.ari_runtime/launcher_error.log`의 마지막 부분을 담은
+메시지 상자가 표시됩니다.
 
 설치 후에는 아래 검증 명령을 실행해 보길 권장합니다.
 
 ```bash
-py -3.11 validate_repo.py
+.venv\Scripts\python.exe validate_repo.py
 ```
 
 ### 선택 의존성 설치
@@ -25,20 +33,29 @@ py -3.11 validate_repo.py
 
 ```bash
 # OCR 기반 화면 텍스트 검증 (비전 검증 기능)
-pip install "easyocr>=1.7.0"          # 권장, 한국어 지원
-# pip install "pytesseract>=0.3.10"   # 경량 대안 (Tesseract 별도 설치 필요)
+.venv\Scripts\python.exe -m pip install "easyocr>=1.7.0"          # 권장, 한국어 지원
+# .venv\Scripts\python.exe -m pip install "pytesseract>=0.3.10"   # 경량 대안 (Tesseract 별도 설치 필요)
 
 # 의미 기반 전략 기억 검색
-pip install sentence-transformers torch
+.venv\Scripts\python.exe -m pip install sentence-transformers torch
 
 # Edge TTS (무료 클라우드 TTS)
-pip install edge-tts
+.venv\Scripts\python.exe -m pip install edge-tts
 
 # ElevenLabs TTS
-pip install elevenlabs
+.venv\Scripts\python.exe -m pip install elevenlabs
 ```
 
 > **주의**: easyocr는 NumPy를 업그레이드할 수 있습니다. `numpy<2` 제약이 `requirements.txt`에 명시되어 있으므로 설치 순서와 관계없이 `numpy 1.x`가 유지됩니다.
+
+### 프로젝트 가상환경 구조
+
+- `.venv`에는 메인 앱과 일반 선택 의존성을 설치합니다.
+- `.venv-tts`에는 CosyVoice3의 CUDA torch와 TTS 의존성만 설치합니다.
+
+CosyVoice3의 CUDA torch와 메인 앱의 `sentence-transformers`가 사용하는 CPU
+torch를 한 환경에 설치하면 서로 덮어쓸 수 있으므로 두 가상환경을 분리합니다.
+CosyVoice3까지 준비하려면 `setup.bat --with-tts`를 실행해 주세요.
 
 ## 2. 기본 사용 흐름
 
@@ -49,7 +66,7 @@ pip install elevenlabs
 3. 필요한 경우 `AI & TTS` 탭 상단 `로컬 설치` 섹션에서 Ollama 또는 CosyVoice3를 먼저 설치합니다.
 4. AI 모델, TTS, UI 테마를 원하는 값으로 조정합니다.
 5. 웨이크워드(`아리야`) 또는 트레이 메뉴 → `💬 텍스트 대화`로 명령합니다.
-6. 소스에서 `py Main.py`로 실행하면 설정/메모리/예약 상태는 `VoiceCommand/.ari_runtime/` 아래에 저장됩니다.
+6. 소스에서 `.venv\Scripts\python.exe Main.py`로 실행하면 설정/메모리/예약 상태는 `VoiceCommand/.ari_runtime/` 아래에 저장됩니다.
 7. `build_exe.py`로 빌드한 exe를 실행하면 같은 상태 파일은 `%AppData%/Ari/` 아래에 저장됩니다.
 8. CosyVoice용 `reference.wav`도 같은 규칙을 따릅니다. 소스/테스트 실행 시 `VoiceCommand/.ari_runtime/reference.wav`를 먼저 찾고, 없으면 `VoiceCommand/reference.wav`를 사용합니다. 빌드된 exe 실행 시에는 `%AppData%/Ari/reference.wav`를 먼저 찾고, 없으면 번들된 `reference.wav`를 사용합니다.
 
@@ -298,11 +315,13 @@ CosyVoice3를 사용하면 로컬 환경에서 비교적 안정적인 TTS 파이
 
 ```bash
 # 대화형 설치 (기본 경로: %USERPROFILE%\CosyVoice)
-py -3.11 install_cosyvoice.py
+.venv\Scripts\python.exe install_cosyvoice.py
 
 # 경로 직접 지정
-py -3.11 install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
+.venv\Scripts\python.exe install_cosyvoice.py --dir "D:\MyApps\CosyVoice"
 ```
+
+설치 스크립트는 CosyVoice 의존성을 `.venv-tts`에 자동으로 설치합니다.
 
 설정창에서 더 간단하게 진행하려면 **AI & TTS → 로컬 설치 → CosyVoice 설치** 버튼을 사용하면 됩니다.
 
@@ -329,8 +348,8 @@ Ollama를 사용하면 인터넷 연결이나 API 비용 없이 로컬에서 LLM
 스크립트로 설치하려면:
 
 ```bash
-py -3.11 install_ollama.py
-py -3.11 install_ollama.py --models llama3.2:3b qwen3:4b
+.venv\Scripts\python.exe install_ollama.py
+.venv\Scripts\python.exe install_ollama.py --models llama3.2:3b qwen3:4b
 ```
 
 권장 사양은 RAM 8GB+, GPU VRAM 4GB+(선택)입니다.

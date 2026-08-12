@@ -35,6 +35,33 @@ def setup_paths(cosyvoice_dir):
     # eager 강제 해제 — SDPA가 eager보다 빠름 (sliding window 경고는 무시)
 
 
+def _patch_torchaudio_load():
+    """torchaudio.load를 soundfile 기반으로 교체한다.
+
+    torchaudio 2.9+는 load를 torchcodec에 위임하고, torchcodec은 FFmpeg
+    공유 DLL을 요구한다. 여기서 읽는 건 reference.wav 하나뿐이므로
+    이미 설치된 soundfile로 대체해 외부 시스템 의존을 없앤다.
+    """
+    try:
+        import soundfile as sf
+        import torch
+        import torchaudio
+    except ImportError as exc:
+        ctrl(f"INFO:torchaudio.load 패치 생략 ({exc})")
+        return
+
+    def _load(filepath, frame_offset=0, num_frames=-1, normalize=True,
+              channels_first=True, **_kwargs):
+        frames = num_frames if num_frames and num_frames > 0 else -1
+        data, sample_rate = sf.read(str(filepath), dtype="float32", always_2d=True,
+                                    start=frame_offset, frames=frames)
+        wav = torch.from_numpy(data)  # (프레임, 채널)
+        return (wav.T.contiguous() if channels_first else wav), sample_rate
+
+    torchaudio.load = _load
+    ctrl("INFO:torchaudio.load → soundfile 대체 (torchcodec 불필요)")
+
+
 def write_chunk(data: bytes):
     """이진 stdout에 길이 접두어 + PCM 데이터 씀"""
     _BINARY_OUT.write(struct.pack("<I", len(data)))
@@ -71,6 +98,7 @@ def main():
     args = parser.parse_args()
 
     setup_paths(args.cosyvoice_dir)
+    _patch_torchaudio_load()
 
     # 모델 로드
     try:
@@ -83,7 +111,10 @@ def main():
         import torch
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cudnn.benchmark = True   # 고정 입력크기 반복 시 자동 커널 튜닝
+        # cudnn.benchmark는 입력 shape가 바뀔 때마다 커널 자동 튜닝을 다시 돈다.
+        # TTS는 발화마다 길이가 달라 매번 수십 초를 날리므로 끈다.
+        # (실측: 첫 소리까지 24.4s → 3.9s)
+        torch.backends.cudnn.benchmark = False
         torch.set_grad_enabled(False)
         try:
             torch.set_float32_matmul_precision("high")

@@ -29,17 +29,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          py -3.11 -m pip install --upgrade pip
-          py -3.11 -m pip install -r VoiceCommand/requirements.txt
-          py -3.11 -m pip install nuitka
+          py -3.11 -m venv VoiceCommand\.venv
+          VoiceCommand\.venv\Scripts\python.exe -m pip install --upgrade pip
+          VoiceCommand\.venv\Scripts\python.exe -m pip install -r VoiceCommand\requirements.txt
+          VoiceCommand\.venv\Scripts\python.exe -m pip install nuitka
 
       - name: Validate repository
         working-directory: VoiceCommand
-        run: py -3.11 validate_repo.py
+        run: .venv\Scripts\python.exe validate_repo.py
 
       - name: Build EXE (Standalone Folder)
         working-directory: VoiceCommand
-        run: py -3.11 build_exe.py --clean
+        run: .venv\Scripts\python.exe build_exe.py --clean
 
       - name: Zip Artifact
         working-directory: VoiceCommand

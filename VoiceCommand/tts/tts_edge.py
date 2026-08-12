@@ -68,11 +68,13 @@ class EdgeTTS(QObject):
             audio = audio.set_channels(1).set_sample_width(2).set_frame_rate(_SAMPLE_RATE)
             pcm = audio.raw_data
 
+            from audio.audio_manager import get_output_device_index
             stream = self.pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
+                output_device_index=get_output_device_index(),
             )
             stream.write(pcm)
             stream.stop_stream()

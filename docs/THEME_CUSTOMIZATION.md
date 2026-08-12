@@ -35,7 +35,7 @@
 빌드된 exe 기준 테마 경로:
 %AppData%\Ari\theme
 
-소스 실행(`py Main.py`) 기준 테마 경로:
+소스 실행(`VoiceCommand\.venv\Scripts\python.exe VoiceCommand\Main.py`) 기준 테마 경로:
 VoiceCommand\.ari_runtime\theme
 ```
 

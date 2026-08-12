@@ -29,7 +29,8 @@ from ui.settings_agent_page import _AgentSettingsPage
 
 class SettingsDialog(QDialog):
     TTS_KEYS = {
-        "tts_mode", "fish_api_key", "fish_reference_id", "cosyvoice_reference_text",
+        "tts_mode", "fish_api_key", "fish_reference_id", "fish_model", "tts_volume",
+        "cosyvoice_reference_text",
         "cosyvoice_speed", "cosyvoice_dir", "openai_tts_api_key", "openai_tts_voice", "openai_tts_model",
         "elevenlabs_api_key", "elevenlabs_voice_id", "edge_tts_voice", "edge_tts_rate",
     }
@@ -190,9 +191,23 @@ class SettingsDialog(QDialog):
         self._set_combo(self.mic_combo, self.settings.get("microphone", ""))
         gvbox.addWidget(self.mic_combo)
 
-        gvbox.addSpacing(30)
-        gvbox.addWidget(QLabel(_("스피커 출력 장치:")))
-        gvbox.addWidget(create_muted_label(_("현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다.")))
+        gvbox.addSpacing(15)
+        gvbox.addWidget(QLabel(_("스피커 출력 장치 선택:")))
+        self.speaker_combo = QComboBox()
+        self.speaker_combo.addItem(_("시스템 기본 스피커"), "")
+        try:
+            from audio.audio_manager import list_output_devices
+            out_devices = list_output_devices()
+            seen_names = set()
+            for dev in out_devices:
+                name = dev["name"]
+                if name not in seen_names:
+                    self.speaker_combo.addItem(name, name)
+                    seen_names.add(name)
+        except Exception as e:
+            logging.error(f"출력 장치 목록 로드 오류: {e}")
+        self._set_combo(self.speaker_combo, self.settings.get("audio_output_device", ""))
+        gvbox.addWidget(self.speaker_combo)
 
         stt_group = QGroupBox(_("음성 인식"))
         stt_vbox = QVBoxLayout(stt_group)
@@ -374,6 +389,7 @@ class SettingsDialog(QDialog):
 
             # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),
+            "audio_output_device": self.speaker_combo.currentData(),
             "ui_theme_preset": self.theme_preset_combo.currentData(),
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),

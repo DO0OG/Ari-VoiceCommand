@@ -53,18 +53,25 @@
 
 ### 설치 및 실행
 
-```bash
-# 1. 저장소 클론
+```bat
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd Ari-VoiceCommand
-
-# 2. 의존성 설치
-pip install -r VoiceCommand/requirements.txt
-
-# 3. 실행
 cd VoiceCommand
-py -3.11 Main.py
+setup.bat
+Ari.vbs
 ```
+
+명령줄에서 설치하려면 `setup.bat` 대신
+`py -3.11 install_dependencies.py`를 실행해 주세요.
+
+일반 실행에는 콘솔 창을 띄우지 않는 `Ari.vbs`를 사용해 주세요. 시작 오류를
+직접 확인해야 할 때만 진단용 `Ari.bat`를 실행해 주세요. 숨김 실행이 실패하면
+`VoiceCommand/.ari_runtime/launcher_error.log`의 마지막 부분이 메시지 상자에 표시됩니다.
+
+기본 `setup.bat`는 메인 앱과 일반 선택 의존성을 위한 `.venv`를 만듭니다.
+로컬 CosyVoice3까지 준비하려면 `setup.bat --with-tts`를 실행해 주세요. 이 명령은
+CosyVoice3의 CUDA torch와 TTS 패키지를 위한 두 번째 환경 `.venv-tts`도 만듭니다.
+이처럼 venv 2개를 분리하면 TTS 패키지가 메인 앱의 CPU torch 의존성을 덮어쓰지 않습니다.
 
 ---
 
@@ -82,6 +89,7 @@ Ari는 듣고, 계획하고, 실행하고, 검증하고, 학습하는 흐름을 
 | **로컬 AI 스택** | Ollama와 로컬 TTS 파이프라인을 통해 프라이버시 민감 환경도 지원합니다. |
 | **UI / 검증** | PySide6 UI, 애니메이션 캐릭터, 텍스트 채팅, OCR 기반 결과 검증을 제공합니다. |
 | **기억 / 개인화** | 사용자 선호와 실행 전략을 축적해 반복 작업을 최적화합니다. |
+| **원격 제어** | 허용된 Telegram 채팅에서 로컬 UI와 동일한 명령 처리 흐름으로 Ari를 원격 조작할 수 있습니다. |
 
 ### 캐릭터 위젯 주요 확장 기능
 
@@ -99,6 +107,9 @@ Ari는 듣고, 계획하고, 실행하고, 검증하고, 학습하는 흐름을 
 
 ### 최근 업데이트
 
+- **Telegram 원격 명령 브리지:** 허용 목록 기반 chat_id 인증, long-polling, 메시지 편집을 통한 스트리밍, 스크린샷 사진 전송을 지원합니다 (`telegram_enabled` 설정, 기본 비활성화).
+- **생성 이미지 다운로드 제한:** 이미지 생성 도구가 HTTPS URL에서만 이미지를 다운로드하도록 제한되었습니다.
+- **자율 에이전트 고급 기능:** 로컬 MCP 서버(파일 읽기/쓰기 도구 포함), 스트리밍·비전·파일/앱 도구, 중단/재개, 감사 로그, 에이전트 대시보드가 추가되었습니다.
 - **다국어 명령 라우팅:** LLMRouter, WeatherCommand, 툴 핸들러가 한국어·영어·일본어 키워드를 모두 인식해 지원 언어 전환 환경에서도 에이전트가 올바르게 활성화됩니다.
 - **응답 캐시 설정 외부화:** LLM 응답 캐시 TTL과 최대 크기를 `ari_settings.json`에서 조정할 수 있습니다 (`agent_response_cache_ttl`, `agent_response_cache_max_size`).
 - **비동기 에이전트 작업 큐:** `AgentTaskQueue`가 우선순위 기반 백그라운드 작업 스케줄링과 작업별 취소 기능을 제공합니다.

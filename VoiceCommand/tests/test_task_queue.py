@@ -48,6 +48,18 @@ class AgentTaskQueueTests(unittest.TestCase):
         self._wait_for_status(queue, task_id, "cancelled")
         self.assertEqual(queue.result(task_id).result, "noticed")
 
+    def test_results_are_bounded_by_max_results(self):
+        queue = AgentTaskQueue(max_workers=1, max_results=3)
+        self.addCleanup(queue.shutdown)
+
+        ids = [queue.submit(f"job-{idx}", lambda cancel_event: "ok") for idx in range(5)]
+        self._wait_for_status(queue, ids[-1], "completed")
+
+        self.assertIsNone(queue.result(ids[0]))
+        self.assertIsNone(queue.result(ids[1]))
+        for task_id in ids[2:]:
+            self.assertIsNotNone(queue.result(task_id))
+
     def _wait_for_status(self, queue, task_id, expected):
         deadline = time.time() + 2
         while time.time() < deadline:

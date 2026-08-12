@@ -40,11 +40,11 @@
 - 새로운 기능을 추가하거나 버그를 수정할 때는 관련 테스트도 함께 작성해 주세요.
 - 모든 테스트가 통과하는지 확인 후 풀 리퀘스트를 제출해 주세요.
 - 기본 검증 명령:
-  - `py -3.11 VoiceCommand/validate_repo.py`
-  - 빠른 문법 검사만 필요하면 `py -3.11 VoiceCommand/validate_repo.py --compile-only`
+  - `VoiceCommand\.venv\Scripts\python.exe VoiceCommand\validate_repo.py`
+  - 빠른 문법 검사만 필요하면 `VoiceCommand\.venv\Scripts\python.exe VoiceCommand\validate_repo.py --compile-only`
 - 현재 기본 기준선은 **전체 unittest + smoke** 입니다.
 - `validate_repo.py`는 현재 compile + unit test 외에 clean runtime 환경과 marketplace SHA256 계약 smoke도 함께 확인합니다.
-- 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `py -3.11 -m unittest ...` 형태로 부분 실행해도 됩니다.
+- 기능 회귀를 빠르게 보려면 필요한 테스트만 골라 `VoiceCommand\.venv\Scripts\python.exe -m unittest ...` 형태로 부분 실행해도 됩니다.
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 함께 확인하는 것을 권장합니다.
 - Agent Skills/MCP를 건드렸다면 `test_skill_manager`, `test_skill_installer`, `test_mcp_client`, `test_llm_provider`, `test_ai_command`도 함께 확인해 주세요.
 - 최근 자기개선 루프(ReflectionEngine / SkillLibrary / WeeklyReport / i18n)를 건드렸다면 `test_learning_engine`, `test_skill_library`, `test_episode_memory`, `test_learning_quality`, `test_weekly_report`, `test_agent_integration`, `test_skill_optimizer`를 우선 확인해 주세요.
@@ -58,8 +58,8 @@
 - `VoiceCommand/i18n/locales/ko/LC_MESSAGES/ari.po`
 - `VoiceCommand/i18n/locales/en/LC_MESSAGES/ari.po`
 - `VoiceCommand/i18n/locales/ja/LC_MESSAGES/ari.po`
-- `py -3.11 VoiceCommand/scripts/extract_strings.py`
-- `py -3.11 VoiceCommand/scripts/compile_po.py`
+- `VoiceCommand\.venv\Scripts\python.exe VoiceCommand\scripts\extract_strings.py`
+- `VoiceCommand\.venv\Scripts\python.exe VoiceCommand\scripts\compile_po.py`
 
 자기개선 루프처럼 보고서/lesson/fallback 메시지가 늘어나는 영역은 ko/en/ja 3개 locale을 함께 갱신하지 않으면 실제 실행 시 언어별 품질 차이가 커질 수 있습니다.
 

@@ -32,22 +32,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          py -3.11 -m pip install --upgrade pip
-          py -3.11 -m pip install -r VoiceCommand/requirements.txt
-          py -3.11 -m pip install bandit
+          py -3.11 -m venv VoiceCommand\.venv
+          VoiceCommand\.venv\Scripts\python.exe -m pip install --upgrade pip
+          VoiceCommand\.venv\Scripts\python.exe -m pip install -r VoiceCommand\requirements.txt
+          VoiceCommand\.venv\Scripts\python.exe -m pip install bandit
 
       - name: Validate repository
         working-directory: VoiceCommand
-        run: py -3.11 validate_repo.py
+        run: .venv\Scripts\python.exe validate_repo.py
 
       - name: Run unit tests
         working-directory: VoiceCommand
-        run: py -3.11 -m unittest discover -s tests -p "test_*.py" -v
+        run: .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
 
       - name: Security scan (bandit)
         working-directory: VoiceCommand
         run: |
-          py -3.11 -m bandit -r . -x tests,__pycache__ --severity-level medium --confidence-level medium -q
+          .venv\Scripts\python.exe -m bandit -r . -x tests,__pycache__ --severity-level medium --confidence-level medium -q
 
   validate_market_web:
     name: Validate Marketplace Web

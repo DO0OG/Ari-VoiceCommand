@@ -48,8 +48,9 @@ class AgentTaskResult:
 class AgentTaskQueue:
     """PriorityQueue + worker thread 기반 에이전트 작업 큐."""
 
-    def __init__(self, max_workers: int = 2):
+    def __init__(self, max_workers: int = 2, *, max_results: int = 200):
         self.max_workers = max(1, int(max_workers or 1))
+        self.max_results = max(1, int(max_results or 1))
         self._queue: queue.PriorityQueue[tuple[int, int, AgentQueuedTask]] = queue.PriorityQueue()
         self._counter = itertools.count()
         self._pending: dict[str, AgentQueuedTask] = {}
@@ -150,11 +151,13 @@ class AgentTaskQueue:
             if self._pending.pop(task.task_id, None) is None:
                 return
             if task.cancel_event.is_set():
-                self._results[task.task_id] = AgentTaskResult(
-                    task_id=task.task_id,
-                    goal=task.goal,
-                    status="cancelled",
-                    finished_at=time.time(),
+                self._store_result_locked(
+                    AgentTaskResult(
+                        task_id=task.task_id,
+                        goal=task.goal,
+                        status="cancelled",
+                        finished_at=time.time(),
+                    )
                 )
                 return
             self._running[task.task_id] = task
@@ -183,4 +186,10 @@ class AgentTaskQueue:
             )
         with self._lock:
             self._running.pop(task.task_id, None)
-            self._results[task.task_id] = task_result
+            self._store_result_locked(task_result)
+
+    def _store_result_locked(self, task_result: AgentTaskResult) -> None:
+        """_lock을 잡은 상태에서 호출: 결과 저장 후 오래된 항목부터 상한 유지."""
+        self._results[task_result.task_id] = task_result
+        while len(self._results) > self.max_results:
+            self._results.pop(next(iter(self._results)))

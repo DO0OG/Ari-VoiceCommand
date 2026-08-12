@@ -44,6 +44,7 @@ DEFAULT_SETTINGS = {
     "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge
     "fish_api_key": "",
     "fish_reference_id": "",
+    "fish_model": "s2.1-pro-free",  # Fish Audio 백엔드 모델 (무료 등급)
     "cosyvoice_reference_text": "",
     "cosyvoice_speed": 0.9,
     "cosyvoice_dir": "",           # CosyVoice 설치 경로 (빈 값이면 자동 탐색)
@@ -62,6 +63,7 @@ DEFAULT_SETTINGS = {
     "history_instruction": "",
     # ── 기타 ────────────────────────────────────────────────────────────
     "microphone": "",
+    "audio_output_device": "",
     "stt_provider": "google",
     "whisper_model": "small",
     "whisper_device": "auto",

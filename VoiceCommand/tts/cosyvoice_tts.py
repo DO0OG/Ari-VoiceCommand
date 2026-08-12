@@ -15,6 +15,7 @@ import subprocess
 from collections import deque
 from typing import Optional
 
+import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
@@ -22,10 +23,30 @@ from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_e
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _find_tts_venv_python() -> str:
+    """TTS 전용 venv 인터프리터 경로(없으면 빈 문자열).
+
+    CosyVoice 의존성(hyperpyyaml, CUDA torch, librosa 등)은 .venv-tts에만
+    있다. 메인 .venv는 sentence-transformers가 잡아둔 CPU torch를 쓰므로
+    워커를 거기서 띄우면 ModuleNotFoundError로 즉시 죽는다.
+    """
+    app_root = os.path.dirname(_HERE)
+    for candidate in (
+        os.path.join(app_root, ".venv-tts", "Scripts", "python.exe"),
+        os.path.join(app_root, ".venv-tts", "bin", "python"),
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    return ""
+
+
 def _get_python_exe() -> str:
     """실제 Python 인터프리터 경로 반환.
     frozen(EXE) 환경에서는 sys.executable이 Ari.exe 이므로
     PATH에서 python을 찾아야 한다."""
+    tts_python = _find_tts_venv_python()
+    if tts_python:
+        return tts_python
     if getattr(sys, 'frozen', False):
         python = shutil.which('python') or shutil.which('python3')
         if not python:
@@ -81,10 +102,23 @@ def _get_worker_script() -> str:
     return os.path.join(_HERE, "cosyvoice_worker.py")
 
 
+def _load_tts_volume() -> float:
+    """설정된 재생 볼륨 배율(0.0~2.0). 읽기 실패하면 원본 그대로."""
+    try:
+        from core.config_manager import ConfigManager
+        value = float(ConfigManager.get("tts_volume", 1.0))
+    except (ImportError, TypeError, ValueError) as exc:
+        logging.debug("tts_volume 조회 실패, 1.0 사용: %s", exc)
+        return 1.0
+    return min(max(value, 0.0), 2.0)
+
+
 class CosyVoiceTTS(QObject):
     playback_finished = Signal()
     _MAX_PCM_BUFFER_BYTES = 24000 * 4 * 12
     _AUDIO_FRAMES_PER_BUFFER = 512
+    # __init__을 우회해 생성되는 경우(테스트 등)에도 값이 있어야 한다.
+    volume = 1.0
 
     def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9):
         super().__init__()
@@ -96,6 +130,7 @@ class CosyVoiceTTS(QObject):
         self.reference_wav = reference_wav or _get_reference_wav()
         self.reference_text = reference_text
         self.speed = speed
+        self.volume = _load_tts_volume()
 
         self.pa = GlobalAudio.get_instance()
         self.sample_rate = 24000  # 워커에서 갱신됨
@@ -127,11 +162,22 @@ class CosyVoiceTTS(QObject):
             "--cosyvoice-dir", self._cosyvoice_dir,
             "--speed", str(self.speed),
         ]
+        # 부모는 stdin/stderr를 UTF-8로 주고받는데 한글 Windows의 자식
+        # Python은 기본이 cp949라, 지정하지 않으면 한글이 깨져 워커가
+        # 엉뚱한 텍스트를 합성한다. Inductor/Triton 캐시도 한글 경로를
+        # 못 읽으므로 ASCII 경로로 보낸다.
+        worker_env = dict(os.environ)
+        worker_env["PYTHONUTF8"] = "1"
+        worker_env["PYTHONIOENCODING"] = "utf-8"
+        worker_env.setdefault("TORCHINDUCTOR_CACHE_DIR", r"C:\torch_cache\inductor")
+        worker_env.setdefault("TRITON_CACHE_DIR", r"C:\torch_cache\triton")
+
         popen_kwargs = {
             "stdin": subprocess.PIPE,
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
             "bufsize": 0,
+            "env": worker_env,
         }
         if os.name == "nt":
             popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -208,19 +254,71 @@ class CosyVoiceTTS(QObject):
         flag = pyaudio.paComplete if empty_and_done else pyaudio.paContinue
         return (chunk, flag)
 
+    def _apply_volume(self, data: bytes) -> bytes:
+        """float32 PCM에 tts_volume 배율을 적용한다.
+
+        CosyVoice는 API TTS와 달리 출력 레벨을 일정하게 맞춰주지 않아
+        참조 음성 레벨을 그대로 따라간다. 제공자를 오갈 때 체감 볼륨이
+        튀면 이 값으로 맞춘다. 1.0이면 변환 비용 없이 원본을 그대로 쓴다.
+        """
+        if self.volume == 1.0 or not data:
+            return data
+        samples = np.frombuffer(data, dtype=np.float32) * self.volume
+        # 배율을 1.0 초과로 올린 경우 클리핑 잡음이 나지 않게 막는다.
+        return np.clip(samples, -1.0, 1.0).astype(np.float32).tobytes()
+
+    def _open_stream_on(self, device_index):
+        return self.pa.open(
+            format=pyaudio.paFloat32,
+            channels=1,
+            rate=self.sample_rate,
+            output=True,
+            output_device_index=device_index,
+            frames_per_buffer=self._AUDIO_FRAMES_PER_BUFFER,
+            stream_callback=self._audio_callback,
+        )
+
     def _ensure_stream(self):
+        """설정된 출력 장치로 열고, 실패하면 시스템 기본값까지 내려간다.
+
+        장치를 지정하지 않으면 Fish TTS(설정 장치)와 서로 다른 장치로
+        재생되어 체감 볼륨이 크게 달라진다. Voicemeeter처럼 가상 장치가
+        기본으로 잡혀 있으면 게인 스테이징까지 달라진다.
+
+        같은 스피커가 host API별로 중복 노출되는데 WASAPI는 24kHz를
+        거부하고(-9997) WDM-KS는 독점 점유로 열리지 않으므로(-9999)
+        audio_manager가 정렬해 준 후보를 순서대로 시도한다.
+        """
         with self._stream_lock:
             self._close_stream_unlocked()
-            self._stream = self.pa.open(
-                format=pyaudio.paFloat32,
-                channels=1,
-                rate=self.sample_rate,
-                output=True,
-                frames_per_buffer=self._AUDIO_FRAMES_PER_BUFFER,
-                stream_callback=self._audio_callback,
+            from audio.audio_manager import (
+                find_output_device_candidates,
+                get_configured_output_device_name,
             )
-            self._stream_rate = self.sample_rate
-            return self._stream
+
+            device_name = get_configured_output_device_name()
+            candidates = find_output_device_candidates(device_name)
+            candidates.append(None)  # 마지막 수단: 시스템 기본 장치
+
+            errors = []
+            for device_index in candidates:
+                try:
+                    self._stream = self._open_stream_on(device_index)
+                except OSError as exc:
+                    errors.append(f"idx={device_index}: {exc}")
+                    continue
+                if device_index is None and device_name:
+                    logging.warning(
+                        "[TTS] '%s' 출력 실패로 시스템 기본 장치 사용 (%s)",
+                        device_name, "; ".join(errors),
+                    )
+                self._stream_rate = self.sample_rate
+                return self._stream
+
+            raise OSError(
+                f"[TTS] {self.sample_rate}Hz 출력 스트림을 열 수 없습니다 "
+                f"({'; '.join(errors)})"
+            )
 
     def _close_stream(self):
         with self._stream_lock:
@@ -288,6 +386,7 @@ class CosyVoiceTTS(QObject):
                                 if first:
                                     logging.info("[TTS] 첫 청크 수신 → 재생 시작: %.2fs", time.time() - t0)
                                     first = False
+                                data = self._apply_volume(data)
                                 max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
                                 while not self._stopping:
                                     with self._pcm_lock:

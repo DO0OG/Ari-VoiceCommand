@@ -85,6 +85,14 @@ class _TTSSettingsPage(QWidget):
         fl.addWidget(QLabel(_("Reference ID:")))
         self.fish_ref_input = QLineEdit(self._settings.get("fish_reference_id", ""))
         fl.addWidget(self.fish_ref_input)
+        fl.addWidget(QLabel(_("모델:")))
+        self.fish_model_combo = QComboBox()
+        self.fish_model_combo.setEditable(True)
+        for m in ["s2.1-pro-free", "s1", "speech-1.6", "speech-1.5"]:
+            self.fish_model_combo.addItem(m, m)
+        self._set_combo(self.fish_model_combo,
+                        self._settings.get("fish_model", "s2.1-pro-free"))
+        fl.addWidget(self.fish_model_combo)
         tts_vbox.addWidget(fish_grp)
         self._tts_groups["fish"] = fish_grp
 
@@ -117,6 +125,9 @@ class _TTSSettingsPage(QWidget):
         cvl.addWidget(QLabel(_("말하기 속도 (0.7 ~ 1.2):")))
         self.cosyvoice_speed_input = QLineEdit(str(self._settings.get("cosyvoice_speed", 0.9)))
         cvl.addWidget(self.cosyvoice_speed_input)
+        cvl.addWidget(QLabel(_("재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):")))
+        self.tts_volume_input = QLineEdit(str(self._settings.get("tts_volume", 1.0)))
+        cvl.addWidget(self.tts_volume_input)
         tts_vbox.addWidget(cv_grp)
         self._tts_groups["local"] = cv_grp
 
@@ -347,9 +358,13 @@ class _TTSSettingsPage(QWidget):
             "tts_mode": self.tts_mode_combo.currentData(),
             "fish_api_key": self.fish_key_input.text().strip(),
             "fish_reference_id": self.fish_ref_input.text().strip(),
+            # 편집 가능 콤보라 사용자가 직접 입력한 모델명도 그대로 받는다.
+            "fish_model": (self.fish_model_combo.currentText().strip()
+                           or "s2.1-pro-free"),
             "cosyvoice_dir": self.cosyvoice_dir_input.text().strip(),
             "cosyvoice_reference_text": self.cosyvoice_ref_text.toPlainText().strip(),
             "cosyvoice_speed": self._float(self.cosyvoice_speed_input.text(), 0.9),
+            "tts_volume": self._float(self.tts_volume_input.text(), 1.0),
             "openai_tts_api_key": self.openai_tts_key_input.text().strip(),
             "openai_tts_voice": self.openai_tts_voice_combo.currentData(),
             "openai_tts_model": self.openai_tts_model_combo.currentData(),

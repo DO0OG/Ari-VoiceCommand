@@ -9,6 +9,7 @@ _TTS_SIGNATURE_KEYS = (
     "fish_reference_id",
     "cosyvoice_reference_text",
     "cosyvoice_speed",
+    "fish_model",
     "openai_tts_api_key",
     "openai_api_key",
     "openai_tts_voice",
@@ -30,7 +31,7 @@ def build_tts_signature(settings=None):
 def create_tts_provider(settings=None):
     """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성"""
     settings = settings or ConfigManager.load_settings()
-    tts_mode = settings.get("tts_mode", "fish")
+    tts_mode = settings.get("tts_mode", "edge")
 
     if tts_mode == "local":
         try:
@@ -42,8 +43,8 @@ def create_tts_provider(settings=None):
             logging.info("CosyVoice3 로컬 TTS 초기화 완료")
             return provider, "local"
         except Exception as e:
-            logging.error(f"CosyVoice3 초기화 실패, Fish Audio로 fallback: {e}")
-            tts_mode = "fish"
+            logging.error(f"CosyVoice3 초기화 실패, Edge TTS로 fallback: {e}")
+            tts_mode = "edge"
 
     if tts_mode == "openai_tts":
         try:
@@ -56,8 +57,8 @@ def create_tts_provider(settings=None):
             logging.info("OpenAI TTS 초기화 완료")
             return provider, "openai_tts"
         except Exception as e:
-            logging.error(f"OpenAI TTS 초기화 실패, Fish Audio로 fallback: {e}")
-            tts_mode = "fish"
+            logging.error(f"OpenAI TTS 초기화 실패, Edge TTS로 fallback: {e}")
+            tts_mode = "edge"
 
     if tts_mode == "elevenlabs":
         try:
@@ -70,31 +71,37 @@ def create_tts_provider(settings=None):
             logging.info("ElevenLabs TTS 초기화 완료")
             return provider, "elevenlabs"
         except Exception as e:
-            logging.error(f"ElevenLabs TTS 초기화 실패, Fish Audio로 fallback: {e}")
-            tts_mode = "fish"
+            logging.error(f"ElevenLabs TTS 초기화 실패, Edge TTS로 fallback: {e}")
+            tts_mode = "edge"
 
-    if tts_mode == "edge":
-        try:
-            from tts.tts_edge import EdgeTTS
-            provider = EdgeTTS(
-                voice=settings.get("edge_tts_voice", "ko-KR-SunHiNeural"),
-                rate=settings.get("edge_tts_rate", "+0%"),
-            )
-            logging.info("Edge TTS 초기화 완료")
-            return provider, "edge"
-        except Exception as e:
-            logging.error(f"Edge TTS 초기화 실패, Fish Audio로 fallback: {e}")
-            tts_mode = "fish"
+    if tts_mode == "fish":
+        api_key = settings.get("fish_api_key", "")
+        if api_key:
+            try:
+                from tts.fish_tts_ws import FishTTSWebSocket
+                provider = FishTTSWebSocket(
+                    api_key=api_key,
+                    reference_id=settings.get("fish_reference_id", ""),
+                    model=settings.get("fish_model", "s2.1-pro-free"),
+                )
+                logging.info("Fish Audio TTS 초기화 완료")
+                return provider, "fish"
+            except Exception as e:
+                logging.error(f"Fish Audio TTS 초기화 실패, Edge TTS로 fallback: {e}")
+                tts_mode = "edge"
+        else:
+            logging.warning("Fish API key가 없어 Edge TTS로 자동 전환합니다.")
+            tts_mode = "edge"
 
-    # 기본값: Fish Audio
-    api_key = settings.get("fish_api_key", "")
-    if not api_key:
-        logging.warning("Fish API key가 설정되지 않았습니다")
-    
-    from tts.fish_tts_ws import FishTTSWebSocket
-    provider = FishTTSWebSocket(
-        api_key=api_key,
-        reference_id=settings.get("fish_reference_id", "")
-    )
-    logging.info("Fish Audio TTS 초기화 완료")
-    return provider, "fish"
+    # 기본 및 Fallback: Edge TTS (무료 & 고품질)
+    try:
+        from tts.tts_edge import EdgeTTS
+        provider = EdgeTTS(
+            voice=settings.get("edge_tts_voice", "ko-KR-SunHiNeural"),
+            rate=settings.get("edge_tts_rate", "+0%"),
+        )
+        logging.info("Edge TTS 초기화 완료")
+        return provider, "edge"
+    except Exception as e:
+        logging.error(f"Edge TTS 초기화 실패: {e}")
+        raise

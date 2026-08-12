@@ -21,7 +21,12 @@ class FishTTSWebSocket(QObject):
     _PLAYBACK_TIMEOUT_GRACE_MIN_SEC = 5.0
     _PLAYBACK_TIMEOUT_MAX_SEC = 900.0
 
-    def __init__(self, api_key="", reference_id=""):
+    # SDK 기본 백엔드(speech-1.5)는 유료 등급이라 명시하지 않으면 과금된다.
+    _DEFAULT_MODEL = "s2.1-pro-free"
+    # __init__을 거치지 않고 생성되는 경우(테스트 등)에도 항상 값이 있도록 한다.
+    model = _DEFAULT_MODEL
+
+    def __init__(self, api_key="", reference_id="", model=""):
         super().__init__()
         from audio.audio_manager import GlobalAudio
         try:
@@ -29,6 +34,7 @@ class FishTTSWebSocket(QObject):
         except Exception as exc:
             raise RuntimeError(f"Fish Audio 세션 초기화 실패: {exc}") from exc
         self.reference_id = reference_id
+        self.model = model or self._DEFAULT_MODEL
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False
         self.play_thread = None
@@ -50,7 +56,7 @@ class FishTTSWebSocket(QObject):
                 format="wav",
             )
 
-            audio_stream = self.session.tts(req)
+            audio_stream = self.session.tts(req, backend=self.model)
 
             audio_queue = queue.Queue(maxsize=self._QUEUE_MAX_CHUNKS)
             self.stop_event.clear()
@@ -106,15 +112,17 @@ class FishTTSWebSocket(QObject):
                     return
 
                 # 3단계: PyAudio 재생
-                from audio.audio_manager import _audio_output_lock
+                from audio.audio_manager import _audio_output_lock, get_output_device_index
                 stream = None
                 try:
+                    out_idx = get_output_device_index()
                     with _audio_output_lock:
                         stream = self.pa.open(
                             format=self.pa.get_format_from_width(sample_width),
                             channels=channels,
                             rate=sample_rate,
                             output=True,
+                            output_device_index=out_idx,
                             frames_per_buffer=4096,
                         )
 

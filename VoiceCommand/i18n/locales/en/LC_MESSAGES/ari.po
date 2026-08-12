@@ -2304,3 +2304,49 @@ msgstr "Google OAuth Client Secret"
 
 msgid "settings.agent.image_generation"
 msgstr "Enable image generation tools"
+
+# CosyVoice installer runtime messages
+msgid "CosyVoice 전용 가상환경 Python을 찾지 못했습니다: {python_exe}"
+msgstr "Could not find the CosyVoice virtual environment Python: {python_exe}"
+
+msgid "Git이 설치되어 있지 않습니다. (https://git-scm.com)"
+msgstr "Git is not installed. (https://git-scm.com)"
+
+msgid "\n설치 경로: {path}\n"
+msgstr "\nInstall path: {path}\n"
+
+msgid "[1/4] 저장소 클론 중..."
+msgstr "[1/4] Cloning repository..."
+
+msgid "[1/4] 저장소 이미 존재: {path}"
+msgstr "[1/4] Repository already exists: {path}"
+
+msgid "\n[2/4] 핵심 의존성 설치 중..."
+msgstr "\n[2/4] Installing core dependencies..."
+
+msgid "\n[3/4] 모델 다운로드 중 (Fun-CosyVoice3-0.5B, 약 2GB)..."
+msgstr "\n[3/4] Downloading model (Fun-CosyVoice3-0.5B, about 2 GB)..."
+
+msgid "\n[3/4] 모델 이미 존재: {path}"
+msgstr "\n[3/4] Model already exists: {path}"
+
+msgid "\n[4/4] 세부 의존성 설치 중 (시간이 다소 소요될 수 있습니다)..."
+msgstr "\n[4/4] Installing additional dependencies (this may take a while)..."
+
+msgid "\n[4/4] requirements.txt 없음, 건너뜀"
+msgstr "\n[4/4] requirements.txt not found; skipping"
+
+msgid "✨ CosyVoice3 설치가 완료되었습니다!"
+msgstr "✨ CosyVoice3 installation is complete!"
+
+msgid "위치: {path}"
+msgstr "Location: {path}"
+
+msgid "다음 단계:"
+msgstr "Next steps:"
+
+msgid "  1. 아리 설정 → TTS 모드 → 로컬 (CosyVoice3) 선택"
+msgstr "  1. Open Ari Settings → TTS mode → select Local (CosyVoice3)"
+
+msgid "  2. 설정 → CosyVoice 경로 → {path} 입력 (또는 자동 감지)"
+msgstr "  2. Open Settings → CosyVoice path → enter {path} (or use auto-detection)"

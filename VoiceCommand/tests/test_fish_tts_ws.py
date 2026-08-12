@@ -72,12 +72,15 @@ class FishTTSWebSocketTests(unittest.TestCase):
 
         with patch.object(FishTTSWebSocket, "__init__", lambda self, *args, **kwargs: None):
             tts = FishTTSWebSocket()
-        tts.session = type(
-            "_Session",
-            (),
-            {"tts": lambda self, req: iter([wav_bytes[:32], wav_bytes[32:]])},
-        )()
+        sent = {}
+
+        def _fake_tts(self, req, backend=None):
+            sent["backend"] = backend
+            return iter([wav_bytes[:32], wav_bytes[32:]])
+
+        tts.session = type("_Session", (), {"tts": _fake_tts})()
         tts.reference_id = ""
+        tts.model = "s2.1-pro-free"
         tts.pa = _FakeAudio()
         tts.is_playing = False
         tts.play_thread = None
@@ -87,6 +90,8 @@ class FishTTSWebSocketTests(unittest.TestCase):
         result = tts.speak("안녕하세요")
 
         self.assertTrue(result)
+        # 무료 등급 백엔드가 실제로 전달되어야 과금되지 않는다.
+        self.assertEqual(sent["backend"], "s2.1-pro-free")
         self.assertFalse(tts.is_playing)
         self.assertEqual(tts.playback_finished.emitted, 1)
         self.assertTrue(tts.pa.stream.writes)

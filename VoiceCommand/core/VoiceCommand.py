@@ -533,6 +533,7 @@ def enable_game_mode():
             _state.fish_tts = FishTTSWebSocket(
                 api_key=settings.get("fish_api_key", ""),
                 reference_id=settings.get("fish_reference_id", ""),
+                model=settings.get("fish_model", "s2.1-pro-free"),
             )
         else:
             initialize_tts()

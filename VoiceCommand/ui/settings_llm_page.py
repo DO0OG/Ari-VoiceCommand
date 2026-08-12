@@ -58,7 +58,7 @@ class _ValidatorThread(QThread):
         create_fn = getattr(completions_api, "create")
         create_fn(
             model=model,
-            max_tokens=1,
+            max_tokens=5,
             messages=[{"role": "user", "content": "hi"}],
         )
 
@@ -66,7 +66,7 @@ class _ValidatorThread(QThread):
         try:
             from agent.llm_provider import _PROVIDER_CONFIG
             cfg = _PROVIDER_CONFIG.get(self.provider, _PROVIDER_CONFIG["groq"])
-            model = self.model.strip() or cfg["default_model"]
+            model = self.model.strip() or cfg.get("default_model", "")
 
             if self.provider == "anthropic":
                 anthropic_module = importlib.import_module("anthropic")
@@ -79,6 +79,11 @@ class _ValidatorThread(QThread):
                     kwargs["base_url"] = ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
                 elif cfg["base_url"]:
                     kwargs["base_url"] = cfg["base_url"]
+                if self.provider == "openrouter":
+                    kwargs["default_headers"] = {
+                        "HTTP-Referer": "https://github.com/Ari-Assistant",
+                        "X-Title": "Ari Voice Assistant",
+                    }
                 client = openai_module.OpenAI(**kwargs)
                 self._validate_openai_client(client, model)
             self.done.emit(True, f"✓ {model} 연결 성공")
@@ -87,11 +92,22 @@ class _ValidatorThread(QThread):
                 self.done.emit(False, "✗ Ollama 서버에 연결할 수 없어요. Ollama 실행 여부를 확인하세요.")
                 return
             msg = str(e)
+            status_code = getattr(e, "status_code", None)
+            if status_code == 404 or "404" in msg:
+                label = cfg.get("label", self.provider)
+                self.done.emit(
+                    False,
+                    f"✗ 모델 '{model}'을(를) {label}에서 찾을 수 없습니다. 모델명을 확인해 주세요.",
+                )
+                return
+            if status_code == 401 or "401" in msg or "Unauthorized" in msg:
+                self.done.emit(False, "✗ API Key가 유효하지 않습니다. 키를 확인해 주세요.")
+                return
             for marker in ("Error code:", "status code", "error_code"):
                 if marker in msg:
                     msg = msg.split("\n")[0]
                     break
-            self.done.emit(False, f"✗ {msg[:80]}")
+            self.done.emit(False, f"✗ {msg[:100]}")
 
 
 # ── LLM 설정 페이지 ────────────────────────────────────────────────────────────

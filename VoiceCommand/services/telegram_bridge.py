@@ -215,7 +215,15 @@ class TelegramBridge:
             self.client.send_message(incoming.chat_id, text)
 
         stream = StreamingTextBuffer(emit_update)
-        result = self.command_runner(incoming.text, stream.append)
+        try:
+            result = self.command_runner(incoming.text, stream.append)
+        except Exception as exc:
+            logger.exception("[TelegramBridge] command failed chat_id=%s", incoming.chat_id)
+            try:
+                emit_update(f"Error: {exc}")
+            except Exception:
+                logger.debug("[TelegramBridge] error notification failed", exc_info=True)
+            raise
         stream.flush()
         final = (result or stream.text or last_text["value"] or "Done.").strip()
         image_path = self._extract_image_path(final)

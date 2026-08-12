@@ -26,7 +26,7 @@
 빌드된 exe 기준 플러그인 경로:
 %AppData%\Ari\plugins
 
-소스 실행(`py Main.py`) 기준 플러그인 경로:
+소스 실행(`VoiceCommand\.venv\Scripts\python.exe VoiceCommand\Main.py`) 기준 플러그인 경로:
 VoiceCommand\.ari_runtime\plugins
 ```
 

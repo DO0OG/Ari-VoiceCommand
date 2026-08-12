@@ -103,6 +103,25 @@ class TelegramBridgeTests(unittest.TestCase):
 
         self.assertEqual(client.photos, [("123", r"C:\tmp\shot.png", "screenshot")])
 
+    def test_command_error_notifies_chat(self):
+        client = FakeTelegramClient()
+
+        def runner(text, stream_callback=None):
+            raise RuntimeError("boom")
+
+        bridge = TelegramBridge(
+            client,
+            runner,
+            allowed_chat_ids=["123"],
+            queue=ImmediateQueue(),
+        )
+
+        with self.assertRaises(RuntimeError):
+            bridge._run_message(IncomingMessage(chat_id="123", text="fail", message_id=3), threading.Event())
+
+        self.assertEqual(client.sent[0], ("123", "Processing...", 3))
+        self.assertIn(("123", 1, "Error: boom"), client.edited)
+
 
 if __name__ == "__main__":
     unittest.main()

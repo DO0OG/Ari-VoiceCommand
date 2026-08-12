@@ -53,18 +53,27 @@
 
 ### Installation & Run
 
-```bash
-# 1. Clone repository
+```bat
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd Ari-VoiceCommand
-
-# 2. Install dependencies
-pip install -r VoiceCommand/requirements.txt
-
-# 3. Run
 cd VoiceCommand
-py -3.11 Main.py
+setup.bat
+Ari.vbs
 ```
+
+To install from the command line, run `py -3.11 install_dependencies.py`
+instead of `setup.bat`.
+
+Use `Ari.vbs` for normal launches; it starts Ari without showing a console
+window. Run `Ari.bat` only for diagnostics when you need to see startup errors.
+If a hidden launch fails, Ari shows the end of
+`VoiceCommand/.ari_runtime/launcher_error.log` in a message box.
+
+The default `setup.bat` command creates `.venv` for the main application and
+its regular optional dependencies. To prepare local CosyVoice3 as well, run
+`setup.bat --with-tts`; this creates a second environment, `.venv-tts`, for
+CosyVoice3's CUDA-enabled torch and TTS packages. This two-venv layout prevents
+those packages from replacing the main application's CPU torch dependencies.
 
 ---
 
@@ -82,6 +91,7 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 | **Local AI Stack** | Supports local LLM workflows with Ollama and local TTS pipelines for privacy-sensitive environments. |
 | **UI & Verification** | Provides a PySide6 desktop UI, animated character widget, text chat, and OCR-based result verification. |
 | **Memory & Personalization** | Stores user preferences, adapts behavior, and accumulates reusable strategies for repeated tasks. |
+| **Remote Control** | Runs Ari commands from allow-listed Telegram chats through the same command pipeline as the local UI. |
 
 ### Character Widget Highlights
 
@@ -99,6 +109,9 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent** that ca
 
 ### Recent Updates
 
+- **Telegram remote command bridge:** allow-listed chat authorization, long-polling, streaming via message edits, and screenshot photo forwarding (`telegram_enabled`, disabled by default).
+- **Restricted generated image downloads:** the image generation tool now only downloads images from HTTPS URLs.
+- **Advanced autonomous agent features:** local MCP server (including file read/write tools), streaming/vision/file/app tools, interrupt & resume, audit logging, and an agent dashboard.
 - **Multilingual command routing:** LLMRouter, WeatherCommand, and tool handlers now recognise Korean, English, and Japanese keywords — the agent activates correctly in all supported locales.
 - **Configurable response cache:** LLM response cache TTL and maximum size are now readable from `ari_settings.json` (`agent_response_cache_ttl`, `agent_response_cache_max_size`).
 - **Async agent task queue:** `AgentTaskQueue` provides priority-based background task scheduling with per-task cancellation support.
