@@ -169,7 +169,8 @@ class EpisodeMemory:
             scored.append((score, episode.timestamp or "", f"{episode.goal[:80]} -> {reason[:120]}"))
 
         patterns: List[str] = []
-        for _, _, pattern in sorted(scored, key=lambda item: (item[0], item[1]), reverse=True):
+        for scored_item in sorted(scored, key=lambda item: (item[0], item[1]), reverse=True):
+            pattern = scored_item[2]
             if pattern not in patterns:
                 patterns.append(pattern)
             if len(patterns) >= limit:

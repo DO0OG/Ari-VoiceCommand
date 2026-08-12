@@ -12,15 +12,16 @@ from agent.autonomous_executor import AutonomousExecutor
 
 class AutonomousExecutorTests(unittest.TestCase):
     def test_build_child_env_filters_expanded_sensitive_prefixes(self):
+        filtered_value = "blocked"
         fake_env = {
             "PATH": "allowed",
-            "AWS_SECRET_ACCESS_KEY": "blocked",
-            "AZURE_OPENAI_KEY": "blocked",
-            "GOOGLE_API_KEY": "blocked",
-            "GITHUB_TOKEN": "blocked",
-            "MY_OPENAI_API_KEY": "blocked",
-            "FISH_API_KEY": "blocked",
-            "PRIVATE_TOKEN": "blocked",
+            "AWS_SECRET_ACCESS_KEY": filtered_value,
+            "AZURE_OPENAI_KEY": filtered_value,
+            "GOOGLE_API_KEY": filtered_value,
+            "GITHUB_TOKEN": filtered_value,
+            "MY_OPENAI_API_KEY": filtered_value,
+            "FISH_API_KEY": filtered_value,
+            "PRIVATE_TOKEN": filtered_value,
             "CUSTOM_VALUE": "allowed",
         }
 

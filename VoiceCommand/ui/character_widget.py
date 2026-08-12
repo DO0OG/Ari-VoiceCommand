@@ -11,7 +11,7 @@ import logging
 import ctypes
 from collections import OrderedDict
 from queue import Queue
-from typing import Callable, Optional
+from typing import Optional
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve, Signal, Slot, Property
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
@@ -827,7 +827,6 @@ class CharacterWidget(QWidget):
 
     def smooth_walk(self, at_left_edge=False, at_right_edge=False):
         """부드럽고 느린 걷기 이동 (벽에서 반대로 나오기 포함)"""
-        screen = self.get_screen_geometry()
         margin = max(0, (self.width() // 2) - 30)
 
         # 이동 방향 결정 (벽에 있으면 반대 방향으로 강제)

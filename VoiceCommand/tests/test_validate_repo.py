@@ -1,8 +1,9 @@
 import json
 import os
-import subprocess  # nosec B404 - 고정된 검증 스크립트만 실행
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,15 +16,12 @@ VOICECOMMAND_ROOT = str(Path(__file__).resolve().parent.parent)
 
 class ValidateRepoTests(unittest.TestCase):
     def test_json_plan_output(self):
-        result = subprocess.run(
-            [sys.executable, os.path.join(VOICECOMMAND_ROOT, "validate_repo.py"), "--json"],
-            # nosec B603 - 입력값이 테스트 코드 내부 고정값임
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        payload = json.loads(result.stdout)
+        stdout = StringIO()
+        with patch.object(sys, "argv", ["validate_repo.py", "--json"]), redirect_stdout(stdout):
+            exit_code = validate_repo.main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
         self.assertIn("compile_targets", payload)
         self.assertIn("agent/execution_analysis.py", payload["compile_targets"])
         self.assertIn("agent/assistant_text_utils.py", payload["compile_targets"])

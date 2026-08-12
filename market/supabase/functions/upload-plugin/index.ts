@@ -102,11 +102,10 @@ Deno.serve(async (req) => {
       return json({ error: error?.message ?? "plugin insert failed" }, 500);
     }
 
-    try {
-      await triggerValidation(plugin.id, user.id);
-    } catch (dispatchError) {
-      await markValidationBootstrapFailure(supabase, plugin.id);
-      throw dispatchError;
+    const dispatchError = await triggerValidation(plugin.id, user.id);
+    if (dispatchError) {
+      const updateError = await markValidationBootstrapFailure(supabase, plugin.id);
+      throw new Error(updateError ? `${dispatchError}; ${updateError}` : dispatchError);
     }
     return json({ plugin_id: plugin.id, status: plugin.status });
   } catch (error) {
@@ -175,40 +174,45 @@ function validateMeta(meta: PluginMeta): string | null {
   return null;
 }
 
-async function triggerValidation(pluginId: string, developerId: string) {
+async function triggerValidation(pluginId: string, developerId: string): Promise<string | null> {
   const repo = Deno.env.get("GH_REPO");
   const pat = Deno.env.get("GH_PAT");
   if (!repo || !pat) {
-    throw new Error("Validation pipeline is not configured");
+    return "Validation pipeline is not configured";
   }
 
-  const response = await fetch(
-    `https://api.github.com/repos/${repo}/actions/workflows/validate-plugin.yml/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${pat}`,
-        "Content-Type": "application/json",
-        Accept: "application/vnd.github+json",
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/validate-plugin.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${pat}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify({
+          ref: "main",
+          inputs: { plugin_id: pluginId, developer_id: developerId },
+        }),
       },
-      body: JSON.stringify({
-        ref: "main",
-        inputs: { plugin_id: pluginId, developer_id: developerId },
-      }),
-    },
-  );
+    );
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Failed to trigger validation: ${response.status} ${body}`);
+    if (!response.ok) {
+      return `Failed to trigger validation (HTTP ${response.status})`;
+    }
+    return null;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown network error";
+    return `Failed to trigger validation: ${detail}`;
   }
 }
 
 async function markValidationBootstrapFailure(
   supabase: ReturnType<typeof createAdminClient>,
   pluginId: string,
-) {
-  await supabase
+): Promise<string | null> {
+  const { error } = await supabase
     .from("plugins")
     .update({
       status: "rejected",
@@ -219,4 +223,5 @@ async function markValidationBootstrapFailure(
       },
     })
     .eq("id", pluginId);
+  return error ? `Failed to record validation bootstrap failure: ${error.message}` : null;
 }

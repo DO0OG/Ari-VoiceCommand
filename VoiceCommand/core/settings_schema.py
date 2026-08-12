@@ -21,6 +21,8 @@ SENSITIVE_SETTINGS_KEYS = (
     "elevenlabs_api_key",
 )
 
+_UNSET_CREDENTIAL = ""
+
 DEFAULT_SETTINGS = {
     # ── LLM 제공자 ──────────────────────────────────────────────────────
     "llm_provider": "groq",
@@ -29,29 +31,29 @@ DEFAULT_SETTINGS = {
     "llm_planner_model": "",
     "llm_execution_provider": "",  # 비워두면 기본 제공자와 동일
     "llm_execution_model": "",
-    "groq_api_key": "",
-    "openai_api_key": "",
-    "anthropic_api_key": "",
-    "mistral_api_key": "",
-    "gemini_api_key": "",
-    "openrouter_api_key": "",
-    "nvidia_nim_api_key": "",
+    "groq_api_key": _UNSET_CREDENTIAL,
+    "openai_api_key": _UNSET_CREDENTIAL,
+    "anthropic_api_key": _UNSET_CREDENTIAL,
+    "mistral_api_key": _UNSET_CREDENTIAL,
+    "gemini_api_key": _UNSET_CREDENTIAL,
+    "openrouter_api_key": _UNSET_CREDENTIAL,
+    "nvidia_nim_api_key": _UNSET_CREDENTIAL,
     "ollama_base_url": "http://localhost:11434/v1",
     "llm_streaming_enabled": True,
     "vision_enabled": True,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
     "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge
-    "fish_api_key": "",
-    "fish_reference_id": "",
+    "fish_api_key": _UNSET_CREDENTIAL,
+    "fish_reference_id": _UNSET_CREDENTIAL,
     "fish_model": "s2.1-pro-free",  # Fish Audio 백엔드 모델 (무료 등급)
     "cosyvoice_reference_text": "",
     "cosyvoice_speed": 0.9,
     "cosyvoice_dir": "",           # CosyVoice 설치 경로 (빈 값이면 자동 탐색)
-    "openai_tts_api_key": "",
+    "openai_tts_api_key": _UNSET_CREDENTIAL,
     "openai_tts_voice": "nova",    # alloy | echo | fable | onyx | nova | shimmer
     "openai_tts_model": "tts-1",   # tts-1 | tts-1-hd
-    "elevenlabs_api_key": "",
+    "elevenlabs_api_key": _UNSET_CREDENTIAL,
     "elevenlabs_voice_id": "",
     "elevenlabs_model_id": "eleven_multilingual_v2",
     "edge_tts_voice": "ko-KR-SunHiNeural",
@@ -103,7 +105,7 @@ DEFAULT_SETTINGS = {
     "mcp_server_enabled": False,
     "mcp_server_port": 8765,
     "telegram_enabled": False,
-    "telegram_bot_token": "",
+    "telegram_bot_token": _UNSET_CREDENTIAL,
     "telegram_allowed_chat_ids": [],
     "telegram_poll_timeout_seconds": 25,
     "agent_dashboard_enabled": True,
@@ -111,7 +113,7 @@ DEFAULT_SETTINGS = {
     "max_subagents": 3,
     "google_calendar_enabled": False,
     "google_client_id": "",
-    "google_client_secret": "",
+    "google_client_secret": _UNSET_CREDENTIAL,
     "image_generation_enabled": False,
     "image_gen_provider": "openai",
 }

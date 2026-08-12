@@ -6,12 +6,17 @@ xgettext가 설치된 경우 사용하고, 없으면 간단한 regex 추출로 �
 """
 import os
 import re
-import subprocess
+import logging
+import shutil
+# xgettext is resolved to an executable path and invoked without a shell.
+import subprocess  # nosec B404
 import tempfile
 
 _BASE = os.path.dirname(os.path.dirname(__file__))
 _OUTPUT = os.path.join(_BASE, "i18n", "locales", "ari.pot")
 _SOURCES = ["ui", "agent", "core", "commands", "memory", "services", "i18n"]
+
+log = logging.getLogger(__name__)
 
 _PY_FILES: list[str] = []
 for d in _SOURCES:
@@ -25,34 +30,55 @@ for d in _SOURCES:
 
 
 def _extract_with_xgettext() -> bool:
+    executable = shutil.which("xgettext")
+    if executable is None:
+        return False
+
+    files_from: str | None = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
                                         delete=False, encoding="utf-8") as fh:
             fh.write("\n".join(_PY_FILES))
             files_from = fh.name
-        subprocess.run(
+        # The executable and every argument are controlled by this script.
+        subprocess.run(  # nosec B603
             [
-                "xgettext", "--language=Python",
+                executable, "--language=Python",
                 "--keyword=_", "--keyword=ngettext:1,2",
                 "--output", _OUTPUT, "--from-code=UTF-8",
                 "--package-name=Ari",
                 "--files-from", files_from,
             ],
             check=True,
+            shell=False,
         )
-        os.unlink(files_from)
         return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as exc:
+        log.warning("xgettext extraction failed: %s", exc)
         return False
+    finally:
+        if files_from is not None:
+            try:
+                os.unlink(files_from)
+            except OSError as exc:
+                log.debug("Could not remove temporary xgettext input list: %s", exc)
+
+
+def _read_source(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as source:
+            return source.read()
+    except (OSError, UnicodeError) as exc:
+        log.warning("Skipping unreadable source file %s: %s", path, exc)
+        return None
 
 
 def _extract_with_regex() -> None:
     pattern = re.compile(r'_\(\s*["\']([^"\']+)["\']')
     found: set[str] = set()
     for path in _PY_FILES:
-        try:
-            text = open(path, encoding="utf-8").read()
-        except Exception:
+        text = _read_source(path)
+        if text is None:
             continue
         for match in pattern.finditer(text):
             found.add(match.group(1))

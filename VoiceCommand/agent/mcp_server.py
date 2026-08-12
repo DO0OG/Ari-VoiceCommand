@@ -112,8 +112,8 @@ class AriMCPServer:
             if QSystemTrayIcon.supportsMessages():
                 # 트레이 인스턴스가 없는 경우도 있어 텍스트 결과는 항상 반환한다.
                 return f"{title}: {message}"
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("[MCPServer] system tray notification unavailable: %s", exc)
         return f"{title}: {message}"
 
     def _system_info(self) -> str:

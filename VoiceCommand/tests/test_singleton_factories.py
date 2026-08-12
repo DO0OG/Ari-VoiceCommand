@@ -3,6 +3,22 @@ import threading
 import unittest
 
 
+_MODULE_LOADERS = {
+    "agent.confirmation_manager": lambda: importlib.import_module("agent.confirmation_manager"),
+    "agent.few_shot_injector": lambda: importlib.import_module("agent.few_shot_injector"),
+    "agent.goal_predictor": lambda: importlib.import_module("agent.goal_predictor"),
+    "agent.learning_metrics": lambda: importlib.import_module("agent.learning_metrics"),
+    "agent.llm_router": lambda: importlib.import_module("agent.llm_router"),
+    "agent.planner_feedback": lambda: importlib.import_module("agent.planner_feedback"),
+    "agent.reflection_engine": lambda: importlib.import_module("agent.reflection_engine"),
+    "agent.safety_checker": lambda: importlib.import_module("agent.safety_checker"),
+    "agent.skill_optimizer": lambda: importlib.import_module("agent.skill_optimizer"),
+    "agent.weekly_report": lambda: importlib.import_module("agent.weekly_report"),
+    "memory.memory_consolidator": lambda: importlib.import_module("memory.memory_consolidator"),
+    "memory.memory_index": lambda: importlib.import_module("memory.memory_index"),
+    "memory.user_profile_engine": lambda: importlib.import_module("memory.user_profile_engine"),
+}
+
 
 class SingletonFactoryTests(unittest.TestCase):
     def _assert_singleton_factory_thread_safe(
@@ -12,7 +28,7 @@ class SingletonFactoryTests(unittest.TestCase):
         class_name: str,
         getter_name: str,
     ) -> None:
-        module = importlib.import_module(module_name)
+        module = _MODULE_LOADERS[module_name]()
         original_singleton = getattr(module, singleton_name)
         original_class = getattr(module, class_name)
         created = []

@@ -1110,7 +1110,8 @@ class AICommand(BaseCommand):
         try:
             from i18n.translator import _
         except Exception:
-            _ = lambda message, **kwargs: message.format(**kwargs) if kwargs else message  # type: ignore[assignment]
+            def _(message: str, **kwargs) -> str:
+                return message.format(**kwargs) if kwargs else message
 
         skill_name = self._get_primary_skill_name(skill_ctx) or "script"
         logging.info("[AICommand] script 스킬 감지 → run_agent_task 승격: %s", skill_name)
@@ -1371,12 +1372,13 @@ class AICommand(BaseCommand):
     def execute(self, text: str) -> None:
         from core.VoiceCommand import _state
         from core.config_manager import ConfigManager
-        stream_cb = None
+        stream_callback = None
         cw = getattr(_state, "character_widget", None)
         if cw is not None and ConfigManager.get("llm_streaming_enabled", True):
-            def stream_cb(delta: str) -> None:
+            def emit_stream_token(delta: str) -> None:
                 cw.stream_token_signal.emit(delta)
-        self._run_interaction(text, self.tts_wrapper, stream_callback=stream_cb)
+            stream_callback = emit_stream_token
+        self._run_interaction(text, self.tts_wrapper, stream_callback=stream_callback)
 
     def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
@@ -1491,7 +1493,7 @@ class AICommand(BaseCommand):
                 )
                 self._emit_user_message(response)
             else:
-                response, _, _ = self.ai_assistant.process_query(text)
+                response = self.ai_assistant.process_query(text)[0]
                 self._emit_user_message(response)
 
             if response:

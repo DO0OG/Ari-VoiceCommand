@@ -12,7 +12,7 @@ import threading
 from collections import Counter
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints

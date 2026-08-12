@@ -12,6 +12,20 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+_CREATE_KNOWLEDGE_TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS knowledge (
+        id INTEGER PRIMARY KEY,
+        entity TEXT NOT NULL,
+        relation TEXT NOT NULL,
+        value TEXT NOT NULL,
+        confidence REAL NOT NULL DEFAULT 0.5,
+        source TEXT NOT NULL DEFAULT 'conversation',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(entity, relation, value)
+    )
+"""
+
 
 class KnowledgeBase:
     def __init__(self, db_path: str | None = None):
@@ -27,21 +41,7 @@ class KnowledgeBase:
 
     def _ensure_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS knowledge (
-                    id INTEGER PRIMARY KEY,
-                    entity TEXT NOT NULL,
-                    relation TEXT NOT NULL,
-                    value TEXT NOT NULL,
-                    confidence REAL NOT NULL DEFAULT 0.5,
-                    source TEXT NOT NULL DEFAULT 'conversation',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(entity, relation, value)
-                )
-                """
-            )
+            conn.execute(_CREATE_KNOWLEDGE_TABLE_SQL)
             conn.execute(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(entity, relation, value)"
             )

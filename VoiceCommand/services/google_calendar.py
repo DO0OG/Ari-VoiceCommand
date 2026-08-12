@@ -9,7 +9,10 @@ import requests
 
 from core.resource_manager import ResourceManager
 
-TOKEN_FILE = "google_token.json"
+GOOGLE_AUTH_CACHE_FILENAME = "google_token.json"
+# Backwards-compatible export used by the Gmail service. This is a filename,
+# not an embedded credential.
+TOKEN_FILE = GOOGLE_AUTH_CACHE_FILENAME
 
 
 class GoogleAuthRequired(RuntimeError):
