@@ -15,10 +15,13 @@
     <img src="https://img.shields.io/badge/Protocol-MCP-7C3AED" alt="MCP Support" />
     <img src="https://img.shields.io/badge/Extensions-Plugins%20%26%20Skills-FF7B54" alt="Plugins and Skills" />
     <img src="https://img.shields.io/badge/i18n-KO%20%7C%20EN%20%7C%20JA-orange" alt="i18n" />
-    <a href="https://app.codacy.com/gh/DO0OG/Ari-VoiceCommand/dashboard">
-      <img src="https://app.codacy.com/project/badge/Grade/b30dee6110a44335b36a1cdf47f0566f?branch=main" alt="Codacy Badge" />
-    </a>
     <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
+  </p>
+
+  <p align="center">
+    <a href="https://app.codacy.com/gh/DO0OG/Ari-VoiceCommand/dashboard">
+      <img src="https://img.shields.io/codacy/grade/b30dee6110a44335b36a1cdf47f0566f/main?style=for-the-badge&amp;logo=codacy&amp;label=Codacy%20Quality" alt="Codacy Code Quality Grade" />
+    </a>
   </p>
 
   <p align="center">
