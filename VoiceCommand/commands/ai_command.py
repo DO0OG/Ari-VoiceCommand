@@ -1261,17 +1261,22 @@ class AICommand(BaseCommand):
         if not self._contains_shutdown_reference(normalized):
             return False
 
+        # 각 패턴은 "종료 언급"과 "재확인을 구하는 명시적 어구"가 서로 가까이
+        # (약 20~30자 이내) 붙어 있을 때만 매칭한다. 예전에는 물음표(?)만 있으면
+        # 무조건 매칭돼서, 모델이 "지원하지 않아요. ...선택해 주시겠어요?"처럼
+        # 무관한 안내문 끝에 물음표를 붙였을 뿐인데도 재확인 응답으로 오판해
+        # 도구 호출 복구를 막아버리는 문제가 있었다.
         confirmation_patterns = (
-            r"(정말|진짜).*(꺼|끄|종료).*(까요|습니까|\?)",
-            r"(꺼|끄|종료).*(드릴까요|할까요|해도\s*될까요|하시겠습니까|\?)",
-            r"(진행\s*중인\s*작업|저장\s*안|중단됩니다).*(정말|꺼드릴까요|종료할까요|\?)",
-            r"(확인|괜찮|준비).*(되면|되셨으면|말씀|답|확인)",
-            r"(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like).*(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off)",
-            r"(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off).*(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like|\?)",
-            r"(unsaved|ongoing|in\s+progress|running\s+work|current\s+work).*(stop|interrupt|terminate|close|lost|shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|\?)",
-            r"(本当に|確認|よろしい).*(終了|シャットダウン|オフ).*(か|？|\?)",
-            r"(終了|シャットダウン|オフ).*(しますか|してもよろしい|よろしいですか|か|？|\?)",
-            r"(保存していない|作業中|進行中|中断).*(本当に|終了しますか|シャットダウンしますか|？|\?)",
+            r"(정말|진짜).{0,20}(꺼|끄|종료).{0,20}(까요|습니까)",
+            r"(꺼|끄|종료).{0,20}(드릴까요|할까요|해도\s*될까요|하시겠습니까)",
+            r"(진행\s*중인\s*작업|저장\s*안|중단됩니다).{0,20}(정말|꺼드릴까요|종료할까요)",
+            r"(확인|괜찮|준비).{0,20}(되면|되셨으면|말씀|답|확인)",
+            r"(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like).{0,30}(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off)",
+            r"(shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down|turn\s+off|power\s+off).{0,30}(are\s+you\s+sure|really|confirm|confirmation|do\s+you\s+want|would\s+you\s+like)",
+            r"(unsaved|ongoing|in\s+progress|running\s+work|current\s+work).{0,30}(stop|interrupt|terminate|close|lost|shutdown|shut\s*down|shut\s+it\s+down|shutting\s+down)",
+            r"(本当に|確認|よろしい).{0,20}(終了|シャットダウン|オフ)",
+            r"(終了|シャットダウン|オフ).{0,20}(しますか|してもよろしい|よろしいですか)",
+            r"(保存していない|作業中|進行中|中断).{0,20}(本当に|終了しますか|シャットダウンしますか)",
         )
         return any(
             re.search(pattern, normalized, flags=re.IGNORECASE)
