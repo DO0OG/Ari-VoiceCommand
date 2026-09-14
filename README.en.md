@@ -6,13 +6,13 @@
   </a>
 </p>
 
-The canonical English README is the repository root:
+The English README now lives at the repository root:
 
-- 👉 [README.md](./README.md)
+- [README.md](./README.md)
 
-Other language versions:
+Other languages:
 
 - [한국어](./README.ko.md)
 - [日本語](./README.ja.md)
 
-This file remains only as a compatibility entry point for older links.
+This file only sticks around so that older links keep working.

@@ -1,18 +1,18 @@
 # 문서 모음
 
-아리(Ari) 프로젝트 문서를 한 곳에 모았습니다.
-README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필요한 문서를 빠르게 찾기 위한 색인 역할을 합니다.
+아리(Ari) 프로젝트 문서를 한곳에 모았습니다.
+README가 프로젝트의 첫인상이라면, 이 문서는 필요한 문서를 목적에 따라 빠르게 찾아가기 위한 색인입니다.
 
 ## 빠르게 시작하기
 
-처음 설치하거나 기본 사용 흐름을 확인할 때는 아래 문서부터 보시면 됩니다.
+처음 설치하거나 기본 사용 흐름부터 확인하고 싶다면 아래 문서를 먼저 보세요.
 
 - [프로그램 사용 가이드](./USAGE.md) — 실행, 기본 사용법, 로컬 설치(Ollama/CosyVoice3), 자동화 예시, NVIDIA NIM
-- [기여 가이드](./CONTRIBUTING.md) — 검증 명령, 브랜치/커밋 규칙, 로컬 산출물 관리
+- [기여 가이드](./CONTRIBUTING.md) — 검증 명령, 브랜치·커밋 규칙, 로컬 산출물 관리
 
 ## 최근 문서화된 변경 포인트
 
-최근 자기개선 루프 갱신에 맞춰 아래 항목도 문서 기준선을 함께 맞췄습니다.
+자기개선 루프가 바뀌면서 아래 항목의 문서 기준선도 같이 맞췄습니다.
 
 - 실패 반성 결과를 동일 실행 재시도에 주입하는 자율 실행 흐름
 - 성공 시 background reflection, 실패 시 동기 reflection 재시도 흐름
@@ -25,15 +25,15 @@ README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필�
 - 주간 보고서의 학습 컴포넌트 통계 / 신규 스킬 / Python 컴파일 / 추정 토큰 표시
 - ko/en/ja 3개 언어 동시 반영을 전제로 한 i18n 유지 절차
 
-추가로 캐릭터 위젯 확장 기능 기준선도 반영했습니다.
+캐릭터 위젯 확장 기능 쪽 기준선도 함께 반영했습니다.
 
-- 마켓플레이스 플러그인 설명/배포와 연계되는 사용자 문구 및 가이드
+- 마켓플레이스 플러그인 설명·배포와 맞물리는 사용자 문구 및 가이드
 - 트레이 메뉴 기준 접근 경로와 커스텀 메시지 관리 흐름
-- 플러그인 ZIP을 마켓플레이스로 별도 배포하고 런타임 폴더에 설치하는 운영 규칙
+- 플러그인 ZIP을 마켓플레이스로 따로 배포하고 런타임 폴더에 설치하는 운영 규칙
 
 ## 확장과 커스터마이징
 
-앱 기능을 확장하거나 외형을 조정할 때는 아래 문서를 참고하시면 됩니다.
+앱 기능을 늘리거나 외형을 손볼 때는 아래 문서를 참고하세요.
 
 - [프로그램 사용 가이드 - Agent Skills / MCP](./USAGE.md#4-에이전트-스킬-skills--mcp) — Agent Skills 설치, MCP 스킬 사용 흐름, 관리 UI
 - [로컬 MCP 서버](./MCP_SERVER.md) — Ari 도구를 외부 클라이언트에서 호출하는 HTTP 엔드포인트
@@ -44,13 +44,13 @@ README가 프로젝트의 첫 소개라면, 이 문서는 목적에 따라 필�
 
 ## 개발 및 운영 참고
 
-아래 메모는 실행 경로와 검증 흐름을 빠르게 확인하기 위한 운영 참고 사항입니다.
+실행 경로와 검증 흐름을 빠르게 확인할 때 보는 메모입니다.
 
 ### 운영 메모
 
-- 소스 실행(`VoiceCommand\.venv\Scripts\python.exe VoiceCommand\Main.py`) 기준 런타임 상태는 `VoiceCommand/.ari_runtime/`에 저장됩니다.
-- 빌드된 exe 실행 기준 런타임 상태는 `%AppData%/Ari/`에 저장됩니다.
-- `reference.wav`는 소스/테스트 실행 시 런타임 경로를 우선하고, exe 실행 시에는 `%AppData%/Ari/` 경로를 우선합니다.
-- `VoiceCommand/validate_repo.py`는 compile + unittest 외에 clean runtime 환경과 marketplace SHA256 계약 smoke까지 함께 확인합니다.
+- 소스로 실행하면(`VoiceCommand\.venv\Scripts\python.exe VoiceCommand\Main.py`) 런타임 상태가 `VoiceCommand/.ari_runtime/`에 쌓입니다.
+- 빌드된 exe로 실행하면 같은 상태가 `%AppData%/Ari/`에 쌓입니다.
+- `reference.wav`는 소스·테스트 실행에서는 런타임 경로를, exe 실행에서는 `%AppData%/Ari/` 경로를 먼저 찾습니다.
+- `VoiceCommand/validate_repo.py`는 compile + unittest에 더해 clean runtime 환경과 marketplace SHA256 계약 smoke까지 확인합니다.
 
 - [자율 에이전트 고급 기능](AGENT_ADVANCED.md)
