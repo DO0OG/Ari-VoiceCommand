@@ -41,7 +41,7 @@ class SettingsDialog(QDialog):
         "ollama_base_url",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
-        "scenario", "history_instruction",
+        "scenario", "history_instruction", "response_verbosity",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
     STT_KEYS = {
@@ -167,6 +167,14 @@ class SettingsDialog(QDialog):
             edit.setMinimumHeight(90)
             setattr(self, attr, edit)
             gvbox.addWidget(edit, 1)
+
+        gvbox.addWidget(QLabel(_("응답 말수:")))
+        self.verbosity_combo = QComboBox()
+        self.verbosity_combo.addItem(_("간결하게 (한두 문장)"), "concise")
+        self.verbosity_combo.addItem(_("보통"), "normal")
+        self.verbosity_combo.addItem(_("수다스럽게"), "chatty")
+        self._set_combo(self.verbosity_combo, self.settings.get("response_verbosity", "concise"))
+        gvbox.addWidget(self.verbosity_combo)
 
         vbox.addWidget(group, 1)
         return widget
@@ -386,6 +394,7 @@ class SettingsDialog(QDialog):
             "scenario": self.scenario_input.toPlainText().strip(),
             "system_prompt": self.system_input.toPlainText().strip(),
             "history_instruction": self.history_input.toPlainText().strip(),
+            "response_verbosity": self.verbosity_combo.currentData(),
 
             # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),

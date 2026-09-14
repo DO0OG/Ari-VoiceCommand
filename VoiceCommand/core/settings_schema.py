@@ -63,6 +63,7 @@ DEFAULT_SETTINGS = {
     "scenario": "",
     "system_prompt": "",
     "history_instruction": "",
+    "response_verbosity": "concise",  # concise | normal | chatty — 응답 말수 조절
     # ── 기타 ────────────────────────────────────────────────────────────
     "microphone": "",
     "audio_output_device": "",

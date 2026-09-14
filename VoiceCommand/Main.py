@@ -29,9 +29,15 @@ if _suppress_rule not in _qt_logging_rules:
     )
 
 # Windows 콘솔 창 숨기기
+# ShowWindow(hwnd, SW_HIDE)만으로는 Windows Terminal에서 최소화 상태로만
+# 남고 완전히 사라지지 않는 경우가 있어(콘솔 창을 소유한 것이 conhost가 아니라
+# Windows Terminal 자체인 경우), 콘솔을 프로세스에서 완전히 분리하는
+# FreeConsole()을 우선 시도하고, 실패 시에만 ShowWindow로 대체한다.
+# pythonw.exe로 실행된 경우(콘솔 없음)에는 두 호출 모두 조용히 실패해도 무해하다.
 if sys.platform == "win32":
     import ctypes
-    ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+    if not ctypes.windll.kernel32.FreeConsole():
+        ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
 if sys.stderr is not None:
     faulthandler.enable()  # 네이티브 크래시(세그폴트 등) 발생 시 stderr에 스택 출력

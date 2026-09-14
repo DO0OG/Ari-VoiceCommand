@@ -174,7 +174,8 @@ def initialize_tts():
         personality=settings.get("personality", ""),
         scenario=settings.get("scenario", ""),
         system_prompt=settings.get("system_prompt", ""),
-        history_instruction=settings.get("history_instruction", "")
+        history_instruction=settings.get("history_instruction", ""),
+        response_verbosity=settings.get("response_verbosity", "concise"),
     )
 
 

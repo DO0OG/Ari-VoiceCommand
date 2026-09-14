@@ -184,7 +184,7 @@ class LLMProvider:
                  planner_provider="", execution_provider="",
                  planner_api_key="", execution_api_key="",
                  system_prompt="", personality="", scenario="", history_instruction="",
-                 router_enabled=False):
+                 response_verbosity="concise", router_enabled=False):
         self.provider = provider
         self.api_key = api_key
         self.model = model.strip()
@@ -213,6 +213,7 @@ class LLMProvider:
             scenario=scenario,
             system_prompt=system_prompt,
             history_instruction=history_instruction,
+            response_verbosity=response_verbosity,
         )
 
         if api_key or provider == "ollama":
@@ -1236,6 +1237,7 @@ def get_llm_provider() -> LLMProvider:
                     personality=s.get("personality", ""),
                     scenario=s.get("scenario", ""),
                     history_instruction=s.get("history_instruction", ""),
+                    response_verbosity=s.get("response_verbosity", "concise"),
                     router_enabled=s.get("llm_router_enabled", False),
                 )
     return _instance
