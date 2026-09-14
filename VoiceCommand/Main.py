@@ -36,6 +36,17 @@ if sys.platform == "win32":
 if sys.stderr is not None:
     faulthandler.enable()  # 네이티브 크래시(세그폴트 등) 발생 시 stderr에 스택 출력
 
+# torch(sentence-transformers 경유)를 Qt(PySide6)보다 먼저 임포트한다.
+# Qt를 먼저 임포트한 뒤 torch를 로드하면 Windows에서 DLL 초기화 경합이 발생해
+# access violation으로 프로세스가 손상되고, 그 여파로 PyAudio/PortAudio까지
+# 깨지는 문제가 있었다(재현 확인됨: PySide6 임포트 → torch 임포트 순서에서
+# c10.dll 로드가 WinError 1114로 실패). Qt 임포트 전에 미리 로드해 회피한다.
+try:
+    from agent.embedder import get_embedder as _preload_get_embedder
+    _preload_get_embedder()
+except Exception as _embedder_preload_exc:
+    logging.debug("임베더 사전 로드 생략: %s", _embedder_preload_exc)
+
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QEventLoop, Qt, QTimer
