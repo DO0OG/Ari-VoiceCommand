@@ -26,7 +26,7 @@ _PROVIDER_CONFIG = {
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
         "label": "Groq",
-        "default_model": "llama-3.3-70b-versatile",
+        "default_model": "openai/gpt-oss-120b",
     },
     "openai": {
         "base_url": None,  # openai SDK 기본값 사용
@@ -56,7 +56,7 @@ _PROVIDER_CONFIG = {
     "nvidia_nim": {
         "base_url": "https://integrate.api.nvidia.com/v1",
         "label": "NVIDIA NIM",
-        "default_model": "meta/llama-3.3-70b-instruct",
+        "default_model": "nvidia/nemotron-3-super-120b-a12b",
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
