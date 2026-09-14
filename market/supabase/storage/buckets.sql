@@ -10,13 +10,19 @@ drop policy if exists "auth_upload_only" on storage.objects;
 create policy "auth_upload_only" on storage.objects
   for insert
   to authenticated
-  with check (bucket_id = 'plugin-uploads');
+  with check (
+    bucket_id = 'plugin-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid()::text)
+  );
 
 drop policy if exists "auth_read_own_uploads" on storage.objects;
 create policy "auth_read_own_uploads" on storage.objects
   for select
   to authenticated
-  using (bucket_id = 'plugin-uploads');
+  using (
+    bucket_id = 'plugin-uploads'
+    and (storage.foldername(name))[1] = (select auth.uid()::text)
+  );
 
 drop policy if exists "service_manage_uploads" on storage.objects;
 create policy "service_manage_uploads" on storage.objects

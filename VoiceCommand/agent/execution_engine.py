@@ -26,6 +26,7 @@ from agent.execution_analysis import (
     is_read_only_step_content,
     mutates_runtime_state,
 )
+from agent.dag_builder import extract_resources
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -94,12 +95,34 @@ class ExecutionEngine:
         tts_func: Optional[Callable] = None,
         progress_callback: Optional[Callable] = None,
         context_lock: Optional[threading.Lock] = None,
+        cancel_event: Optional[threading.Event] = None,
     ):
         self.executor = executor
         self.planner = planner
         self.tts = tts_func
         self.progress_callback = progress_callback
         self._context_lock = context_lock or threading.Lock()
+        self._cancel_event = cancel_event
+
+    def set_cancel_event(self, cancel_event: Optional[threading.Event]) -> None:
+        """Attach the signal used to stop the current plan."""
+        self._cancel_event = cancel_event
+
+    def _is_cancel_requested(self) -> bool:
+        event = getattr(self, "_cancel_event", None)
+        return event is not None and event.is_set()
+
+    @staticmethod
+    def _cancelled_result() -> ExecutionResult:
+        return ExecutionResult(success=False, error="사용자 취소")
+
+    def _cancelled_step_result(self, step: ActionStep) -> StepResult:
+        return StepResult(
+            step=step,
+            exec_result=self._cancelled_result(),
+            attempt=0,
+            failure_kind="user_cancelled",
+        )
 
     # ── 공개 메서드 ────────────────────────────────────────────────────────────
 
@@ -109,15 +132,25 @@ class ExecutionEngine:
         context: Dict[str, str],
         goal: str,
         step_runner=None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Tuple[bool, List]:
         """ActionStep 목록을 실행하고 (전체 성공 여부, StepResult 목록) 반환."""
+        if cancel_event is not None:
+            self.set_cancel_event(cancel_event)
         runner = step_runner or self._execute_step_with_retry
         step_results: List[StepResult] = []
         groups = self._group_by_dependency(steps)
 
         for group in groups:
+            if self._is_cancel_requested():
+                if group:
+                    step_results.append(self._cancelled_step_result(group[0]))
+                return False, step_results
             if len(group) == 1 and group[0].step_type == "think":
                 step = group[0]
+                if self._is_cancel_requested():
+                    step_results.append(self._cancelled_step_result(step))
+                    return False, step_results
                 step_results.append(
                     StepResult(
                         step=step,
@@ -137,6 +170,9 @@ class ExecutionEngine:
 
             if len(runnable) == 1:
                 step = runnable[0]
+                if self._is_cancel_requested():
+                    step_results.append(self._cancelled_step_result(step))
+                    return False, step_results
                 self._emit_progress(
                     "step_start",
                     step_id=step.step_id,
@@ -154,6 +190,9 @@ class ExecutionEngine:
                     )
                 ]
             else:
+                if self._is_cancel_requested():
+                    step_results.append(self._cancelled_step_result(runnable[0]))
+                    return False, step_results
                 for s in runnable:
                     self._emit_progress(
                         "step_start",
@@ -161,10 +200,13 @@ class ExecutionEngine:
                         desc=s.description_kr,
                         step_type=s.step_type,
                     )
-                group_results = self._execute_parallel_group(runnable, context, goal, runner)
+                group_results = self._execute_parallel_group(
+                    runnable, context, goal, runner
+                )
 
             for sr in group_results:
-                sr = self._apply_developer_step_guard(goal, sr, context)
+                if not self._is_cancel_requested():
+                    sr = self._apply_developer_step_guard(goal, sr, context)
                 step_results.append(sr)
                 self._emit_progress(
                     "step_done",
@@ -181,8 +223,11 @@ class ExecutionEngine:
                                 sr.exec_result.output[:_out_limit]
                             )
                     self._update_runtime_context(context, sr.exec_result)
-                elif sr.step.on_failure == "abort":
+                elif sr.step.on_failure == "abort" and not self._is_cancel_requested():
                     return False, step_results
+
+            if self._is_cancel_requested():
+                return False, step_results
 
         return True, step_results
 
@@ -191,9 +236,12 @@ class ExecutionEngine:
         step: ActionStep,
         goal: str,
         context: Dict[str, str],
+        cancel_event: Optional[threading.Event] = None,
     ) -> Tuple[ExecutionResult, int, bool]:
         """공개 래퍼 — 단일 단계 실행 + 자동 수정."""
-        return self._execute_step_with_retry(step, goal, context)
+        return self._execute_step_with_retry(
+            step, goal, context, cancel_event=cancel_event
+        )
 
     # ── 내부 메서드 ────────────────────────────────────────────────────────────
 
@@ -202,14 +250,21 @@ class ExecutionEngine:
         step: ActionStep,
         goal: str,
         context: Dict[str, str],
+        cancel_event: Optional[threading.Event] = None,
     ) -> Tuple[ExecutionResult, int, bool]:
         curr, fixed = step, False
         res = ExecutionResult(success=False, error="실행되지 않음")
         seen_errors: list[str] = []
+        if cancel_event is not None:
+            self.set_cancel_event(cancel_event)
         for att in range(1, self.MAX_STEP_RETRIES + 2):
+            if self._is_cancel_requested():
+                return self._cancelled_result(), 0, fixed
             step_start = time.monotonic()
             res = self._run_step(curr, context)
             elapsed = time.monotonic() - step_start
+            if self._is_cancel_requested():
+                return res, att, fixed
             expected = self._estimate_step_timeout(curr)
             if elapsed > expected:
                 logger.warning(
@@ -241,9 +296,18 @@ class ExecutionEngine:
                 break
             seen_errors.append(err_sig)
             if err in _LOCK_CONTENTION_ERRORS:
-                time.sleep(att)
+                event = getattr(self, "_cancel_event", None)
+                if event is not None:
+                    if event.wait(att):
+                        return self._cancelled_result(), att, fixed
+                else:
+                    time.sleep(att)
+                if self._is_cancel_requested():
+                    return self._cancelled_result(), att, fixed
                 continue
             # ModuleNotFoundError → pip 자동 설치 후 LLM 수정 없이 재시도
+            if self._is_cancel_requested():
+                return self._cancelled_result(), att, fixed
             if "No module named" in err and self._auto_install_if_needed(err):
                 logger.info("[ExecutionEngine] 패키지 설치 후 단계 재실행")
                 continue
@@ -253,12 +317,17 @@ class ExecutionEngine:
                     max=self.MAX_STEP_RETRIES,
                 )
             )
+            if self._is_cancel_requested():
+                return self._cancelled_result(), att, fixed
             recovered = self._apply_recovery_strategy(curr, err, att, goal, context)
+            if self._is_cancel_requested():
+                return self._cancelled_result(), att, fixed
             if recovered is not None:
                 curr, fixed = recovered, True
             else:
                 break
-        self._auto_restore_failed_writes(curr, res)
+        if not self._is_cancel_requested():
+            self._auto_restore_failed_writes(curr, res)
         return res, att, fixed
 
     def _apply_recovery_strategy(
@@ -270,6 +339,8 @@ class ExecutionEngine:
         context: Dict[str, str],
     ) -> Optional[ActionStep]:
         """실패 단계에 적합한 회복 전략을 선택하여 수정된 ActionStep을 반환한다."""
+        if self._is_cancel_requested():
+            return None
         analysis = analyze_failure(error)
         failure_kind = analysis.primary_cause
         if analysis.recovery_probability < 0.1 or analysis.recommended_strategy == "abort":
@@ -370,12 +441,19 @@ class ExecutionEngine:
         context: Dict[str, str],
         goal: str,
         step_runner=None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> List:
+        if cancel_event is not None:
+            self.set_cancel_event(cancel_event)
         runner = step_runner or self._execute_step_with_retry
         results = [None] * len(group)
 
         def run_one(idx, step):
+            if self._is_cancel_requested():
+                return self._cancelled_step_result(step)
             res, att, fixed = runner(step, goal, context)
+            if self._is_cancel_requested() and not res.success:
+                return self._cancelled_step_result(step)
             return StepResult(
                 step=step,
                 exec_result=res,
@@ -393,12 +471,26 @@ class ExecutionEngine:
                 except Exception as e:
                     results[idx] = StepResult(
                         step=group[idx],
-                        exec_result=ExecutionResult(success=False, error=str(e)),
-                        failure_kind="runtime_exception",
+                        exec_result=(
+                            self._cancelled_result()
+                            if self._is_cancel_requested()
+                            else ExecutionResult(success=False, error=str(e))
+                        ),
+                        failure_kind=(
+                            "user_cancelled"
+                            if self._is_cancel_requested()
+                            else "runtime_exception"
+                        ),
                     )
+                if self._is_cancel_requested():
+                    for pending in futures:
+                        if not pending.done():
+                            pending.cancel()
         return [r for r in results if r]
 
     def _run_step(self, step: ActionStep, context: Dict[str, str]) -> ExecutionResult:
+        if self._is_cancel_requested():
+            return self._cancelled_result()
         self._inject_dom_suggestions(step, context, goal_hint=context.get("goal", ""))
         if step.step_type == "python":
             return self.executor.run_python(
@@ -505,6 +597,20 @@ class ExecutionEngine:
         logger.warning("[ExecutionEngine] 패키지 설치 실패: %s", pip_pkg)
         return False
 
+    @staticmethod
+    def _uses_shared_desktop(step: ActionStep) -> bool:
+        declared_resources = set(getattr(step, "reads", []) or [])
+        declared_resources.update(getattr(step, "writes", []) or [])
+        if "desktop:" in declared_resources:
+            return True
+        reads, writes = extract_resources(
+            (getattr(step, "content", "") or "")
+            + "\n"
+            + (getattr(step, "description_kr", "") or ""),
+            getattr(step, "step_type", "python"),
+        )
+        return "desktop:" in set(reads) | set(writes)
+
     def _group_by_dependency(self, steps: List[ActionStep]) -> List[List[ActionStep]]:
         """parallel_group 우선, 없으면 기존 의존성 분석으로 실행 레이어 생성."""
         if not steps:
@@ -526,7 +632,13 @@ class ExecutionEngine:
                         [s for s in steps if getattr(s, "parallel_group", -1) == pg],
                         key=lambda s: s.step_id,
                     )
-                    result.append(group_steps)
+                    desktop_steps = [s for s in group_steps if self._uses_shared_desktop(s)]
+                    if len(desktop_steps) <= 1:
+                        result.append(group_steps)
+                    else:
+                        # Preserve the planner's order while ensuring that
+                        # no shared-desktop operation can run concurrently.
+                        result.extend([[s] for s in group_steps])
             return result
 
         graph = {s.step_id: set() for s in steps}
@@ -554,6 +666,7 @@ class ExecutionEngine:
             current_targets = target_cache[s.step_id]
             current_read_only = is_read_only_step_content(s.content, s.description_kr)
             current_stateful = mutates_runtime_state(s.content, s.description_kr)
+            current_desktop = self._uses_shared_desktop(s)
             current_index = step_positions[s.step_id]
 
             for prev_id in ordered_ids[:current_index]:
@@ -565,6 +678,7 @@ class ExecutionEngine:
                 prev_stateful = mutates_runtime_state(
                     prev_step.content, prev_step.description_kr
                 )
+                prev_desktop = self._uses_shared_desktop(prev_step)
 
                 path_conflict = bool(
                     set(current_targets["paths"]) & set(prev_targets["paths"])
@@ -581,6 +695,7 @@ class ExecutionEngine:
                     & set(prev_targets.get("goal_hints", []))
                 )
                 state_conflict = current_stateful and prev_stateful
+                desktop_conflict = current_desktop and prev_desktop
 
                 if (
                     path_conflict
@@ -588,6 +703,7 @@ class ExecutionEngine:
                     or window_conflict
                     or goal_hint_conflict
                     or state_conflict
+                    or desktop_conflict
                 ):
                     graph[s.step_id].add(prev_id)
                     continue

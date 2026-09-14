@@ -426,11 +426,12 @@ try:
     finally:
         sys.argv = original_argv
 except SystemExit as exc:
-    exit_code = exc.code if isinstance(exc.code, int) else 1
+    exit_code = 0 if exc.code is None else exc.code if isinstance(exc.code, int) else 1
     build_success = exit_code == 0
 except Exception as exc:
     print(f"\n❌ 빌드 중 예외 발생: {exc}")
     build_success = False
+    exit_code = 1
 
 if build_success:
     # 폴더 정리
@@ -449,3 +450,4 @@ else:
         print(f"\n❌ 빌드 중 오류 발생 (코드: {exit_code})")
     else:
         print("\n❌ 빌드 중 오류 발생")
+    sys.exit(exit_code or 1)

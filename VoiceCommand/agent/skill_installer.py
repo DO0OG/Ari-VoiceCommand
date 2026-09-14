@@ -4,9 +4,11 @@ from __future__ import annotations
 import io
 import json
 import logging
+import ntpath
 import os
 import re
 import shutil
+import stat
 import tempfile
 import urllib.parse
 import urllib.request
@@ -193,18 +195,32 @@ class SkillInstaller:
         return prefixes
 
     def _extract_skill_dir(self, archive: zipfile.ZipFile, prefix: str, temp_dir: str) -> str:
+        for member in archive.infolist():
+            name = member.filename.replace("\\", "/")
+            if (
+                name.startswith("/")
+                or ntpath.splitdrive(name)[0]
+                or ".." in name.split("/")
+                or ":" in name
+                or stat.S_ISLNK(member.external_attr >> 16)
+            ):
+                raise ValueError(f"Unsafe ZIP entry: {member.filename}")
         normalized_prefix = prefix.strip("/") + "/"
         relative_root = os.path.basename(normalized_prefix.rstrip("/")) or "skill"
-        target_root = os.path.join(temp_dir, relative_root)
+        target_root = os.path.realpath(os.path.join(temp_dir, relative_root))
+        if os.path.commonpath([os.path.realpath(temp_dir), target_root]) != os.path.realpath(temp_dir):
+            raise ValueError("Unsafe ZIP extraction root")
         os.makedirs(target_root, exist_ok=True)
         for member in archive.namelist():
-            normalized_member = member.strip("/")
+            normalized_member = member.replace("\\", "/")
             if not normalized_member.startswith(normalized_prefix):
                 continue
             relative_path = normalized_member[len(normalized_prefix) :]
             if not relative_path:
                 continue
-            destination = os.path.join(target_root, relative_path)
+            destination = os.path.realpath(os.path.join(target_root, relative_path))
+            if os.path.commonpath([target_root, destination]) != target_root:
+                raise ValueError(f"Unsafe ZIP destination: {member}")
             if member.endswith("/"):
                 os.makedirs(destination, exist_ok=True)
                 continue

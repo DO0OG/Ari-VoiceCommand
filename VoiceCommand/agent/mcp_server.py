@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
+from pathlib import Path
+import secrets
 import threading
 from typing import Any, Callable
 
@@ -11,8 +14,18 @@ log = logging.getLogger(__name__)
 
 
 class AriMCPServer:
-    def __init__(self, tts_func: Callable[[str], None] | None = None):
+    """Use ARI_MCP_TOKEN and os.pathsep-separated ARI_MCP_ALLOWED_PATHS for HTTP access."""
+
+    def __init__(self, tts_func: Callable[[str], None] | None = None, *,
+                 token: str | None = None, allowed_paths: list[str] | None = None,
+                 port: int = 8765):
         self.tts_func = tts_func
+        self._token = token if token is not None else os.environ.get("ARI_MCP_TOKEN", "")
+        roots = allowed_paths if allowed_paths is not None else (
+            os.environ.get("ARI_MCP_ALLOWED_PATHS", "").split(os.pathsep)
+        )
+        self._allowed_paths = tuple(Path(root).expanduser().resolve() for root in roots if root)
+        self._allowed_hosts = {f"{host}:{int(port)}" for host in ("127.0.0.1", "localhost", "[::1]")}
         from agent.automation_helpers import AutomationHelpers
         self._automation = AutomationHelpers()
 
@@ -21,6 +34,24 @@ class AriMCPServer:
         from fastapi.responses import JSONResponse
 
         app = FastAPI(title="Ari Local MCP Server")
+
+        @app.middleware("http")
+        async def authenticate(request, call_next):
+            hosts = request.headers.getlist("host")
+            origins = request.headers.getlist("origin")
+            if len(hosts) != 1 or hosts[0].lower() not in self._allowed_hosts:
+                return JSONResponse({"error": "Invalid Host"}, status_code=403)
+            if origins and (len(origins) != 1 or origins[0].lower() not in {
+                f"http://{host}" for host in self._allowed_hosts
+            }):
+                return JSONResponse({"error": "Invalid Origin"}, status_code=403)
+            if not self._token:
+                return JSONResponse({"error": "MCP authentication token is not configured"}, status_code=503)
+            authorization = request.headers.getlist("authorization")
+            expected = f"Bearer {self._token}".encode("utf-8")
+            if len(authorization) != 1 or not secrets.compare_digest(authorization[0].encode("utf-8"), expected):
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return await call_next(request)
 
         @app.post("/mcp")
         async def mcp(payload: dict[str, Any]):
@@ -82,13 +113,21 @@ class AriMCPServer:
             )
         raise ValueError(f"Unknown tool: {name}")
 
+    def _resolve_allowed_path(self, path: str) -> str:
+        candidate = Path(path).expanduser().resolve()
+        if candidate.is_reserved() or any(":" in part for part in candidate.parts[1:]):
+            raise PermissionError("Invalid file path")
+        if not any(candidate.is_relative_to(root) for root in self._allowed_paths):
+            raise PermissionError("File path is outside MCP allowed paths")
+        return str(candidate)
+
     def _read_file(self, path: str, start_line: int = 1, end_line: int | None = None) -> str:
         if not path:
             return "error: path required"
         try:
             from agent.file_tools import read_file
             import json as _json
-            result = read_file(path, start_line, end_line)
+            result = read_file(self._resolve_allowed_path(path), start_line, end_line)
             return _json.dumps(result, ensure_ascii=False, default=str)
         except Exception as exc:
             log.error("[MCPServer] ari_read_file 실패: %s", exc)
@@ -100,7 +139,7 @@ class AriMCPServer:
         try:
             from agent.file_tools import write_file
             import json as _json
-            result = write_file(path, content, mode)
+            result = write_file(self._resolve_allowed_path(path), content, mode)
             return _json.dumps(result, ensure_ascii=False, default=str)
         except Exception as exc:
             log.error("[MCPServer] ari_write_file 실패: %s", exc)
@@ -151,7 +190,7 @@ def start_mcp_server_background(tts_func: Callable[[str], None] | None = None, p
     """uvicorn 서버를 데몬 스레드로 시작한다."""
     try:
         import uvicorn
-        server = AriMCPServer(tts_func)
+        server = AriMCPServer(tts_func, port=port)
         app = server.create_app()
 
         def _run() -> None:

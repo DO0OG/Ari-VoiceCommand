@@ -23,6 +23,7 @@ def _wav_bytes_to_numpy(wav_bytes: bytes):
         frames = wf.readframes(wf.getnframes())
         sample_width = wf.getsampwidth()
         channels = wf.getnchannels()
+        sample_rate = wf.getframerate()
 
     if sample_width == 1:
         audio = (np.frombuffer(frames, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
@@ -35,6 +36,12 @@ def _wav_bytes_to_numpy(wav_bytes: bytes):
 
     if channels > 1:
         audio = audio.reshape(-1, channels).mean(axis=1)
+    if sample_rate != 16000 and audio.size:
+        from math import gcd
+        from scipy.signal import resample_poly
+
+        divisor = gcd(sample_rate, 16000)
+        audio = resample_poly(audio, 16000 // divisor, sample_rate // divisor).astype(np.float32)
     return audio
 
 

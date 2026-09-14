@@ -12,6 +12,34 @@ import re
 _STEP_OUTPUT_REF_RE = re.compile(r"step_(\d+)_output")
 _WINDOWS_PATH_RE = re.compile(r"([A-Za-z]:\\[^\\\n\"']+(?:\\[^\\\n\"']+)*)")
 _URL_RE = re.compile(r"https?://([A-Za-z0-9._:-]+)")
+_DESKTOP_STATE_CALL_RE = re.compile(
+    r"\b(?:click_screen|click_image|move_mouse|type_text|press_keys|hotkey|"
+    r"focus_window|wait_for_window|launch_app|open_path|open_url|"
+    r"browser_login|run_browser_actions|run_desktop_workflow|"
+    r"run_adaptive_desktop_workflow|run_resilient_desktop_workflow|"
+    r"get_active_window_title|list_open_windows|get_desktop_state|"
+    r"write_clipboard|read_clipboard|take_screenshot|screenshot|"
+    r"is_image_visible|get_window_state)\s*\(",
+    re.IGNORECASE,
+)
+_DESKTOP_STATE_TOKENS = (
+    "pyautogui",
+    "pynput",
+    "win32gui",
+    "win32api",
+    "keyboard.",
+    "mouse.",
+    "pyperclip.",
+    "screenshot",
+    "화면",
+    "창 상태",
+    "창",
+    "포커스",
+    "클릭",
+    "키보드",
+    "마우스",
+    "입력",
+)
 
 
 def _norm_file(path: str) -> str:
@@ -39,6 +67,14 @@ def extract_resources(step_content: str, step_type: str) -> tuple[list[str], lis
         reads.append("clipboard:")
     if "reg add" in text.lower():
         writes.append("reg:unknown")
+    lowered = text.lower()
+    if _DESKTOP_STATE_CALL_RE.search(text) or any(
+        token in lowered for token in _DESKTOP_STATE_TOKENS
+    ):
+        # The desktop focus, pointer, and keyboard state is process-global.
+        # Treat every operation that observes or changes it as an exclusive
+        # resource so two such steps cannot share a parallel group.
+        writes.append("desktop:")
     return sorted(set(reads)), sorted(set(writes))
 
 
@@ -52,18 +88,31 @@ class DagNode:
 
 def build_dag(steps: list) -> list[DagNode]:
     nodes: list[DagNode] = []
+    resource_cache: dict[int, tuple[set[str], set[str]]] = {}
     for idx, step in enumerate(steps):
         depends = set(getattr(step, "depends_on", []) or [])
         refs = _STEP_OUTPUT_REF_RE.findall((getattr(step, "content", "") or "") + (getattr(step, "condition", "") or ""))
         depends.update(int(ref) for ref in refs)
+        inferred_reads, inferred_writes = extract_resources(
+            getattr(step, "content", "") or "",
+            getattr(step, "step_type", "python"),
+        )
+        curr_reads = set(getattr(step, "reads", []) or []) | set(inferred_reads)
+        curr_writes = set(getattr(step, "writes", []) or []) | set(inferred_writes)
+        resource_cache[step.step_id] = (curr_reads, curr_writes)
         for prev in steps[:idx]:
-            prev_reads = set(getattr(prev, "reads", []) or [])
-            prev_writes = set(getattr(prev, "writes", []) or [])
-            curr_reads = set(getattr(step, "reads", []) or [])
-            curr_writes = set(getattr(step, "writes", []) or [])
-            if (curr_reads & prev_writes) or (curr_writes & prev_writes) or (curr_writes & prev_reads):
+            prev_reads, prev_writes = resource_cache[prev.step_id]
+            shared_desktop = "desktop:" in (curr_reads | curr_writes) and "desktop:" in (prev_reads | prev_writes)
+            if shared_desktop or (curr_reads & prev_writes) or (curr_writes & prev_writes) or (curr_writes & prev_reads):
                 depends.add(prev.step_id)
-        nodes.append(DagNode(step.step_id, sorted(depends), list(getattr(step, "writes", []) or []), list(getattr(step, "reads", []) or [])))
+        nodes.append(
+            DagNode(
+                step.step_id,
+                sorted(depends),
+                sorted(curr_writes),
+                sorted(curr_reads),
+            )
+        )
     return nodes
 
 
