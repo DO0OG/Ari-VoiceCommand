@@ -51,7 +51,8 @@ export async function getOrCreateDeveloper(supabase: SupabaseClient, user: {
   email?: string | null;
   user_metadata?: Record<string, unknown>;
 }) {
-  const githubId = String(user.user_metadata?.provider_id ?? user.user_metadata?.sub ?? user.id);
+  // The verified auth user id is the ownership key. Provider metadata is profile data only.
+  const githubId = user.id;
   const githubLogin = String(
     user.user_metadata?.user_name ??
       user.user_metadata?.preferred_username ??

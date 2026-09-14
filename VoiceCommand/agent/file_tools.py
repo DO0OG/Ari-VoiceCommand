@@ -436,8 +436,17 @@ def delete_file(path: str, confirmed: bool = False) -> Dict[str, Any]:
     """파일 또는 빈 폴더를 삭제한다. confirmed=True가 필요하다."""
     try:
         target = _normalize_path(path)
-        if not confirmed:
-            return {"error": "삭제하려면 confirmed=true가 필요합니다.", "path": target}
+        from agent.confirmation_manager import get_confirmation_manager
+        from agent.safety_checker import DangerLevel, SafetyReport
+
+        report = SafetyReport(
+            level=DangerLevel.CAUTION,
+            matched_patterns=[target],
+            summary=f"Delete {target}",
+            category="file_delete",
+        )
+        if get_confirmation_manager().request_confirmation(f"Delete {target}", report) is not True:
+            return {"error": "File deletion was not approved by the user.", "path": target}
         if os.path.isdir(target):
             os.rmdir(target)
         elif os.path.isfile(target):

@@ -61,14 +61,15 @@ Deno.serve(async (req) => {
 
     const fileBuffer = await file.arrayBuffer();
     const sha256 = await computeSha256Hex(fileBuffer);
+    const submissionId = crypto.randomUUID();
 
-    const filePath = `${user.id}/${meta.name}-${meta.version}.zip`;
+    const filePath = `${user.id}/${submissionId}/${meta.name}-${meta.version}.zip`;
     const uploadRes = await supabase.storage.from("plugin-uploads").upload(
       filePath,
       fileBuffer,
       {
         contentType: "application/zip",
-        upsert: true,
+        upsert: false,
       },
     );
     if (uploadRes.error) {
@@ -89,7 +90,9 @@ Deno.serve(async (req) => {
           entry: meta.entry,
           zip_url: uploadRes.data.path,
           sha256,
+          submission_id: submissionId,
           status: "pending",
+          release_url: null,
           review_report: {},
           reviewed_at: null,
         },
@@ -102,9 +105,13 @@ Deno.serve(async (req) => {
       return json({ error: error?.message ?? "plugin insert failed" }, 500);
     }
 
-    const dispatchError = await triggerValidation(plugin.id, user.id);
+    const dispatchError = await triggerValidation(plugin.id, user.id, {
+      submissionId,
+      version: meta.version,
+      sha256,
+    });
     if (dispatchError) {
-      const updateError = await markValidationBootstrapFailure(supabase, plugin.id);
+      const updateError = await markValidationBootstrapFailure(supabase, plugin.id, submissionId);
       throw new Error(updateError ? `${dispatchError}; ${updateError}` : dispatchError);
     }
     return json({ plugin_id: plugin.id, status: plugin.status });
@@ -174,7 +181,11 @@ function validateMeta(meta: PluginMeta): string | null {
   return null;
 }
 
-async function triggerValidation(pluginId: string, developerId: string): Promise<string | null> {
+async function triggerValidation(
+  pluginId: string,
+  developerId: string,
+  submission: { submissionId: string; version: string; sha256: string },
+): Promise<string | null> {
   const repo = Deno.env.get("GH_REPO");
   const pat = Deno.env.get("GH_PAT");
   if (!repo || !pat) {
@@ -193,7 +204,13 @@ async function triggerValidation(pluginId: string, developerId: string): Promise
         },
         body: JSON.stringify({
           ref: "main",
-          inputs: { plugin_id: pluginId, developer_id: developerId },
+          inputs: {
+            plugin_id: pluginId,
+            developer_id: developerId,
+            submission_id: submission.submissionId,
+            plugin_version: submission.version,
+            plugin_sha256: submission.sha256,
+          },
         }),
       },
     );
@@ -211,6 +228,7 @@ async function triggerValidation(pluginId: string, developerId: string): Promise
 async function markValidationBootstrapFailure(
   supabase: ReturnType<typeof createAdminClient>,
   pluginId: string,
+  submissionId: string,
 ): Promise<string | null> {
   const { error } = await supabase
     .from("plugins")
@@ -222,6 +240,7 @@ async function markValidationBootstrapFailure(
         summary: "자동 검증 파이프라인 시작에 실패했습니다. 잠시 후 다시 업로드해 주세요.",
       },
     })
-    .eq("id", pluginId);
+    .eq("id", pluginId)
+    .eq("submission_id", submissionId);
   return error ? `Failed to record validation bootstrap failure: ${error.message}` : null;
 }

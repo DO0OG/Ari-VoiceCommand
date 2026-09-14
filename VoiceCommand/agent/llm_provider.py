@@ -305,6 +305,16 @@ class LLMProvider:
             self.conversation_history.append({"role": role, "content": content})
             if len(self.conversation_history) > self.max_history * 2:
                 self.conversation_history = self.conversation_history[-self.max_history * 2:]
+            # Never retain a result after its corresponding tool-use turn was trimmed.
+            while self.conversation_history and self._is_tool_result_message(self.conversation_history[0]):
+                self.conversation_history.pop(0)
+
+    @staticmethod
+    def _is_tool_result_message(message: dict) -> bool:
+        content = message.get("content")
+        return message.get("role") == "user" and isinstance(content, list) and any(
+            block.get("type") == "tool_result" for block in content
+        )
 
     def clear_history(self):
         with self._history_lock:
@@ -343,12 +353,17 @@ class LLMProvider:
             history = list(self.conversation_history)
         selected: list[dict] = []
         used = 0
-        for message in reversed(history):
-            compacted = self._compact_history_message(message)
-            cost = self._estimate_tokens([compacted])
+        while history:
+            message = history.pop()
+            group = [self._compact_history_message(message)]
+            if self._is_tool_result_message(message):
+                if not history:
+                    break
+                group.insert(0, self._compact_history_message(history.pop()))
+            cost = self._estimate_tokens(group)
             if selected and used + cost > budget:
                 break
-            selected.append(compacted)
+            selected.extend(reversed(group))
             used += cost
         selected.reverse()
         return selected
@@ -483,10 +498,11 @@ class LLMProvider:
                 if stream_callback:
                     self._emit_stream_text(cached, stream_callback)
                 return cached
-            if save_history:
-                self.add_to_history("user", user_message)
             messages = [{"role": "system", "content": system_override or self._build_system(include_context, user_message=user_message)}]
             messages.extend(self._history_for_context())
+            messages.append({"role": "user", "content": user_message})
+            if save_history:
+                self.add_to_history("user", user_message)
 
             if provider == "anthropic":
                 resp = client.messages.create(
@@ -506,10 +522,12 @@ class LLMProvider:
                     stream_callback=stream_callback,
                 )
             
-            from memory.memory_manager import get_memory_manager
-            memory_manager = get_memory_manager()
-            memory_manager.process_interaction(user_message, raw_msg)
-            msg = self._clean_response(memory_manager.clean_response(raw_msg))
+            if save_history:
+                from memory.memory_manager import get_memory_manager
+                memory_manager = get_memory_manager()
+                memory_manager.process_interaction(user_message, raw_msg)
+                raw_msg = memory_manager.clean_response(raw_msg)
+            msg = self._clean_response(raw_msg)
             if save_history:
                 self.add_to_history("assistant", msg)
             if msg and self._should_cache(user_message):
@@ -756,15 +774,18 @@ class LLMProvider:
 
     def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="", stream_callback=None) -> str:
         """도구 결과 피드백"""
+        model = model_override or self.model
         if not self._has_any_client():
-            return ""
+            return "도구 결과 처리 실패: AI 기능이 비활성화되어 있습니다."
         try:
             client, provider, model = self._resolve_route(original_msg, model_override)
             if not client:
-                return ""
+                return "도구 결과 처리 실패: AI 클라이언트가 없습니다."
             if not model:
                 logging.warning("[LLMProvider] tool_result 모델 미설정: provider=%s", provider)
-                return ""
+                return self._missing_model_response(provider)
+            if not tool_calls or len(tool_calls) != len(results):
+                raise ValueError("Every tool call must have exactly one result")
             if provider == "anthropic":
                 return self._anthropic_feed_tool_result(
                     original_msg,
@@ -812,7 +833,7 @@ class LLMProvider:
             return msg
         except Exception as e:
             logging.error("feed_tool_result 오류 (%s): %s", model, e)
-            return ""
+            return f"도구 결과 처리 실패: {e}"
 
     def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None, stream_callback=None):
         model = model_override or self.model
@@ -836,7 +857,12 @@ class LLMProvider:
             msg = self._clean_response(raw_msg)
             if stream_callback and msg and not tool_calls:
                 self._emit_stream_text(msg, stream_callback)
-            if msg:
+            if tool_calls:
+                self.add_to_history("assistant", [
+                    block.model_dump(exclude_none=True) if hasattr(block, "model_dump") else dict(vars(block))
+                    for block in resp.content
+                ])
+            elif msg:
                 self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
@@ -847,14 +873,34 @@ class LLMProvider:
         model = model_override or self.model
         client = client_override or self.client
         try:
+            if not tool_calls or len(tool_calls) != len(results):
+                raise ValueError("Every tool call must have exactly one result")
             results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
-            messages = self._history_for_context()
-            messages.append({"role": "user", "content": results_content})
+            with self._history_lock:
+                history = self._history_snapshot()
+                result_message = {"role": "user", "content": results_content}
+                already_recorded = bool(history and history[-1] == result_message)
+                previous = history[-2] if already_recorded and len(history) > 1 else (history[-1] if history else {})
+                content = previous.get("content", [])
+                blocks = [b for b in content if b.get("type") == "tool_use"] if isinstance(content, list) else []
+                expected = [{"id": tc["id"], "name": tc["name"], "input": tc.get("arguments", {})} for tc in tool_calls]
+                actual = [{key: b[key] for key in ("id", "name", "input")} for b in blocks]
+                if previous.get("role") != "assistant" or actual != expected:
+                    raise ValueError("Tool results do not match the preceding assistant tool-use turn")
+                if not already_recorded:
+                    self.add_to_history("user", results_content)
+                messages = self._history_for_context()
             resp = client.messages.create(
                 model=model,
                 max_tokens=500,
                 system=self._build_system(user_message=original_msg),
                 messages=messages,
+                tools=[{
+                    "name": tool["function"]["name"],
+                    "description": tool["function"]["description"],
+                    "input_schema": tool["function"]["parameters"],
+                } for tool in self.get_available_tools()],
+                tool_choice={"type": "none"},
             )
             msg = self._clean_response(" ".join([b.text for b in resp.content if b.type == "text"]))
             if stream_callback and msg:
@@ -864,7 +910,7 @@ class LLMProvider:
             return msg
         except Exception as e:
             logging.error("Anthropic feed 오류: %s", e)
-            return ""
+            return f"도구 결과 처리 실패: {e}"
 
     def _stream_or_chat_completion(
         self,

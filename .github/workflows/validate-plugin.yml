@@ -9,6 +9,15 @@ on:
       developer_id:
         required: true
         description: "Supabase auth.users의 UUID"
+      submission_id:
+        required: true
+        description: "검증 대상 업로드의 불변 UUID"
+      plugin_version:
+        required: true
+        description: "검증 대상 플러그인 버전"
+      plugin_sha256:
+        required: true
+        description: "검증 대상 업로드의 SHA-256"
 
 jobs:
   validate:
@@ -16,6 +25,9 @@ jobs:
     env:
       PLUGIN_ID: ${{ inputs.plugin_id }}
       DEVELOPER_ID: ${{ inputs.developer_id }}
+      SUBMISSION_ID: ${{ inputs.submission_id }}
+      PLUGIN_VERSION: ${{ inputs.plugin_version }}
+      PLUGIN_SHA256: ${{ inputs.plugin_sha256 }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
@@ -32,7 +44,7 @@ jobs:
           pip install supabase requests bandit pylint semgrep
           sudo apt-get update -qq
           sudo apt-get install -y clamav clamav-daemon
-          sudo systemctl stop clamav-freshclam || true
+          sudo systemctl stop clamav-freshclam
           sudo freshclam --quiet
 
       - name: 플러그인 다운로드
@@ -41,20 +53,33 @@ jobs:
       # STEP 1: 바이러스 스캔
       - name: ClamAV 바이러스 스캔
         run: |
+          set +e
           clamscan -r ./plugin/ --infected --no-summary \
-            --log=clamav_result.txt || true
+            --log=clamav_result.txt
+          scan_status=$?
+          set -e
+          export CLAMAV_EXIT_CODE="$scan_status"
+          printf 'CLAMAV_EXIT_CODE=%s\n' "$scan_status" >> "$GITHUB_ENV"
           python market/marketplace/scripts/check_clamav.py
 
       # STEP 2: 정적 분석
       - name: Bandit 보안 분석
         run: |
+          set +e
           bandit -r ./plugin/ -f json -o bandit_result.json \
-            --severity-level medium || true
+            --severity-level medium
+          bandit_status=$?
+          set -e
+          printf 'BANDIT_EXIT_CODE=%s\n' "$bandit_status" >> "$GITHUB_ENV"
 
       - name: Pylint 코드 품질
         run: |
+          set +e
           pylint ./plugin/ --output-format=json \
-            --disable=C,R > pylint_result.json || true
+            --disable=C,R > pylint_result.json
+          pylint_status=$?
+          set -e
+          printf 'PYLINT_EXIT_CODE=%s\n' "$pylint_status" >> "$GITHUB_ENV"
 
       - name: 정적 분석 판정
         run: python market/marketplace/scripts/check_static.py

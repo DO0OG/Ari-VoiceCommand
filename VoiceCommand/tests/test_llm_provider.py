@@ -1,12 +1,80 @@
 import threading
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
+from types import SimpleNamespace
 
 
 from agent.llm_provider import LLMProvider
 
 
 class LLMProviderTests(unittest.TestCase):
+    def test_unsaved_chat_sends_current_message_without_memory_side_effects(self):
+        for backend in ("openai", "anthropic"):
+            with self.subTest(backend=backend):
+                provider = LLMProvider(provider=backend, model="test")
+                provider.client = Mock()
+                provider.add_to_history("user", "previous")
+                before = provider._history_snapshot()
+                provider.client.messages.create.return_value = SimpleNamespace(
+                    content=[SimpleNamespace(text="summary")]
+                )
+                with patch.object(provider, "_build_system", return_value="system"), \
+                     patch.object(provider, "_should_cache", return_value=False), \
+                     patch.object(provider, "_stream_or_chat_completion", return_value="summary") as completion, \
+                     patch("memory.memory_manager.get_memory_manager") as memory:
+                    result = provider.chat("summarize this transcript", include_context=False, save_history=False)
+                request = provider.client.messages.create.call_args if backend == "anthropic" else completion.call_args
+                self.assertEqual(request.kwargs["messages"][-1], {"role": "user", "content": "summarize this transcript"})
+                self.assertEqual(result, "summary")
+                self.assertEqual(provider._history_snapshot(), before)
+                memory.assert_not_called()
+
+    def test_anthropic_tool_turn_preserves_original_blocks_and_result_pair(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        original = [
+            SimpleNamespace(type="text", text="checking"),
+            SimpleNamespace(type="tool_use", id="call-1", name="read_file", input={"path": "a"}),
+            SimpleNamespace(type="tool_use", id="call-2", name="read_file", input={"path": "b"}),
+        ]
+        provider.client.messages.create.side_effect = [
+            SimpleNamespace(content=original),
+            SimpleNamespace(content=[SimpleNamespace(type="text", text="done")]),
+        ]
+        provider.add_to_history("user", "read files")
+        with patch.object(provider, "_build_system", return_value="system"):
+            _, calls = provider._anthropic_chat("read files", False, True)
+            self.assertEqual(provider._history_snapshot()[-1]["content"], [vars(b) for b in original])
+            self.assertEqual(provider.feed_tool_result("read files", calls, ["a data", "b data"]), "done")
+        messages = provider.client.messages.create.call_args.kwargs["messages"]
+        self.assertTrue(provider.client.messages.create.call_args.kwargs["tools"])
+        self.assertEqual(messages[-2], {"role": "assistant", "content": [vars(b) for b in original]})
+        self.assertEqual([b["tool_use_id"] for b in messages[-1]["content"]], ["call-1", "call-2"])
+        self.assertEqual(provider._history_snapshot()[-2], messages[-1])
+        # A token budget must not split the tool-use/result pair.
+        provider.conversation_history.pop()
+        self.assertEqual(len(provider._history_for_context(max_tokens=1)), 2)
+
+    def test_anthropic_tool_result_rejects_missing_or_mismatched_calls(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        calls = [{"id": "missing", "name": "read_file", "arguments": {}}]
+        self.assertIn("실패", provider.feed_tool_result("read", calls, []))
+        self.assertIn("실패", provider.feed_tool_result("read", calls, ["data"]))
+        provider.client.messages.create.assert_not_called()
+
+    def test_anthropic_feed_failure_is_reported_and_retry_keeps_one_result_turn(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        provider.client.messages.create.side_effect = RuntimeError("request failed")
+        provider.add_to_history("assistant", [{"type": "tool_use", "id": "c", "name": "read_file", "input": {}}])
+        calls = [{"id": "c", "name": "read_file", "arguments": {}}]
+        with patch.object(provider, "_build_system", return_value="system"):
+            for _ in range(2):
+                self.assertIn("request failed", provider.feed_tool_result("read", calls, ["data"]))
+        self.assertEqual(len(provider._history_snapshot()), 2)
+
     def test_provider_does_not_apply_code_default_model(self):
         provider = LLMProvider(provider="nvidia_nim")
 

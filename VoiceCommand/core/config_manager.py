@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 import shutil
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
 from core.settings_schema import (
     DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
@@ -115,6 +115,11 @@ class ConfigManager:
 
     @classmethod
     def set_value(cls, key: str, value: object) -> bool:
-        settings = dict(cls.load_settings())
-        settings[key] = value
-        return cls.save_settings(settings)
+        return cls.update_settings(lambda settings: settings.update({key: value}))
+
+    @classmethod
+    def update_settings(cls, update: Callable[[SettingsDict], None]) -> bool:
+        with cls._lock:
+            settings = copy.deepcopy(cls.load_settings())
+            update(settings)
+            return cls.save_settings(settings)

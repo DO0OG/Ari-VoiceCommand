@@ -61,6 +61,7 @@ class AgentOrchestrator:
         tts_func: Optional[Callable] = None,
         progress_callback: Optional[Callable] = None,
         thinking_callback: Optional[Callable] = None,
+        cancel_event: Optional[threading.Event] = None,
     ):
         self.executor = executor
         self.planner = planner
@@ -69,7 +70,10 @@ class AgentOrchestrator:
         self.thinking_callback = thinking_callback
         self._run_lock = threading.Lock()
         self._context_lock = threading.Lock()
-        self._interrupt_requested = threading.Event()
+        self._owns_cancel_event = cancel_event is None
+        self._interrupt_requested = cancel_event if cancel_event is not None else threading.Event()
+        self._children_lock = threading.Lock()
+        self._children: set = set()
         self._last_checkpoint: dict | None = None
         self.default_timeout = self._load_timeout_seconds()
         self.max_subagents = self._load_max_subagents()
@@ -84,6 +88,7 @@ class AgentOrchestrator:
             tts_func=tts_func,
             progress_callback=progress_callback,
             context_lock=self._context_lock,
+            cancel_event=self._interrupt_requested,
         )
         self._verify_engine = VerificationEngine(planner=planner)
         self._learn = LearningEngine(
@@ -120,6 +125,10 @@ class AgentOrchestrator:
     def interrupt(self) -> None:
         """진행 중인 에이전트 루프를 다음 안전 지점에서 중단하도록 요청한다."""
         self._interrupt_requested.set()
+        with self._children_lock:
+            children = list(self._children)
+        for child in children:
+            child.interrupt()
         try:
             cancel = getattr(self.executor, "cancel_running_processes", None)
             if callable(cancel):
@@ -129,14 +138,14 @@ class AgentOrchestrator:
         self._emit_progress("interrupt_requested")
 
     def resume(self, additional_goal: str = "") -> AgentRunResult:
-        """마지막 중단 체크포인트의 목표를 다시 실행한다."""
+        """마지막 중단 체크포인트의 미완료 단계와 실행 문맥을 복원한다."""
         checkpoint = dict(self._last_checkpoint or {})
         goal = str(checkpoint.get("goal", "") or "").strip()
         if additional_goal:
             goal = f"{goal}\n\n추가 지시: {additional_goal}" if goal else additional_goal
         if not goal:
             return AgentRunResult(goal=additional_goal, achieved=False, summary=_("재개할 작업이 없습니다."))
-        return self.run(goal)
+        return self.run(goal, _checkpoint=checkpoint)
 
     def spawn_subagent(
         self,
@@ -161,8 +170,15 @@ class AgentOrchestrator:
                 executor=AutonomousExecutor(self.tts),
                 planner=get_planner(),
                 tts_func=self.tts,
+                cancel_event=self._interrupt_requested,
             )
-            return child.run(delegated_goal, timeout=timeout)
+            with self._children_lock:
+                self._children.add(child)
+            try:
+                return child.run(delegated_goal, timeout=timeout)
+            finally:
+                with self._children_lock:
+                    self._children.discard(child)
 
         self._emit_progress("subagent_start", goal=goal)
         future = self._subagent_pool.submit(_run)
@@ -195,7 +211,12 @@ class AgentOrchestrator:
         res, _, _ = self._exec.execute_step_with_retry(step, goal, {})
         return res
 
-    def run(self, goal: str, timeout: Optional[float] = None) -> AgentRunResult:
+    def run(
+        self,
+        goal: str,
+        timeout: Optional[float] = None,
+        _checkpoint: Optional[Dict] = None,
+    ) -> AgentRunResult:
         """복잡한 목표를 다층 루프로 자율 달성."""
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
@@ -203,15 +224,25 @@ class AgentOrchestrator:
             return AgentRunResult(goal=goal, summary=_("다른 작업이 진행 중입니다."))
 
         start_time = time.time()
-        self._interrupt_requested.clear()
+        if self._owns_cancel_event:
+            self._interrupt_requested.clear()
         self._set_thinking(True)
         try:
             timeout_seconds = self.default_timeout if timeout is None else float(timeout)
             deadline = start_time + max(0.1, timeout_seconds)
-            shared_context = self._build_shared_context(goal)
+            shared_context = {} if _checkpoint or self._interrupt_requested.is_set() else self._build_shared_context(goal)
             if self._is_timeout_exceeded(deadline):
                 return AgentRunResult(goal=goal, achieved=False, summary=_("실행 시간 초과"))
-            run_result = self._run_loop(goal, shared_context=shared_context, deadline=deadline)
+            run_result = self._run_loop(
+                goal,
+                shared_context=shared_context,
+                deadline=deadline,
+                checkpoint=_checkpoint,
+            )
+            if self._interrupt_requested.is_set():
+                run_result.achieved = False
+                run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                return run_result
             lesson = ""
             reflection = None
             if (
@@ -222,7 +253,7 @@ class AgentOrchestrator:
                 reflection = self._learn.reflect_on_failure(goal, run_result)
                 run_result.learning_components["ReflectionEngine"] = True
                 lesson = getattr(reflection, "lesson", "") or ""
-                if lesson:
+                if lesson and not self._interrupt_requested.is_set():
                     run_result.summary += _("\n(교훈: {lesson})").format(lesson=lesson)
                     retry_context = {
                         "reflection_insight": lesson,
@@ -239,7 +270,7 @@ class AgentOrchestrator:
                     if retry_result.achieved:
                         retry_result.learning_components["ReflectionEngine"] = True
                         run_result = retry_result
-            else:
+            elif not self._interrupt_requested.is_set():
                 self._learn.schedule_reflection(
                     goal,
                     run_result,
@@ -249,6 +280,11 @@ class AgentOrchestrator:
                     ),
                 )
 
+            if self._interrupt_requested.is_set():
+                run_result.achieved = False
+                run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                return run_result
+            self._last_checkpoint = None
             duration = int((time.time() - start_time) * 1000)
             self._learn.schedule_post_run_update(goal, run_result, duration)
             self._learn.record_learning_metrics(run_result)
@@ -270,12 +306,84 @@ class AgentOrchestrator:
 
     # ── 내부 루프 ─────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _restore_action_step(raw_step) -> Optional[ActionStep]:
+        if isinstance(raw_step, ActionStep):
+            return raw_step
+        if not isinstance(raw_step, dict):
+            return None
+        try:
+            return ActionStep(**raw_step)
+        except (TypeError, ValueError):
+            logger.debug("[Orchestrator] Invalid checkpoint step ignored")
+            return None
+
+    @classmethod
+    def _restore_step_result(cls, raw_result) -> Optional[StepResult]:
+        if isinstance(raw_result, StepResult):
+            return raw_result
+        if not isinstance(raw_result, dict):
+            return None
+        step = cls._restore_action_step(raw_result.get("step"))
+        raw_exec_result = raw_result.get("exec_result")
+        if isinstance(raw_exec_result, ExecutionResult):
+            exec_result = raw_exec_result
+        elif isinstance(raw_exec_result, dict):
+            try:
+                exec_result = ExecutionResult(**raw_exec_result)
+            except (TypeError, ValueError):
+                return None
+        else:
+            exec_result = None
+        if step is None or exec_result is None:
+            return None
+        try:
+            return StepResult(**{**raw_result, "step": step, "exec_result": exec_result})
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _restore_checkpoint_state(cls, checkpoint: Optional[Dict]):
+        if not checkpoint:
+            return [], [], {}, False
+        steps = [
+            step
+            for raw_step in checkpoint.get("steps", []) or []
+            if (step := cls._restore_action_step(raw_step)) is not None
+        ]
+        results = [
+            result
+            for raw_result in checkpoint.get("step_results", []) or []
+            if (result := cls._restore_step_result(raw_result)) is not None
+        ]
+        context = checkpoint.get("context")
+        if not isinstance(context, dict):
+            context = checkpoint.get("execution_context")
+        if not isinstance(context, dict):
+            context = {}
+        return steps, results, dict(context), bool("steps" in checkpoint)
+
+    def _save_checkpoint(self, goal, iteration, steps, run_result, context, current_results=()):
+        self._last_checkpoint = {
+            "goal": goal,
+            "iteration": iteration,
+            "step_results": list(run_result.step_results),
+            "current_step_results": list(current_results),
+            "context": dict(context),
+        }
+        if steps is not None:
+            self._last_checkpoint["steps"] = [asdict(step) for step in steps]
+        run_result.achieved = False
+        run_result.summary = _("사용자 요청으로 중단되었습니다.")
+        self._emit_progress("interrupted", iteration=iteration)
+
     def _run_loop(
         self,
         goal: str,
         reflection_context: Optional[Dict[str, str]] = None,
         shared_context: Optional[Dict[str, str]] = None,
         deadline: Optional[float] = None,
+        checkpoint: Optional[Dict] = None,
     ) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
         run_result = AgentRunResult(goal=goal)
@@ -304,7 +412,22 @@ class AgentOrchestrator:
             with self._context_lock:
                 context.update(context_init)
 
-        if self._should_prefer_template_over_skill(goal):
+        saved_steps, saved_results, saved_context, resume_plan = self._restore_checkpoint_state(checkpoint)
+        if checkpoint:
+            context.update(saved_context)
+            context["goal"] = goal
+            run_result.step_results = saved_results
+        resumed_results = []
+        if resume_plan:
+            raw_results = checkpoint.get("current_step_results", checkpoint.get("step_results", []))
+            resumed_results = [
+                result for raw in raw_results
+                if (result := self._restore_step_result(raw)) is not None
+                and result.exec_result.success
+                and any(result.step == step for step in saved_steps)
+            ]
+
+        if checkpoint or self._interrupt_requested.is_set() or self._should_prefer_template_over_skill(goal):
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
         else:
             skill_result = self._run_with_skill_if_available(
@@ -320,16 +443,10 @@ class AgentOrchestrator:
         logger.info("[Orchestrator] 목표 난이도 %.2f → 최대 %d회 반복", difficulty, max_iterations)
         replan_reasons: list[str] = []
 
-        for iteration in range(max_iterations):
+        start_iteration = int(checkpoint.get("iteration", 0)) if checkpoint else 0
+        for iteration in range(start_iteration, max(max_iterations, start_iteration + 1)):
             if self._interrupt_requested.is_set():
-                run_result.summary = _("사용자 요청으로 중단되었습니다.")
-                self._last_checkpoint = {
-                    "goal": goal,
-                    "iteration": iteration,
-                    "step_results": list(run_result.step_results),
-                    "context": dict(context),
-                }
-                self._emit_progress("interrupted", iteration=iteration)
+                self._save_checkpoint(goal, iteration, saved_steps if resume_plan else None, run_result, context, resumed_results)
                 break
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
@@ -346,14 +463,17 @@ class AgentOrchestrator:
                     context["재계획_힌트"] = (
                         f"{context.get('재계획_힌트', '')} {timeout_hint}"
                     ).strip()
-            steps = self.planner.decompose(goal, context)
+            restoring = resume_plan
+            prior_results = resumed_results if restoring else []
+            steps = saved_steps if restoring else self.planner.decompose(goal, context)
+            resume_plan = False
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
                 break
             self._merge_learning_components(
                 learning_components, self.planner.get_last_learning_signals()
             )
-            if not steps:
+            if not steps and not restoring:
                 run_result.summary = _("계획 수립에 실패했습니다.")
                 break
             prevalidation_issues = self._prevalidate_steps(steps)
@@ -384,30 +504,17 @@ class AgentOrchestrator:
 
             # Layer 2: Execute + Self-Fix
             if self._interrupt_requested.is_set():
-                run_result.summary = _("사용자 요청으로 중단되었습니다.")
-                self._last_checkpoint = {
-                    "goal": goal,
-                    "iteration": iteration,
-                    "steps": [asdict(s) for s in steps],
-                    "step_results": list(run_result.step_results),
-                    "context": dict(context),
-                }
-                self._emit_progress("interrupted", iteration=iteration)
+                self._save_checkpoint(goal, iteration, steps, run_result, context, prior_results)
                 break
+            completed_ids = {result.step.step_id for result in prior_results}
+            pending_steps = [step for step in steps if step.step_id not in completed_ids]
             all_success, step_results = self._execute_plan(
-                steps, context, goal
+                pending_steps, context, goal
             )
+            current_results = prior_results + step_results
             if self._interrupt_requested.is_set():
                 run_result.step_results.extend(step_results)
-                run_result.summary = _("사용자 요청으로 중단되었습니다.")
-                self._last_checkpoint = {
-                    "goal": goal,
-                    "iteration": iteration,
-                    "steps": [asdict(s) for s in steps],
-                    "step_results": list(run_result.step_results),
-                    "context": dict(context),
-                }
-                self._emit_progress("interrupted", iteration=iteration)
+                self._save_checkpoint(goal, iteration, steps, run_result, context, current_results)
                 break
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
@@ -436,7 +543,13 @@ class AgentOrchestrator:
 
             # Layer 3: Verify
             self._emit_progress("verify_start")
-            achieved, summary = self._verify_engine.verify(goal, step_results)
+            if self._interrupt_requested.is_set():
+                self._save_checkpoint(goal, iteration, steps, run_result, context, current_results)
+                break
+            achieved, summary = self._verify_engine.verify(goal, current_results)
+            if self._interrupt_requested.is_set():
+                self._save_checkpoint(goal, iteration, steps, run_result, context, current_results)
+                break
             run_result.achieved = achieved
             run_result.summary = summary
 
@@ -571,6 +684,8 @@ class AgentOrchestrator:
         context: Dict[str, str],
         learning_components: Dict[str, bool],
     ) -> Optional[AgentRunResult]:
+        if self._interrupt_requested.is_set():
+            return None
         try:
             from agent.skill_library import get_skill_library
             skill = get_skill_library().get_applicable_skill(goal)
@@ -581,6 +696,8 @@ class AgentOrchestrator:
             # Direction 2: 컴파일된 Python 스킬 우선 실행
             if skill.compiled:
                 result = self._run_compiled_skill(skill, goal)
+                if self._interrupt_requested.is_set():
+                    return result or AgentRunResult(goal=goal, summary=_("사용자 요청으로 중단되었습니다."))
                 if result is not None:
                     with self._context_lock:
                         context["skill_id"] = skill.skill_id
@@ -608,8 +725,14 @@ class AgentOrchestrator:
                 goal=goal, step_results=step_results, total_iterations=1
             )
             result.learning_components["SkillLibrary"] = True
+            if self._interrupt_requested.is_set():
+                self._save_checkpoint(goal, 0, steps, result, context, step_results)
+                return result
             if all_success:
                 achieved, summary = self._verify_engine.verify(goal, step_results)
+                if self._interrupt_requested.is_set():
+                    self._save_checkpoint(goal, 0, steps, result, context, step_results)
+                    return result
                 result.achieved = achieved
                 result.summary = summary
                 if achieved:
@@ -636,6 +759,8 @@ class AgentOrchestrator:
             optimizer = get_skill_optimizer()
             success, output = optimizer.run_compiled(skill.skill_id, goal)
             result = AgentRunResult(goal=goal, total_iterations=1)
+            if self._interrupt_requested.is_set():
+                return result
             if success:
                 result.achieved = True
                 result.summary = output

@@ -1,7 +1,10 @@
 import os
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from agent import file_tools
 from agent.file_tools import analyze_data_file, batch_rename_files, detect_file_set
@@ -61,7 +64,12 @@ class FileToolsTests(unittest.TestCase):
             move_result = file_tools.move_file(str(path), str(moved))
             self.assertTrue(move_result["moved"])
 
-            delete_result = file_tools.delete_file(str(moved), confirmed=True)
+            fake_module = types.ModuleType("agent.confirmation_manager")
+            fake_manager = MagicMock()
+            fake_manager.request_confirmation.return_value = True
+            fake_module.get_confirmation_manager = MagicMock(return_value=fake_manager)
+            with patch.dict(sys.modules, {"agent.confirmation_manager": fake_module}):
+                delete_result = file_tools.delete_file(str(moved))
             self.assertTrue(delete_result["deleted"])
 
     def test_edit_requires_unique_old_string(self):

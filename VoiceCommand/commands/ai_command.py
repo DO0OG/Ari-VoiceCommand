@@ -520,7 +520,6 @@ class AICommand(BaseCommand):
         from agent import file_tools
         result = file_tools.delete_file(
             str(args.get("path", "") or ""),
-            bool(args.get("confirmed", False)),
         )
         self.executor._log_audit("file_delete", str(args.get("path", "") or ""), "success" if "error" not in result else "error", result, self._current_goal)
         return self._format_tool_payload(result)
