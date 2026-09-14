@@ -462,6 +462,14 @@ class LLMProvider:
             targets.append((client, provider, model))
         return targets
 
+    def _reasoning_extra_body(self, provider: str) -> dict:
+        """Groq의 reasoning 계열 모델(gpt-oss, qwen3 등)이 사고 과정(체인 오브
+        소트)을 그대로 최종 응답 content에 섞어 보내는 것을 막는다.
+        reasoning_format=hidden 이면 최종 답변만 content에 담겨 온다."""
+        if provider == "groq":
+            return {"reasoning_format": "hidden"}
+        return {}
+
     def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:
         provider = self.provider
         model = model_override or self.model
@@ -521,6 +529,7 @@ class LLMProvider:
                     temperature=0.7,
                     max_tokens=self._estimate_max_tokens(user_message),
                     stream_callback=stream_callback,
+                    provider=provider,
                 )
             
             if save_history:
@@ -593,6 +602,7 @@ class LLMProvider:
                 model=model, messages=messages, tools=tools, tool_choice=tool_choice,
                 temperature=0.1 if request_ctx["force_tool"] else 0.3,
                 max_tokens=self._estimate_max_tokens(user_message) + 200,
+                extra_body=self._reasoning_extra_body(provider),
             )
             choice = response.choices[0]
             tool_calls = []
@@ -676,6 +686,7 @@ class LLMProvider:
                     temperature=float(kwargs.get("temperature", 0.7)),
                     max_tokens=int(kwargs.get("max_tokens", 1000)),
                     stream=True,
+                    extra_body=self._reasoning_extra_body(provider),
                 )
                 for chunk in stream:
                     choice = chunk.choices[0]
@@ -696,6 +707,7 @@ class LLMProvider:
                 temperature=float(kwargs.get("temperature", 0.7)),
                 max_tokens=int(kwargs.get("max_tokens", 1000)),
                 stream_callback=on_token,
+                provider=provider,
             )
         if on_done:
             on_done(full_text, tool_calls)
@@ -742,6 +754,7 @@ class LLMProvider:
                         ],
                     }],
                     max_tokens=800,
+                    extra_body=self._reasoning_extra_body(provider),
                 )
                 return self._clean_response(resp.choices[0].message.content or "")
         except Exception as exc:
@@ -825,7 +838,11 @@ class LLMProvider:
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
-            response = client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=self._estimate_max_tokens(original_msg))
+            response = client.chat.completions.create(
+                model=model, messages=messages, temperature=0.7,
+                max_tokens=self._estimate_max_tokens(original_msg),
+                extra_body=self._reasoning_extra_body(provider),
+            )
             msg = self._clean_response(response.choices[0].message.content or "")
             if stream_callback and msg:
                 self._emit_stream_text(msg, stream_callback)
@@ -922,14 +939,17 @@ class LLMProvider:
         temperature: float,
         max_tokens: int,
         stream_callback=None,
+        provider: str = "",
     ) -> str:
         streaming_enabled = bool(self._load_int_setting("llm_streaming_enabled", 1))
+        extra_body = self._reasoning_extra_body(provider)
         if not stream_callback or not streaming_enabled:
             resp = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                extra_body=extra_body,
             )
             return resp.choices[0].message.content or ""
         try:
@@ -939,6 +959,7 @@ class LLMProvider:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=True,
+                extra_body=extra_body,
             )
             parts: List[str] = []
             for chunk in stream:
@@ -961,6 +982,7 @@ class LLMProvider:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            extra_body=extra_body,
         )
         text = resp.choices[0].message.content or ""
         self._emit_stream_text(text, stream_callback)
