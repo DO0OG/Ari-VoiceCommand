@@ -261,7 +261,11 @@ class StrategyMemory:
         window_start = window_end - timedelta(days=safe_days)
         records = [
             rec for rec in self._records
-            if window_start <= self._parse_timestamp(rec.timestamp) < window_end
+            # 상한을 <=로 포함한다. record() 직후 곧바로 get_stats()를 호출하면
+            # 두 datetime.now() 호출이 (특히 해상도가 낮은 환경에서) 완전히
+            # 같은 값을 반환할 수 있는데, 예전의 엄격한 < 비교는 그 경계에
+            # 정확히 걸친 기록을 조용히 누락시켰다.
+            if window_start <= self._parse_timestamp(rec.timestamp) <= window_end
         ]
         success_count = len([rec for rec in records if rec.success])
         fail_count = len(records) - success_count

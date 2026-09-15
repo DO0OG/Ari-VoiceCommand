@@ -23,15 +23,22 @@ class ImageGenerator:
             from core.config_manager import ConfigManager
             enabled = bool(ConfigManager.get("image_generation_enabled", False))
             provider = str(ConfigManager.get("image_gen_provider", self.provider) or self.provider)
+            api_key = str(ConfigManager.get("openai_api_key", "") or "")
         except Exception:
             enabled = False
             provider = self.provider
+            api_key = ""
         if not enabled:
             return {"enabled": False, "message": "이미지 생성 기능이 비활성화되어 있습니다."}
         if provider != "openai":
             return {"enabled": True, "provider": provider, "message": "현재 OpenAI 이미지 생성만 지원합니다."}
+        if not api_key:
+            return {"enabled": True, "provider": provider, "message": "설정에 OpenAI API 키가 등록되어 있지 않습니다."}
         from openai import OpenAI
-        client = OpenAI()
+        # 설정 창에 저장된 키를 명시적으로 전달한다. 인자 없이 OpenAI()를
+        # 호출하면 OS 환경변수 OPENAI_API_KEY만 보고 앱 설정은 무시되어,
+        # 설정 창에서 키를 등록해도 이미지 생성이 항상 실패했다.
+        client = OpenAI(api_key=api_key)
         response = client.images.generate(model="dall-e-3", prompt=prompt, size=size, n=1)
         image = response.data[0]
         out_dir = output_dir or ResourceManager.get_runtime_path("generated_images")

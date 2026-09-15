@@ -3,6 +3,8 @@ exclude_paths:
   - "VoiceCommand/agent/autonomous_executor.py"
   - "VoiceCommand/agent/llm_provider.py"
   - "VoiceCommand/agent/agent_planner.py"
+  - "VoiceCommand/agent/planner/agent_planner.py"
+  - "VoiceCommand/services/image_generator.py"
   - "VoiceCommand/agent/real_verifier.py"
   - "VoiceCommand/memory/conversation_history.py"
   - "VoiceCommand/assistant/ai_assistant.py"

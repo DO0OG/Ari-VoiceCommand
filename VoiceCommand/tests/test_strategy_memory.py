@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 
 from agent.strategy_memory import StrategyMemory
@@ -77,9 +78,21 @@ class StrategyMemoryTests(unittest.TestCase):
             self.assertEqual(results[0].goal_summary, "브라우저 다운로드 자동화")
 
     def test_lesson_lookup_stats_and_repeated_failures_are_available(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        # get_stats()는 record() 시점과 조회 시점 각각에서 datetime.now()를 다시
+        # 호출한다. 실제 시계를 쓰면 두 시점 사이의 실행 지연(특히 느린 CI
+        # 러너)이 날짜 경계와 겹칠 때 드물게 window 필터가 어긋날 수 있으므로,
+        # 시각을 고정해 테스트를 실제 시계 타이밍과 무관하게 만든다.
+        fixed_now = datetime(2026, 1, 1, 12, 0, 0)
+
+        class _FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now
+
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch("agent.strategy_memory.datetime", _FrozenDateTime):
             memory = StrategyMemory(filepath=os.path.join(tmp, "strategy.json"))
-            now = datetime.now().isoformat()
+            now = fixed_now.isoformat()
             memory.record("브라우저 다운로드 자동화", [], False, error="timeout", failure_kind="timeout", lesson="대기 후 재확인", duration_ms=120)
             memory.record("브라우저 다운로드 자동화", [], False, error="timeout", failure_kind="timeout", lesson="도메인별 셀렉터 점검", duration_ms=150)
             memory.record("브라우저 다운로드 자동화", [], True, duration_ms=90)
