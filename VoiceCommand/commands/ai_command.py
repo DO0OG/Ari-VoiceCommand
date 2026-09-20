@@ -223,7 +223,7 @@ class AICommand(BaseCommand):
         from core.VoiceCommand import execute_command
         query = args.get("query", "").strip()
         if not query:
-            self.tts_wrapper("어떤 음악이나 영상을 재생할까요?")
+            self.tts_wrapper(_("어떤 음악이나 영상을 재생할까요?"))
             return None
         execute_command(f"유튜브 {query} 재생")
         return None
@@ -292,29 +292,40 @@ class AICommand(BaseCommand):
 
             character_widget = _state.character_widget
             if not character_widget:
-                return "캐릭터 위젯이 아직 초기화되지 않았습니다."
+                return _("캐릭터 위젯이 아직 초기화되지 않았습니다.")
 
             geom = character_widget.get_screen_geometry()
             current_screen = getattr(character_widget, "_current_screen", None) or QApplication.primaryScreen()
             if current_screen is None:
-                return "현재 화면 정보를 확인할 수 없습니다."
+                return _("현재 화면 정보를 확인할 수 없습니다.")
             full_geom = current_screen.geometry()
             
             is_full = (geom.width() >= full_geom.width() - 10 and 
                        geom.height() >= full_geom.height() - 10)
             
-            status = f"현재 화면 상태: {'[전체화면 모드]' if is_full else '[일반 모드]'}\n"
-            status += f"- 가용 화면 크기: {geom.width()}x{geom.height()}\n"
-            status += f"- 전체 모니터 크기: {full_geom.width()}x{full_geom.height()}\n"
+            status = _(
+                "현재 화면 상태: {mode}\n",
+                mode=_("[전체화면 모드]") if is_full else _("[일반 모드]"),
+            )
+            status += _(
+                "- 가용 화면 크기: {width}x{height}\n",
+                width=geom.width(),
+                height=geom.height(),
+            )
+            status += _(
+                "- 전체 모니터 크기: {width}x{height}\n",
+                width=full_geom.width(),
+                height=full_geom.height(),
+            )
             
             if not is_full:
-                status += "- 현재 작업표시줄이 화면의 일부를 차지하고 있어, 저는 작업표시줄 바로 위에 서 있습니다."
+                status += _("- 현재 작업표시줄이 화면의 일부를 차지하고 있어, 저는 작업표시줄 바로 위에 서 있습니다.")
             else:
-                status += "- 현재 게임이나 영상이 전체화면으로 실행 중이거나 작업표시줄이 숨겨져 있어, 저는 화면 맨 아래 바닥에 서 있습니다."
+                status += _("- 현재 게임이나 영상이 전체화면으로 실행 중이거나 작업표시줄이 숨겨져 있어, 저는 화면 맨 아래 바닥에 서 있습니다.")
             
             return status
         except Exception as e:
-            return f"화면 상태 확인 중 오류 발생: {e}"
+            return _("화면 상태 확인 중 오류 발생: {error}", error=e)
 
     def _handle_python(self, args: dict) -> Optional[str]:
         """단일 Python 코드 실행 — 실패 시 오케스트레이터가 자동 수정 후 재시도"""
@@ -401,7 +412,7 @@ class AICommand(BaseCommand):
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
             logging.error("web_search 오류: %s", e)
-            return f"검색 오류: {e}"
+            return _("검색 오류: {error}", error=e)
 
     def _handle_web_fetch(self, args: dict) -> Optional[str]:
         """URL 내용 가져오기"""
@@ -414,7 +425,7 @@ class AICommand(BaseCommand):
             return result
         except Exception as e:
             logging.error("web_fetch 오류: %s", e)
-            return f"페이지 로드 오류: {e}"
+            return _("페이지 로드 오류: {error}", error=e)
 
     def _handle_mcp_call(self, args: dict) -> Optional[str]:
         endpoint = str(args.get("endpoint", "") or "").strip()
@@ -670,19 +681,14 @@ class AICommand(BaseCommand):
 
         # 종료/재시작 goal → 에이전트 루프 대신 SystemCommand 직접 라우팅
         _SHUTDOWN_GOALS = (
-            _("컴퓨터 종료"),
             "컴퓨터 종료",
             "pc 종료",
-            _("시스템 종료"),
             "시스템 종료",
-            _("전원 끄기"),
             "전원 끄기",
             "shutdown",
         )
         _RESTART_GOALS = (
-            _("컴퓨터 재시작"),
             "컴퓨터 재시작",
-            _("재부팅"),
             "재부팅",
             "restart",
         )
@@ -1333,7 +1339,7 @@ class AICommand(BaseCommand):
             return None
         if not self._is_shutdown_request(goal_text):
             return None
-        return self._handle_schedule_task({"goal": _("컴퓨터 종료"), "when": when})
+        return self._handle_schedule_task({"goal": "컴퓨터 종료", "when": when})
 
     def _should_escalate_to_agent_task(self, user_text: str, response: Optional[str]) -> bool:
         """도구 호출이 없을 때 복잡한 작업 요청을 에이전트 태스크로 승격할지 판단."""
@@ -1523,10 +1529,10 @@ class AICommand(BaseCommand):
 
         except AttributeError as e:
             logging.error("AI 어시스턴트가 초기화되지 않았습니다: %s", e)
-            self.tts_wrapper("AI 기능을 사용할 수 없습니다.")
+            self.tts_wrapper(_("AI 기능을 사용할 수 없습니다."))
         except Exception as e:
             logging.error("AI 응답 생성 오류: %s", e, exc_info=True)
-            self.tts_wrapper("응답 생성 중 오류가 발생했습니다.")
+            self.tts_wrapper(_("응답 생성 중 오류가 발생했습니다."))
         finally:
             self.tts_wrapper = original_tts
             self.executor.tts_wrapper = original_exec_tts

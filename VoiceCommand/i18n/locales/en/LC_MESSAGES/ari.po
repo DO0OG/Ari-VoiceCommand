@@ -2539,3 +2539,126 @@ msgstr "Agent"
 
 msgid "재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):"
 msgstr "Playback volume multiplier (0.0 - 2.0, 1.0 = original):"
+
+msgid "최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?"
+msgstr "You've talked about '{top_topic}' often lately. Shall I find more related information?"
+
+msgid "최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?"
+msgstr "I see recurring strategies related to the recent topic '{topic_name}'. Shall I organize them for you?"
+
+msgid "이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?"
+msgstr "You often request help with '{cmd}' around this time. Shall I help now?"
+
+msgid "좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?"
+msgstr "Good morning! Shall I summarize today's weather and top news?"
+
+msgid "오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?"
+msgstr "You've worked hard today. Shall I check tomorrow's weather for you?"
+
+msgid "(기쁨) 알람 시간이에요! 요청하신 '{goal}' 시각입니다."
+msgstr "(기쁨) It's alarm time! It's time for '{goal}', as requested."
+
+msgid " 알림 사운드: {alarm_sound}"
+msgstr " Alarm sound: {alarm_sound}"
+
+msgid "메모리 정리 완료: 사실 {facts}개, 전략 {strategies}개, 대화 {conversations}건 정리"
+msgstr "Memory cleanup complete: {facts} facts, {strategies} strategies, {conversations} conversations organized"
+
+msgid "메모리 정리 실패"
+msgstr "Memory cleanup failed"
+
+msgid "주간 리포트 생성 실패"
+msgstr "Weekly report generation failed"
+
+msgid "(진지) 예약된 작업을 시작할게요: {goal}"
+msgstr "(진지) I'll start the scheduled task: {goal}"
+
+msgid "오케스트레이터가 연결되지 않았습니다."
+msgstr "The orchestrator is not connected."
+
+msgid "예약 작업을 실행할 수 없어요."
+msgstr "I can't run the scheduled task."
+
+msgid "작업 완료"
+msgstr "Task complete"
+
+msgid "예약 작업 실행 실패"
+msgstr "Scheduled task execution failed"
+
+msgid "실행 결과 없음"
+msgstr "No execution result"
+
+msgid "예약 작업 실행"
+msgstr "Scheduled task execution"
+
+msgid "자주 하는 작업을 아직 충분히 배우지 못했어요."
+msgstr "I haven't learned enough about your frequent tasks yet."
+
+msgid "자주 하는 작업은 {goals}예요."
+msgstr "Your frequent tasks are {goals}."
+
+msgid "아직 떠올릴 만한 기록이 충분하지 않아요."
+msgstr "There aren't enough records to recall yet."
+
+msgid "기억나는 최근 기록은 {records}"
+msgstr "Recent records I remember: {records}"
+
+msgid "아직 저장된 스킬이 없어요."
+msgstr "There are no saved skills yet."
+
+msgid "현재 스킬은 {skills}예요."
+msgstr "Your current skills are {skills}."
+
+msgid "삭제할 스킬이 없어요."
+msgstr "There are no skills to delete."
+
+msgid "{name} 스킬을 비활성화했어요."
+msgstr "The {name} skill has been disabled."
+
+msgid "메모리 정리를 마쳤어요. 사실 {facts}개, 전략 {strategies}개가 현재 유지 중이에요."
+msgstr "Memory cleanup is complete. {facts} facts and {strategies} strategies are currently retained."
+
+msgid "어떤 음악이나 영상을 재생할까요?"
+msgstr "What music or video would you like me to play?"
+
+msgid "캐릭터 위젯이 아직 초기화되지 않았습니다."
+msgstr "The character widget has not been initialized yet."
+
+msgid "현재 화면 정보를 확인할 수 없습니다."
+msgstr "Unable to retrieve the current screen information."
+
+msgid "현재 화면 상태: {mode}\n"
+msgstr "Current screen status: {mode}\n"
+
+msgid "[전체화면 모드]"
+msgstr "[Fullscreen mode]"
+
+msgid "[일반 모드]"
+msgstr "[Normal mode]"
+
+msgid "- 가용 화면 크기: {width}x{height}\n"
+msgstr "- Available screen size: {width}x{height}\n"
+
+msgid "- 전체 모니터 크기: {width}x{height}\n"
+msgstr "- Full monitor size: {width}x{height}\n"
+
+msgid "- 현재 작업표시줄이 화면의 일부를 차지하고 있어, 저는 작업표시줄 바로 위에 서 있습니다."
+msgstr "- The taskbar currently occupies part of the screen, so I'm standing just above it."
+
+msgid "- 현재 게임이나 영상이 전체화면으로 실행 중이거나 작업표시줄이 숨겨져 있어, 저는 화면 맨 아래 바닥에 서 있습니다."
+msgstr "- A game or video is running in fullscreen, or the taskbar is hidden, so I'm standing at the very bottom of the screen."
+
+msgid "화면 상태 확인 중 오류 발생: {error}"
+msgstr "Error checking screen status: {error}"
+
+msgid "검색 오류: {error}"
+msgstr "Search error: {error}"
+
+msgid "페이지 로드 오류: {error}"
+msgstr "Page load error: {error}"
+
+msgid "AI 기능을 사용할 수 없습니다."
+msgstr "AI features are unavailable."
+
+msgid "응답 생성 중 오류가 발생했습니다."
+msgstr "An error occurred while generating a response."
