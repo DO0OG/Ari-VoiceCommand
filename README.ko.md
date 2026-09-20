@@ -186,6 +186,8 @@ Windows 자동화, STT/TTS 연동, 로컬 모델 지원, PySide6 UX, 플러그�
 
 ## 에셋 및 출처
 
+- 기본 캐릭터 이미지 — **JAraTang** 작가님:
+  <https://www.pixiv.net/users/78194943>
 - `DNFBitBitv2` 폰트 — 공식 출처:
   <https://df.nexon.com/data/font/dnfbitbitv2>
 

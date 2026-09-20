@@ -189,6 +189,8 @@ The [contribution guide](./docs/CONTRIBUTING.md) is the place to start.
 
 ## Assets & Credits
 
+- Default character illustrations — by **JAraTang**:
+  <https://www.pixiv.net/users/78194943>
 - `DNFBitBitv2` font — official source:
   <https://df.nexon.com/data/font/dnfbitbitv2>
 

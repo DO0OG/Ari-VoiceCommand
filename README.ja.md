@@ -188,6 +188,8 @@ Windows 自動化、STT/TTS 連携、ローカルモデル対応、PySide6 UX、
 
 ## アセットと出典
 
+- 既定のキャラクターイラスト — **JAraTang** 氏:
+  <https://www.pixiv.net/users/78194943>
 - `DNFBitBitv2` フォント — 公式配布元:
   <https://df.nexon.com/data/font/dnfbitbitv2>
 
