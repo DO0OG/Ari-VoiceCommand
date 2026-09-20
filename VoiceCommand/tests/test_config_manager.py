@@ -1,3 +1,6 @@
+import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -37,6 +40,23 @@ class ConfigManagerTests(unittest.TestCase):
             )
 
         self.assertFalse(normalized["weekly_report_enabled"])
+
+
+    def test_save_settings_keeps_previous_file_when_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "settings.json")
+            original = {"stt_energy_threshold": 300}
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(original, handle)
+
+            with patch("core.config_manager._settings_path", return_value=path):
+                with patch("core.config_manager.json.dump", side_effect=OSError("disk full")):
+                    saved = ConfigManager.save_settings({"stt_energy_threshold": 500})
+
+            self.assertFalse(saved)
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle), original)
+            self.assertEqual(os.listdir(tmp), ["settings.json"])
 
 
 if __name__ == "__main__":

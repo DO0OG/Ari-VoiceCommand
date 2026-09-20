@@ -8,8 +8,9 @@ consistent with the local text UI.
 from __future__ import annotations
 
 import logging
+import inspect
+import json
 import os
-import re
 import threading
 import time
 from typing import Any, Callable, Iterable, Optional
@@ -25,7 +26,7 @@ from services.messaging_bridge_base import ChatAuthorizer, IncomingMessage, Stre
 
 logger = logging.getLogger(__name__)
 
-CommandRunner = Callable[[str, Optional[Callable[[str], None]]], str]
+CommandRunner = Callable[..., str]
 
 
 def _as_list(value: object) -> list[object]:
@@ -63,7 +64,14 @@ class TelegramApiClient:
         return list(data.get("result") or [])
 
     def send_message(self, chat_id: str, text: str, *, reply_to_message_id: int | None = None) -> int | None:
-        payload: dict[str, object] = {"chat_id": chat_id, "text": text[:4096]}
+        if len(text) > 4096:
+            first_id = None
+            for offset in range(0, len(text), 4096):
+                message_id = self.send_message(chat_id, text[offset:offset + 4096], reply_to_message_id=reply_to_message_id)
+                if offset == 0:
+                    first_id = message_id
+            return first_id
+        payload: dict[str, object] = {"chat_id": chat_id, "text": text}
         if reply_to_message_id is not None:
             payload["reply_to_message_id"] = reply_to_message_id
         response = self.session.post(f"{self.base_url}/sendMessage", json=payload, timeout=self.timeout)
@@ -201,6 +209,22 @@ class TelegramBridge:
             reply_to_message_id=incoming.message_id,
         )
         last_text = {"value": ""}
+        image_paths: list[str] = []
+
+        def collect_image(name: str, result: str | None) -> None:
+            if name == "take_screenshot":
+                path = result
+            elif name == "generate_image":
+                try:
+                    payload = json.loads(result or "{}")
+                except (TypeError, ValueError):
+                    return
+                path = payload.get("path") if isinstance(payload, dict) else None
+            else:
+                return
+            if isinstance(path, str) and os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                if path not in image_paths:
+                    image_paths.append(path)
 
         def emit_update(text: str) -> None:
             if cancel_event.is_set():
@@ -212,11 +236,18 @@ class TelegramBridge:
                     return
                 except Exception as exc:
                     logger.debug("[TelegramBridge] edit failed, sending new message: %s", exc)
-            self.client.send_message(incoming.chat_id, text)
+            self.client.send_message(incoming.chat_id, text[:4096])
 
         stream = StreamingTextBuffer(emit_update)
         try:
-            result = self.command_runner(incoming.text, stream.append)
+            try:
+                parameters = inspect.signature(self.command_runner).parameters
+            except (TypeError, ValueError):
+                parameters = {}
+            if "tool_result_callback" in parameters:
+                result = self.command_runner(incoming.text, stream.append, tool_result_callback=collect_image)
+            else:
+                result = self.command_runner(incoming.text, stream.append)
         except Exception as exc:
             logger.exception("[TelegramBridge] command failed chat_id=%s", incoming.chat_id)
             try:
@@ -226,25 +257,17 @@ class TelegramBridge:
             raise
         stream.flush()
         final = (result or stream.text or last_text["value"] or "Done.").strip()
-        image_path = self._extract_image_path(final)
-        if image_path:
+        for image_path in image_paths:
             try:
                 self.client.send_photo(incoming.chat_id, image_path, caption="screenshot")
             except Exception as exc:
                 logger.warning("[TelegramBridge] image send failed: %s", exc)
-        if final != last_text["value"]:
-            emit_update(final)
+        if final != last_text["value"] or len(final) > 4096:
+            emit_update(final[:4096])
+            if not cancel_event.is_set():
+                for offset in range(4096, len(final), 4096):
+                    self.client.send_message(incoming.chat_id, final[offset:offset + 4096])
         return final
-
-    def _extract_image_path(self, text: str) -> str:
-        candidates = [str(text or "").strip()]
-        candidates.extend(re.findall(r"([A-Za-z]:\\[^\r\n]+?\.(?:png|jpg|jpeg|webp))", text or "", flags=re.IGNORECASE))
-        candidates.extend(re.findall(r"(/[^\r\n]+?\.(?:png|jpg|jpeg|webp))", text or "", flags=re.IGNORECASE))
-        for candidate in candidates:
-            path = candidate.strip().strip("\"'")
-            if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-                return path
-        return ""
 
 
 def start_telegram_bridge(command_runner: CommandRunner) -> TelegramBridge | None:

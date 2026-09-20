@@ -69,5 +69,13 @@ class AgentTaskQueueTests(unittest.TestCase):
         self.fail(f"{task_id} did not reach {expected}; got {queue.status(task_id)}")
 
 
+    def test_submit_after_shutdown_is_rejected(self):
+        queue = AgentTaskQueue(max_workers=1)
+        queue.shutdown()
+
+        with self.assertRaises(RuntimeError):
+            queue.submit("late", lambda cancel_event: "ok")
+
+
 if __name__ == "__main__":
     unittest.main()

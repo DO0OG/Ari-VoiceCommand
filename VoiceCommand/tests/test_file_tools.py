@@ -81,5 +81,43 @@ class FileToolsTests(unittest.TestCase):
             self.assertEqual(result["matches"], 2)
 
 
+    def test_merge_text_files_rejects_output_matching_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "a.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("원본 내용")
+
+            result = file_tools.merge_text_files([path], path)
+
+            self.assertTrue(result.startswith("오류:"))
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "원본 내용")
+
+    def test_read_file_returns_only_requested_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "lines.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("".join(f"line{idx}\n" for idx in range(1, 11)))
+
+            result = file_tools.read_file(path, start_line=3, end_line=5)
+
+            self.assertEqual(result["content"], "line3\nline4\nline5\n")
+            self.assertEqual(result["start_line"], 3)
+            self.assertEqual(result["end_line"], 5)
+            self.assertEqual(result["line_count"], 10)
+
+    def test_read_file_clamps_end_line_beyond_eof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "short.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("one\ntwo\n")
+
+            result = file_tools.read_file(path, start_line=2, end_line=99)
+
+            self.assertEqual(result["content"], "two\n")
+            self.assertEqual(result["end_line"], 2)
+            self.assertEqual(result["line_count"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

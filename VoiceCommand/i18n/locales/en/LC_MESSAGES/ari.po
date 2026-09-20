@@ -2371,3 +2371,171 @@ msgstr "Left moves up, right moves down. Use this when a custom image floats abo
 
 msgid "기본값으로 되돌리기"
 msgstr "Reset to defaults"
+
+msgid "재개할 작업이 없습니다."
+msgstr "No task to resume."
+
+msgid "사용자 요청으로 중단되었습니다."
+msgstr "Stopped at the user's request."
+
+msgid "실행 시간 초과"
+msgstr "Execution timed out"
+
+msgid "파일 내용을 읽어 반환합니다."
+msgstr "Reads and returns the file contents."
+
+msgid "시작 줄 (선택, 기본 1)"
+msgstr "Start line (optional, default 1)"
+
+msgid "끝 줄 (선택)"
+msgstr "End line (optional)"
+
+msgid "파일에 내용을 씁니다 (덮어쓰기 또는 추가)."
+msgstr "Writes content to a file (overwrite or append)."
+
+msgid "기본 overwrite"
+msgstr "Defaults to overwrite"
+
+msgid "파일의 특정 문자열을 찾아 교체합니다 (diff 없이 정밀 편집)."
+msgstr "Finds and replaces a specific string in a file (precise edit without a diff)."
+
+msgid "교체할 원본 텍스트 (파일 내 고유해야 함)"
+msgstr "Original text to replace (must be unique within the file)"
+
+msgid "새 텍스트"
+msgstr "New text"
+
+msgid "디렉토리 내 파일/폴더 목록을 반환합니다."
+msgstr "Returns the list of files and folders in a directory."
+
+msgid "glob 패턴 (선택, 예: *.py)"
+msgstr "Glob pattern (optional, e.g. *.py)"
+
+msgid "하위 폴더 포함 여부"
+msgstr "Whether to include subfolders"
+
+msgid "파일들 안에서 정규식 패턴을 검색합니다."
+msgstr "Searches files for a regular expression pattern."
+
+msgid "검색할 정규식"
+msgstr "Regular expression to search for"
+
+msgid "대상 파일 glob (예: *.py)"
+msgstr "Target file glob (e.g. *.py)"
+
+msgid "파일 또는 폴더를 이동하거나 이름을 변경합니다."
+msgstr "Moves or renames a file or folder."
+
+msgid "파일 또는 빈 폴더를 삭제합니다."
+msgstr "Deletes a file or an empty folder."
+
+msgid "현재 화면 스크린샷을 찍어 내용을 분석합니다."
+msgstr "Captures the current screen and analyzes its contents."
+
+msgid "분석 질문"
+msgstr "Analysis question"
+
+msgid "이미지 파일 내용을 분석합니다."
+msgstr "Analyzes the contents of an image file."
+
+msgid "앱 이름이나 경로로 애플리케이션을 실행합니다."
+msgstr "Launches an application by name or path."
+
+msgid "프로세스 이름으로 실행 중인 앱을 종료합니다."
+msgstr "Terminates a running app by process name."
+
+msgid "실행 중인 앱 목록을 반환합니다."
+msgstr "Returns the list of running apps."
+
+msgid "제목 일부가 일치하는 창에 포커스를 맞춥니다."
+msgstr "Focuses the window whose title partially matches."
+
+msgid "전체 화면 스크린샷을 저장하고 경로를 반환합니다."
+msgstr "Saves a full-screen screenshot and returns its path."
+
+msgid "클립보드 텍스트를 반환합니다."
+msgstr "Returns the clipboard text."
+
+msgid "클립보드에 텍스트를 저장합니다."
+msgstr "Saves text to the clipboard."
+
+msgid "진행 중인 작업을 중단할게요."
+msgstr "I'll stop the task in progress."
+
+msgid "일"
+msgstr "day"
+
+msgid "현재 화면을 설명해 주세요."
+msgstr "Please describe the current screen."
+
+msgid "스크린샷 분석 실패: {error}"
+msgstr "Screenshot analysis failed: {error}"
+
+msgid "이미지 내용을 설명해 주세요."
+msgstr "Please describe the image contents."
+
+msgid "이미지 분석 실패: {error}"
+msgstr "Image analysis failed: {error}"
+
+msgid "종료할 앱 이름이 필요합니다."
+msgstr "The name of the app to close is required."
+
+msgid "앱 종료 실패: {error}"
+msgstr "Failed to close the app: {error}"
+
+msgid "실행 앱 목록 조회 실패: {error}"
+msgstr "Failed to list running apps: {error}"
+
+msgid "클립보드에 저장했습니다."
+msgstr "Saved to the clipboard."
+
+msgid "사용자 취소"
+msgstr "Cancelled by user"
+
+msgid "에이전트 대시보드"
+msgstr "Agent Dashboard"
+
+msgid "생각 중..."
+msgstr "Thinking..."
+
+msgid "에이전트 실행"
+msgstr "Agent Execution"
+
+msgid "전체 실행 타임아웃 (초)"
+msgstr "Overall execution timeout (seconds)"
+
+msgid "에이전트 대시보드 사용"
+msgstr "Use the agent dashboard"
+
+msgid "도구 실행 감사 로그 기록"
+msgstr "Record a tool execution audit log"
+
+msgid "로컬 MCP 서버 사용"
+msgstr "Use the local MCP server"
+
+msgid "{seconds}초"
+msgstr "{seconds}s"
+
+msgid "응답 말수:"
+msgstr "Response length:"
+
+msgid "간결하게 (한두 문장)"
+msgstr "Concise (one or two sentences)"
+
+msgid "보통"
+msgstr "Normal"
+
+msgid "수다스럽게"
+msgstr "Talkative"
+
+msgid "스피커 출력 장치 선택:"
+msgstr "Speaker output device:"
+
+msgid "시스템 기본 스피커"
+msgstr "System default speaker"
+
+msgid "에이전트"
+msgstr "Agent"
+
+msgid "재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):"
+msgstr "Playback volume multiplier (0.0 - 2.0, 1.0 = original):"

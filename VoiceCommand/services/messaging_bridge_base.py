@@ -41,14 +41,19 @@ class StreamingTextBuffer:
         self._emit = emit
         self._min_chars = max(1, int(min_chars or 1))
         self._buffer: list[str] = []
+        self._length = 0
+        self._last_char = ""
         self._last_sent = ""
 
     def append(self, delta: str) -> None:
         if not delta:
             return
-        self._buffer.append(str(delta))
-        current = self.text
-        if len(current) - len(self._last_sent) >= self._min_chars or current.endswith((".", "!", "?", "\n")):
+        delta = str(delta)
+        self._buffer.append(delta)
+        self._length += len(delta)
+        if delta:
+            self._last_char = delta[-1]
+        if self._length - len(self._last_sent) >= self._min_chars or self._last_char in (".", "!", "?", "\n"):
             self.flush()
 
     @property

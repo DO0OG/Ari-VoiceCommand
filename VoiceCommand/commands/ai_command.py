@@ -1384,7 +1384,7 @@ class AICommand(BaseCommand):
             stream_callback = emit_stream_token
         self._run_interaction(text, self.tts_wrapper, stream_callback=stream_callback)
 
-    def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
+    def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
         outputs: List[str] = []
 
@@ -1392,11 +1392,11 @@ class AICommand(BaseCommand):
             if message:
                 outputs.append(str(message))
 
-        self._run_interaction(text, collect, stream_callback=stream_callback)
+        self._run_interaction(text, collect, stream_callback=stream_callback, tool_result_callback=tool_result_callback)
         cleaned = [msg.strip() for msg in outputs if msg and msg.strip()]
         return "\n".join(cleaned)
 
-    def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None) -> None:
+    def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> None:
         if self._is_interrupt_command(text):
             self.orchestrator.interrupt()
             output_callback(_("진행 중인 작업을 중단할게요."))
@@ -1464,7 +1464,7 @@ class AICommand(BaseCommand):
                     if response and self._should_emit_preface_response(response):
                         self._emit_user_message(response)
 
-                    results = self._execute_tool_calls(tool_calls)
+                    results = self._execute_tool_calls(tool_calls, tool_result_callback=tool_result_callback)
 
                     non_none = [r for r in results if r is not None]
                     followup = None
@@ -1541,7 +1541,7 @@ class AICommand(BaseCommand):
         normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
         return normalized in {"이어서 해줘", "계속해", "계속", "resume", "continue"}
 
-    def _execute_tool_calls(self, tool_calls: list) -> List[Optional[str]]:
+    def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""
         results: List[Optional[str]] = []
         for tc in tool_calls:
@@ -1556,6 +1556,9 @@ class AICommand(BaseCommand):
                 except Exception as e:
                     logging.error("tool 핸들러 오류 (%s): %s", name, e, exc_info=True)
                     result = f"오류: {e}"
+                else:
+                    if tool_result_callback is not None:
+                        tool_result_callback(name, result)
                 results.append(result)
             else:
                 logging.warning("알 수 없는 tool: %s", name)

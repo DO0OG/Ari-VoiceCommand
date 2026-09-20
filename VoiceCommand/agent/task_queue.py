@@ -86,8 +86,10 @@ class AgentTaskQueue:
             priority=int(priority),
         )
         with self._lock:
+            if self._shutdown.is_set():
+                raise RuntimeError("Task queue has been shut down")
             self._pending[task.task_id] = task
-        self._queue.put((task.priority, next(self._counter), task))
+            self._queue.put((task.priority, next(self._counter), task))
         return task.task_id
 
     def cancel(self, task_id: str) -> bool:
@@ -123,11 +125,11 @@ class AgentTaskQueue:
             return self._results.get(task_id)
 
     def shutdown(self, *, cancel_pending: bool = True) -> None:
-        if cancel_pending:
-            with self._lock:
+        with self._lock:
+            self._shutdown.set()
+            if cancel_pending:
                 for task in list(self._pending.values()) + list(self._running.values()):
                     task.cancel_event.set()
-        self._shutdown.set()
         for _ in self._workers:
             self._queue.put((10**9, next(self._counter), AgentQueuedTask("", "", _noop_runner)))
         for worker in self._workers:

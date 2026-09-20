@@ -224,5 +224,41 @@ class MarketplaceClientTests(unittest.TestCase):
         self.assertIn("sha256?: string", web_types_text)
 
 
+    def test_install_plugin_reports_activation_failure(self):
+        archive_bytes = self._build_archive_bytes()
+
+        class _FakeResponse:
+            def __init__(self, payload: bytes):
+                self._payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return self._payload
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with mock.patch.object(
+                marketplace_client,
+                "_post",
+                return_value={
+                    "release_url": "https://example.com/plugin.zip",
+                    "name": "sample_plugin",
+                    "entry": "main.py",
+                    "sha256": hashlib.sha256(archive_bytes).hexdigest(),
+                },
+            ):
+                with mock.patch("core.marketplace_client.urllib.request.urlopen", return_value=_FakeResponse(archive_bytes)):
+                    with mock.patch("core.plugin_loader.get_plugin_manager", side_effect=Exception("api mismatch")):
+                        with self.assertRaises(RuntimeError) as ctx:
+                            marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir)
+
+            self.assertIn("api mismatch", str(ctx.exception))
+            self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.zip")))
+
+
 if __name__ == "__main__":
     unittest.main()

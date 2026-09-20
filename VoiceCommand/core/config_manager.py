@@ -5,6 +5,7 @@ import logging
 import os
 import threading
 import shutil
+import tempfile
 from typing import Callable, Optional, cast
 
 from core.settings_schema import (
@@ -80,8 +81,19 @@ class ConfigManager:
             try:
                 normalized = cls._normalize_settings(settings)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(normalized, f, indent=2, ensure_ascii=False)
+                temp_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(path), delete=False) as f:
+                        temp_path = f.name
+                        json.dump(normalized, f, indent=2, ensure_ascii=False)
+                    os.replace(temp_path, path)
+                    temp_path = None
+                finally:
+                    if temp_path is not None:
+                        try:
+                            os.unlink(temp_path)
+                        except OSError:
+                            pass
                 logging.info("설정을 저장했습니다.")
                 cls._cached_settings = dict(normalized)
                 return True

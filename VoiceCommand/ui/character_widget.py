@@ -41,30 +41,7 @@ def _is_thinking_bubble_text(text: str) -> bool:
     return normalized in thinking_texts
 
 
-def _is_geometry_animation_running(animation: Optional[QPropertyAnimation]) -> bool:
-    return animation is not None and animation.state() == QPropertyAnimation.Running
-
-
-def _sync_walk_animation_end_value(
-    animation: Optional[QPropertyAnimation],
-    walk_target_y: Optional[int],
-    ground_y: int,
-    *,
-    threshold: int = 2,
-) -> Optional[int]:
-    if animation is None or walk_target_y is None:
-        return walk_target_y
-    if abs(walk_target_y - ground_y) <= threshold:
-        return walk_target_y
-
-    end_value = animation.endValue()
-    if end_value is None:
-        return walk_target_y
-
-    animation.setEndValue(
-        QRect(end_value.x(), int(ground_y), end_value.width(), end_value.height())
-    )
-    return int(ground_y)
+from ui.character_geometry import _is_geometry_animation_running, _sync_walk_animation_end_value
 
 
 def _append_bubble_history(text: str) -> None:
@@ -143,24 +120,7 @@ def _invoke_level_up_callback(callback_obj: object) -> None:
         callback()
 
 
-class LRUCache:
-    """LRU 캐시 구현"""
-    def __init__(self, capacity=IMAGE_CACHE_CAPACITY):
-        self.cache = OrderedDict()
-        self.capacity = capacity
-
-    def get(self, key):
-        if key not in self.cache:
-            return None
-        self.cache.move_to_end(key)
-        return self.cache[key]
-
-    def put(self, key, value):
-        if key in self.cache:
-            self.cache.move_to_end(key)
-        self.cache[key] = value
-        if len(self.cache) > self.capacity:
-            self.cache.popitem(last=False)
+from ui.image_cache import LRUCache
 
 
 class CharacterWidget(QWidget):

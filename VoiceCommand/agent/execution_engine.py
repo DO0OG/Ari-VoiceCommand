@@ -35,13 +35,7 @@ logger = logging.getLogger(__name__)
 # ── 데이터 클래스 ──────────────────────────────────────────────────────────────
 # StepResult를 execution_engine에 정의하여 agent_orchestrator와의 순환 임포트를 방지한다.
 
-@dataclass
-class StepResult:
-    step: ActionStep
-    exec_result: ExecutionResult
-    attempt: int = 1
-    was_fixed: bool = False
-    failure_kind: str = ""
+from agent.step_result import StepResult
 
 try:
     from services.dom_analyser import suggest_next_actions

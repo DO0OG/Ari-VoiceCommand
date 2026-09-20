@@ -60,10 +60,11 @@ class TimerManager:
             entry = TimerEntry(
                 name=normalized_name,
                 minutes=minutes,
-                callback=lambda timer_name=normalized_name, timer_label=label, is_auto_named=auto_named: self._on_alarm(
+                callback=lambda timer_name=normalized_name, timer_label=label, is_auto_named=auto_named, timer_id=self._order_counter: self._on_alarm(
                     timer_name,
                     timer_label,
                     is_auto_named,
+                    timer_id,
                 ),
                 auto_named=auto_named,
                 order=self._order_counter,
@@ -143,8 +144,11 @@ class TimerManager:
             return _("{mins}분", mins=mins)
         return _("{secs}초", secs=secs)
 
-    def _on_alarm(self, name: str, label: str, auto_named: bool):
+    def _on_alarm(self, name: str, label: str, auto_named: bool, timer_id: int):
         with self._lock:
+            entry = self._timers.get(name)
+            if entry is None or entry.order != timer_id:
+                return
             self._timers.pop(name, None)
         if auto_named:
             message = _("{label} 타이머가 완료되었습니다.", label=label)
