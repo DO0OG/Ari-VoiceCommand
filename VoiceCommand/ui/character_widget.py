@@ -164,8 +164,13 @@ class LRUCache:
 
 
 class CharacterWidget(QWidget):
-    # 캐릭터 이미지 표시 배율. 리소스가 이미 표시 해상도로 제작되어 있어 1.0이 기본이다.
-    _IMAGE_SCALE = 1.0
+    # 캐릭터 표시 배율 허용 범위. 기본 리소스는 표시 해상도로 제작되어 1.0이 기본값이다.
+    SCALE_MIN = 0.3
+    SCALE_MAX = 3.0
+    # 바닥 정렬 보정값(px) 허용 범위. 커스텀 이미지의 하단 여백을 사용자가 직접 보정한다.
+    GROUND_OFFSET_MIN = -200
+    GROUND_OFFSET_MAX = 200
+    GROUND_OFFSET_DEFAULT = 4
 
     _ANIMATION_SPECS = {
         "idle": 10,
@@ -211,6 +216,9 @@ class CharacterWidget(QWidget):
         self._active_character_pack: Optional[str] = None
         self._base_images_dir = ""
         self.image_cache = LRUCache()
+        self.image_scale = 1.0
+        self.ground_offset = self.GROUND_OFFSET_DEFAULT
+        self._load_display_settings()
         self.facing_right = True  # 캐릭터 방향
         self.is_thinking = False   # 추가: 생각 중 여부
 
@@ -364,8 +372,8 @@ class CharacterWidget(QWidget):
             image = image.transformed(transform, Qt.SmoothTransformation)
 
         scaled_image = image.scaled(
-            int(image.width() * self._IMAGE_SCALE),
-            int(image.height() * self._IMAGE_SCALE),
+            max(1, int(image.width() * self.image_scale)),
+            max(1, int(image.height() * self.image_scale)),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
@@ -373,6 +381,36 @@ class CharacterWidget(QWidget):
         pixmap = QPixmap.fromImage(scaled_image)
         self.image_cache.put(cache_key, pixmap)
         return pixmap
+
+    @classmethod
+    def _clamp(cls, value, low, high, default):
+        """설정값을 허용 범위로 제한한다. 잘못된 값이면 기본값으로 되돌린다."""
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return default
+        if number != number:  # NaN
+            return default
+        return max(low, min(high, number))
+
+    def _load_display_settings(self) -> tuple[float, int]:
+        """설정에서 표시 배율과 바닥 보정값을 읽어 적용한다."""
+        from core.config_manager import ConfigManager
+        settings = ConfigManager.load_settings()
+        self.image_scale = self._clamp(
+            settings.get("character_scale", 1.0), self.SCALE_MIN, self.SCALE_MAX, 1.0
+        )
+        self.ground_offset = int(self._clamp(
+            settings.get("character_ground_offset", self.GROUND_OFFSET_DEFAULT),
+            self.GROUND_OFFSET_MIN, self.GROUND_OFFSET_MAX, self.GROUND_OFFSET_DEFAULT
+        ))
+        return self.image_scale, self.ground_offset
+
+    def apply_display_settings(self):
+        """설정 변경 후 표시 배율과 바닥 위치를 다시 적용한다."""
+        self._load_display_settings()
+        self.image_cache.cache.clear()
+        self.update_frame()
 
     def load_animations(self):
         """애니메이션 프레임 로드"""
@@ -564,7 +602,7 @@ class CharacterWidget(QWidget):
         screen_full = current_screen.geometry() if current_screen else screen
         is_full_screen = screen.height() >= screen_full.height() - 10
         
-        offset = 4
+        offset = self.ground_offset
         if is_full_screen:
             offset -= 4 # 전체화면일 때 살짝 더 내려오게 조정
             
@@ -1139,6 +1177,8 @@ class CharacterWidget(QWidget):
             if dialog.tts_settings_changed():
                 from VoiceCommand import initialize_tts
                 initialize_tts()
+            if dialog.character_settings_changed():
+                self.apply_display_settings()
             if dialog.theme_settings_changed():
                 try:
                     from ui.theme_runtime import apply_live_theme

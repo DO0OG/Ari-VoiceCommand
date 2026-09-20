@@ -1,0 +1,6 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+MAX_THINKING_TOKENS = "10000"
+CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = "50"

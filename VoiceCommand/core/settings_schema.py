@@ -77,6 +77,8 @@ DEFAULT_SETTINGS = {
     "tts_speed": 1.0,
     "tts_volume": 1.0,
     "tts_fallback_provider": "edge",
+    "character_scale": 1.0,          # 캐릭터 표시 배율 (0.3 ~ 3.0)
+    "character_ground_offset": 4,    # 캐릭터 바닥 정렬 보정값(px). 양수면 아래로 내려간다.
     "ui_theme_preset": "default",
     "ui_theme_scale": 1.0,
     "ui_font_family": "",

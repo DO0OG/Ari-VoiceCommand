@@ -44,6 +44,7 @@ class SettingsDialog(QDialog):
         "scenario", "history_instruction", "response_verbosity",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
+    CHARACTER_KEYS = {"character_scale", "character_ground_offset"}
     STT_KEYS = {
         "stt_provider", "whisper_model", "whisper_device", "whisper_compute_type",
         "wake_words", "stt_energy_threshold", "stt_dynamic_energy",
@@ -227,6 +228,25 @@ class SettingsDialog(QDialog):
         vbox.addWidget(stt_group)
         vbox.addWidget(group)
 
+        char_group = QGroupBox(_("캐릭터 표시 설정"))
+        cvbox = QVBoxLayout(char_group)
+        cvbox.addWidget(create_muted_label(
+            _("캐릭터 크기와 바닥에 서는 높이를 조절합니다. 커스텀 이미지를 쓸 때 "
+              "발이 바닥에서 뜨거나 파묻히면 바닥 보정값으로 맞추세요.")
+        ))
+
+        cvbox.addWidget(QLabel(_("캐릭터 크기 배율 (0.3 ~ 3.0):")))
+        self.char_scale_input = QLineEdit(str(self.settings.get("character_scale", 1.0)))
+        self.char_scale_input.setPlaceholderText(_("예: 1.0 (숫자가 클수록 크게 표시)"))
+        cvbox.addWidget(self.char_scale_input)
+
+        cvbox.addWidget(QLabel(_("바닥 보정값 (-200 ~ 200 px):")))
+        self.char_offset_input = QLineEdit(str(self.settings.get("character_ground_offset", 4)))
+        self.char_offset_input.setPlaceholderText(_("예: 4 (값을 키우면 아래로 내려감)"))
+        cvbox.addWidget(self.char_offset_input)
+
+        vbox.addWidget(char_group)
+
         theme_group = QGroupBox(_("UI 테마 설정"))
         tvbox = QVBoxLayout(theme_group)
 
@@ -399,6 +419,8 @@ class SettingsDialog(QDialog):
             # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),
             "audio_output_device": self.speaker_combo.currentData(),
+            "character_scale": max(0.3, min(3.0, self._float(self.char_scale_input.text(), 1.0))),
+            "character_ground_offset": max(-200, min(200, int(self._float(self.char_offset_input.text(), 4)))),
             "ui_theme_preset": self.theme_preset_combo.currentData(),
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),
@@ -442,6 +464,9 @@ class SettingsDialog(QDialog):
 
     def llm_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.LLM_KEYS)
+
+    def character_settings_changed(self) -> bool:
+        return any(key in self.changed_keys for key in self.CHARACTER_KEYS)
 
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)

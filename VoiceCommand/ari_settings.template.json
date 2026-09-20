@@ -49,6 +49,8 @@
   "tts_volume": 1.0,
   "tts_fallback_provider": "edge",
   "tts_wake_guard_seconds": 1.2,
+  "character_scale": 1.0,
+  "character_ground_offset": 4,
   "ui_theme_preset": "default",
   "ui_theme_scale": 1.0,
   "ui_font_family": "",
