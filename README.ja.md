@@ -1,7 +1,7 @@
 # 🎙️ Ari (アリ) — オープンソース Windows AI 音声アシスタント
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
+  <img src="docs/assets/ari-idle.gif" width="180" alt="アリ キャラクター" />
   <p align="center">
     <strong>ウェイクワード、多言語 STT/TTS、デスクトップ自動化、MCP ツール、プラグイン、ローカル LLM をサポートする Windows 向け音声アシスタント兼デスクトップエージェントです。</strong><br />
     Windows デスクトップで話しかけるだけで、Ari が内容を汲み取って処理を実行し、結果まで確かめます。使うほど手になじむ、オープンソースの Python/PySide6 製 AI アシスタントです。

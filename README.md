@@ -1,7 +1,7 @@
 # 🎙️ Ari — Open-Source Windows AI Voice Assistant
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
+  <img src="docs/assets/ari-idle.gif" width="180" alt="Ari character" />
   <p align="center">
     <strong>A Windows voice assistant and desktop agent with wake word, multilingual STT/TTS, desktop automation, MCP tools, plugins, and local LLM support.</strong><br />
     Ari is an open-source Python/PySide6 desktop assistant for Windows. It listens, does the work, checks the result, and gets better at it over time.
