@@ -71,5 +71,45 @@ class TimerManagerTests(unittest.TestCase):
         self.assertAlmostEqual(japanese or 0.0, 65.1666, places=2)
 
 
+    def test_stale_alarm_does_not_remove_replacement_timer(self):
+        timers = []
+        messages = []
+
+        def _factory(delay, cb):
+            timer = _FakeTimer(delay, cb)
+            timers.append(timer)
+            return timer
+
+        with patch("services.timer_manager.threading.Timer", side_effect=_factory):
+            manager = TimerManager(tts_callback=messages.append)
+            manager.set_timer(1, name="요리")
+            manager.set_timer(2, name="요리")
+            messages.clear()
+
+            timers[0].callback()
+
+        self.assertEqual([item["name"] for item in manager.list_timers()], ["요리"])
+        self.assertEqual(messages, [])
+
+    def test_current_alarm_removes_timer_and_notifies(self):
+        timers = []
+        messages = []
+
+        def _factory(delay, cb):
+            timer = _FakeTimer(delay, cb)
+            timers.append(timer)
+            return timer
+
+        with patch("services.timer_manager.threading.Timer", side_effect=_factory):
+            manager = TimerManager(tts_callback=messages.append)
+            manager.set_timer(1, name="요리")
+            messages.clear()
+
+            timers[0].callback()
+
+        self.assertEqual(manager.list_timers(), [])
+        self.assertEqual(len(messages), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

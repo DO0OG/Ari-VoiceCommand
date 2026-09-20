@@ -46,7 +46,7 @@ def _require_web_url(url: str) -> str:
 def _get(url: str) -> dict:
     req = urllib.request.Request(_require_web_url(url), headers=_BASE_HEADERS)
     # URL scheme/host validation is handled by _require_web_url().
-    with urllib.request.urlopen(req) as resp:  # nosec B310
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -58,7 +58,7 @@ def _post(url: str, body: dict) -> dict:
         method="POST",
     )
     # URL scheme/host validation is handled by _require_web_url().
-    with urllib.request.urlopen(req) as resp:  # nosec B310
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -174,7 +174,7 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
     # 3. ZIP 다운로드 및 압축 해제 (루트 레벨 .py 파일만)
     try:
         # release_url is validated through _require_web_url() before opening.
-        with urllib.request.urlopen(_require_web_url(release_url)) as resp:  # nosec B310
+        with urllib.request.urlopen(_require_web_url(release_url), timeout=30) as resp:  # nosec B310
             content = resp.read()
     except Exception as e:
         logger.error("ZIP 다운로드 실패: %s", e)
@@ -220,6 +220,6 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
             pm.load_plugin(path)
             logger.info("플러그인 로드: %s", fname)
     except Exception as e:
-        logger.warning("동적 로드 실패 (재시작 시 적용됨): %s", e)
+        raise RuntimeError(f"플러그인 파일은 저장되었지만 활성화에 실패했습니다: {e}") from e
 
     return True

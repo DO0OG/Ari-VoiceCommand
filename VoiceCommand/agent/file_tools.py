@@ -89,6 +89,12 @@ def merge_text_files(file_paths: List[str], output_path: str) -> str:
         output_path: 저장할 결과 파일 경로
     """
     try:
+        normalized_output = os.path.normcase(os.path.realpath(output_path))
+        for fname in file_paths:
+            if normalized_output == os.path.normcase(os.path.realpath(fname)) or (
+                os.path.exists(output_path) and os.path.exists(fname) and os.path.samefile(output_path, fname)
+            ):
+                raise ValueError("출력 파일은 입력 파일과 같을 수 없습니다.")
         with open(output_path, 'w', encoding='utf-8') as outfile:
             for fname in file_paths:
                 if not os.path.exists(fname):
@@ -285,17 +291,21 @@ def read_file(file_path: str, start_line: int = 1, end_line: Optional[int] = Non
         path = _normalize_path(file_path)
         if not os.path.isfile(path):
             return {"error": "파일이 존재하지 않습니다.", "file_path": path}
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
         start = max(1, int(start_line or 1))
-        end = int(end_line) if end_line else len(lines)
-        end = min(max(end, start), len(lines))
+        end = max(int(end_line), start) if end_line else None
+        lines = []
+        line_count = 0
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line_count, line in enumerate(f, 1):
+                if line_count >= start and (end is None or line_count <= end):
+                    lines.append(line)
+        end = min(end, line_count) if end is not None else line_count
         return {
             "file_path": path,
             "start_line": start,
             "end_line": end,
-            "line_count": len(lines),
-            "content": "".join(lines[start - 1:end]),
+            "line_count": line_count,
+            "content": "".join(lines),
         }
     except Exception as e:
         logger.error("read_file 오류: %s", e)
