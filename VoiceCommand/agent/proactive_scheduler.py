@@ -13,6 +13,8 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional, Any
 
+from i18n.translator import _
+
 _SCHEDULE_FILE: str = ""  # _init_schedule_file() 에서 설정
 _SCHEDULE_RUN_LOG_FILE: str = ""  # _init_schedule_log_file() 에서 설정
 _TICK_INTERVAL = 30
@@ -280,14 +282,14 @@ class ProactiveScheduler:
             if topics[top_topic] >= 3:
                 suggestions.append({
                     "type": "topic",
-                    "text": f"최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?",
+                    "text": _("최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?", top_topic=top_topic),
                     "goal": f"최근 관심사인 '{top_topic}'에 대한 최신 뉴스나 유용한 정보를 정리해줘"
                 })
         for topic_item in ctx_mgr.get_topic_recommendations(limit=2, include_strategy=True):
             topic_name = topic_item.split(":", 1)[0]
             suggestions.append({
                 "type": "topic_strategy",
-                "text": f"최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?",
+                "text": _("최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?", topic_name=topic_name),
                 "goal": f"최근 주제 '{topic_name}' 관련 작업 이어서 정리해줘",
             })
 
@@ -297,20 +299,20 @@ class ProactiveScheduler:
         for cmd in habitual_commands:
             suggestions.append({
                 "type": "habit",
-                "text": f"이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?",
+                "text": _("이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?", cmd=cmd),
                 "goal": cmd,
             })
 
         if 7 <= hour <= 9:
             suggestions.append({
                 "type": "routine",
-                "text": "좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?",
+                "text": _("좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?"),
                 "goal": "오늘 날씨와 주요 뉴스 요약 브리핑"
             })
         elif 22 <= hour <= 23:
             suggestions.append({
                 "type": "routine",
-                "text": "오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?",
+                "text": _("오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?"),
                 "goal": "내일 날씨와 기온 확인"
             })
 
@@ -346,9 +348,9 @@ class ProactiveScheduler:
         error = ""
         summary = ""
         if task.task_type == "alarm":
-            message = f"(기쁨) 알람 시간이에요! 요청하신 '{task.goal}' 시각입니다."
+            message = _("(기쁨) 알람 시간이에요! 요청하신 '{goal}' 시각입니다.", goal=task.goal)
             if task.alarm_sound:
-                message += f" 알림 사운드: {task.alarm_sound}"
+                message += _(" 알림 사운드: {alarm_sound}", alarm_sound=task.alarm_sound)
             summary = message
             success = True
             if self.tts:
@@ -362,14 +364,16 @@ class ProactiveScheduler:
                 from memory.memory_consolidator import get_memory_consolidator
                 days_ago = int(ConfigManager.get("memory_consolidation_days", 14))
                 result = get_memory_consolidator().run_all(days_ago=days_ago)
-                summary = (
-                    f"메모리 정리 완료: 사실 {result['facts']}개, "
-                    f"전략 {result['strategies']}개, 대화 {result['conversations']}건 정리"
+                summary = _(
+                    "메모리 정리 완료: 사실 {facts}개, 전략 {strategies}개, 대화 {conversations}건 정리",
+                    facts=result["facts"],
+                    strategies=result["strategies"],
+                    conversations=result["conversations"],
                 )
                 success = True
             except Exception as exc:
                 error = str(exc)
-                summary = "메모리 정리 실패"
+                summary = _("메모리 정리 실패")
                 logging.error("[Scheduler] 메모리 정리 실패: %s", exc)
             if self.tts and summary:
                 self.tts(summary if success else f"(걱정) {summary}: {error}")
@@ -383,7 +387,7 @@ class ProactiveScheduler:
                 success = True
             except Exception as exc:
                 error = str(exc)
-                summary = "주간 리포트 생성 실패"
+                summary = _("주간 리포트 생성 실패")
                 logging.error("[Scheduler] 주간 리포트 생성 실패: %s", exc)
             if self.tts and summary:
                 self.tts(summary if success else f"(걱정) {summary}: {error}")
@@ -392,24 +396,24 @@ class ProactiveScheduler:
 
         logging.info("[Scheduler] 작업 실행: %s", task.goal)
         if self.tts:
-            self.tts(f"(진지) 예약된 작업을 시작할게요: {task.goal}")
+            self.tts(_("(진지) 예약된 작업을 시작할게요: {goal}", goal=task.goal))
         
         if not self._orchestrator_func:
-            error = "오케스트레이터가 연결되지 않았습니다."
-            summary = "예약 작업을 실행할 수 없어요."
+            error = _("오케스트레이터가 연결되지 않았습니다.")
+            summary = _("예약 작업을 실행할 수 없어요.")
             self._finalize_task_run(task, started_at, False, error, summary, next_run_before, next_run_after)
             return
 
         try:
             res = self._orchestrator_func(task.goal)
-            summary = getattr(res, "summary", "작업 완료")
+            summary = getattr(res, "summary", _("작업 완료"))
             success = bool(getattr(res, "achieved", True))
             if self.tts:
                 self.tts(summary)
         except Exception as e:
             logging.error("[Scheduler] 실행 실패: %s", e)
             error = str(e)
-            summary = "예약 작업 실행 실패"
+            summary = _("예약 작업 실행 실패")
         self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
 
     def check_missed_tasks_on_startup(self):
@@ -583,7 +587,7 @@ class ProactiveScheduler:
         next_run_after: str,
     ) -> None:
         finished_at = datetime.now().isoformat()
-        status_text = summary if summary else (error or "실행 결과 없음")
+        status_text = summary if summary else (error or _("실행 결과 없음"))
         with self._lock:
             current = self._tasks.get(task.task_id)
             if current is not None:
@@ -629,7 +633,7 @@ class ProactiveScheduler:
         summary: str,
     ) -> None:
         synthetic_goal = f"[예약:{task.task_type}] {task.goal}"
-        status_summary = (summary or error or "예약 작업 실행")[:300]
+        status_summary = (summary or error or _("예약 작업 실행"))[:300]
         try:
             started = datetime.fromisoformat(started_at)
             finished = datetime.fromisoformat(finished_at)

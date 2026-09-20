@@ -2539,3 +2539,126 @@ msgstr "에이전트"
 
 msgid "재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):"
 msgstr "재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):"
+
+msgid "최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?"
+msgstr "최근 '{top_topic}'에 대해 자주 대화하셨네요. 관련 정보를 더 찾아드릴까요?"
+
+msgid "최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?"
+msgstr "최근 주제 '{topic_name}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?"
+
+msgid "이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?"
+msgstr "이 시간대에는 '{cmd}' 관련 요청이 많았어요. 바로 도와드릴까요?"
+
+msgid "좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?"
+msgstr "좋은 아침이에요! 오늘 날씨와 주요 뉴스를 요약해 드릴까요?"
+
+msgid "오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?"
+msgstr "오늘 하루 수고 많으셨어요. 내일 날씨를 미리 확인해 드릴까요?"
+
+msgid "(기쁨) 알람 시간이에요! 요청하신 '{goal}' 시각입니다."
+msgstr "(기쁨) 알람 시간이에요! 요청하신 '{goal}' 시각입니다."
+
+msgid " 알림 사운드: {alarm_sound}"
+msgstr " 알림 사운드: {alarm_sound}"
+
+msgid "메모리 정리 완료: 사실 {facts}개, 전략 {strategies}개, 대화 {conversations}건 정리"
+msgstr "메모리 정리 완료: 사실 {facts}개, 전략 {strategies}개, 대화 {conversations}건 정리"
+
+msgid "메모리 정리 실패"
+msgstr "메모리 정리 실패"
+
+msgid "주간 리포트 생성 실패"
+msgstr "주간 리포트 생성 실패"
+
+msgid "(진지) 예약된 작업을 시작할게요: {goal}"
+msgstr "(진지) 예약된 작업을 시작할게요: {goal}"
+
+msgid "오케스트레이터가 연결되지 않았습니다."
+msgstr "오케스트레이터가 연결되지 않았습니다."
+
+msgid "예약 작업을 실행할 수 없어요."
+msgstr "예약 작업을 실행할 수 없어요."
+
+msgid "작업 완료"
+msgstr "작업 완료"
+
+msgid "예약 작업 실행 실패"
+msgstr "예약 작업 실행 실패"
+
+msgid "실행 결과 없음"
+msgstr "실행 결과 없음"
+
+msgid "예약 작업 실행"
+msgstr "예약 작업 실행"
+
+msgid "자주 하는 작업을 아직 충분히 배우지 못했어요."
+msgstr "자주 하는 작업을 아직 충분히 배우지 못했어요."
+
+msgid "자주 하는 작업은 {goals}예요."
+msgstr "자주 하는 작업은 {goals}예요."
+
+msgid "아직 떠올릴 만한 기록이 충분하지 않아요."
+msgstr "아직 떠올릴 만한 기록이 충분하지 않아요."
+
+msgid "기억나는 최근 기록은 {records}"
+msgstr "기억나는 최근 기록은 {records}"
+
+msgid "아직 저장된 스킬이 없어요."
+msgstr "아직 저장된 스킬이 없어요."
+
+msgid "현재 스킬은 {skills}예요."
+msgstr "현재 스킬은 {skills}예요."
+
+msgid "삭제할 스킬이 없어요."
+msgstr "삭제할 스킬이 없어요."
+
+msgid "{name} 스킬을 비활성화했어요."
+msgstr "{name} 스킬을 비활성화했어요."
+
+msgid "메모리 정리를 마쳤어요. 사실 {facts}개, 전략 {strategies}개가 현재 유지 중이에요."
+msgstr "메모리 정리를 마쳤어요. 사실 {facts}개, 전략 {strategies}개가 현재 유지 중이에요."
+
+msgid "어떤 음악이나 영상을 재생할까요?"
+msgstr "어떤 음악이나 영상을 재생할까요?"
+
+msgid "캐릭터 위젯이 아직 초기화되지 않았습니다."
+msgstr "캐릭터 위젯이 아직 초기화되지 않았습니다."
+
+msgid "현재 화면 정보를 확인할 수 없습니다."
+msgstr "현재 화면 정보를 확인할 수 없습니다."
+
+msgid "현재 화면 상태: {mode}\n"
+msgstr "현재 화면 상태: {mode}\n"
+
+msgid "[전체화면 모드]"
+msgstr "[전체화면 모드]"
+
+msgid "[일반 모드]"
+msgstr "[일반 모드]"
+
+msgid "- 가용 화면 크기: {width}x{height}\n"
+msgstr "- 가용 화면 크기: {width}x{height}\n"
+
+msgid "- 전체 모니터 크기: {width}x{height}\n"
+msgstr "- 전체 모니터 크기: {width}x{height}\n"
+
+msgid "- 현재 작업표시줄이 화면의 일부를 차지하고 있어, 저는 작업표시줄 바로 위에 서 있습니다."
+msgstr "- 현재 작업표시줄이 화면의 일부를 차지하고 있어, 저는 작업표시줄 바로 위에 서 있습니다."
+
+msgid "- 현재 게임이나 영상이 전체화면으로 실행 중이거나 작업표시줄이 숨겨져 있어, 저는 화면 맨 아래 바닥에 서 있습니다."
+msgstr "- 현재 게임이나 영상이 전체화면으로 실행 중이거나 작업표시줄이 숨겨져 있어, 저는 화면 맨 아래 바닥에 서 있습니다."
+
+msgid "화면 상태 확인 중 오류 발생: {error}"
+msgstr "화면 상태 확인 중 오류 발생: {error}"
+
+msgid "검색 오류: {error}"
+msgstr "검색 오류: {error}"
+
+msgid "페이지 로드 오류: {error}"
+msgstr "페이지 로드 오류: {error}"
+
+msgid "AI 기능을 사용할 수 없습니다."
+msgstr "AI 기능을 사용할 수 없습니다."
+
+msgid "응답 생성 중 오류가 발생했습니다."
+msgstr "응답 생성 중 오류가 발생했습니다."
