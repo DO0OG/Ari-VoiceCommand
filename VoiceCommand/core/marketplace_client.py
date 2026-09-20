@@ -13,6 +13,8 @@ import urllib.request
 import zipfile
 from typing import Dict, List, Optional
 
+from i18n.translator import _
+
 logger = logging.getLogger(__name__)
 
 MARKETPLACE_API = os.environ.get(
@@ -39,7 +41,7 @@ def _require_web_url(url: str) -> str:
     """Bandit B310 대응: http/https URL만 허용한다."""
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"허용되지 않는 URL입니다: {url}")
+        raise ValueError(_("허용되지 않는 URL입니다: {url}", url=url))
     return url
 
 
@@ -220,6 +222,6 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
             pm.load_plugin(path)
             logger.info("플러그인 로드: %s", fname)
     except Exception as e:
-        raise RuntimeError(f"플러그인 파일은 저장되었지만 활성화에 실패했습니다: {e}") from e
+        raise RuntimeError(_("플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}", error=e)) from e
 
     return True

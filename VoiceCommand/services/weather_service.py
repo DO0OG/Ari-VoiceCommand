@@ -9,6 +9,8 @@ import time
 
 import requests
 
+from i18n.translator import _
+
 
 # WMO 날씨 코드 → 한국어
 WMO_CODE = {
@@ -81,7 +83,7 @@ class WeatherService:
             # 한국어 변환
             city = CITY_NAME_MAP.get(city_eng, city_eng)
             if not city:
-                city = "주변"
+                city = _("주변")
 
             logging.info(f"IP 위치: {city_eng} -> {city} ({lat}, {lon})")
             resolved = (lat, lon, city)
@@ -194,26 +196,26 @@ class WeatherService:
                 temp = current["temperature_2m"]
                 humidity = current["relative_humidity_2m"]
                 rain = current["precipitation"]
-                status = WMO_CODE.get(current["weather_code"], "알 수 없음")
+                status = _(WMO_CODE.get(current["weather_code"], "알 수 없음"))
             else:
                 temp = (t_max + t_min) / 2
                 humidity = None
                 rain = 0
-                status = WMO_CODE.get(forecast_code, "알 수 없음")
+                status = _(WMO_CODE.get(forecast_code, "알 수 없음"))
 
             location = f"{city} " if city else ""
-            day_label = "현재" if day_offset == 0 else ("내일" if day_offset == 1 else "모레")
-            info = f"{location}{day_label} 날씨는 {status}입니다. "
-            info += f"기온은 {temp:.0f}도"
+            day_label = _("현재") if day_offset == 0 else (_("내일") if day_offset == 1 else _("모레"))
+            info = _("{location}{day_label} 날씨는 {status}입니다. ", location=location, day_label=day_label, status=status)
+            info += _("기온은 {temp:.0f}도", temp=temp)
             if humidity is not None:
-                info += f", 습도는 {humidity}%"
+                info += _(", 습도는 {humidity}%", humidity=humidity)
             if rain > 0:
-                info += f", 강수량은 {rain:.1f}밀리미터"
-            info += "입니다. "
-            info += f"{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도"
+                info += _(", 강수량은 {rain:.1f}밀리미터", rain=rain)
+            info += _("입니다. ")
+            info += _("{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도", day_label=day_label, t_max=t_max, t_min=t_min)
             if pop is not None:
-                info += f", 강수 확률은 {pop}%"
-            info += "입니다."
+                info += _(", 강수 확률은 {pop}%", pop=pop)
+            info += _("입니다.")
 
             with self._cache_lock:
                 self._weather_cache[cache_key] = (now, info)
@@ -221,7 +223,7 @@ class WeatherService:
 
         except requests.exceptions.RequestException as e:
             logging.error(f"날씨 요청 오류: {e}")
-            return "날씨 정보를 가져오는 데 실패했습니다."
+            return _("날씨 정보를 가져오는 데 실패했습니다.")
         except Exception as e:
             logging.error(f"날씨 처리 오류: {e}", exc_info=True)
-            return "날씨 정보를 가져오는 중 오류가 발생했습니다."
+            return _("날씨 정보를 가져오는 중 오류가 발생했습니다.")

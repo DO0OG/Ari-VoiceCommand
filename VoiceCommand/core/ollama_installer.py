@@ -15,6 +15,8 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
+from i18n.translator import _
+
 
 OLLAMA_WINDOWS_INSTALLER_URL = "https://ollama.com/download/OllamaSetup.exe"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
@@ -82,23 +84,23 @@ def _require_http_url(url: str, allowed_hosts: set[str]) -> str:
     parsed = urllib.parse.urlparse(url)
     host = (parsed.hostname or "").lower()
     if parsed.scheme not in {"http", "https"} or host not in allowed_hosts:
-        raise ValueError(f"허용되지 않는 URL입니다: {url}")
+        raise ValueError(_("허용되지 않는 URL입니다: {url}", url=url))
     return url
 
 
 def _require_existing_executable(path: str, allowed_names: set[str]) -> str:
     candidate = os.path.abspath(path or "")
     if not candidate or not os.path.exists(candidate):
-        raise FileNotFoundError(f"실행 파일을 찾을 수 없습니다: {path}")
+        raise FileNotFoundError(_("실행 파일을 찾을 수 없습니다: {path}", path=path))
     if os.path.basename(candidate).lower() not in {name.lower() for name in allowed_names}:
-        raise ValueError(f"허용되지 않는 실행 파일입니다: {candidate}")
+        raise ValueError(_("허용되지 않는 실행 파일입니다: {candidate}", candidate=candidate))
     return candidate
 
 
 def _validate_model_name(model: str) -> str:
     name = str(model or "").strip()
     if not _SAFE_MODEL_RE.fullmatch(name):
-        raise ValueError(f"허용되지 않는 모델 이름입니다: {model}")
+        raise ValueError(_("허용되지 않는 모델 이름입니다: {model}", model=model))
     return name
 
 
@@ -122,7 +124,7 @@ def _post_local_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
 
 
 def _download_installer(target_path: str, log: Callable[[str], None]) -> None:
-    log("Ollama 설치 파일 다운로드 중...")
+    log(_("Ollama 설치 파일 다운로드 중..."))
     request = urllib.request.Request(_require_http_url(OLLAMA_WINDOWS_INSTALLER_URL, {"ollama.com"}))
     # _require_http_url() restricts this download to the official ollama.com host.
     with urllib.request.urlopen(request, timeout=30.0) as response:  # nosec B310
@@ -135,12 +137,12 @@ def _run_installer(installer_path: str, install_dir: str | None, log: Callable[[
     arguments = ""
     if install_dir:
         arguments = f'/DIR="{os.path.abspath(install_dir)}"'
-    log("Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요.")
+    log(_("Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요."))
     import ctypes
 
     result = ctypes.windll.shell32.ShellExecuteW(None, "open", safe_installer, arguments or None, None, 1)
     if result <= 32:
-        raise RuntimeError(f"Ollama 설치 프로그램 실행 실패: {result}")
+        raise RuntimeError(_("Ollama 설치 프로그램 실행 실패: {result}", result=result))
 
 
 def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
@@ -150,7 +152,7 @@ def _set_models_env(models_dir: str, log: Callable[[str], None]) -> None:
     current = os.environ.get("OLLAMA_MODELS", "").strip()
     if os.path.normcase(current) == os.path.normcase(models_dir):
         return
-    log(f"모델 저장 경로 설정: {models_dir}")
+    log(_("모델 저장 경로 설정: {models_dir}", models_dir=models_dir))
     try:
         import winreg
 
@@ -173,7 +175,7 @@ def ensure_ollama_server(ollama_exe: str, base_url: str, log: Callable[[str], No
     if _server_ready(base_url):
         return
 
-    log("Ollama 서버를 시작합니다...")
+    log(_("Ollama 서버를 시작합니다..."))
     validated_exe = _require_existing_executable(ollama_exe, {"ollama.exe", "ollama"})
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.Popen(
@@ -190,7 +192,7 @@ def ensure_ollama_server(ollama_exe: str, base_url: str, log: Callable[[str], No
         if _server_ready(base_url):
             return
         time.sleep(0.5)
-    raise RuntimeError("Ollama 서버가 30초 내에 시작되지 않았습니다.")
+    raise RuntimeError(_("Ollama 서버가 30초 내에 시작되지 않았습니다."))
 
 
 def pull_models(
@@ -203,7 +205,7 @@ def pull_models(
     _require_existing_executable(ollama_exe, {"ollama.exe", "ollama"})
     for model in normalize_models(models):
         safe_model = _validate_model_name(model)
-        log(f"모델 다운로드 중: {safe_model}")
+        log(_("모델 다운로드 중: {safe_model}", safe_model=safe_model))
         _post_local_json(f"{base_url}/api/pull", {"name": safe_model, "stream": False}, timeout=120.0)
         installed.append(safe_model)
     return installed
@@ -217,7 +219,7 @@ def install_ollama(
 ) -> dict:
     """Windows에서 Ollama를 설치하고 선택한 모델을 내려받는다."""
     if os.name != "nt":
-        raise RuntimeError("Ollama 자동 설치는 현재 Windows만 지원합니다.")
+        raise RuntimeError(_("Ollama 자동 설치는 현재 Windows만 지원합니다."))
 
     logger = log or print
     target_install_dir = os.path.abspath(install_dir) if install_dir else None
@@ -232,11 +234,11 @@ def install_ollama(
         _download_installer(installer_path, logger)
         _run_installer(installer_path, target_install_dir, logger)
     else:
-        logger("Ollama가 이미 설치되어 있어 설치 단계는 건너뜁니다.")
+        logger(_("Ollama가 이미 설치되어 있어 설치 단계는 건너뜁니다."))
 
     ollama_exe = find_ollama_executable()
     if not ollama_exe:
-        raise RuntimeError("설치 후에도 ollama.exe를 찾지 못했습니다.")
+        raise RuntimeError(_("설치 후에도 ollama.exe를 찾지 못했습니다."))
 
     ensure_ollama_server(ollama_exe, DEFAULT_OLLAMA_BASE_URL, logger)
     installed_models = pull_models(
@@ -246,7 +248,7 @@ def install_ollama(
         logger,
     )
 
-    logger("Ollama 설치 작업이 완료되었습니다.")
+    logger(_("Ollama 설치 작업이 완료되었습니다."))
     return {
         "ollama_exe": ollama_exe,
         "install_dir": target_install_dir or os.path.dirname(ollama_exe),
