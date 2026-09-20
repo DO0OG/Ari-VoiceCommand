@@ -4,7 +4,9 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QFrame, QLabel
+from PySide6.QtWidgets import (
+    QApplication, QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget,
+)
 
 
 from agent.proactive_scheduler import ScheduledTask
@@ -132,6 +134,37 @@ class TextInterfaceStreamingTests(unittest.TestCase):
 
         self.assertLessEqual(bubble.maximumWidth(), widget.width())
         self.assertLess(bubble.maximumWidth(), widget.width())
+
+    def test_chat_widget_bubble_grows_with_wrapped_lines(self):
+        # 실제 UI와 같이 크기 조절되는 스크롤 영역 안에 넣어야 잘림이 재현된다.
+        host = QWidget()
+        host_layout = QVBoxLayout(host)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        widget = ChatWidget()
+        scroll.setWidget(widget)
+        host_layout.addWidget(scroll)
+        host.resize(600, 800)
+        host.show()
+        self.addCleanup(host.close)
+        self._app.processEvents()
+
+        widget.add_message("긴 응답 " * 30, is_user=False)
+        self._app.processEvents()
+        widget.layout().activate()
+
+        row_layout = widget.layout().itemAt(0).widget().layout()
+        bubble = next(
+            item.widget()
+            for index in range(row_layout.count())
+            if (item := row_layout.itemAt(index)).widget() and isinstance(item.widget(), QFrame)
+        )
+        msg_lbl = max(bubble.findChildren(QLabel), key=lambda lbl: len(lbl.text()))
+
+        # 배정된 폭에서 줄바꿈된 본문이 잘리지 않아야 한다.
+        needed = msg_lbl.heightForWidth(msg_lbl.width())
+        self.assertGreater(needed, 0)
+        self.assertGreaterEqual(msg_lbl.height(), needed)
 
     def test_chat_widget_preserves_message_timestamp_across_rerender(self):
         widget = ChatWidget()

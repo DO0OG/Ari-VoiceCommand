@@ -91,12 +91,17 @@ class ChatWidget(QFrame):
         bg_color     = COLOR_BG_CHAT_USER if is_user else COLOR_BG_CHAT_AARI
         corner_style = "border-top-right-radius: 0px;" if is_user else "border-top-left-radius: 0px;"
 
+        bubble_width = self._bubble_max_width()
         msg_frame = QFrame()
         msg_frame.setObjectName("chatMessageBubble")
-        msg_frame.setMaximumWidth(self._bubble_max_width())
+        msg_frame.setMaximumWidth(bubble_width)
         msg_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         msg_lay = QVBoxLayout(msg_frame)
         msg_lay.setContentsMargins(15, 10, 15, 10)
+        # 라벨에도 최대 폭을 걸어야 줄바꿈된 높이가 sizeHint에 반영된다.
+        # 이 값이 없으면 스크롤 영역이 한 줄 높이로만 말풍선을 잡아 긴 글이 잘린다.
+        text_width = max(1, bubble_width - msg_lay.contentsMargins().left()
+                         - msg_lay.contentsMargins().right())
 
         sender_lbl = QLabel(sender_name)
         sender_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL + 1, QFont.Bold))
@@ -104,6 +109,7 @@ class ChatWidget(QFrame):
         sender_lbl.setWordWrap(True)
         sender_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         sender_lbl.setMinimumWidth(0)
+        sender_lbl.setMaximumWidth(text_width)
 
         msg_lbl = QLabel(display_message)
         msg_lbl.setWordWrap(True)
@@ -111,6 +117,7 @@ class ChatWidget(QFrame):
         msg_lbl.setStyleSheet(f"color: {COLOR_TEXT_PRIMARY}; margin: 2px 0px;")
         msg_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         msg_lbl.setMinimumWidth(0)
+        msg_lbl.setMaximumWidth(text_width)
 
         time_lbl = QLabel(timestamp)
         time_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
