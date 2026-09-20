@@ -284,6 +284,28 @@ class CharacterWidgetHelperTests(unittest.TestCase):
         self.assertIsNone(widget.image_cache.get("stale"))
         update_frame.assert_called_once()
 
+    def test_apply_display_settings_uses_given_values_without_reading_config(self):
+        widget = self._make_widget()
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings") as load_settings,
+            patch.object(widget, "update_frame"),
+        ):
+            widget.apply_display_settings(scale=1.8, ground_offset=-20)
+
+        load_settings.assert_not_called()
+        self.assertEqual(widget.image_scale, 1.8)
+        self.assertEqual(widget.ground_offset, -20)
+
+    def test_apply_display_settings_clamps_preview_values(self):
+        widget = self._make_widget()
+
+        with patch.object(widget, "update_frame"):
+            widget.apply_display_settings(scale=50.0, ground_offset=5000)
+
+        self.assertEqual(widget.image_scale, CharacterWidget.SCALE_MAX)
+        self.assertEqual(widget.ground_offset, CharacterWidget.GROUND_OFFSET_MAX)
+
     def test_update_current_screen_tracks_screen_by_widget_center(self):
         widget = self._make_widget()
         primary = _FakeScreen(QRect(0, 0, 1920, 1080))

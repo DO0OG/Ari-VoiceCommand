@@ -406,9 +406,21 @@ class CharacterWidget(QWidget):
         ))
         return self.image_scale, self.ground_offset
 
-    def apply_display_settings(self):
-        """설정 변경 후 표시 배율과 바닥 위치를 다시 적용한다."""
-        self._load_display_settings()
+    def apply_display_settings(self, scale=None, ground_offset=None):
+        """표시 배율과 바닥 위치를 다시 적용한다.
+
+        값을 넘기지 않으면 저장된 설정을 읽는다. 설정 창의 실시간 미리보기는
+        저장 전 값을 직접 넘겨 호출한다.
+        """
+        if scale is None and ground_offset is None:
+            self._load_display_settings()
+        else:
+            if scale is not None:
+                self.image_scale = self._clamp(scale, self.SCALE_MIN, self.SCALE_MAX, self.image_scale)
+            if ground_offset is not None:
+                self.ground_offset = int(self._clamp(
+                    ground_offset, self.GROUND_OFFSET_MIN, self.GROUND_OFFSET_MAX, self.ground_offset
+                ))
         self.image_cache.cache.clear()
         self.update_frame()
 
@@ -1177,8 +1189,6 @@ class CharacterWidget(QWidget):
             if dialog.tts_settings_changed():
                 from VoiceCommand import initialize_tts
                 initialize_tts()
-            if dialog.character_settings_changed():
-                self.apply_display_settings()
             if dialog.theme_settings_changed():
                 try:
                     from ui.theme_runtime import apply_live_theme
