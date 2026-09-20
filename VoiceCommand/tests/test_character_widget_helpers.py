@@ -236,6 +236,76 @@ class CharacterWidgetHelperTests(unittest.TestCase):
                 QRect(-1280, -50, 4880, 1174),
             )
 
+    def test_display_settings_are_clamped_to_allowed_range(self):
+        widget = self._make_widget()
+        settings = {"character_scale": 99.0, "character_ground_offset": -9999}
+
+        with patch("core.config_manager.ConfigManager.load_settings", return_value=settings):
+            widget._load_display_settings()
+
+        self.assertEqual(widget.image_scale, CharacterWidget.SCALE_MAX)
+        self.assertEqual(widget.ground_offset, CharacterWidget.GROUND_OFFSET_MIN)
+
+    def test_display_settings_fall_back_to_defaults_on_invalid_value(self):
+        widget = self._make_widget()
+        settings = {"character_scale": "abc", "character_ground_offset": None}
+
+        with patch("core.config_manager.ConfigManager.load_settings", return_value=settings):
+            widget._load_display_settings()
+
+        self.assertEqual(widget.image_scale, 1.0)
+        self.assertEqual(widget.ground_offset, CharacterWidget.GROUND_OFFSET_DEFAULT)
+
+    def test_get_ground_y_reflects_configured_ground_offset(self):
+        widget = self._make_widget()
+        screen = QRect(0, 0, 1920, 1040)
+
+        with patch.object(widget, "get_screen_geometry", return_value=screen):
+            widget.ground_offset = 4
+            default_y = widget.get_ground_y(height=300)
+            widget.ground_offset = -30
+            raised_y = widget.get_ground_y(height=300)
+
+        self.assertEqual(default_y - raised_y, 34)
+
+    def test_apply_display_settings_clears_cache_and_refreshes_frame(self):
+        widget = self._make_widget()
+        widget.image_cache.put("stale", object())
+        settings = {"character_scale": 1.5, "character_ground_offset": 10}
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value=settings),
+            patch.object(widget, "update_frame") as update_frame,
+        ):
+            widget.apply_display_settings()
+
+        self.assertEqual(widget.image_scale, 1.5)
+        self.assertEqual(widget.ground_offset, 10)
+        self.assertIsNone(widget.image_cache.get("stale"))
+        update_frame.assert_called_once()
+
+    def test_apply_display_settings_uses_given_values_without_reading_config(self):
+        widget = self._make_widget()
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings") as load_settings,
+            patch.object(widget, "update_frame"),
+        ):
+            widget.apply_display_settings(scale=1.8, ground_offset=-20)
+
+        load_settings.assert_not_called()
+        self.assertEqual(widget.image_scale, 1.8)
+        self.assertEqual(widget.ground_offset, -20)
+
+    def test_apply_display_settings_clamps_preview_values(self):
+        widget = self._make_widget()
+
+        with patch.object(widget, "update_frame"):
+            widget.apply_display_settings(scale=50.0, ground_offset=5000)
+
+        self.assertEqual(widget.image_scale, CharacterWidget.SCALE_MAX)
+        self.assertEqual(widget.ground_offset, CharacterWidget.GROUND_OFFSET_MAX)
+
     def test_update_current_screen_tracks_screen_by_widget_center(self):
         widget = self._make_widget()
         primary = _FakeScreen(QRect(0, 0, 1920, 1080))

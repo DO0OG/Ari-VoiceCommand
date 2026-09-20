@@ -2350,3 +2350,24 @@ msgstr "  1. Open Ari Settings → TTS mode → select Local (CosyVoice3)"
 
 msgid "  2. 설정 → CosyVoice 경로 → {path} 입력 (또는 자동 감지)"
 msgstr "  2. Open Settings → CosyVoice path → enter {path} (or use auto-detection)"
+
+msgid "캐릭터 표시 설정"
+msgstr "Character Display"
+
+msgid "슬라이더를 움직이면 화면의 아리에게 바로 반영됩니다. 취소하면 원래대로 돌아갑니다."
+msgstr "Changes apply to Ari on screen as you drag. Cancel restores the previous values."
+
+msgid "크기"
+msgstr "Size"
+
+msgid "작게 30% ↔ 크게 300% (기본 100%)"
+msgstr "Smaller 30% ↔ Larger 300% (default 100%)"
+
+msgid "바닥 위치"
+msgstr "Ground Position"
+
+msgid "왼쪽은 위로, 오른쪽은 아래로 내려갑니다. 직접 만든 이미지의 발이 바닥에서 뜨거나 파묻힐 때 맞추세요."
+msgstr "Left moves up, right moves down. Use this when a custom image floats above or sinks below the ground."
+
+msgid "기본값으로 되돌리기"
+msgstr "Reset to defaults"

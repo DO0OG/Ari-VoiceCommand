@@ -8,8 +8,9 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
     QComboBox, QGroupBox, QWidget,
-    QTabWidget, QMessageBox, QFrame,
+    QTabWidget, QMessageBox, QFrame, QSlider,
 )
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from core.config_manager import ConfigManager
@@ -44,6 +45,7 @@ class SettingsDialog(QDialog):
         "scenario", "history_instruction", "response_verbosity",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
+    CHARACTER_KEYS = {"character_scale", "character_ground_offset"}
     STT_KEYS = {
         "stt_provider", "whisper_model", "whisper_device", "whisper_compute_type",
         "wake_words", "stt_energy_threshold", "stt_dynamic_energy",
@@ -227,6 +229,8 @@ class SettingsDialog(QDialog):
         vbox.addWidget(stt_group)
         vbox.addWidget(group)
 
+        vbox.addWidget(self._create_character_group())
+
         theme_group = QGroupBox(_("UI 테마 설정"))
         tvbox = QVBoxLayout(theme_group)
 
@@ -290,6 +294,98 @@ class SettingsDialog(QDialog):
 
         vbox.addStretch()
         return widget
+
+    # ── 캐릭터 표시 설정 ──────────────────────────────────────────────────────
+
+    def _create_character_group(self) -> QGroupBox:
+        """캐릭터 크기와 바닥 위치를 슬라이더로 조절한다. 움직이는 즉시 미리보기가 반영된다."""
+        group = QGroupBox(_("캐릭터 표시 설정"))
+        layout = QVBoxLayout(group)
+        layout.addWidget(create_muted_label(
+            _("슬라이더를 움직이면 화면의 아리에게 바로 반영됩니다. 취소하면 원래대로 돌아갑니다.")
+        ))
+
+        self._original_char_scale = float(self.settings.get("character_scale", 1.0))
+        self._original_char_offset = int(self.settings.get("character_ground_offset", 4))
+
+        # 크기 — 퍼센트로 보여주는 편이 배율 숫자보다 읽기 쉽다.
+        size_row = QHBoxLayout()
+        size_row.addWidget(QLabel(_("크기")))
+        self.char_scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.char_scale_slider.setRange(30, 300)
+        self.char_scale_slider.setSingleStep(5)
+        self.char_scale_slider.setPageStep(10)
+        self.char_scale_slider.setValue(int(round(self._original_char_scale * 100)))
+        size_row.addWidget(self.char_scale_slider, 1)
+        self.char_scale_value = QLabel()
+        self.char_scale_value.setMinimumWidth(56)
+        size_row.addWidget(self.char_scale_value)
+        layout.addLayout(size_row)
+        layout.addWidget(create_muted_label(_("작게 30% ↔ 크게 300% (기본 100%)")))
+
+        # 바닥 위치 — 부호의 의미를 라벨로 드러낸다.
+        offset_row = QHBoxLayout()
+        offset_row.addWidget(QLabel(_("바닥 위치")))
+        self.char_offset_slider = QSlider(Qt.Orientation.Horizontal)
+        self.char_offset_slider.setRange(-200, 200)
+        self.char_offset_slider.setSingleStep(1)
+        self.char_offset_slider.setPageStep(5)
+        self.char_offset_slider.setValue(self._original_char_offset)
+        offset_row.addWidget(self.char_offset_slider, 1)
+        self.char_offset_value = QLabel()
+        self.char_offset_value.setMinimumWidth(56)
+        offset_row.addWidget(self.char_offset_value)
+        layout.addLayout(offset_row)
+        layout.addWidget(create_muted_label(
+            _("왼쪽은 위로, 오른쪽은 아래로 내려갑니다. 직접 만든 이미지의 발이 바닥에서 뜨거나 파묻힐 때 맞추세요.")
+        ))
+
+        reset_btn = QPushButton(_("기본값으로 되돌리기"))
+        reset_btn.setStyleSheet(secondary_btn_style())
+        reset_btn.clicked.connect(self._reset_character_display)
+        layout.addWidget(reset_btn)
+
+        self.char_scale_slider.valueChanged.connect(self._on_character_display_changed)
+        self.char_offset_slider.valueChanged.connect(self._on_character_display_changed)
+        self._refresh_character_labels()
+        return group
+
+    def _refresh_character_labels(self):
+        self.char_scale_value.setText(f"{self.char_scale_slider.value()}%")
+        offset = self.char_offset_slider.value()
+        self.char_offset_value.setText(f"{offset:+d}px")
+
+    def _on_character_display_changed(self, _value=None):
+        self._refresh_character_labels()
+        self._apply_character_display(
+            self.char_scale_slider.value() / 100.0,
+            self.char_offset_slider.value(),
+        )
+
+    def _reset_character_display(self):
+        defaults = ConfigManager.DEFAULT_SETTINGS
+        self.char_scale_slider.setValue(int(round(float(defaults.get("character_scale", 1.0)) * 100)))
+        self.char_offset_slider.setValue(int(defaults.get("character_ground_offset", 4)))
+
+    @staticmethod
+    def _apply_character_display(scale: float, ground_offset: int):
+        """실행 중인 캐릭터 위젯에 표시 설정을 반영한다. 위젯이 없으면 조용히 넘어간다."""
+        try:
+            from core.VoiceCommand import _state
+            widget = getattr(_state, "character_widget", None)
+            if widget is not None and hasattr(widget, "apply_display_settings"):
+                widget.apply_display_settings(scale=scale, ground_offset=ground_offset)
+        except Exception as exc:
+            logging.debug(f"캐릭터 표시 설정 반영 생략: {exc}")
+
+    def _restore_character_display(self):
+        """저장하지 않고 창을 닫으면 미리보기를 되돌린다."""
+        if hasattr(self, "_original_char_scale"):
+            self._apply_character_display(self._original_char_scale, self._original_char_offset)
+
+    def reject(self):
+        self._restore_character_display()
+        super().reject()
 
     # ── 유틸리티 ─────────────────────────────────────────────────────────────
 
@@ -399,6 +495,8 @@ class SettingsDialog(QDialog):
             # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),
             "audio_output_device": self.speaker_combo.currentData(),
+            "character_scale": round(self.char_scale_slider.value() / 100.0, 2),
+            "character_ground_offset": self.char_offset_slider.value(),
             "ui_theme_preset": self.theme_preset_combo.currentData(),
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),
@@ -416,6 +514,12 @@ class SettingsDialog(QDialog):
             if self.original_settings.get(key) != value
         }
         ConfigManager.save_settings(merged_settings)
+
+        if self.character_settings_changed():
+            self._apply_character_display(
+                merged_settings["character_scale"],
+                merged_settings["character_ground_offset"],
+            )
 
         if self.llm_settings_changed():
             try:
@@ -442,6 +546,9 @@ class SettingsDialog(QDialog):
 
     def llm_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.LLM_KEYS)
+
+    def character_settings_changed(self) -> bool:
+        return any(key in self.changed_keys for key in self.CHARACTER_KEYS)
 
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)

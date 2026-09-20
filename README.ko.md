@@ -1,7 +1,7 @@
 # 🎙️ Ari (아리) — 오픈소스 Windows AI 음성 어시스턴트
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fc8de4b7-57ca-4c22-812c-e5dcc7b45cdd" width="200" alt="Ari Logo" />
+  <img src="docs/assets/ari-idle.gif" width="180" alt="아리 캐릭터" />
   <p align="center">
     <strong>웨이크워드, 다국어 STT/TTS, 데스크톱 자동화, MCP 도구, 플러그인, 로컬 LLM을 지원하는 Windows용 음성 어시스턴트이자 데스크톱 에이전트입니다.</strong><br />
     Windows 데스크톱에서 음성으로 지시하면 아리가 알아듣고 작업을 처리한 뒤 결과까지 확인합니다. 쓸수록 손에 익는 오픈소스 Python/PySide6 기반 AI 어시스턴트입니다.
@@ -186,6 +186,8 @@ Windows 자동화, STT/TTS 연동, 로컬 모델 지원, PySide6 UX, 플러그�
 
 ## 에셋 및 출처
 
+- 기본 캐릭터 이미지 — **JAraTang** 작가님:
+  <https://www.pixiv.net/users/78194943>
 - `DNFBitBitv2` 폰트 — 공식 출처:
   <https://df.nexon.com/data/font/dnfbitbitv2>
 
