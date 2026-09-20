@@ -165,11 +165,11 @@ class LRUCache:
 
 class CharacterWidget(QWidget):
     _ANIMATION_SPECS = {
-        "idle": 8,
-        "walk": 9,
-        "drag": 8,
-        "fall": 8,
-        "sit": 9,
+        "idle": 10,
+        "walk": 10,
+        "drag": 10,
+        "fall": 10,
+        "sit": 10,
         "climb": 6,
         "ceiling": 4,
         "sleep": 4,
