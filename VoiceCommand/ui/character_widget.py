@@ -164,6 +164,9 @@ class LRUCache:
 
 
 class CharacterWidget(QWidget):
+    # 캐릭터 이미지 표시 배율. 리소스가 이미 표시 해상도로 제작되어 있어 1.0이 기본이다.
+    _IMAGE_SCALE = 1.0
+
     _ANIMATION_SPECS = {
         "idle": 10,
         "walk": 10,
@@ -361,8 +364,8 @@ class CharacterWidget(QWidget):
             image = image.transformed(transform, Qt.SmoothTransformation)
 
         scaled_image = image.scaled(
-            int(image.width() * 1.5),
-            int(image.height() * 1.5),
+            int(image.width() * self._IMAGE_SCALE),
+            int(image.height() * self._IMAGE_SCALE),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
@@ -561,7 +564,7 @@ class CharacterWidget(QWidget):
         screen_full = current_screen.geometry() if current_screen else screen
         is_full_screen = screen.height() >= screen_full.height() - 10
         
-        offset = 24 if self.current_animation == "sit" else 4
+        offset = 4
         if is_full_screen:
             offset -= 4 # 전체화면일 때 살짝 더 내려오게 조정
             
