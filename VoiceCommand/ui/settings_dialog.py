@@ -337,8 +337,7 @@ class SettingsDialog(QDialog):
         offset_row.addWidget(self.char_offset_value)
         layout.addLayout(offset_row)
         layout.addWidget(create_muted_label(
-            _("왼쪽으로 옮기면 위로, 오른쪽으로 옮기면 아래로 내려갑니다. "
-              "직접 만든 이미지의 발이 바닥에서 뜨거나 파묻힐 때 맞추세요.")
+            _("왼쪽은 위로, 오른쪽은 아래로 내려갑니다. 직접 만든 이미지의 발이 바닥에서 뜨거나 파묻힐 때 맞추세요.")
         ))
 
         reset_btn = QPushButton(_("기본값으로 되돌리기"))
