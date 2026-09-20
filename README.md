@@ -115,7 +115,7 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent**. It lis
 
 ### Recent Updates
 
-- **Telegram remote command bridge:** allow-listed chat authorization, long-polling, streaming via message edits, and screenshot photo forwarding (`telegram_enabled`, disabled by default).
+- **Telegram remote command bridge:** allow-listed chat authorization, long-polling, streaming via message edits, forwarding of screenshots and images produced by that request, and chunked delivery of replies longer than 4096 characters (`telegram_enabled`, disabled by default).
 - **Restricted generated image downloads:** the image generation tool now only downloads images from HTTPS URLs.
 - **Advanced autonomous agent features:** local MCP server (including file read/write tools), streaming/vision/file/app tools, interrupt & resume, audit logging, and an agent dashboard.
 - **Multilingual command routing:** LLMRouter, WeatherCommand, and the tool handlers now recognize Korean, English, and Japanese keywords, so the agent activates correctly in every supported locale.

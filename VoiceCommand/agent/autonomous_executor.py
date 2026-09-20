@@ -24,16 +24,8 @@ from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
 from i18n.translator import _
 
-# 자식 프로세스에 전달하지 않을 환경 변수 접두사 (API 키 등 민감 정보)
-_SENSITIVE_ENV_PREFIXES = (
-    "OPENAI_", "GROQ_", "ANTHROPIC_", "SUPABASE_",
-    "GEMINI_", "MISTRAL_", "COHERE_", "DEEPSEEK_",
-    "AWS_", "AZURE_", "GCP_", "GOOGLE_",
-    "GITHUB_", "GITLAB_", "DISCORD_", "SLACK_",
-    "DATABASE_", "DB_", "MONGO_", "REDIS_", "POSTGRES_",
-    "API_KEY", "SECRET_", "TOKEN_", "PASSWORD_", "PRIVATE_",
-)
-_SENSITIVE_ENV_SUBSTRINGS = ("API_KEY", "SECRET", "TOKEN", "PASSWORD", "PRIVATE")
+from agent.child_environment import _SENSITIVE_ENV_PREFIXES, _SENSITIVE_ENV_SUBSTRINGS, _is_sensitive_env_var, _build_child_env
+
 _SUBPROCESS_TIMEOUT_SECONDS = 30
 _PROCESS_KILL_WAIT_SECONDS = 5
 _PDF_BOTTOM_MARGIN_PX = 50
@@ -43,95 +35,7 @@ _PDF_FONT_CANDIDATES = (
     ("NotoSansCJK", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
     ("NotoSansKR", "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf"),
 )
-_ONE_LINE_SUITE_KEYWORDS = {
-    "with", "for", "if", "elif", "else", "try", "except",
-    "finally", "while", "def", "class", "match", "case",
-}
-
-
-def _is_sensitive_env_var(name: str) -> bool:
-    normalized = (name or "").upper()
-    return any(normalized.startswith(prefix) for prefix in _SENSITIVE_ENV_PREFIXES) or any(
-        token in normalized for token in _SENSITIVE_ENV_SUBSTRINGS
-    )
-
-
-def _build_child_env() -> dict:
-    """민감한 환경변수를 제외한 안전한 자식 프로세스 환경 반환."""
-    return {
-        k: v for k, v in os.environ.items()
-        if not _is_sensitive_env_var(k)
-    }
-
-
-def _split_top_level_semicolons(code: str) -> str:
-    """문자열/괄호 내부를 제외한 최상위 세미콜론만 줄바꿈으로 변환한다."""
-    lines = code.splitlines(keepends=True)
-    if not lines:
-        return code
-
-    line_offsets: list[int] = []
-    offset = 0
-    for line in lines:
-        line_offsets.append(offset)
-        offset += len(line)
-
-    def to_index(position: tuple[int, int]) -> int:
-        line_no, column = position
-        return line_offsets[line_no - 1] + column
-
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(code).readline))
-    except tokenize.TokenError:
-        return code
-
-    replacements: list[tuple[int, int]] = []
-    depth = 0
-    current_line = 1
-    first_name_on_line = ""
-    one_line_suite_active = False
-
-    for index, token in enumerate(tokens):
-        token_line = token.start[0]
-        if token_line != current_line:
-            current_line = token_line
-            first_name_on_line = ""
-            one_line_suite_active = False
-
-        if token.type == tokenize.NAME and not first_name_on_line:
-            first_name_on_line = token.string
-
-        if token.type != tokenize.OP:
-            continue
-
-        if token.string in "([{":
-            depth += 1
-            continue
-        if token.string in ")]}":
-            depth = max(0, depth - 1)
-            continue
-        if token.string == ":" and depth == 0 and first_name_on_line in _ONE_LINE_SUITE_KEYWORDS:
-            one_line_suite_active = True
-            continue
-        if token.string != ";" or depth != 0 or one_line_suite_active:
-            continue
-
-        start_index = to_index(token.start)
-        end_index = start_index + 1
-        for next_token in tokens[index + 1:]:
-            if next_token.start[0] != token_line:
-                break
-            end_index = to_index(next_token.start)
-            break
-        replacements.append((start_index, end_index))
-
-    if not replacements:
-        return code
-
-    normalized = code
-    for start_index, end_index in reversed(replacements):
-        normalized = f"{normalized[:start_index]}\n{normalized[end_index:]}"
-    return normalized
+from agent.source_normalization import _ONE_LINE_SUITE_KEYWORDS, _split_top_level_semicolons
 
 
 @dataclass
