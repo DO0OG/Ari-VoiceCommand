@@ -2662,3 +2662,300 @@ msgstr "AI機能を利用できません。"
 
 msgid "응답 생성 중 오류가 발생했습니다."
 msgstr "応答の生成中にエラーが発生しました。"
+
+msgid "일부 단계가 실패하여 목표를 달성하지 못했습니다."
+msgstr "一部の手順に失敗したため、目標を達成できませんでした。"
+
+msgid "실제 경로({filename})가 확인되어 작업을 완료했습니다."
+msgstr "実際のパス（{filename}）が確認されたため、タスクを完了しました。"
+
+msgid "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
+msgstr "実行後の状態変化の記録から、ブラウザーまたはアプリの状態変化を確認しました。"
+
+msgid "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
+msgstr "ブラウザーまたはアプリの状態が目標と一致したため、タスクを完了しました。"
+
+msgid "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
+msgstr "アクティブウィンドウのタイトルを確認し、アプリの実行状態を検証しました。"
+
+msgid "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
+msgstr "開いているウィンドウの一覧で、目標 URL と一致する状態を確認しました。"
+
+msgid "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
+msgstr "開いているウィンドウの一覧で、目標と一致するアプリの状態を確認しました。"
+
+msgid "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
+msgstr "画面画像の認識により、目標の状態を確認しました。"
+
+msgid "화면 상단에서 '{app_name}' 텍스트 확인됨"
+msgstr "画面上部で「{app_name}」というテキストを確認しました"
+
+msgid "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
+msgstr "OCR により「{app_name}」アプリが画面上で開いていることを確認しました"
+
+msgid "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
+msgstr "ワークフローの実行結果に開いた URL が記録されていたため、目標を達成しました。"
+
+msgid "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
+msgstr "ワークフローの実行結果にウィンドウタイトルと成功アクションが記録されていたため、タスクを完了しました。"
+
+msgid "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
+msgstr "現在のブラウザー状態を読み取り、目標と一致する実行結果を確認しました。"
+
+msgid "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
+msgstr "ブラウザーの最後のアクション記録から、目標と一致する実行状態を確認しました。"
+
+msgid "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
+msgstr "検証ステップに失敗したため、リポジトリの作業を完了できませんでした。"
+
+msgid "검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다."
+msgstr "検証ログに失敗の兆候が残っていたため、リポジトリの作業は完了していません。"
+
+msgid "코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다."
+msgstr "コード変更後、リポジトリの検証コマンドが正常に完了しました。"
+
+msgid "검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다."
+msgstr "検証ステップはありましたが成功の兆候が明確でないため、リポジトリの作業を完了したとはみなせません。"
+
+msgid "화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({found}/{total})"
+msgstr "画面 OCR で目標に関連するテキストを確認しました。({found}/{total})"
+
+msgid "상태 검증 결과: {status}"
+msgstr "状態検証結果: {status}"
+
+msgid "미달성"
+msgstr "未達成"
+
+msgid "LLM 검증 실패"
+msgstr "LLM 検証に失敗しました"
+
+msgid "검증 프로세스 오류"
+msgstr "検証プロセスでエラーが発生しました"
+
+msgid "주의! {summary}"
+msgstr "警告！{summary}"
+
+msgid "주의: {summary}. 실행합니다."
+msgstr "警告: {summary}。実行します。"
+
+msgid "복구 가능한 백업을 찾지 못했습니다."
+msgstr "復元可能なバックアップが見つかりません。"
+
+msgid "백업 파일이 존재하지 않습니다."
+msgstr "バックアップファイルが存在しません。"
+
+msgid "코드 실행 중 기술적인 문제가 발생했어요."
+msgstr "コードの実行中に技術的な問題が発生しました。"
+
+msgid "파이썬 실행 실패"
+msgstr "Python の実行に失敗しました"
+
+msgid "실행 시간 초과 ({seconds}초)"
+msgstr "実行がタイムアウトしました（{seconds}秒）"
+
+msgid "명령어 실행 시간이 너무 길어 중단했습니다."
+msgstr "コマンドの実行に時間がかかりすぎたため、中断しました。"
+
+msgid "시스템 명령 실행 중 오류가 발생했습니다."
+msgstr "システムコマンドの実行中にエラーが発生しました。"
+
+msgid "문서 저장 실패: {error}"
+msgstr "ドキュメントの保存に失敗しました: {error}"
+
+msgid "백업 생성 실패: {error}"
+msgstr "バックアップの作成に失敗しました: {error}"
+
+msgid "디렉터리가 아닙니다."
+msgstr "ディレクトリではありません。"
+
+msgid "오류: {error}"
+msgstr "エラー: {error}"
+
+msgid "출력 파일은 입력 파일과 같을 수 없습니다."
+msgstr "出力ファイルを入力ファイルと同じにすることはできません。"
+
+msgid "\n--- 원본 파일: {filename} ---\n"
+msgstr "\n--- 元のファイル: {filename} ---\n"
+
+msgid "파일이 존재하지 않습니다."
+msgstr "ファイルが存在しません。"
+
+msgid "상세 파싱 실패"
+msgstr "詳細な解析に失敗しました"
+
+msgid "지원하지 않는 형식입니다."
+msgstr "サポートされていない形式です。"
+
+msgid "분석 보고서"
+msgstr "分析レポート"
+
+msgid "*생성 일시: {timestamp}*\n\n"
+msgstr "*生成日時: {timestamp}*\n\n"
+
+msgid "path가 비어 있습니다."
+msgstr "path が空です。"
+
+msgid "old_string이 비어 있습니다."
+msgstr "old_string が空です。"
+
+msgid "old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회"
+msgstr "old_string はファイル内に 1 回だけ出現する必要があります。現在は {count} 回です"
+
+msgid "원본 경로가 존재하지 않습니다."
+msgstr "元のパスが存在しません。"
+
+msgid "대상 경로가 존재하지 않습니다."
+msgstr "対象パスが存在しません。"
+
+msgid "검색 결과가 없습니다."
+msgstr "検索結果がありません。"
+
+msgid "제목 없음"
+msgstr "タイトルなし"
+
+msgid "검색 중 오류 발생: {error}"
+msgstr "検索中にエラーが発生しました: {error}"
+
+msgid "허용되지 않은 URL 스킴: {scheme}"
+msgstr "許可されていないURLスキーム: {scheme}"
+
+msgid "페이지 로드 실패: {error}"
+msgstr "ページの読み込みに失敗しました: {error}"
+
+msgid "로그인 완료를 감지하지 못했습니다."
+msgstr "ログインの完了を検出できませんでした。"
+
+msgid "DOM 에러 상태 감지"
+msgstr "DOMのエラー状態を検出しました"
+
+msgid "다운로드 완료 파일을 찾지 못했습니다."
+msgstr "ダウンロードが完了したファイルが見つかりませんでした。"
+
+msgid "허용되지 않는 URL입니다: {url}"
+msgstr "許可されていないURLです: {url}"
+
+msgid "플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}"
+msgstr "プラグインファイルは保存されましたが、有効化に失敗しました: {error}"
+
+msgid "실행 파일을 찾을 수 없습니다: {path}"
+msgstr "実行ファイルが見つかりません: {path}"
+
+msgid "허용되지 않는 실행 파일입니다: {candidate}"
+msgstr "許可されていない実行ファイルです: {candidate}"
+
+msgid "허용되지 않는 모델 이름입니다: {model}"
+msgstr "許可されていないモデル名です: {model}"
+
+msgid "Ollama 설치 파일 다운로드 중..."
+msgstr "Ollamaのインストーラーをダウンロードしています..."
+
+msgid "Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요."
+msgstr "Ollamaのインストーラーを起動します。インストール画面が表示されたら、手順に従って進めてください。"
+
+msgid "Ollama 설치 프로그램 실행 실패: {result}"
+msgstr "Ollamaのインストーラーの起動に失敗しました: {result}"
+
+msgid "모델 저장 경로 설정: {models_dir}"
+msgstr "モデルの保存先を設定しています: {models_dir}"
+
+msgid "Ollama 서버를 시작합니다..."
+msgstr "Ollamaサーバーを起動しています..."
+
+msgid "Ollama 서버가 30초 내에 시작되지 않았습니다."
+msgstr "Ollamaサーバーが30秒以内に起動しませんでした。"
+
+msgid "모델 다운로드 중: {safe_model}"
+msgstr "モデルをダウンロードしています: {safe_model}"
+
+msgid "Ollama 자동 설치는 현재 Windows만 지원합니다."
+msgstr "Ollamaの自動インストールは現在Windowsのみに対応しています。"
+
+msgid "Ollama가 이미 설치되어 있어 설치 단계는 건너뜁니다."
+msgstr "Ollamaはすでにインストールされているため、インストールをスキップします。"
+
+msgid "설치 후에도 ollama.exe를 찾지 못했습니다."
+msgstr "インストール後もollama.exeが見つかりませんでした。"
+
+msgid "Ollama 설치 작업이 완료되었습니다."
+msgstr "Ollamaのインストールが完了しました。"
+
+msgid "맑음"
+msgstr "晴れ"
+
+msgid "대체로 맑음"
+msgstr "おおむね晴れ"
+
+msgid "구름 많음"
+msgstr "晴れ時々曇り"
+
+msgid "흐림"
+msgstr "曇り"
+
+msgid "안개"
+msgstr "霧"
+
+msgid "이슬비"
+msgstr "霧雨"
+
+msgid "비"
+msgstr "雨"
+
+msgid "강한 비"
+msgstr "強い雨"
+
+msgid "눈"
+msgstr "雪"
+
+msgid "강한 눈"
+msgstr "強い雪"
+
+msgid "소나기"
+msgstr "にわか雨"
+
+msgid "강한 소나기"
+msgstr "強いにわか雨"
+
+msgid "천둥번개"
+msgstr "雷雨"
+
+msgid "천둥번개(우박)"
+msgstr "雷雨（ひょう）"
+
+msgid "알 수 없음"
+msgstr "不明"
+
+msgid "주변"
+msgstr "周辺"
+
+msgid "현재"
+msgstr "現在"
+
+msgid "모레"
+msgstr "明後日"
+
+msgid "{location}{day_label} 날씨는 {status}입니다. "
+msgstr "{location}{day_label}の天気は{status}です。 "
+
+msgid "기온은 {temp:.0f}도"
+msgstr "気温は{temp:.0f}度"
+
+msgid ", 습도는 {humidity}%"
+msgstr "、湿度は{humidity}%"
+
+msgid ", 강수량은 {rain:.1f}밀리미터"
+msgstr "、降水量は{rain:.1f}ミリメートル"
+
+msgid "입니다. "
+msgstr "です。 "
+
+msgid "{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도"
+msgstr "{day_label}の最高気温は{t_max:.0f}度、最低気温は{t_min:.0f}度"
+
+msgid ", 강수 확률은 {pop}%"
+msgstr "、降水確率は{pop}%"
+
+msgid "입니다."
+msgstr "です。"
+
+msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
+msgstr "天気情報の取得中にエラーが発生しました。"

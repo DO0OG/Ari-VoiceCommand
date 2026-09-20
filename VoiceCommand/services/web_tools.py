@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional, List, Dict, Any
 
+from i18n.translator import _
+
 from agent.automation_plan_utils import (
     find_similar_goal_key,
     normalize_goal_hint,
@@ -91,24 +93,24 @@ def web_search(query: str, max_results: int = 5) -> str:
         with _create_search_client() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
         if not results:
-            return "검색 결과가 없습니다."
+            return _("검색 결과가 없습니다.")
         
         lines = []
         for i, r in enumerate(results, 1):
-            lines.append(f"[{i}] {r.get('title', '제목 없음')}")
+            lines.append(f"[{i}] {r.get('title', _('제목 없음'))}")
             lines.append(f"    {r.get('body', '')[:200]}")
             lines.append(f"    URL: {r.get('href', '')}")
         return "\n".join(lines)
     except Exception as e:
         logging.error("[WebTools] 검색 오류: %s", e)
-        return f"검색 중 오류 발생: {e}"
+        return _("검색 중 오류 발생: {error}", error=e)
 
 def web_fetch(url: str, max_chars: int = 3000) -> str:
     """URL의 본문 텍스트를 추출한다."""
     try:
         if not _is_safe_http_url(url):
             parsed = urllib.parse.urlparse(url)
-            return f"허용되지 않은 URL 스킴: {parsed.scheme or 'unknown'}"
+            return _("허용되지 않은 URL 스킴: {scheme}", scheme=parsed.scheme or "unknown")
         req = urllib.request.Request(url, headers=_HEADERS)
         # _is_safe_http_url() restricts fetches to http/https URLs only.
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
@@ -120,7 +122,7 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
         text = html.unescape(text)
         return re.sub(r'\s+', ' ', text).strip()[:max_chars]
     except Exception as e:
-        return f"페이지 로드 실패: {e}"
+        return _("페이지 로드 실패: {error}", error=e)
 
 # ── Selenium 스마트 브라우저 (Phase 2.1) ───────────────────────────────────────
 
@@ -356,7 +358,7 @@ class SmartBrowser:
                 "action_results": action_results,
                 "suggested_followups": [],
                 "replan_count": replan_count,
-                "error": "로그인 완료를 감지하지 못했습니다.",
+                "error": _("로그인 완료를 감지하지 못했습니다."),
             }
 
         suggested_followups = suggest_next_actions(dom_state, goal_hint)
@@ -374,7 +376,7 @@ class SmartBrowser:
                         "action_results": action_results,
                         "suggested_followups": suggested_followups,
                         "replan_count": replan_count,
-                        "error": "DOM 에러 상태 감지",
+                        "error": _("DOM 에러 상태 감지"),
                     }
                 replanned = replan_callback(dom_state, goal_hint) or []
                 replan_count += 1
@@ -456,7 +458,7 @@ class SmartBrowser:
                     return path
                 last_seen[path] = (size, now)
             time.sleep(0.5)
-        raise TimeoutError("다운로드 완료 파일을 찾지 못했습니다.")
+        raise TimeoutError(_("다운로드 완료 파일을 찾지 못했습니다."))
 
     def _ordered_selectors(self, domain: str, action_key: str, selectors: List[str]) -> List[str]:
         remembered = self._selector_history.get(domain, {}).get(action_key)

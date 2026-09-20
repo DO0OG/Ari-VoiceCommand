@@ -2662,3 +2662,300 @@ msgstr "AI 기능을 사용할 수 없습니다."
 
 msgid "응답 생성 중 오류가 발생했습니다."
 msgstr "응답 생성 중 오류가 발생했습니다."
+
+msgid "일부 단계가 실패하여 목표를 달성하지 못했습니다."
+msgstr "일부 단계가 실패하여 목표를 달성하지 못했습니다."
+
+msgid "실제 경로({filename})가 확인되어 작업을 완료했습니다."
+msgstr "실제 경로({filename})가 확인되어 작업을 완료했습니다."
+
+msgid "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
+msgstr "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
+
+msgid "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
+msgstr "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
+
+msgid "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
+msgstr "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
+
+msgid "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
+msgstr "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
+
+msgid "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
+msgstr "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
+
+msgid "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
+msgstr "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
+
+msgid "화면 상단에서 '{app_name}' 텍스트 확인됨"
+msgstr "화면 상단에서 '{app_name}' 텍스트 확인됨"
+
+msgid "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
+msgstr "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
+
+msgid "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
+msgstr "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
+
+msgid "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
+msgstr "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
+
+msgid "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
+msgstr "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
+
+msgid "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
+msgstr "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
+
+msgid "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
+msgstr "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
+
+msgid "검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다."
+msgstr "검증 로그에 실패 신호가 남아 있어 저장소 작업이 완료되지 않았습니다."
+
+msgid "코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다."
+msgstr "코드 변경 후 저장소 검증 명령이 성공적으로 완료됐습니다."
+
+msgid "검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다."
+msgstr "검증 단계는 있었지만 성공 신호가 명확하지 않아 저장소 작업을 완료로 볼 수 없습니다."
+
+msgid "화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({found}/{total})"
+msgstr "화면 OCR에서 목표 관련 텍스트를 확인했습니다. ({found}/{total})"
+
+msgid "상태 검증 결과: {status}"
+msgstr "상태 검증 결과: {status}"
+
+msgid "미달성"
+msgstr "미달성"
+
+msgid "LLM 검증 실패"
+msgstr "LLM 검증 실패"
+
+msgid "검증 프로세스 오류"
+msgstr "검증 프로세스 오류"
+
+msgid "주의! {summary}"
+msgstr "주의! {summary}"
+
+msgid "주의: {summary}. 실행합니다."
+msgstr "주의: {summary}. 실행합니다."
+
+msgid "복구 가능한 백업을 찾지 못했습니다."
+msgstr "복구 가능한 백업을 찾지 못했습니다."
+
+msgid "백업 파일이 존재하지 않습니다."
+msgstr "백업 파일이 존재하지 않습니다."
+
+msgid "코드 실행 중 기술적인 문제가 발생했어요."
+msgstr "코드 실행 중 기술적인 문제가 발생했어요."
+
+msgid "파이썬 실행 실패"
+msgstr "파이썬 실행 실패"
+
+msgid "실행 시간 초과 ({seconds}초)"
+msgstr "실행 시간 초과 ({seconds}초)"
+
+msgid "명령어 실행 시간이 너무 길어 중단했습니다."
+msgstr "명령어 실행 시간이 너무 길어 중단했습니다."
+
+msgid "시스템 명령 실행 중 오류가 발생했습니다."
+msgstr "시스템 명령 실행 중 오류가 발생했습니다."
+
+msgid "문서 저장 실패: {error}"
+msgstr "문서 저장 실패: {error}"
+
+msgid "백업 생성 실패: {error}"
+msgstr "백업 생성 실패: {error}"
+
+msgid "디렉터리가 아닙니다."
+msgstr "디렉터리가 아닙니다."
+
+msgid "오류: {error}"
+msgstr "오류: {error}"
+
+msgid "출력 파일은 입력 파일과 같을 수 없습니다."
+msgstr "출력 파일은 입력 파일과 같을 수 없습니다."
+
+msgid "\n--- 원본 파일: {filename} ---\n"
+msgstr "\n--- 원본 파일: {filename} ---\n"
+
+msgid "파일이 존재하지 않습니다."
+msgstr "파일이 존재하지 않습니다."
+
+msgid "상세 파싱 실패"
+msgstr "상세 파싱 실패"
+
+msgid "지원하지 않는 형식입니다."
+msgstr "지원하지 않는 형식입니다."
+
+msgid "분석 보고서"
+msgstr "분석 보고서"
+
+msgid "*생성 일시: {timestamp}*\n\n"
+msgstr "*생성 일시: {timestamp}*\n\n"
+
+msgid "path가 비어 있습니다."
+msgstr "path가 비어 있습니다."
+
+msgid "old_string이 비어 있습니다."
+msgstr "old_string이 비어 있습니다."
+
+msgid "old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회"
+msgstr "old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회"
+
+msgid "원본 경로가 존재하지 않습니다."
+msgstr "원본 경로가 존재하지 않습니다."
+
+msgid "대상 경로가 존재하지 않습니다."
+msgstr "대상 경로가 존재하지 않습니다."
+
+msgid "검색 결과가 없습니다."
+msgstr "검색 결과가 없습니다."
+
+msgid "제목 없음"
+msgstr "제목 없음"
+
+msgid "검색 중 오류 발생: {error}"
+msgstr "검색 중 오류 발생: {error}"
+
+msgid "허용되지 않은 URL 스킴: {scheme}"
+msgstr "허용되지 않은 URL 스킴: {scheme}"
+
+msgid "페이지 로드 실패: {error}"
+msgstr "페이지 로드 실패: {error}"
+
+msgid "로그인 완료를 감지하지 못했습니다."
+msgstr "로그인 완료를 감지하지 못했습니다."
+
+msgid "DOM 에러 상태 감지"
+msgstr "DOM 에러 상태 감지"
+
+msgid "다운로드 완료 파일을 찾지 못했습니다."
+msgstr "다운로드 완료 파일을 찾지 못했습니다."
+
+msgid "허용되지 않는 URL입니다: {url}"
+msgstr "허용되지 않는 URL입니다: {url}"
+
+msgid "플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}"
+msgstr "플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}"
+
+msgid "실행 파일을 찾을 수 없습니다: {path}"
+msgstr "실행 파일을 찾을 수 없습니다: {path}"
+
+msgid "허용되지 않는 실행 파일입니다: {candidate}"
+msgstr "허용되지 않는 실행 파일입니다: {candidate}"
+
+msgid "허용되지 않는 모델 이름입니다: {model}"
+msgstr "허용되지 않는 모델 이름입니다: {model}"
+
+msgid "Ollama 설치 파일 다운로드 중..."
+msgstr "Ollama 설치 파일 다운로드 중..."
+
+msgid "Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요."
+msgstr "Ollama 설치 프로그램을 실행합니다. 설치 창이 뜨면 계속 진행하세요."
+
+msgid "Ollama 설치 프로그램 실행 실패: {result}"
+msgstr "Ollama 설치 프로그램 실행 실패: {result}"
+
+msgid "모델 저장 경로 설정: {models_dir}"
+msgstr "모델 저장 경로 설정: {models_dir}"
+
+msgid "Ollama 서버를 시작합니다..."
+msgstr "Ollama 서버를 시작합니다..."
+
+msgid "Ollama 서버가 30초 내에 시작되지 않았습니다."
+msgstr "Ollama 서버가 30초 내에 시작되지 않았습니다."
+
+msgid "모델 다운로드 중: {safe_model}"
+msgstr "모델 다운로드 중: {safe_model}"
+
+msgid "Ollama 자동 설치는 현재 Windows만 지원합니다."
+msgstr "Ollama 자동 설치는 현재 Windows만 지원합니다."
+
+msgid "Ollama가 이미 설치되어 있어 설치 단계는 건너뜁니다."
+msgstr "Ollama가 이미 설치되어 있어 설치 단계는 건너뜁니다."
+
+msgid "설치 후에도 ollama.exe를 찾지 못했습니다."
+msgstr "설치 후에도 ollama.exe를 찾지 못했습니다."
+
+msgid "Ollama 설치 작업이 완료되었습니다."
+msgstr "Ollama 설치 작업이 완료되었습니다."
+
+msgid "맑음"
+msgstr "맑음"
+
+msgid "대체로 맑음"
+msgstr "대체로 맑음"
+
+msgid "구름 많음"
+msgstr "구름 많음"
+
+msgid "흐림"
+msgstr "흐림"
+
+msgid "안개"
+msgstr "안개"
+
+msgid "이슬비"
+msgstr "이슬비"
+
+msgid "비"
+msgstr "비"
+
+msgid "강한 비"
+msgstr "강한 비"
+
+msgid "눈"
+msgstr "눈"
+
+msgid "강한 눈"
+msgstr "강한 눈"
+
+msgid "소나기"
+msgstr "소나기"
+
+msgid "강한 소나기"
+msgstr "강한 소나기"
+
+msgid "천둥번개"
+msgstr "천둥번개"
+
+msgid "천둥번개(우박)"
+msgstr "천둥번개(우박)"
+
+msgid "알 수 없음"
+msgstr "알 수 없음"
+
+msgid "주변"
+msgstr "주변"
+
+msgid "현재"
+msgstr "현재"
+
+msgid "모레"
+msgstr "모레"
+
+msgid "{location}{day_label} 날씨는 {status}입니다. "
+msgstr "{location}{day_label} 날씨는 {status}입니다. "
+
+msgid "기온은 {temp:.0f}도"
+msgstr "기온은 {temp:.0f}도"
+
+msgid ", 습도는 {humidity}%"
+msgstr ", 습도는 {humidity}%"
+
+msgid ", 강수량은 {rain:.1f}밀리미터"
+msgstr ", 강수량은 {rain:.1f}밀리미터"
+
+msgid "입니다. "
+msgstr "입니다. "
+
+msgid "{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도"
+msgstr "{day_label} 최고 {t_max:.0f}도, 최저 {t_min:.0f}도"
+
+msgid ", 강수 확률은 {pop}%"
+msgstr ", 강수 확률은 {pop}%"
+
+msgid "입니다."
+msgstr "입니다."
+
+msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
+msgstr "날씨 정보를 가져오는 중 오류가 발생했습니다."

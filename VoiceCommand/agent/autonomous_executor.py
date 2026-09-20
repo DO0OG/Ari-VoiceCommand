@@ -189,7 +189,7 @@ class AutonomousExecutor:
 
                 if report.level == DangerLevel.DANGEROUS:
                     if self.tts_wrapper:
-                        self.tts_wrapper(f"주의! {report.summary}")
+                        self.tts_wrapper(_("주의! {summary}", summary=report.summary))
                     confirmed = self._ask_confirmation(f"Python 코드 실행\n\n{code[:200]}", report)
                     if not confirmed:
                         result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=code)
@@ -201,7 +201,7 @@ class AutonomousExecutor:
 
                 elif report.level == DangerLevel.CAUTION:
                     if self.tts_wrapper:
-                        self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
+                        self.tts_wrapper(_("주의: {summary}. 실행합니다.", summary=report.summary))
 
                 result = self._do_run_python(code, extra_globals=extra_globals)
             except Exception as exc:
@@ -233,7 +233,7 @@ class AutonomousExecutor:
 
                 if report.level == DangerLevel.DANGEROUS:
                     if self.tts_wrapper:
-                        self.tts_wrapper(f"주의! {report.summary}")
+                        self.tts_wrapper(_("주의! {summary}", summary=report.summary))
                     confirmed = self._ask_confirmation(f"Shell 명령 실행\n\n{command}", report)
                     if not confirmed:
                         result = ExecutionResult(success=False, error="사용자 취소", code_or_cmd=command)
@@ -245,7 +245,7 @@ class AutonomousExecutor:
 
                 elif report.level == DangerLevel.CAUTION:
                     if self.tts_wrapper:
-                        self.tts_wrapper(f"주의: {report.summary}. 실행합니다.")
+                        self.tts_wrapper(_("주의: {summary}. 실행합니다.", summary=report.summary))
 
                 result = self._do_run_shell(command)
             except Exception as exc:
@@ -332,11 +332,11 @@ class AutonomousExecutor:
                 match = item
                 break
         if not match:
-            raise FileNotFoundError("복구 가능한 백업을 찾지 못했습니다.")
+            raise FileNotFoundError(_("복구 가능한 백업을 찾지 못했습니다."))
         backup_path = match.get("backup_path", "")
         target = match.get("target_path", "")
         if not backup_path or not target or not os.path.exists(backup_path):
-            raise FileNotFoundError("백업 파일이 존재하지 않습니다.")
+            raise FileNotFoundError(_("백업 파일이 존재하지 않습니다."))
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(backup_path, target)
         return target
@@ -449,9 +449,9 @@ class AutonomousExecutor:
             if process.returncode != 0:
                 logging.error("[Executor] Python 오류:\n%s", error_output)
                 if self.tts_wrapper:
-                    self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
+                    self.tts_wrapper(_("코드 실행 중 기술적인 문제가 발생했어요."))
                 self._log_audit("python", code, "error", error_output, "")
-                return ExecutionResult(success=False, error=error_output or "파이썬 실행 실패")
+                return ExecutionResult(success=False, error=error_output or _("파이썬 실행 실패"))
             if output:
                 logging.info("[Executor] Python 출력:\n%s", output)
             self._log_audit("python", code, "success", output, "")
@@ -470,13 +470,13 @@ class AutonomousExecutor:
             self._log_audit("python", code, "timeout", "", "")
             return ExecutionResult(
                 success=False,
-                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+                error=_("실행 시간 초과 ({seconds}초)", seconds=_SUBPROCESS_TIMEOUT_SECONDS),
             )
         except Exception:
             err = traceback.format_exc()
             logging.error("[Executor] Python 오류:\n%s", err)
             if self.tts_wrapper:
-                self.tts_wrapper("코드 실행 중 기술적인 문제가 발생했어요.")
+                self.tts_wrapper(_("코드 실행 중 기술적인 문제가 발생했어요."))
             self._log_audit("python", code, "error", err, "")
             return ExecutionResult(success=False, error=err)
         finally:
@@ -527,16 +527,16 @@ class AutonomousExecutor:
                 except Exception:
                     pass
             if self.tts_wrapper:
-                self.tts_wrapper("명령어 실행 시간이 너무 길어 중단했습니다.")
+                self.tts_wrapper(_("명령어 실행 시간이 너무 길어 중단했습니다."))
             self._log_audit("shell", command, "timeout", "", "")
             return ExecutionResult(
                 success=False,
-                error=f"실행 시간 초과 ({_SUBPROCESS_TIMEOUT_SECONDS}초)",
+                error=_("실행 시간 초과 ({seconds}초)", seconds=_SUBPROCESS_TIMEOUT_SECONDS),
             )
         except Exception as e:
             logging.error("[Executor] Shell 오류: %s", e)
             if self.tts_wrapper:
-                self.tts_wrapper("시스템 명령 실행 중 오류가 발생했습니다.")
+                self.tts_wrapper(_("시스템 명령 실행 중 오류가 발생했습니다."))
             self._log_audit("shell", command, "error", str(e), "")
             return ExecutionResult(success=False, error=str(e))
         finally:
@@ -705,7 +705,7 @@ class AutonomousExecutor:
                     f.write(plain)
             return path
         except Exception as exc:
-            raise RuntimeError(f"문서 저장 실패: {exc}") from exc
+            raise RuntimeError(_("문서 저장 실패: {error}", error=exc)) from exc
 
     def _backup_file_if_exists(self, path: str) -> None:
         normalized = os.path.abspath(path)
@@ -725,7 +725,7 @@ class AutonomousExecutor:
             if len(self._backup_history) > self._MAX_BACKUP_HISTORY:
                 self._backup_history = self._backup_history[-self._MAX_BACKUP_HISTORY:]
         except Exception as exc:
-            raise RuntimeError(f"백업 생성 실패: {exc}") from exc
+            raise RuntimeError(_("백업 생성 실패: {error}", error=exc)) from exc
 
     def _can_write_pdf(self) -> bool:
         try:

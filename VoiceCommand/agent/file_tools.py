@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from i18n.translator import _
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +21,7 @@ def detect_file_set(folder_path: str, extensions: Optional[List[str]] = None) ->
     """폴더 내 파일 세트를 스캔하고 확장자별/패턴별 통계를 반환한다."""
     try:
         if not os.path.isdir(folder_path):
-            return {"error": "디렉터리가 아닙니다."}
+            return {"error": _("디렉터리가 아닙니다.")}
         normalized_exts = {ext.lower().lstrip(".") for ext in (extensions or []) if ext}
         files = []
         by_extension: Dict[str, int] = {}
@@ -46,7 +48,7 @@ def batch_rename_files(folder_path: str, rename_rule: str, replacement: str = ""
     """정규식 기반 파일 이름 일괄 변경."""
     try:
         if not os.path.isdir(folder_path):
-            return {"error": "디렉터리가 아닙니다."}
+            return {"error": _("디렉터리가 아닙니다.")}
         pattern = re.compile(rename_rule)
         results = []
         for name in sorted(os.listdir(folder_path)):
@@ -79,7 +81,7 @@ def rename_file(old_path: str, new_name: str) -> str:
         return new_path
     except Exception as e:
         logger.error("rename_file 오류: %s", e)
-        return f"오류: {e}"
+        return _("오류: {error}", error=e)
 
 def merge_text_files(file_paths: List[str], output_path: str) -> str:
     """여러 텍스트 파일을 하나로 병합.
@@ -94,19 +96,24 @@ def merge_text_files(file_paths: List[str], output_path: str) -> str:
             if normalized_output == os.path.normcase(os.path.realpath(fname)) or (
                 os.path.exists(output_path) and os.path.exists(fname) and os.path.samefile(output_path, fname)
             ):
-                raise ValueError("출력 파일은 입력 파일과 같을 수 없습니다.")
+                raise ValueError(_("출력 파일은 입력 파일과 같을 수 없습니다."))
         with open(output_path, 'w', encoding='utf-8') as outfile:
             for fname in file_paths:
                 if not os.path.exists(fname):
                     continue
                 with open(fname, 'r', encoding='utf-8', errors='ignore') as infile:
-                    outfile.write(f"\n--- 원본 파일: {os.path.basename(fname)} ---\n")
+                    outfile.write(
+                        _(
+                            "\n--- 원본 파일: {filename} ---\n",
+                            filename=os.path.basename(fname),
+                        )
+                    )
                     outfile.write(infile.read())
                     outfile.write("\n")
         return output_path
     except Exception as e:
         logger.error("merge_text_files 오류: %s", e)
-        return f"오류: {e}"
+        return _("오류: {error}", error=e)
 
 def organize_folder_by_extension(folder_path: str) -> Dict[str, int]:
     """폴더 내 파일들을 확장자별 서브 폴더로 정리.
@@ -119,7 +126,7 @@ def organize_folder_by_extension(folder_path: str) -> Dict[str, int]:
     try:
         stats = {}
         if not os.path.isdir(folder_path):
-            return {"error": "디렉터리가 아닙니다."}
+            return {"error": _("디렉터리가 아닙니다.")}
             
         for filename in os.listdir(folder_path):
             filepath = os.path.join(folder_path, filename)
@@ -156,7 +163,7 @@ def analyze_data_file(file_path: str) -> Dict[str, Any]:
     """
     try:
         if not os.path.exists(file_path):
-            return {"error": "파일이 존재하지 않습니다."}
+            return {"error": _("파일이 존재하지 않습니다.")}
             
         ext = file_path.split('.')[-1].lower()
         if ext == 'json':
@@ -200,9 +207,9 @@ def analyze_data_file(file_path: str) -> Dict[str, Any]:
                     return {
                         "format": "csv_raw",
                         "lines": len(content.splitlines()),
-                        "note": "상세 파싱 실패"
+                        "note": _("상세 파싱 실패")
                     }
-        return {"error": "지원하지 않는 형식입니다."}
+        return {"error": _("지원하지 않는 형식입니다.")}
     except Exception as e:
         logger.error("analyze_data_file 오류: %s", e)
         return {"error": str(e)}
@@ -216,8 +223,13 @@ def generate_markdown_report(content: str, output_path: str, title: str = "분�
         title: 보고서 제목
     """
     try:
+        if title == "분석 보고서":
+            title = _("분석 보고서")
         full_content = f"# {title}\n\n"
-        full_content += f"*생성 일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n"
+        full_content += _(
+            "*생성 일시: {timestamp}*\n\n",
+            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        )
         full_content += "---\n\n"
         full_content += content
         
@@ -229,7 +241,7 @@ def generate_markdown_report(content: str, output_path: str, title: str = "분�
         return output_path
     except Exception as e:
         logger.error("generate_markdown_report 오류: %s", e)
-        return f"오류: {e}"
+        return _("오류: {error}", error=e)
 
 
 def _sample_columns(rows: List[Dict[str, Any]], columns: List[str], limit: int = 3) -> Dict[str, List[Any]]:
@@ -281,7 +293,7 @@ def _summarize_numeric_columns(rows: List[Dict[str, Any]], columns: List[str]) -
 
 def _normalize_path(path: str) -> str:
     if not path:
-        raise ValueError("path가 비어 있습니다.")
+        raise ValueError(_("path가 비어 있습니다."))
     return os.path.abspath(os.path.expanduser(path))
 
 
@@ -290,7 +302,7 @@ def read_file(file_path: str, start_line: int = 1, end_line: Optional[int] = Non
     try:
         path = _normalize_path(file_path)
         if not os.path.isfile(path):
-            return {"error": "파일이 존재하지 않습니다.", "file_path": path}
+            return {"error": _("파일이 존재하지 않습니다."), "file_path": path}
         start = max(1, int(start_line or 1))
         end = max(int(end_line), start) if end_line else None
         lines = []
@@ -334,16 +346,19 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any
     """파일 내 고유한 문자열 1개를 교체한다."""
     try:
         if not old_string:
-            return {"error": "old_string이 비어 있습니다."}
+            return {"error": _("old_string이 비어 있습니다.")}
         path = _normalize_path(file_path)
         if not os.path.isfile(path):
-            return {"error": "파일이 존재하지 않습니다.", "file_path": path}
+            return {"error": _("파일이 존재하지 않습니다."), "file_path": path}
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
         count = content.count(old_string)
         if count != 1:
             return {
-                "error": f"old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회",
+                "error": _(
+                    "old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {count}회",
+                    count=count,
+                ),
                 "matches": count,
             }
         with open(path, "w", encoding="utf-8") as f:
@@ -364,7 +379,7 @@ def list_directory(path: str, pattern: str = "*", recursive: bool = False) -> Di
     try:
         base = _normalize_path(path)
         if not os.path.isdir(base):
-            return {"error": "디렉터리가 아닙니다.", "path": base}
+            return {"error": _("디렉터리가 아닙니다."), "path": base}
         root = Path(base)
         glob_pattern = pattern or "*"
         entries = root.rglob(glob_pattern) if recursive else root.glob(glob_pattern)
@@ -433,7 +448,7 @@ def move_file(src: str, dst: str) -> Dict[str, Any]:
         src_path = _normalize_path(src)
         dst_path = _normalize_path(dst)
         if not os.path.exists(src_path):
-            return {"error": "원본 경로가 존재하지 않습니다.", "src": src_path}
+            return {"error": _("원본 경로가 존재하지 않습니다."), "src": src_path}
         os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
         shutil.move(src_path, dst_path)
         return {"src": src_path, "dst": dst_path, "moved": True}
@@ -462,7 +477,7 @@ def delete_file(path: str, confirmed: bool = False) -> Dict[str, Any]:
         elif os.path.isfile(target):
             os.remove(target)
         else:
-            return {"error": "대상 경로가 존재하지 않습니다.", "path": target}
+            return {"error": _("대상 경로가 존재하지 않습니다."), "path": target}
         return {"path": target, "deleted": True}
     except Exception as e:
         logger.error("delete_file 오류: %s", e)
