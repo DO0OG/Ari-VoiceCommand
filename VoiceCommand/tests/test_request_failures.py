@@ -5,9 +5,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import httpx
-from openai import APIConnectionError, APITimeoutError
-
 from agent.llm_provider import LLMProvider
 
 
@@ -17,8 +14,15 @@ def status_error(status):
     return error
 
 
-def _request():
-    return httpx.Request("POST", "https://example.com")
+# 제공자 라이브러리는 예외 클래스 이름으로만 구분되므로(_error_response 참고)
+# 같은 이름의 대역으로 분기를 확인한다.  테스트가 특정 라이브러리를 직접
+# 끌어오지 않게 하려는 의도다.
+class APIConnectionError(Exception):
+    pass
+
+
+class APITimeoutError(Exception):
+    pass
 
 
 class RequestFailureMessageTests(unittest.TestCase):
@@ -30,8 +34,8 @@ class RequestFailureMessageTests(unittest.TestCase):
             (status_error(500), "서버 오류"),
             (status_error(503), "서버 오류"),
             (RuntimeError("unknown"), "요청을 처리"),
-            (APIConnectionError(request=_request()), "네트워크"),
-            (APITimeoutError(request=_request()), "네트워크"),
+            (APIConnectionError("connection failed"), "네트워크"),
+            (APITimeoutError("timed out"), "네트워크"),
         ]
         for error, expected in cases:
             with self.subTest(error=type(error).__name__, status=getattr(error, "status_code", None)):
