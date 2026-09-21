@@ -40,6 +40,10 @@ DEFAULT_SETTINGS = {
     "nvidia_nim_api_key": _UNSET_CREDENTIAL,
     "ollama_base_url": "http://localhost:11434/v1",
     "llm_streaming_enabled": True,
+    "local_decision_engine_enabled": True,
+    "local_decision_backend": "linear",
+    "local_decision_threshold": 0.92,
+    "local_decision_direct_execution": False,
     "vision_enabled": True,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────

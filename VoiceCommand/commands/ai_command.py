@@ -1379,6 +1379,24 @@ class AICommand(BaseCommand):
 
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
+    def try_fast_path(self, text: str) -> None:
+        """선택적 로컬 분류 실패는 기존 대화 경로에 영향을 주지 않는다."""
+        try:
+            from core.config_manager import ConfigManager
+
+            if ConfigManager.get("local_decision_engine_enabled", True) is not True:
+                return None
+            from agent.decision.engine import LocalDecisionEngine
+            from core.resource_manager import ResourceManager
+
+            if not hasattr(self, "_decision_engine"):
+                self._decision_engine = LocalDecisionEngine(
+                    ResourceManager.get_bundle_path("resources/decision")
+                )
+            return self._decision_engine.try_fast_path(text)
+        except Exception:
+            return None
+
     def execute(self, text: str) -> None:
         from core.VoiceCommand import _state
         from core.config_manager import ConfigManager
@@ -1438,6 +1456,7 @@ class AICommand(BaseCommand):
                 if skill_ctx.get("escalate_to_agent"):
                     tool_calls = [self._build_script_skill_escalation_tool_call(text, skill_ctx)]
                 else:
+                    self.try_fast_path(text)
                     response, tool_calls = self._invoke_with_optional_stream(
                         self.ai_assistant.chat_with_tools,
                         text,

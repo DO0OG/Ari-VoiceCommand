@@ -1,0 +1,22 @@
+{
+  "python": "3.11.4",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "processor": "",
+  "iterations": 1000,
+  "import_ms": 119.09960000048159,
+  "load_ms": 8.160399998814682,
+  "cold_first_prediction_ms": 127.4861999991117,
+  "warm_ms": {
+    "p50": 0.04889999945589807,
+    "p95": 0.07360500021604821,
+    "p99": 0.09973099884518885
+  },
+  "cpu_ms": 46.875,
+  "baseline_rss_bytes": 20148224,
+  "steady_rss_bytes": 38207488,
+  "additional_steady_rss_bytes": 18059264,
+  "peak_rss_bytes": 40161280,
+  "resource_bytes": 873553,
+  "gpu_used": false,
+  "rss_scope": "Fresh process: baseline after psutil, before NumPy and runtime import; OS peak if available"
+}

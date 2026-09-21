@@ -1,0 +1,1046 @@
+{
+  "candidate_labels": [
+    "analyze_image_file",
+    "analyze_screenshot",
+    "api_call",
+    "cancel_scheduled_task",
+    "cancel_timer",
+    "close_app",
+    "create_calendar_event",
+    "delegate_to_subagent",
+    "delete_file",
+    "edit_file",
+    "execute_python_code",
+    "execute_shell_command",
+    "focus_window",
+    "generate_image",
+    "get_calendar_events",
+    "get_clipboard",
+    "get_current_time",
+    "get_running_apps",
+    "get_screen_status",
+    "get_weather",
+    "launch_app",
+    "list_directory",
+    "list_scheduled_tasks",
+    "move_file",
+    "read_emails",
+    "read_file",
+    "run_agent_task",
+    "schedule_task",
+    "search_in_files",
+    "send_email",
+    "set_clipboard",
+    "set_timer",
+    "take_screenshot",
+    "web_fetch",
+    "web_search",
+    "write_file",
+    "unknown_or_complex"
+  ],
+  "core_tool_names": [
+    "adjust_volume",
+    "analyze_image_file",
+    "analyze_screenshot",
+    "api_call",
+    "cancel_scheduled_task",
+    "cancel_timer",
+    "close_app",
+    "create_calendar_event",
+    "delegate_to_subagent",
+    "delete_file",
+    "edit_file",
+    "execute_python_code",
+    "execute_shell_command",
+    "focus_window",
+    "generate_image",
+    "get_calendar_events",
+    "get_clipboard",
+    "get_current_time",
+    "get_running_apps",
+    "get_screen_status",
+    "get_weather",
+    "launch_app",
+    "list_directory",
+    "list_scheduled_tasks",
+    "mcp_call",
+    "move_file",
+    "play_youtube",
+    "read_emails",
+    "read_file",
+    "run_agent_task",
+    "schedule_task",
+    "search_in_files",
+    "send_email",
+    "set_clipboard",
+    "set_timer",
+    "shutdown_computer",
+    "take_screenshot",
+    "web_fetch",
+    "web_search",
+    "write_file"
+  ],
+  "core_tool_schemas": [
+    {
+      "function": {
+        "description": "현재 사용자의 화면 상태(작업표시줄 위치, 전체화면 모드 여부 등)를 확인합니다.",
+        "name": "get_screen_status",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "유튜브에서 음악이나 영상을 검색하여 재생합니다.",
+        "name": "play_youtube",
+        "parameters": {
+          "properties": {
+            "query": {
+              "description": "검색할 제목",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "알림용 카운트다운 타이머를 설정합니다. 이름을 지정하면 여러 타이머를 동시에 관리할 수 있습니다. 타이머 종료 시 알림만 울리며 추가 동작은 없습니다. 컴퓨터 종료·파일 저장 등 지연 실행은 schedule_task를 사용하세요.",
+        "name": "set_timer",
+        "parameters": {
+          "properties": {
+            "minutes": {
+              "description": "분",
+              "type": "integer"
+            },
+            "name": {
+              "description": "타이머 이름 (선택)",
+              "type": "string"
+            },
+            "seconds": {
+              "description": "초",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "minutes"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "진행 중인 타이머를 취소합니다. 이름이 없으면 가장 최근 타이머를 취소합니다.",
+        "name": "cancel_timer",
+        "parameters": {
+          "properties": {
+            "name": {
+              "description": "취소할 타이머 이름 (선택)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "현재 날씨 정보를 조회합니다.",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "시스템 볼륨을 조절합니다.",
+        "name": "adjust_volume",
+        "parameters": {
+          "properties": {
+            "direction": {
+              "description": "up/down/mute",
+              "enum": [
+                "up",
+                "down",
+                "mute"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "direction"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "현재 시간을 알려줍니다.",
+        "name": "get_current_time",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파이썬 코드로 자율 처리합니다.",
+        "name": "execute_python_code",
+        "parameters": {
+          "properties": {
+            "code": {
+              "description": "코드",
+              "type": "string"
+            },
+            "explanation": {
+              "description": "설명",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "CMD 명령어로 자율 처리합니다.",
+        "name": "execute_shell_command",
+        "parameters": {
+          "properties": {
+            "command": {
+              "description": "명령",
+              "type": "string"
+            },
+            "explanation": {
+              "description": "설명",
+              "type": "string"
+            }
+          },
+          "required": [
+            "command"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "복합 목표를 자율 에이전트 루프로 처리합니다.",
+        "name": "run_agent_task",
+        "parameters": {
+          "properties": {
+            "explanation": {
+              "description": "설명",
+              "type": "string"
+            },
+            "goal": {
+              "description": "목표",
+              "type": "string"
+            }
+          },
+          "required": [
+            "goal"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "인터넷 정보를 검색합니다.",
+        "name": "web_search",
+        "parameters": {
+          "properties": {
+            "max_results": {
+              "description": "결과 수",
+              "type": "integer"
+            },
+            "query": {
+              "description": "검색어",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "웹 페이지 내용을 가져옵니다.",
+        "name": "web_fetch",
+        "parameters": {
+          "properties": {
+            "url": {
+              "description": "URL",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "특정 시간에 작업을 예약 실행합니다. 'N분/시간 뒤', 'N시에' 등 시간 표현과 함께 컴퓨터 종료·파일 저장 등 지연 실행 요청에 사용합니다.",
+        "name": "schedule_task",
+        "parameters": {
+          "properties": {
+            "explanation": {
+              "description": "설명",
+              "type": "string"
+            },
+            "goal": {
+              "description": "작업 내용",
+              "type": "string"
+            },
+            "when": {
+              "description": "시간 표현",
+              "type": "string"
+            }
+          },
+          "required": [
+            "goal",
+            "when"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "MCP 스킬 도구를 호출합니다. MCP 엔드포인트 URL, 도구명, 파라미터를 지정하세요.",
+        "name": "mcp_call",
+        "parameters": {
+          "properties": {
+            "arguments": {
+              "description": "도구에 전달할 파라미터 (JSON 객체)",
+              "type": "object"
+            },
+            "endpoint": {
+              "description": "MCP 서버 엔드포인트 URL (예: https://yuju777-coupang-mcp.hf.space/mcp)",
+              "type": "string"
+            },
+            "tool": {
+              "description": "호출할 MCP 도구명 (예: search_coupang_products)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint",
+            "tool"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "컴퓨터를 즉시 종료합니다. 시간 표현(예: '15분 뒤', '오후 11시')이 포함된 경우에는 schedule_task를 사용하세요.",
+        "name": "shutdown_computer",
+        "parameters": {
+          "properties": {
+            "confirmed": {
+              "description": "종료 확인 여부 (항상 true)",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "confirmed"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "현재 예약된 작업 목록을 조회합니다. '예약된 작업 뭐 있어?', '스케줄 확인해줘' 등의 요청에 사용합니다.",
+        "name": "list_scheduled_tasks",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "예약된 작업을 ID로 취소합니다.",
+        "name": "cancel_scheduled_task",
+        "parameters": {
+          "properties": {
+            "task_id": {
+              "description": "취소할 작업 ID (list_scheduled_tasks로 확인)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "task_id"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일 내용을 읽어 반환합니다.",
+        "name": "read_file",
+        "parameters": {
+          "properties": {
+            "end_line": {
+              "description": "끝 줄 (선택)",
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "start_line": {
+              "description": "시작 줄 (선택, 기본 1)",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "file_path"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일에 내용을 씁니다 (덮어쓰기 또는 추가).",
+        "name": "write_file",
+        "parameters": {
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "mode": {
+              "description": "기본 overwrite",
+              "enum": [
+                "overwrite",
+                "append"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "file_path",
+            "content"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일의 특정 문자열을 찾아 교체합니다 (diff 없이 정밀 편집).",
+        "name": "edit_file",
+        "parameters": {
+          "properties": {
+            "file_path": {
+              "type": "string"
+            },
+            "new_string": {
+              "description": "새 텍스트",
+              "type": "string"
+            },
+            "old_string": {
+              "description": "교체할 원본 텍스트 (파일 내 고유해야 함)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file_path",
+            "old_string",
+            "new_string"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "디렉토리 내 파일/폴더 목록을 반환합니다.",
+        "name": "list_directory",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "pattern": {
+              "description": "glob 패턴 (선택, 예: *.py)",
+              "type": "string"
+            },
+            "recursive": {
+              "description": "하위 폴더 포함 여부",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일들 안에서 정규식 패턴을 검색합니다.",
+        "name": "search_in_files",
+        "parameters": {
+          "properties": {
+            "file_glob": {
+              "description": "대상 파일 glob (예: *.py)",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "pattern": {
+              "description": "검색할 정규식",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "pattern"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일 또는 폴더를 이동하거나 이름을 변경합니다.",
+        "name": "move_file",
+        "parameters": {
+          "properties": {
+            "dst": {
+              "type": "string"
+            },
+            "src": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "src",
+            "dst"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "파일 또는 빈 폴더를 삭제합니다.",
+        "name": "delete_file",
+        "parameters": {
+          "properties": {
+            "confirmed": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "confirmed"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "현재 화면 스크린샷을 찍어 내용을 분석합니다.",
+        "name": "analyze_screenshot",
+        "parameters": {
+          "properties": {
+            "prompt": {
+              "description": "분석 질문",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "이미지 파일 내용을 분석합니다.",
+        "name": "analyze_image_file",
+        "parameters": {
+          "properties": {
+            "image_path": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "image_path"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "앱 이름이나 경로로 애플리케이션을 실행합니다.",
+        "name": "launch_app",
+        "parameters": {
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "프로세스 이름으로 실행 중인 앱을 종료합니다.",
+        "name": "close_app",
+        "parameters": {
+          "properties": {
+            "process_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "process_name"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "실행 중인 앱 목록을 반환합니다.",
+        "name": "get_running_apps",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "제목 일부가 일치하는 창에 포커스를 맞춥니다.",
+        "name": "focus_window",
+        "parameters": {
+          "properties": {
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "전체 화면 스크린샷을 저장하고 경로를 반환합니다.",
+        "name": "take_screenshot",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "클립보드 텍스트를 반환합니다.",
+        "name": "get_clipboard",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "클립보드에 텍스트를 저장합니다.",
+        "name": "set_clipboard",
+        "parameters": {
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.delegate_to_subagent.description",
+        "name": "delegate_to_subagent",
+        "parameters": {
+          "properties": {
+            "context": {
+              "description": "tool.subagent.context",
+              "type": "string"
+            },
+            "goal": {
+              "description": "tool.subagent.goal",
+              "type": "string"
+            },
+            "timeout": {
+              "description": "tool.timeout_seconds",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "goal"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.api_call.description",
+        "name": "api_call",
+        "parameters": {
+          "properties": {
+            "operation": {
+              "description": "tool.api_call.operation",
+              "type": "string"
+            },
+            "params": {
+              "description": "tool.api_call.params",
+              "type": "object"
+            },
+            "service": {
+              "description": "tool.api_call.service",
+              "type": "string"
+            }
+          },
+          "required": [
+            "service",
+            "operation"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.get_calendar_events.description",
+        "name": "get_calendar_events",
+        "parameters": {
+          "properties": {
+            "calendar_id": {
+              "description": "tool.calendar.id",
+              "type": "string"
+            },
+            "days": {
+              "description": "tool.calendar.days",
+              "type": "integer"
+            },
+            "max_results": {
+              "description": "tool.max_results",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.create_calendar_event.description",
+        "name": "create_calendar_event",
+        "parameters": {
+          "properties": {
+            "calendar_id": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "end": {
+              "type": "string"
+            },
+            "start": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "summary",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.send_email.description",
+        "name": "send_email",
+        "parameters": {
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "to",
+            "subject",
+            "body"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.read_emails.description",
+        "name": "read_emails",
+        "parameters": {
+          "properties": {
+            "max_results": {
+              "type": "integer"
+            },
+            "query": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "tool.generate_image.description",
+        "name": "generate_image",
+        "parameters": {
+          "properties": {
+            "prompt": {
+              "type": "string"
+            },
+            "size": {
+              "description": "tool.image.size_example",
+              "type": "string"
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ],
+  "mapped_tool_names": [
+    "analyze_image_file",
+    "analyze_screenshot",
+    "api_call",
+    "cancel_scheduled_task",
+    "cancel_timer",
+    "close_app",
+    "create_calendar_event",
+    "delegate_to_subagent",
+    "delete_file",
+    "edit_file",
+    "execute_python_code",
+    "execute_shell_command",
+    "focus_window",
+    "generate_image",
+    "get_calendar_events",
+    "get_clipboard",
+    "get_current_time",
+    "get_running_apps",
+    "get_screen_status",
+    "get_weather",
+    "launch_app",
+    "list_directory",
+    "list_scheduled_tasks",
+    "move_file",
+    "read_emails",
+    "read_file",
+    "run_agent_task",
+    "schedule_task",
+    "search_in_files",
+    "send_email",
+    "set_clipboard",
+    "set_timer",
+    "take_screenshot",
+    "web_fetch",
+    "web_search",
+    "write_file"
+  ],
+  "source": {
+    "intent_mapping": "agent.tool_selection._TOOL_NAMES_BY_INTENT",
+    "schemas": "agent.tool_schemas.CORE_TOOL_SCHEMAS"
+  },
+  "stale_mapping_tools": [],
+  "tool_names_by_intent": {
+    "automation": [
+      "analyze_image_file",
+      "analyze_screenshot",
+      "api_call",
+      "create_calendar_event",
+      "delegate_to_subagent",
+      "delete_file",
+      "edit_file",
+      "execute_python_code",
+      "execute_shell_command",
+      "generate_image",
+      "get_calendar_events",
+      "get_screen_status",
+      "list_directory",
+      "move_file",
+      "read_emails",
+      "read_file",
+      "run_agent_task",
+      "search_in_files",
+      "send_email",
+      "write_file"
+    ],
+    "conversation": [
+      "get_calendar_events",
+      "get_current_time",
+      "get_weather",
+      "list_scheduled_tasks",
+      "read_emails",
+      "web_fetch",
+      "web_search"
+    ],
+    "file": [
+      "delete_file",
+      "edit_file",
+      "list_directory",
+      "move_file",
+      "read_file",
+      "search_in_files",
+      "write_file"
+    ],
+    "memory": [
+      "get_current_time",
+      "get_weather",
+      "list_scheduled_tasks",
+      "web_fetch",
+      "web_search"
+    ],
+    "schedule": [
+      "cancel_scheduled_task",
+      "cancel_timer",
+      "list_scheduled_tasks",
+      "schedule_task",
+      "set_timer"
+    ],
+    "vision": [
+      "analyze_image_file",
+      "analyze_screenshot",
+      "close_app",
+      "focus_window",
+      "get_clipboard",
+      "get_running_apps",
+      "launch_app",
+      "set_clipboard",
+      "take_screenshot"
+    ],
+    "web": [
+      "web_fetch",
+      "web_search"
+    ]
+  },
+  "unknown_label": "unknown_or_complex",
+  "unsupported_schema_tools": [
+    "adjust_volume",
+    "mcp_call",
+    "play_youtube",
+    "shutdown_computer"
+  ],
+  "version": 1
+}

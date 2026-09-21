@@ -252,6 +252,7 @@ nuitka_args = [
     "--include-data-dir=theme=theme",
     "--include-data-dir=i18n/locales=i18n/locales",
     "--include-data-dir=plugins=plugins",
+    "--include-data-dir=resources/decision=resources/decision",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",

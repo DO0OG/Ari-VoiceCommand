@@ -56,6 +56,8 @@ README가 프로젝트의 첫인상이라면, 이 문서는 필요한 문서를 
 
 실행 경로와 검증 흐름을 빠르게 확인할 때 보는 메모입니다.
 
+- [로컬 결정 엔진](./LOCAL_DECISION_ENGINE.md) — 단계별 도입 계획, 다국어 평가, 신뢰도 보정과 안전한 명령 라우팅
+
 ### 운영 메모
 
 - 소스로 실행하면(`VoiceCommand\.venv\Scripts\python.exe VoiceCommand\Main.py`) 런타임 상태가 `VoiceCommand/.ari_runtime/`에 쌓입니다.
