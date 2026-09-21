@@ -14,27 +14,41 @@ from typing import Iterable
 LanguageText = tuple[str, str, str]
 
 
-# Four distinct paraphrase families per built-in candidate.  The examples are
-# deliberately short and concrete because this is a routing seed, not a claim
-# of production language coverage.
+# At least four distinct paraphrase families per built-in candidate.  The
+# examples are deliberately short and concrete because this is a routing seed,
+# not a claim of production language coverage.  Candidates that are reached
+# most often by voice carry extra families covering dropped particles, casual
+# endings and swapped app names.
 TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
     "get_weather": (
         ("오늘 날씨 알려줘", "Tell me today's weather", "今日の天気を教えて"),
         ("밖에 비 와?", "Is it raining outside?", "外は雨？"),
         ("이번 주말 날씨 확인해줘", "Check the weekend weather", "週末の天気を確認して"),
         ("지금 기온이 몇 도야", "What is the temperature now?", "今の気温は何度？"),
+        ("날씨 어때", "How is the weather", "天気どう"),
+        ("오늘 추워?", "Is it cold today?", "今日寒い？"),
+        ("내일 비 오려나", "Will it rain tomorrow", "明日雨降るかな"),
+        ("바깥 날씨 좀 알려줄래", "Could you tell me the weather outside", "外の天気を教えてくれる"),
     ),
     "get_current_time": (
         ("지금 몇 시야", "What time is it now?", "今何時？"),
         ("현재 시간을 알려줘", "Tell me the current time", "現在時刻を教えて"),
         ("시계 좀 확인해줘", "Check the clock for me", "時計を確認して"),
         ("서울 시간으로 몇 시인지 말해줘", "What time is it in Seoul?", "ソウルは今何時？"),
+        ("몇 시야", "What time", "何時"),
+        ("시간 좀 알려줘", "Give me the time", "時間を教えて"),
+        ("지금 시각 알려줘", "Tell me the time right now", "今の時刻を教えて"),
+        ("몇 시인지 말해줄래", "Could you tell me what time it is", "何時か言ってくれる"),
     ),
     "web_search": (
         ("인터넷에서 고양이 사료를 찾아줘", "Search the web for cat food", "ネットで猫用フードを検索して"),
         ("이 주제 좀 검색해줘", "Look this topic up online", "この話題をネットで調べて"),
         ("최신 노트북 가격을 검색해줘", "Search for current laptop prices", "最新のノートパソコン価格を検索して"),
         ("브라우저로 관련 정보를 찾아봐", "Find information about it online", "ブラウザで関連情報を探して"),
+        ("이거 검색해", "Search this", "これ検索して"),
+        ("구글에 물어봐줘", "Ask Google about it", "Googleで調べて"),
+        ("파이썬 강의 좀 찾아봐", "Look up Python lectures", "Python講座を探して"),
+        ("인터넷에 이런 거 있는지 봐줘", "See whether this exists online", "ネットにこういうのがあるか見て"),
     ),
     "web_fetch": (
         ("이 URL 내용을 가져와줘", "Fetch the contents of this URL", "このURLの内容を取得して"),
@@ -119,12 +133,20 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("디스코드 좀 켜줘", "Launch Discord", "Discordを起動して"),
         ("계산기가 필요하니 사용할 수 있게 준비해줘", "I need the calculator; make it available please", "電卓を使いたいので準備をお願い"),
         ("메모장이 아직 안 켜졌네, 지금 띄워줘", "Notepad is not running yet; please bring it up", "メモ帳がまだ動いていないよ。使えるようにして"),
+        ("크롬 열어줘", "Chrome, open it", "Chrome開いて"),
+        ("네이버 웨일 띄워줘", "Bring up Naver Whale", "Naver Whaleを立ち上げて"),
+        ("엑셀 실행해", "Run Excel", "Excelを実行して"),
+        ("스팀 좀 실행시켜줘", "Please start Steam", "Steamを起動してくれる"),
     ),
     "close_app": (
         ("크롬을 닫아줘", "Close Chrome", "Chromeを閉じて"),
         ("디스코드 종료해", "Quit Discord", "Discordを終了して"),
         ("계산기는 이제 쓸 일이 없으니 종료해", "I am done using the calculator; exit it please", "電卓はもう使わないので終了をお願い"),
         ("메모장을 더 이상 실행된 상태로 두지 마", "Do not leave Notepad running", "メモ帳を動かしたままにしないで"),
+        ("크롬 닫아", "Chrome, close it", "Chrome閉じて"),
+        ("네이버 웨일 좀 닫아줘", "Please close Naver Whale", "Naver Whaleを閉じて"),
+        ("엑셀 꺼줘", "Turn Excel off", "Excelを閉じて"),
+        ("스팀 종료시켜줘", "Shut Steam down", "Steamを終了させて"),
     ),
     "get_running_apps": (
         ("실행 중인 앱 목록을 알려줘", "List the running applications", "起動中のアプリ一覧を教えて"),
@@ -137,12 +159,20 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("디스코드 창을 앞으로 가져와", "Bring the Discord window to the front", "Discordのウィンドウを前面に出して"),
         ("메모장 창을 활성화해", "Activate the Notepad window", "メモ帳のウィンドウをアクティブにして"),
         ("이 제목의 창에 포커스를 맞춰줘", "Focus the window with this title", "このタイトルのウィンドウにフォーカスして"),
+        ("엑셀 창 띄워줘", "Bring the Excel window up", "Excelのウィンドウを出して"),
+        ("스팀 창 앞으로 꺼내", "Pull the Steam window to the front", "Steamのウィンドウを前面に出して"),
+        ("그 창 다시 보여줘", "Show that window again", "そのウィンドウをもう一度見せて"),
+        ("네이버 웨일 창 선택해", "Select the Naver Whale window", "Naver Whaleのウィンドウを選んで"),
     ),
     "take_screenshot": (
         ("화면 캡처를 저장해줘", "Take and save a screenshot", "画面をキャプチャして保存して"),
         ("지금 화면을 스크린샷으로 찍어", "Capture the current screen", "今の画面をスクリーンショットして"),
         ("스크린샷 파일을 만들어줘", "Create a screenshot file", "スクリーンショットファイルを作って"),
         ("화면을 이미지로 저장해", "Save the screen as an image", "画面を画像として保存して"),
+        ("화면 캡처해", "Capture the screen", "画面をキャプチャして"),
+        ("스크린샷 찍어줘", "Take a screenshot", "スクリーンショット撮って"),
+        ("지금 화면 좀 찍어", "Snap the screen now", "今の画面を撮って"),
+        ("화면 그대로 저장해줘", "Save the screen as is", "画面をそのまま保存して"),
     ),
     "get_clipboard": (
         ("클립보드 내용을 보여줘", "Show the clipboard contents", "クリップボードの内容を見せて"),
@@ -309,10 +339,11 @@ def seed_families() -> list[dict]:
     for label in sorted(TOOL_FAMILY_TEXTS):
         for index, texts in enumerate(TOOL_FAMILY_TEXTS[label], start=1):
             family = _family(label, index, texts)
-            # App names are slots in one request template.  Keep the Chrome /
-            # Discord translations together so an app-name swap cannot leak a
-            # template between train and test.
-            if label in {"launch_app", "close_app"} and index in {1, 2}:
+            # App names are slots in one request template, and dropping the
+            # object particle does not change the template either.  Keep those
+            # variants together so a slot swap cannot leak between train and
+            # test -- and so the spoken short form trains next to its parent.
+            if label in {"launch_app", "close_app"} and index in {1, 2, 5, 6}:
                 family["family_id"] = f"{label}.single.app_slot"
             families.append(family)
 

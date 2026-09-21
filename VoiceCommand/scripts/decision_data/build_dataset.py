@@ -20,7 +20,7 @@ except ImportError:  # Direct ``python build_dataset.py`` invocation.
     from decision_data.split_dataset import apply_family_splits, validate_family_splits
 
 
-DATASET_VERSION = "decision-seed-v1"
+DATASET_VERSION = "decision-seed-v2"
 LANGUAGES = ("ko", "en", "ja")
 
 
