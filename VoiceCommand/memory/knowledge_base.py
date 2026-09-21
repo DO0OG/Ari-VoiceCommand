@@ -26,6 +26,10 @@ _CREATE_KNOWLEDGE_TABLE_SQL = """
     )
 """
 
+_CREATE_KNOWLEDGE_FTS_SQL = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(entity, relation, value)"
+)
+
 
 class KnowledgeBase:
     def __init__(self, db_path: str | None = None):
@@ -42,9 +46,7 @@ class KnowledgeBase:
     def _ensure_db(self) -> None:
         with self._connect() as conn:
             conn.execute(_CREATE_KNOWLEDGE_TABLE_SQL)
-            conn.execute(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(entity, relation, value)"
-            )
+            conn.execute(_CREATE_KNOWLEDGE_FTS_SQL)
 
     def upsert(
         self,
