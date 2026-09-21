@@ -389,7 +389,16 @@ class AICommand(BaseCommand):
             if not bool(ConfigManager.get("agent_dashboard_enabled", True)):
                 return None
             from PySide6.QtWidgets import QApplication
-            if QApplication.instance() is None:
+            app = QApplication.instance()
+            if app is None:
+                return None
+            # Qt 위젯은 GUI 스레드에서만 만들 수 있다. 명령 실행 스레드에서 만들면
+            # 앱 전체가 응답하지 않는다.
+            # ponytail: 대시보드를 건너뛰는 최소 수정. 음성 명령에서도 띄우려면
+            # GUI 스레드로 생성을 위임하는 시그널이 필요하다.
+            from PySide6.QtCore import QThread
+            if QThread.currentThread() is not app.thread():
+                logging.debug("에이전트 대시보드 생략: GUI 스레드가 아님")
                 return None
             from ui.agent_dashboard import AgentDashboard
             dashboard = AgentDashboard(self.orchestrator, goal)
