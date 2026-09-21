@@ -135,7 +135,7 @@ class LearningEngine:
                 failure_kind=fk,
                 lesson=lesson,
                 skill_id=skill_id,
-                user_feedback="positive" if run_result.achieved and not is_dev_goal else "",
+                user_feedback="",
                 few_shot_eligible=(
                     run_result.achieved
                     and len(run_result.step_results) <= 5

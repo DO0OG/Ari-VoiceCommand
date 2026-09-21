@@ -76,6 +76,10 @@ _TOOL_NAMES_BY_INTENT = {
         "set_clipboard",
     },
     "automation": {
+        "launch_app",
+        "close_app",
+        "get_running_apps",
+        "focus_window",
         "get_screen_status",
         "execute_python_code",
         "execute_shell_command",

@@ -133,9 +133,11 @@ class TemplatePlansMixin:
         destination_path = ""
         url_match = re.search(r'(https?://[^\s]+)', goal)
         url = url_match.group(1) if url_match else ""
+        open_target = self._extract_open_target(normalized)
         if not url:
             for alias, mapped_url in _SITE_ALIASES.items():
-                if alias in normalized:
+                if (open_target.lower() in {alias, f"{alias} 사이트", f"{alias} 웹사이트"}
+                        if open_target else alias in normalized):
                     url = mapped_url
                     break
         windows_path_pattern = r'([A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+(?:\.[A-Za-z0-9]+)?)'
@@ -193,6 +195,13 @@ class TemplatePlansMixin:
         elif "탐색기" in normalized or "explorer" in lower:
             target_name = "explorer"
 
+        known_app_names = {
+            "메모장", "notepad", "크롬", "chrome", "엣지", "edge", "vscode", "vs code",
+            "visual studio code", "코드", "코드 에디터", "계산기", "calculator", "calc", "탐색기", "explorer",
+        }
+        if open_target and not url and not source_path and open_target.lower() not in known_app_names:
+            target_name = open_target
+
         rename_target = self._extract_rename_target(normalized, all_paths[0] if all_paths else source_path)
         input_text = self._extract_input_text(goal, all_paths, url)
 
@@ -216,7 +225,7 @@ class TemplatePlansMixin:
             wants_move=any(token in normalized for token in ("이동", "옮겨", "move")),
             wants_list=any(token in normalized for token in ("목록", "리스트", "나열", "보여줘")),
             wants_delete=any(token in normalized for token in ("삭제", "지워", "제거")),
-            wants_open=any(token in normalized for token in ("열어", "열고", "실행", "켜", "오픈", "launch", "open")),
+            wants_open=any(token in normalized for token in ("열어", "열고", "실행", "켜", "오픈", "launch", "open", "들어가")),
             wants_login=any(token in normalized for token in ("로그인", "sign in", "login", "log in", "signin")),
             wants_browser=bool(url) or any(token in normalized for token in ("브라우저", "사이트", "웹", "크롬", "엣지")),
             wants_download=any(token in normalized for token in ("다운로드", "download", "내려받", "저장")),
@@ -243,6 +252,21 @@ class TemplatePlansMixin:
             all_paths=all_paths,
             input_text=input_text,
         )
+
+    @staticmethod
+    def _extract_open_target(goal: str) -> str:
+        text = (goal or "").strip().rstrip(".!?。！？")
+        match = re.fullmatch(
+            r"(.+?)\s*(?:열어|실행해|실행|켜|오픈해|들어가)\s*(?:줘|주세요)?",
+            text,
+            flags=re.IGNORECASE,
+        ) or re.fullmatch(r"(?:open|launch)\s+(.+)", text, flags=re.IGNORECASE)
+        if not match:
+            return ""
+        target = re.sub(r"[을를]$", "", match.group(1).strip()).strip().strip("\"'")
+        if re.search(r"그리고|하고|열고|한 뒤|다음|저장|입력|\band\b", target, re.IGNORECASE):
+            return ""
+        return target
 
     def _infer_special_folder_path(self, normalized_goal: str, lower_goal: str) -> str:
         if self.is_developer_goal(normalized_goal):
