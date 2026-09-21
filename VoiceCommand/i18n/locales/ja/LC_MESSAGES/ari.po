@@ -2959,3 +2959,9 @@ msgstr "です。"
 
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "天気情報の取得中にエラーが発生しました。"
+
+msgid "settings.save_failed"
+msgstr "設定を保存できませんでした"
+
+msgid "settings.secret_save_failed"
+msgstr "ファイルの書き込み権限と暗号化ストアを確認してください。暗号化保存を利用できない環境では、環境変数または実行時フォルダーの.envでキーを設定してください。入力内容はこの画面に残っています。"

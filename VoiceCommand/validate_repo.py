@@ -82,6 +82,7 @@ COMPILE_TARGETS = [
     "services/web_tools.py",
     "services/weather_service.py",
     "core/config_manager.py",
+    "core/secret_store.py",
     "core/marketplace_client.py",
     "memory/memory_consolidator.py",
     "memory/memory_index.py",

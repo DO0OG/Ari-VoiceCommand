@@ -2959,3 +2959,9 @@ msgstr "입니다."
 
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "날씨 정보를 가져오는 중 오류가 발생했습니다."
+
+msgid "settings.save_failed"
+msgstr "설정을 저장하지 못했습니다"
+
+msgid "settings.secret_save_failed"
+msgstr "파일 쓰기 권한과 암호화 저장소를 확인해 주세요. 암호화 저장을 지원하지 않는 환경에서는 환경변수 또는 런타임 폴더의 .env로 키를 설정하세요. 입력한 내용은 이 창에 남아 있습니다."

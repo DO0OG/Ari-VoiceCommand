@@ -513,7 +513,10 @@ class SettingsDialog(QDialog):
             key for key, value in merged_settings.items()
             if self.original_settings.get(key) != value
         }
-        ConfigManager.save_settings(merged_settings)
+        if not ConfigManager.save_settings(merged_settings):
+            self.changed_keys = set()
+            QMessageBox.warning(self, _("settings.save_failed"), _("settings.secret_save_failed"))
+            return
 
         if self.character_settings_changed():
             self._apply_character_display(

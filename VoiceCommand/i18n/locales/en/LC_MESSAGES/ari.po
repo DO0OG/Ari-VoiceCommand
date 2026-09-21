@@ -2959,3 +2959,9 @@ msgstr "."
 
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "An error occurred while retrieving weather information."
+
+msgid "settings.save_failed"
+msgstr "Settings could not be saved"
+
+msgid "settings.secret_save_failed"
+msgstr "Check file write permissions and the encrypted store. Where encrypted storage is unavailable, configure keys through environment variables or the runtime folder's .env file. Your input remains in this window."
