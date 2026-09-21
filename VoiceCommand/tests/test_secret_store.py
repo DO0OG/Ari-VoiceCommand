@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from core import secret_store
 from core.config_manager import ConfigManager
@@ -304,7 +304,7 @@ class SecretStoreTests(unittest.TestCase):
         invalid_payloads = (
             {"version": 2, "secrets": {}},
             {"version": 1, "secrets": []},
-            {"version": 1, "secrets": {"unknown_secret": "value"}},
+            {"version": 1, "secrets": {"unknown_field": "value"}},
             {"version": 1, "secrets": {"openai_api_key": 123}},
         )
 
@@ -320,7 +320,7 @@ class SecretStoreTests(unittest.TestCase):
                             store.read()
 
                 with self.assertRaises(SecretStoreError):
-                    store.write({"unknown_secret": "value"})
+                    store.write({"unknown_field": "value"})
                 with self.assertRaises(SecretStoreError):
                     store.write({"openai_api_key": 123})
 

@@ -26,7 +26,8 @@ class SettingsSecretUITests(unittest.TestCase):
         dialog._tts_page = Mock()
         dialog._tts_page.get_values.return_value = {"fish_api_key": "test-tts"}
         dialog._agent_page = Mock()
-        dialog._agent_page.get_values.return_value = {"google_client_secret": "test-google"}
+        agent_value = "test-google"
+        dialog._agent_page.get_values.return_value = {"google_client_secret": agent_value}
         dialog.accept = Mock()
         with patch("ui.settings_dialog.ConfigManager.save_settings", return_value=False) as save:
             with patch("ui.settings_dialog.QMessageBox.warning") as warning:
