@@ -17,7 +17,14 @@ if str(VOICECOMMAND_ROOT) not in sys.path:
 from scripts.decision_data.build_dataset import build_examples
 from scripts.decision_data.generate_candidates import UNKNOWN_LABEL, build_snapshot
 from scripts.decision_data.seed_data import HARD_NEGATIVE_FAMILIES
-from scripts.decision_data.split_dataset import SPLITS, validate_family_splits
+from scripts.decision_data.split_dataset import (
+    SPLITS,
+    assign_family_splits,
+    load_manifest,
+    manifest_drift,
+    validate_manifest,
+    validate_family_splits,
+)
 from agent.decision.candidates import candidate_names as registry_candidate_names
 
 
@@ -61,6 +68,51 @@ class DecisionDataTests(unittest.TestCase):
             normalized_splits[normalized].add(row["split"])
         self.assertTrue(all(len(splits) == 1 for splits in family_splits.values()))
         self.assertTrue(all(len(splits) == 1 for splits in normalized_splits.values()))
+
+    def test_manifest_records_every_family_and_matches_the_built_split(self):
+        recorded = load_manifest()
+        families = {row["family_id"] for row in self.rows}
+        self.assertTrue(recorded, "split manifest must be committed")
+        self.assertEqual(set(recorded), families)
+        for row in self.rows:
+            self.assertEqual(row["split"], recorded[row["family_id"]])
+        validate_manifest(self.rows)
+        self.assertEqual(manifest_drift(self.rows), {"unrecorded": [], "stale": [], "moved": []})
+
+    def test_new_family_is_placed_without_moving_recorded_families(self):
+        recorded = load_manifest()
+        label = self.rows[0]["label"]
+        added = [{"label": label, "family_id": "zzz.unrecorded.family.01"}]
+        assignment = assign_family_splits(
+            [{"label": row["label"], "family_id": row["family_id"]} for row in self.rows] + added
+        )
+        moved = [
+            family for family, split in recorded.items()
+            if assignment.get(family) != split
+        ]
+        self.assertEqual(moved, [])
+        self.assertIn(assignment["zzz.unrecorded.family.01"], SPLITS)
+
+    def test_empty_manifest_reproduces_the_recorded_placement(self):
+        # 기록이 없을 때의 배정 규칙이 현재 기록과 같아야 재현이 가능하다.
+        assignment = assign_family_splits(
+            [{"label": row["label"], "family_id": row["family_id"]} for row in self.rows],
+            manifest={},
+        )
+        self.assertEqual(assignment, load_manifest())
+
+    def test_manifest_validator_rejects_a_moved_or_unrecorded_family(self):
+        moved = copy.deepcopy(self.rows)
+        for row in moved:
+            if row["family_id"] == self.rows[0]["family_id"]:
+                row["split"] = "test" if row["split"] != "test" else "train"
+        with self.assertRaises(ValueError):
+            validate_manifest(moved)
+
+        unrecorded = copy.deepcopy(self.rows)
+        unrecorded[0]["family_id"] = "zzz.unrecorded.family.02"
+        with self.assertRaises(ValueError):
+            validate_manifest(unrecorded)
 
     def test_validator_rejects_unknown_split_and_cross_split_duplicate(self):
         unknown = copy.deepcopy(self.rows)
