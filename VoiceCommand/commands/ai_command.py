@@ -7,7 +7,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 from agent.assistant_text_utils import (
     clean_tool_artifact_text,
@@ -18,6 +18,9 @@ from agent.assistant_text_utils import (
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 from i18n.translator import _, get_language
+
+if TYPE_CHECKING:
+    from agent.decision.engine import FastPathResult
 
 
 class AICommand(BaseCommand):
@@ -60,6 +63,12 @@ class AICommand(BaseCommand):
         "shutdown", "shut down", "turn off", "power off",
         "シャットダウン", "終了", "オフ", "切",
     )
+    _FAST_PATH_MESSAGES = {
+        "get_running_apps": "실행 중인 앱 목록을 확인했습니다.",
+        "take_screenshot": "스크린샷을 저장했습니다.",
+        "adjust_volume": "볼륨을 조절했습니다.",
+    }
+
     def __init__(self, ai_assistant, tts_func, learning_mode_ref):
         self.ai_assistant = ai_assistant
         self.tts_wrapper = tts_func
@@ -268,8 +277,15 @@ class AICommand(BaseCommand):
     def _handle_adjust_volume(self, args: dict) -> Optional[str]:
         from core.VoiceCommand import adjust_volume
 
-        direction = args.get("direction", "up")
-        adjust_volume(str(direction or "up"))
+        direction = str(args.get("direction", "up") or "up").strip()
+        amount = args.get("amount", args.get("percentage"))
+        result = adjust_volume(direction, amount=amount, announce=False)
+        if result is False:
+            return _("볼륨 조절 실패")
+        if result is True:
+            return _("볼륨을 조절했습니다.")
+        if isinstance(result, str):
+            return result
         return None
 
     def _handle_get_current_time(self, args: dict) -> Optional[str]:
@@ -1388,7 +1404,7 @@ class AICommand(BaseCommand):
 
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
-    def try_fast_path(self, text: str) -> None:
+    def try_fast_path(self, text: str) -> Optional["FastPathResult"]:
         """선택적 로컬 분류 실패는 기존 대화 경로에 영향을 주지 않는다."""
         try:
             from core.config_manager import ConfigManager
@@ -1444,7 +1460,7 @@ class AICommand(BaseCommand):
             output_callback(self._agent_run_to_korean(result))
             return
         if not self._exec_lock.acquire(blocking=False):
-            logging.warning("AI 명령 실행 중 재진입 시도 무시: %s", text)
+            logging.warning("명령 실행 중인 동안 새 명령을 건너뜁니다.")
             return
 
         original_tts = self.tts_wrapper
@@ -1455,9 +1471,18 @@ class AICommand(BaseCommand):
             self.tts_wrapper = output_callback
             self.executor.tts_wrapper = output_callback
             self.orchestrator.tts = output_callback
-            self._current_goal = text   # self-fix용 목표 텍스트 저장
+            self._current_goal = ""
             response = None
             tool_calls: List[dict] = []
+            fast_result = self.try_fast_path(text)
+            if fast_result is not None:
+                self._execute_fast_path_result(
+                    fast_result,
+                    tool_result_callback=tool_result_callback,
+                )
+                return
+
+            self._current_goal = text
             skill_ctx = self._get_skill_context(text)
             skill_used = self._get_primary_skill_name(skill_ctx)
             data_source = ""
@@ -1470,7 +1495,6 @@ class AICommand(BaseCommand):
                 if skill_ctx.get("escalate_to_agent"):
                     tool_calls = [self._build_script_skill_escalation_tool_call(text, skill_ctx)]
                 else:
-                    self.try_fast_path(text)
                     response, tool_calls = self._invoke_with_optional_stream(
                         self.ai_assistant.chat_with_tools,
                         text,
@@ -1570,6 +1594,7 @@ class AICommand(BaseCommand):
             self.tts_wrapper = original_tts
             self.executor.tts_wrapper = original_exec_tts
             self.orchestrator.tts = original_orch_tts
+            self._current_goal = ""
             self._exec_lock.release()
 
     def _is_interrupt_command(self, text: str) -> bool:
@@ -1579,6 +1604,75 @@ class AICommand(BaseCommand):
     def _is_resume_command(self, text: str) -> bool:
         normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
         return normalized in {"이어서 해줘", "계속해", "계속", "resume", "continue"}
+
+    @staticmethod
+    def _fast_handler_failed(result) -> bool:
+        if isinstance(result, bool):
+            return not result
+        if isinstance(result, dict) and result.get("success") is False:
+            return True
+        if isinstance(result, str):
+            normalized = result.strip().casefold()
+            return normalized.startswith(
+                (
+                    "오류:",
+                    "error:",
+                    "failed:",
+                    "failed to adjust volume",
+                    "볼륨 조절 실패",
+                    "실행 앱 목록 조회 실패",
+                    "スクリーンショットの保存に失敗",
+                    # 현재 언어로 번역된 실패 문구도 실패로 본다.
+                    _("볼륨 조절 실패").casefold(),
+                    _("실행 앱 목록 조회 실패: {error}").split("{", 1)[0].strip().casefold(),
+                )
+            )
+        return result is None
+
+    def _fast_response(self, name: str, handler_result: Optional[str]) -> Optional[str]:
+        if name == "get_current_time" and handler_result:
+            return str(handler_result)
+
+        message = self._FAST_PATH_MESSAGES.get(name)
+        if not message:
+            return None
+        if name == "take_screenshot" and handler_result:
+            return _("스크린샷을 저장했습니다: {path}").format(path=handler_result)
+        if name == "get_running_apps" and handler_result:
+            return _("실행 중인 앱 목록입니다.\n{apps}").format(apps=handler_result)
+        return _(message)
+
+    def _execute_fast_path_result(
+        self,
+        result,
+        *,
+        tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None,
+    ) -> None:
+        name = str(getattr(result, "tool_name", "") or "")
+        arguments = getattr(result, "arguments", {})
+        if not name or not isinstance(arguments, dict):
+            return
+        try:
+            from agent.decision.candidates import is_direct_allowed
+
+            allowed = is_direct_allowed(name, "fast")
+        except Exception:
+            allowed = False
+        if not allowed:
+            return
+
+        results = self._execute_tool_calls(
+            [{"id": "fast_path_1", "name": name, "arguments": arguments}],
+            tool_result_callback=tool_result_callback,
+        )
+        handler_result = results[0] if results else None
+        if self._fast_handler_failed(handler_result):
+            if handler_result:
+                self._emit_user_message(str(handler_result))
+            return
+        response = self._fast_response(name, handler_result)
+        if response:
+            self._emit_user_message(response)
 
     def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""

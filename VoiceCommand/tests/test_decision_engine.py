@@ -114,14 +114,8 @@ class DecisionEngineTests(unittest.TestCase):
             DIRECT_ALLOWLIST,
             frozenset({
                 "get_current_time",
-                "get_weather",
                 "adjust_volume",
-                "set_timer",
-                "cancel_timer",
-                "launch_app",
-                "focus_window",
                 "get_running_apps",
-                "play_youtube",
                 "take_screenshot",
             }),
         )
@@ -302,7 +296,7 @@ class DecisionEngineTests(unittest.TestCase):
                 self.assertIs(local.last_decision, decision)
                 local.choice.assert_called_once_with("what time is it")
 
-    def test_high_confidence_decision_is_diagnostic_only_even_when_direct_flag_true(self):
+    def test_high_confidence_decision_is_diagnostic_in_shadow(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
@@ -310,7 +304,7 @@ class DecisionEngineTests(unittest.TestCase):
         local = engine.LocalDecisionEngine("unused")
         local.choice = Mock(return_value=decision)
 
-        with self._config_patch(direct=True, mode="fast"):
+        with self._config_patch(direct=True, mode="shadow"):
             self.assertIsNone(local.try_fast_path("what time is it"))
 
         self.assertIs(local.last_decision, decision)
@@ -345,7 +339,7 @@ class DecisionEngineTests(unittest.TestCase):
             for name in candidate_names():
                 with self.subTest(mode=mode, name=name):
                     self.assertFalse(is_direct_allowed(name, mode))
-    def test_modes_keep_direct_execution_disabled_and_invalid_mode_shadows(self):
+    def test_explicit_modes_allow_proven_request_and_invalid_mode_shadows(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             "get_current_time", {"get_current_time": 1.0}, 1.0, 1.0, "linear", 1.0
@@ -355,6 +349,14 @@ class DecisionEngineTests(unittest.TestCase):
                 local = engine.LocalDecisionEngine("unused")
                 local.choice = Mock(return_value=decision)
                 with self._config_patch(mode=mode):
+                    self.assertIsNotNone(local.try_fast_path("what time is it"))
+                self.assertIs(local.last_decision, decision)
+
+        for direct in (False, None, "true"):
+            with self.subTest(direct=direct):
+                local = engine.LocalDecisionEngine("unused")
+                local.choice = Mock(return_value=decision)
+                with self._config_patch(mode="fast", direct=direct):
                     self.assertIsNone(local.try_fast_path("what time is it"))
                 self.assertIs(local.last_decision, decision)
 
@@ -474,9 +476,8 @@ class DecisionEngineTests(unittest.TestCase):
             "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
         )
 
-        # 기본값과 누락 상태뿐 아니라 실행을 허용하는 이름의 모드에서도 기존 대화
-        # 경로만 사용해야 한다.  모드 이름이 곧 실행 권한이 되지 않도록 고정한다.
-        for mode_setting in ("shadow", None, "fast", "adaptive"):
+        # 기본값과 누락 상태에서는 기존 대화 경로를 유지한다.
+        for mode_setting in ("shadow", None):
             with self.subTest(mode_setting=mode_setting):
                 events = []
 

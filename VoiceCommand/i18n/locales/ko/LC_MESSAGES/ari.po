@@ -20,6 +20,21 @@ msgstr "볼륨을 {volume}%로 조절했습니다."
 msgid "볼륨 조절 실패"
 msgstr "볼륨 조절 실패"
 
+msgid "볼륨을 조절했습니다."
+msgstr "볼륨을 조절했습니다."
+
+msgid "음소거했습니다."
+msgstr "음소거했습니다."
+
+msgid "음소거를 해제했습니다."
+msgstr "음소거를 해제했습니다."
+
+msgid "실행 중인 앱 목록입니다.\n{apps}"
+msgstr "실행 중인 앱 목록입니다.\n{apps}"
+
+msgid "스크린샷을 저장했습니다: {path}"
+msgstr "스크린샷을 저장했습니다: {path}"
+
 msgid "게임 모드 ON. GPU 메모리 해제했습니다."
 msgstr "게임 모드 ON. GPU 메모리 해제했습니다."
 
