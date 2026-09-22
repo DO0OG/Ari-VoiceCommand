@@ -474,7 +474,9 @@ class DecisionEngineTests(unittest.TestCase):
             "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
         )
 
-        for mode_setting in ("shadow", None):
+        # 기본값과 누락 상태뿐 아니라 실행을 허용하는 이름의 모드에서도 기존 대화
+        # 경로만 사용해야 한다.  모드 이름이 곧 실행 권한이 되지 않도록 고정한다.
+        for mode_setting in ("shadow", None, "fast", "adaptive"):
             with self.subTest(mode_setting=mode_setting):
                 events = []
 
