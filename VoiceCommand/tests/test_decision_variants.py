@@ -156,13 +156,97 @@ class DecisionVariantTests(unittest.TestCase):
         self.assertTrue(any(kind.startswith("composed:numeric_transcription+") for _, kind in variants))
         self.assertEqual(generate_variants(source, "ko", limit=1)[0][1], "numeric_transcription")
 
-    def test_non_korean_input_is_left_to_the_existing_generators(self):
+    def test_english_variants_keep_the_action_and_the_named_object(self):
+        source = "Open the Chrome window"
+        first = generate_variants(source, "en")
+        self.assertEqual(first, generate_variants(source, "en"))
+        self.assertLessEqual(len(first), 12)
+        self.assertEqual(len({text for text, _ in first}), len(first))
+        self.assertNotIn(source, {text for text, _ in first})
+
+        variants = dict(generate_variants(source, "en", limit=64))
+        self.assertIn("article_omission", variants["Open Chrome window"])
+        self.assertIn("Please open the Chrome window", variants)
+        self.assertIn("Could you open the Chrome window", variants)
+        self.assertIn("Open the Chrome window please", variants)
+        self.assertIn("Um, open the Chrome window", variants)
+        self.assertIn("Um, um, open the Chrome window", variants)
+        self.assertIn("Open the Ch- Chrome window", variants)
+        self.assertIn("Open the Chrom window", variants)
+        self.assertIn("open the chrome window", variants)
+        for text, _ in generate_variants(source, "en", limit=64):
+            with self.subTest(text=text):
+                self.assertTrue(any(name in text.lower() for name in ("chrom", "crome")))
+
+        # A request that already carries a politeness marker keeps one meaning.
+        polite = dict(generate_variants("Could you please open Chrome", "en", limit=64))
+        self.assertIn("Open Chrome", polite)
+        self.assertIn("Can you open Chrome", polite)
+
+    def test_english_spacing_and_number_forms_are_reversible(self):
+        split = {text for text, _ in generate_variants("Take a screenshot", "en", limit=64)}
+        self.assertIn("Take a screen shot", split)
+        self.assertIn("Take screenshot", split)
+        joined = {text for text, _ in generate_variants("Open you tube", "en", limit=64)}
+        self.assertIn("Open youtube", joined)
+
+        digits = {text for text, _ in generate_variants("Set a timer for 30 minutes", "en", limit=64)}
+        self.assertIn("Set a timer for thirty minutes", digits)
+        words = {text for text, _ in generate_variants("Set a timer for thirty minutes", "en", limit=64)}
+        self.assertIn("Set a timer for 30 minutes", words)
+        self.assertIn(
+            "Set a timer for twenty-five minutes",
+            {text for text, _ in generate_variants("Set a timer for 25 minutes", "en", limit=64)},
+        )
+        for source in ("Open 1.5 files", "Wait 1,500 minutes"):
+            with self.subTest(source=source):
+                self.assertNotIn(
+                    "numeric_transcription",
+                    {kind for _, kind in generate_variants(source, "en", limit=64)},
+                )
+
+    def test_japanese_particle_ending_and_transcription_changes(self):
+        source = "Chromeを開いてください"
+        first = generate_variants(source, "ja")
+        self.assertEqual(first, generate_variants(source, "ja"))
+        self.assertLessEqual(len(first), 12)
+        self.assertEqual(len({text for text, _ in first}), len(first))
+        self.assertNotIn(source, {text for text, _ in first})
+
+        variants = dict(generate_variants(source, "ja", limit=64))
+        self.assertIn("particle_omission", variants["Chrome開いてください"])
+        for expected in ("Chromeを開いて", "Chromeを開いてくれる？", "Chromeを開いてよ",
+                         "えっと、Chromeを開いてください", "あの、Chromeを開いてください",
+                         "えっと、えっと、Chromeを開いてください", "Chromeを 開いてください"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, variants)
+        self.assertTrue(all("開い" in text for text, _ in variants.items()))
+
+        readings = {text for text, _ in generate_variants("クロームを開いて", "ja", limit=64)}
+        self.assertIn("クロムを開いて", readings)
+        self.assertIn("ク、クロームを開いて", readings)
+        noisy = {text for text, _ in generate_variants("音量を上げて", "ja", limit=64)}
+        self.assertIn("音料を上げて", noisy)
+        self.assertNotIn("音量を下げて", noisy)
+
+    def test_japanese_number_forms_keep_the_value_and_unit(self):
+        digits = {text for text, _ in generate_variants("30分後に教えて", "ja", limit=64)}
+        self.assertIn("三十分後に教えて", digits)
+        kanji = {text for text, _ in generate_variants("三十分後に教えて", "ja", limit=64)}
+        self.assertIn("30分後に教えて", kanji)
+        hours = {text for text, _ in generate_variants("3時間後に教えて", "ja", limit=64)}
+        self.assertIn("三時間後に教えて", hours)
+        self.assertIn(
+            "150分後に教えて",
+            {text for text, _ in generate_variants("百五十分後に教えて", "ja", limit=64)},
+        )
+
+    def test_unsupported_language_and_empty_input_produce_nothing(self):
         korean = generate_variants("크롬을 켜줘", "ko")
         self.assertGreater(len(korean), 0)
-        self.assertEqual(generate_variants("Open Chrome", "en"), [])
-        self.assertEqual(generate_variants("Chromeを開いて", "ja"), [])
         self.assertEqual(generate_variants("크롬을 켜줘", "unknown"), [])
         self.assertEqual(generate_variants("", "ko"), [])
+        self.assertEqual(generate_variants("Open Chrome", ""), [])
         self.assertEqual(generate_variants("크롬을 켜줘", None), [])
 
 

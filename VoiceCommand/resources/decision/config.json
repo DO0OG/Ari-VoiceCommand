@@ -44,11 +44,11 @@
     "unknown_or_complex"
   ],
   "buckets": 8192,
-  "temperature": 0.9753445989443437,
+  "temperature": 1.1050137103527577,
   "dataset_version": "decision-dataset-v2",
   "augmentation_enabled": true,
   "calibration_version": "temperature-nll-v1",
-  "training_sha256": "22edc2a4aea2207e89be3bdf696c1578a03e7fb04fe7c41f74ec4fe95540ec26",
-  "sha256": "9007f5624c81666efe1af21454cbc585152075f2e5624b6ce9121ed3956a5331",
+  "training_sha256": "f403fa1d38a0d24594df91f551a22e68d9228554d5ce012e2f306e6f7d8b3d5d",
+  "sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
   "epochs": 160
 }

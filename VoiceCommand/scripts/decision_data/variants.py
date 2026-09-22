@@ -306,6 +306,305 @@ def _punctuation_removal(text: str) -> list[str]:
     return [candidate] if candidate and candidate != text else []
 
 
+_EN_ARTICLES = re.compile(r"\b(?:the|a|an|my)\s+(?=[A-Za-z0-9])", re.IGNORECASE)
+_EN_REQUEST_PREFIXES = (
+    "could you please ", "can you please ", "would you please ",
+    "could you ", "can you ", "would you ", "please ",
+)
+_EN_TRANSCRIPTION_ERRORS = (
+    ("chrome", "chrom"),
+    ("chrome", "crome"),
+    ("discord", "discort"),
+    ("youtube", "youtub"),
+    ("volume", "volumn"),
+    ("excel", "excell"),
+    ("steam", "steem"),
+    ("whale", "wale"),
+    ("minutes", "minuts"),
+    ("minute", "minut"),
+    ("screenshot", "screenshoot"),
+    ("calculator", "calcuator"),
+    ("notepad", "notpad"),
+)
+_EN_OVERSEGMENTED = (
+    ("youtube", "you tube"),
+    ("screenshot", "screen shot"),
+    ("notepad", "note pad"),
+    ("discord", "dis cord"),
+)
+_EN_STUTTER_WORDS = ("chrome", "discord", "youtube", "excel", "steam", "notepad", "calculator")
+_EN_SMALL_NUMBERS = (
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "seventeen", "eighteen", "nineteen",
+)
+_EN_TENS = {
+    20: "twenty", 30: "thirty", 40: "forty", 50: "fifty",
+    60: "sixty", 70: "seventy", 80: "eighty", 90: "ninety",
+}
+
+
+def _en_number_word(number: int) -> str | None:
+    """Spell 0-100 the way a speaker would; other values stay as digits."""
+    if number < 0 or number > 100:
+        return None
+    if number < 20:
+        return _EN_SMALL_NUMBERS[number]
+    if number == 100:
+        return "one hundred"
+    tens, ones = divmod(number, 10)
+    word = _EN_TENS[tens * 10]
+    return f"{word}-{_EN_SMALL_NUMBERS[ones]}" if ones else word
+
+
+_EN_NUMBER_VALUES = {
+    word: number
+    for number in range(0, 101)
+    for word in (_en_number_word(number),)
+    if word is not None
+}
+_EN_NUMBER_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(word) for word in sorted(_EN_NUMBER_VALUES, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+_EN_DIGIT_PATTERN = re.compile(r"(?<![\w.,\-/])(0|[1-9][0-9]?|100)(?![\w.,\-/:])")
+
+
+def _match_case(sample: str, target: str) -> str:
+    """Reuse the casing of the text that was matched."""
+    if sample.isupper() and len(sample) > 1:
+        return target.upper()
+    if sample[:1].isupper():
+        return target[:1].upper() + target[1:]
+    return target
+
+
+def _en_replacements(text: str, table: tuple[tuple[str, str], ...]) -> list[str]:
+    variants = []
+    for source, target in table:
+        match = re.search(rf"\b{re.escape(source)}\b", text, re.IGNORECASE)
+        if match:
+            replacement = _match_case(match.group(), target)
+            variants.append(text[: match.start()] + replacement + text[match.end() :])
+    return variants
+
+
+def _en_article_omissions(text: str) -> list[str]:
+    return [text[: match.start()] + text[match.end() :] for match in _EN_ARTICLES.finditer(text)]
+
+
+def _en_request_forms(text: str) -> list[str]:
+    stripped = text.strip()
+    core = stripped.rstrip(".!?")
+    punctuation = stripped[len(core) :]
+    lowered = core.casefold()
+    body = core
+    for prefix in _EN_REQUEST_PREFIXES:
+        if lowered.startswith(prefix):
+            body = core[len(prefix) :]
+            break
+    else:
+        if lowered.endswith(" please"):
+            body = core[: -len(" please")]
+    body = body.strip()
+    if not body or not body[:1].isalpha():
+        return []
+    lower_body = body[:1].lower() + body[1:]
+    upper_body = body[:1].upper() + body[1:]
+    return [
+        value + punctuation
+        for value in (
+            upper_body,
+            "Please " + lower_body,
+            "Could you " + lower_body,
+            "Can you " + lower_body,
+            upper_body + " please",
+        )
+    ]
+
+
+def _en_softeners(text: str) -> list[str]:
+    stripped = text.strip()
+    if not stripped or not stripped[:1].isalpha():
+        return []
+    if re.match(r"^(?:um|uh|so|sorry|hey|just|if)\b", stripped, re.IGNORECASE):
+        return []
+    lower = stripped[:1].lower() + stripped[1:]
+    return [prefix + lower for prefix in ("Um, ", "Uh, ", "So, ", "Sorry, ", "If you can, ", "Just ")]
+
+
+def _en_repetitions(text: str) -> list[str]:
+    stripped = text.strip()
+    variants = []
+    if stripped[:1].isalpha() and not re.match(r"^um,?\s*um\b", stripped, re.IGNORECASE):
+        variants.append("Um, um, " + stripped[:1].lower() + stripped[1:])
+    for word in _EN_STUTTER_WORDS:
+        match = re.search(rf"\b{re.escape(word)}\b", text, re.IGNORECASE)
+        if match:
+            found = match.group()
+            variants.append(text[: match.start()] + found[:2] + "- " + found + text[match.end() :])
+    return variants
+
+
+def _en_transcription_errors(text: str) -> list[str]:
+    return _en_replacements(text, _EN_TRANSCRIPTION_ERRORS)
+
+
+def _en_spacing_oversegmentation(text: str) -> list[str]:
+    return _en_replacements(text, _EN_OVERSEGMENTED)
+
+
+def _en_spacing_loss(text: str) -> list[str]:
+    return _en_replacements(text, tuple((target, source) for source, target in _EN_OVERSEGMENTED))
+
+
+def _en_case_variation(text: str) -> list[str]:
+    lowered = text.lower()
+    return [lowered] if lowered != text else []
+
+
+def _en_numeric_transcriptions(text: str) -> list[str]:
+    variants = []
+    for match in _EN_NUMBER_PATTERN.finditer(text):
+        variants.append(
+            text[: match.start()] + str(_EN_NUMBER_VALUES[match.group().casefold()]) + text[match.end() :]
+        )
+    for match in _EN_DIGIT_PATTERN.finditer(text):
+        word = _en_number_word(int(match.group()))
+        if word:
+            variants.append(text[: match.start()] + word + text[match.end() :])
+    return _unique(variants, text)
+
+
+_JA_PARTICLE = re.compile(r"(?<=[\u3040-\u30ff\u4e00-\u9fffA-Za-z0-9])を")
+_JA_ENDING_ALTERNATIVES = (
+    ("てください", ("て", "てくれる？", "てくれない？", "てよ", "てね")),
+    ("てくれる？", ("て", "てください", "てくれない？", "てよ", "てね")),
+    ("てくれない？", ("て", "てください", "てくれる？", "てよ", "てね")),
+    ("てね", ("て", "てください", "てくれる？", "てくれない？", "てよ")),
+    ("てよ", ("て", "てください", "てくれる？", "てくれない？", "てね")),
+    ("て", ("てください", "てくれる？", "てくれない？", "てよ", "てね")),
+)
+_JA_SOFTENERS = ("えっと、", "あの、", "すみませんが、", "できれば", "ちょっと")
+_JA_TRANSCRIPTION_ERRORS = (
+    ("クローム", "クロム"),
+    ("ディスコード", "ディスコート"),
+    ("ユーチューブ", "ユーチュブ"),
+    ("スクリーンショット", "スクリーンショト"),
+    ("メモ帳", "メモ張"),
+    ("電卓", "電択"),
+    ("音量", "音料"),
+    ("時間", "時感"),
+    ("画面", "我面"),
+    ("天気", "転記"),
+    ("エクセル", "エクセール"),
+)
+_JA_STUTTER = (
+    ("クローム", "ク、クローム"),
+    ("ディスコード", "ディ、ディスコード"),
+    ("ユーチューブ", "ユ、ユーチューブ"),
+    ("スクリーンショット", "ス、スクリーンショット"),
+)
+_JA_DIGIT_NAMES = {1: "一", 2: "二", 3: "三", 4: "四", 5: "五",
+                   6: "六", 7: "七", 8: "八", 9: "九"}
+_JA_UNIT = r"(?P<unit>時間|分|秒|時|回|個|件)"
+_JA_DIGIT_NUMBER = re.compile(rf"(?<![\w.,\-/])(?P<number>0|[1-9][0-9]{{0,3}})\s*{_JA_UNIT}")
+_JA_KANJI_NUMBER = re.compile(rf"(?P<number>[〇一二三四五六七八九十百千]+)\s*{_JA_UNIT}")
+
+
+def _ja_number(value: int) -> str:
+    if value == 0:
+        return "〇"
+    result = []
+    remainder = value
+    for place, character in ((1000, "千"), (100, "百"), (10, "十")):
+        digit, remainder = divmod(remainder, place)
+        if digit:
+            if digit != 1:
+                result.append(_JA_DIGIT_NAMES[digit])
+            result.append(character)
+    if remainder:
+        result.append(_JA_DIGIT_NAMES[remainder])
+    return "".join(result)
+
+
+def _parse_ja_number(value: str) -> int | None:
+    if value == "〇":
+        return 0
+    names = {name: digit for digit, name in _JA_DIGIT_NAMES.items()}
+    places = {"十": 10, "百": 100, "千": 1000}
+    total = 0
+    current = None
+    for character in value:
+        if character in names:
+            current = names[character]
+        elif character in places:
+            total += (current or 1) * places[character]
+            current = None
+        else:
+            return None
+    number = total + (current or 0)
+    return number if 0 <= number <= 9999 and _ja_number(number) == value else None
+
+
+def _ja_particle_omissions(text: str) -> list[str]:
+    return [text[: match.start()] + text[match.end() :] for match in _JA_PARTICLE.finditer(text)]
+
+
+def _ja_verb_endings(text: str) -> list[str]:
+    core = text.rstrip(".!?。！？")
+    punctuation = text[len(core) :]
+    for ending, alternatives in _JA_ENDING_ALTERNATIVES:
+        if core.endswith(ending):
+            stem = core[: -len(ending)]
+            if not stem or not re.search(r"[\u3040-\u30ff\u4e00-\u9fff]$", stem):
+                continue
+            return [stem + alternative + punctuation for alternative in alternatives]
+    return []
+
+
+def _ja_softeners(text: str) -> list[str]:
+    if text.startswith(_JA_SOFTENERS):
+        return []
+    return [softener + text for softener in _JA_SOFTENERS]
+
+
+def _ja_repetitions(text: str) -> list[str]:
+    variants = []
+    if not text.startswith("えっと、えっと"):
+        variants.append("えっと、えっと、" + text)
+    variants.extend(text.replace(source, target, 1) for source, target in _JA_STUTTER if source in text)
+    return variants
+
+
+def _ja_transcription_errors(text: str) -> list[str]:
+    return [text.replace(source, target, 1) for source, target in _JA_TRANSCRIPTION_ERRORS if source in text]
+
+
+def _ja_spacing_oversegmentation(text: str) -> list[str]:
+    variants = [text[: match.end()] + " " + text[match.end() :] for match in _JA_PARTICLE.finditer(text)]
+    core = text.rstrip("。！？.!?")
+    for ending in ("てください", "て"):
+        if core.endswith(ending) and len(core) > len(ending):
+            index = len(core) - len(ending)
+            variants.append(text[:index] + " " + text[index:])
+            break
+    return variants
+
+
+def _ja_numeric_transcriptions(text: str) -> list[str]:
+    variants = []
+    for match in _JA_DIGIT_NUMBER.finditer(text):
+        rendered = _ja_number(int(match.group("number"))) + match.group("unit")
+        variants.append(text[: match.start()] + rendered + text[match.end() :])
+    for match in _JA_KANJI_NUMBER.finditer(text):
+        number = _parse_ja_number(match.group("number"))
+        if number is not None:
+            variants.append(text[: match.start()] + str(number) + match.group("unit") + text[match.end() :])
+    return _unique(variants, text)
+
+
+
 _OPERATIONS = (
     ("particle_omission", _particle_omissions),
     ("verb_ending", _verb_endings),
@@ -319,6 +618,37 @@ _OPERATIONS = (
     ("punctuation_removal", _punctuation_removal),
 )
 
+
+_EN_OPERATIONS = (
+    ("article_omission", _en_article_omissions),
+    ("verb_ending", _en_request_forms),
+    ("softener", _en_softeners),
+    ("repetition", _en_repetitions),
+    ("transcription_error", _en_transcription_errors),
+    ("spacing_loss", _en_spacing_loss),
+    ("spacing_oversegmentation", _en_spacing_oversegmentation),
+    ("case_variation", _en_case_variation),
+    ("numeric_transcription", _en_numeric_transcriptions),
+    ("punctuation_removal", _punctuation_removal),
+)
+
+_JA_OPERATIONS = (
+    ("particle_omission", _ja_particle_omissions),
+    ("verb_ending", _ja_verb_endings),
+    ("softener", _ja_softeners),
+    ("repetition", _ja_repetitions),
+    ("transcription_error", _ja_transcription_errors),
+    ("spacing_loss", _spacing_loss),
+    ("spacing_oversegmentation", _ja_spacing_oversegmentation),
+    ("numeric_transcription", _ja_numeric_transcriptions),
+    ("punctuation_removal", _punctuation_removal),
+)
+
+_LANGUAGE_OPERATIONS = {
+    "ko": _OPERATIONS, "korean": _OPERATIONS,
+    "en": _EN_OPERATIONS, "english": _EN_OPERATIONS,
+    "ja": _JA_OPERATIONS, "japanese": _JA_OPERATIONS,
+}
 
 def _unique(values: list[str], original: str) -> list[str]:
     seen = {original}
@@ -337,24 +667,26 @@ def generate_variants(
     seed: int = 131,
     limit: int = 12,
 ) -> list[tuple[str, str]]:
-    """Generate a bounded, deterministic set of Korean-only variants."""
+    """Generate a bounded, deterministic variant set for a supported language."""
 
     if (
         not isinstance(text, str)
         or not text.strip()
         or not isinstance(language, str)
-        or language.casefold() not in {"ko", "korean"}
         or limit <= 0
     ):
+        return []
+    operations = _LANGUAGE_OPERATIONS.get(language.casefold())
+    if operations is None:
         return []
 
     digest = hashlib.sha256(f"{seed}\0{text}".encode("utf-8")).digest()
     rng = random.Random(int.from_bytes(digest[:8], "big"))
-    operation_order = list(range(len(_OPERATIONS)))
+    operation_order = list(range(len(operations)))
     rng.shuffle(operation_order)
 
     groups: dict[int, list[str]] = {}
-    for index, (_, transform) in enumerate(_OPERATIONS):
+    for index, (_, transform) in enumerate(operations):
         values = _unique(transform(text), text)
         rng.shuffle(values)
         groups[index] = values
@@ -366,18 +698,18 @@ def generate_variants(
             values = groups[index]
             if depth < len(values) and values[depth] not in seen:
                 seen.add(values[depth])
-                singles.append((values[depth], _OPERATIONS[index][0]))
+                singles.append((values[depth], operations[index][0]))
 
     composed: list[tuple[str, str]] = []
     composed_seen = set(seen)
     composition_cap = max(8, min(24, limit * 2))
-    operation_indexes = {name: index for index, (name, _) in enumerate(_OPERATIONS)}
+    operation_indexes = {name: index for index, (name, _) in enumerate(operations)}
     numeric_index = operation_indexes["numeric_transcription"]
     if groups[numeric_index]:
         for second_name in ("verb_ending", "softener"):
             second_index = operation_indexes[second_name]
             for middle in groups[numeric_index][:2]:
-                candidates = _unique(_OPERATIONS[second_index][1](middle), middle)
+                candidates = _unique(operations[second_index][1](middle), middle)
                 if candidates:
                     result = candidates[0]
                     if result not in composed_seen:
@@ -393,7 +725,7 @@ def generate_variants(
         if not groups[first]:
             continue
         middle = groups[first][0]
-        candidates = _unique(_OPERATIONS[second][1](middle), middle)
+        candidates = _unique(operations[second][1](middle), middle)
         if not candidates:
             continue
         rng.shuffle(candidates)
@@ -401,7 +733,7 @@ def generate_variants(
         if result in composed_seen:
             continue
         composed_seen.add(result)
-        composed.append((result, f"composed:{_OPERATIONS[first][0]}+{_OPERATIONS[second][0]}"))
+        composed.append((result, f"composed:{operations[first][0]}+{operations[second][0]}"))
         if len(composed) >= composition_cap:
             break
 
