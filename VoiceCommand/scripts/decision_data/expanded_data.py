@@ -202,6 +202,7 @@ FAST_TEXTS: dict[str, dict[str, tuple[LanguageText, ...]]] = {
         "conversational": (
             ("소리 좀 키워줄래", "Could you turn the sound up?", "音量を上げてくれる？"),
             ("볼륨을 조금 낮춰줘", "Lower the volume a little", "音量を少し下げて"),
+            ("볼륨 좀 키워줘", "Turn the volume up a bit", "音量をちょっと上げて"),
         ),
         "short": (
             ("볼륨 올려", "Volume up", "音量上げて"),

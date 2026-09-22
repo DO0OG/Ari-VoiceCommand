@@ -48,7 +48,7 @@
   "dataset_version": "decision-dataset-v2",
   "augmentation_enabled": true,
   "calibration_version": "temperature-nll-v1",
-  "training_sha256": "0063cc0c2daa2011c83288717502b7fa94dc0391910994648abf3d23db5ec928",
-  "sha256": "1e45779eb67f3ae77f13476c01dd2e451f17b1b0047e2976726711b1431fccbd",
+  "training_sha256": "22edc2a4aea2207e89be3bdf696c1578a03e7fb04fe7c41f74ec4fe95540ec26",
+  "sha256": "9007f5624c81666efe1af21454cbc585152075f2e5624b6ce9121ed3956a5331",
   "epochs": 160
 }
