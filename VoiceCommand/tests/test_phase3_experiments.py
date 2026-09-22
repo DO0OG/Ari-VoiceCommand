@@ -69,7 +69,7 @@ class Phase3FeatureTests(unittest.TestCase):
                 self.assertEqual(len(indices[indices >= 8192]), 0)
                 self.assertEqual(len(indices), len(values))
 
-        for path in ("/tmp/config", "~/Documents"):
+        for path in ("/srv/config", "~/Documents"):
             with self.subTest(group="file_path_presence", value=path):
                 indices, _ = extract_features(path, ("file_path_presence",))
                 self.assertEqual(set(indices[indices >= 8192]), {8192})

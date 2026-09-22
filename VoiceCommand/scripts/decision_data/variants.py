@@ -681,7 +681,9 @@ def generate_variants(
         return []
 
     digest = hashlib.sha256(f"{seed}\0{text}".encode("utf-8")).digest()
-    rng = random.Random(int.from_bytes(digest[:8], "big"))
+    # 재현 가능한 순서가 요구사항이므로 요약값에서 유도한 고정 seed를 쓴다.
+    # 보안 목적이 아니며 암호학적 난수로 바꾸면 결과를 재현할 수 없다.
+    rng = random.Random(int.from_bytes(digest[:8], "big"))  # nosec B311
     operation_order = list(range(len(operations)))
     rng.shuffle(operation_order)
 
