@@ -1393,6 +1393,11 @@ class AICommand(BaseCommand):
         try:
             from core.config_manager import ConfigManager
 
+            mode = ConfigManager.get("local_decision_mode", "shadow")
+            if not isinstance(mode, str) or mode not in {"off", "shadow", "fast", "adaptive"}:
+                mode = "shadow"
+            if mode == "off":
+                return None
             if ConfigManager.get("local_decision_engine_enabled", True) is not True:
                 return None
             from agent.decision.engine import LocalDecisionEngine

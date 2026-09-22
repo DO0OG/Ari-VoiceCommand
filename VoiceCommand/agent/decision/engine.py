@@ -14,18 +14,19 @@ import zlib
 
 import numpy as np
 
+from agent.decision.candidates import (
+    candidate_names as registry_candidate_names,
+    is_direct_allowed,
+)
 from agent.llm_router import get_llm_router
-from agent.tool_schemas import CORE_TOOL_SCHEMAS
-from agent.tool_selection import _TOOL_NAMES_BY_INTENT
 
 
 UNKNOWN = "unknown_or_complex"
 
 
 def candidate_names() -> tuple[str, ...]:
-    """기존 의도 매핑에 포함된 내장 도구만 후보로 사용한다."""
-    registered = {schema["function"]["name"] for schema in CORE_TOOL_SCHEMAS}
-    return tuple(sorted(set().union(*_TOOL_NAMES_BY_INTENT.values()) & registered)) + (UNKNOWN,)
+    """Return the registered candidate names with the abstain label last."""
+    return registry_candidate_names()
 
 
 def hash_features(text: str, buckets: int = 8192) -> tuple[np.ndarray, np.ndarray]:
@@ -151,6 +152,11 @@ class LocalDecisionEngine:
         try:
             from core.config_manager import ConfigManager
 
+            mode = ConfigManager.get("local_decision_mode", "shadow")
+            if not isinstance(mode, str) or mode not in {"off", "shadow", "fast", "adaptive"}:
+                mode = "shadow"
+            if mode == "off":
+                return None
             if ConfigManager.get("local_decision_engine_enabled", True) is not True:
                 return None
             if ConfigManager.get("local_decision_backend", "linear") != "linear":
@@ -161,14 +167,21 @@ class LocalDecisionEngine:
             if not math.isfinite(threshold) or not 0 <= threshold <= 1:
                 return None
             decision = self.choice(text)
-            if (
-                decision is None
-                or decision.choice == UNKNOWN
-                or decision.confidence < threshold
-                or decision.margin < 0.30
-            ):
+            if decision is None:
                 return None
             self.last_decision = decision
+            if mode == "shadow":
+                return None
+            direct_allowed = is_direct_allowed(decision.choice, mode)
+            if (
+                decision.choice == UNKNOWN
+                or not math.isfinite(decision.confidence)
+                or not math.isfinite(decision.margin)
+                or decision.confidence < threshold
+                or decision.margin < 0.30
+                or not direct_allowed
+            ):
+                return None
             # 인자 파서와 안전 정책이 검증되기 전에는 어떤 도구도 직접 실행하지 않는다.
             return None
         except Exception:

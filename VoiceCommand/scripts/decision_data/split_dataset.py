@@ -6,11 +6,40 @@ from collections import defaultdict
 from pathlib import Path
 import argparse
 import json
-import unicodedata
+import sys
 from typing import Iterable
+
+try:
+    from .dataset_guards import normalized_text, whitespace_free_text, validate_no_gold_rows
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from decision_data.dataset_guards import normalized_text, whitespace_free_text, validate_no_gold_rows
 
 
 SPLITS = ("train", "calibration", "test")
+
+
+def merge_overlapping_families(rows: list[dict]) -> list[dict]:
+    parents = {row["family_id"]: row["family_id"] for row in rows}
+
+    def root(family):
+        while parents[family] != family:
+            parents[family] = parents[parents[family]]
+            family = parents[family]
+        return family
+
+    owners = {}
+    for row in rows:
+        family = row["family_id"]
+        keys = (("template", row.get("template_id", family)),
+                ("text", whitespace_free_text(row["text"])))
+        for key in keys:
+            if key in owners:
+                left, right = root(family), root(owners[key])
+                if left != right:
+                    parents[max(left, right)] = min(left, right)
+            owners[key] = family
+    return [dict(row, family_id=root(row["family_id"])) for row in rows]
 
 
 def assign_family_splits(rows: Iterable[dict]) -> dict[str, str]:
@@ -49,6 +78,7 @@ def assign_family_splits(rows: Iterable[dict]) -> dict[str, str]:
 
 def apply_family_splits(rows: Iterable[dict]) -> list[dict]:
     rows = [dict(row) for row in rows]
+    validate_no_gold_rows(rows)
     assignment = assign_family_splits(rows)
     for row in rows:
         row["split"] = assignment[row["family_id"]]
@@ -59,11 +89,14 @@ def validate_family_splits(rows: Iterable[dict]) -> None:
     """Raise ``ValueError`` if a family leaks or a label lacks a split."""
 
     rows = [dict(row) for row in rows]
+    validate_no_gold_rows(rows)
     family_splits: dict[str, set[str]] = defaultdict(set)
     family_labels: dict[str, set[str]] = defaultdict(set)
     family_languages: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     labels_by_split: dict[str, set[str]] = defaultdict(set)
     normalized_text_splits: dict[str, set[str]] = defaultdict(set)
+    template_splits: dict[str, set[str]] = defaultdict(set)
+    compact_text_splits: dict[str, set[str]] = defaultdict(set)
     for row in rows:
         split = str(row.get("split", ""))
         if split not in SPLITS:
@@ -75,8 +108,13 @@ def validate_family_splits(rows: Iterable[dict]) -> None:
         family_labels[family].add(label)
         family_languages[family][language].add(split)
         labels_by_split[split].add(label)
-        normalized = " ".join(unicodedata.normalize("NFKC", str(row["text"])).casefold().split())
+        normalized = normalized_text(row["text"])
         normalized_text_splits[normalized].add(split)
+        compact_text_splits[whitespace_free_text(row["text"])].add(split)
+        template_splits[str(row.get("template_id") or family)].add(split)
+    for kind, groups in (("template", template_splits), ("compact text", compact_text_splits)):
+        if any(len(splits) != 1 for splits in groups.values()):
+            raise ValueError(f"{kind} appears in multiple splits")
     leaking = sorted(family for family, splits in family_splits.items() if len(splits) != 1)
     if leaking:
         raise ValueError(f"family appears in multiple splits: {leaking[:3]}")

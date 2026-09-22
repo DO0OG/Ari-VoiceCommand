@@ -18,6 +18,7 @@ from scripts.decision_data.build_dataset import build_examples
 from scripts.decision_data.generate_candidates import UNKNOWN_LABEL, build_snapshot
 from scripts.decision_data.seed_data import HARD_NEGATIVE_FAMILIES
 from scripts.decision_data.split_dataset import SPLITS, validate_family_splits
+from agent.decision.candidates import candidate_names as registry_candidate_names
 
 
 class DecisionDataTests(unittest.TestCase):
@@ -25,17 +26,14 @@ class DecisionDataTests(unittest.TestCase):
     def setUpClass(cls):
         cls.rows, cls.manifest = build_examples()
 
-    def test_candidate_snapshot_is_schema_derived_and_unknown_is_last(self):
+    def test_candidate_snapshot_is_registry_derived_and_unknown_is_last(self):
         snapshot = build_snapshot()
         self.assertEqual(snapshot["candidate_labels"][-1], UNKNOWN_LABEL)
-        self.assertEqual(
-            snapshot["candidate_labels"][:-1],
-            sorted(set(snapshot["mapped_tool_names"]).intersection(snapshot["core_tool_names"])),
-        )
-        self.assertEqual(
-            set(snapshot["unsupported_schema_tools"]),
-            {"adjust_volume", "mcp_call", "play_youtube", "shutdown_computer"},
-        )
+        self.assertEqual(tuple(snapshot["candidate_labels"]), registry_candidate_names())
+        self.assertEqual(snapshot["source"]["candidate_registry"], "agent.decision.candidates.REGISTRY")
+        self.assertEqual(snapshot["unsupported_schema_tools"], [])
+        for name in ("adjust_volume", "mcp_call", "play_youtube", "shutdown_computer"):
+            self.assertIn(name, snapshot["candidate_labels"])
         self.assertEqual(len(snapshot["core_tool_schemas"]), len(snapshot["core_tool_names"]))
 
     def test_seed_has_every_candidate_in_every_split_and_language(self):
@@ -116,8 +114,11 @@ class DecisionDataTests(unittest.TestCase):
             for row in self.rows
             if row["language"] == "en" and row["text"] in {"Close Chrome", "Quit Discord"}
         }
-        self.assertEqual(launch_families, {"launch_app.single.app_slot"})
-        self.assertEqual(close_families, {"close_app.single.app_slot"})
+        # 병합 후 대표 이름은 바뀔 수 있으므로 이름이 아니라 불변식을 확인한다.
+        # 앱 이름만 바뀐 문장은 한 family 안에 머물러야 학습과 평가가 갈리지 않는다.
+        self.assertEqual(len(launch_families), 1)
+        self.assertEqual(len(close_families), 1)
+        self.assertNotEqual(launch_families, close_families)
         noise_types = {row["noise_type"] for row in self.rows if row["is_noise"]}
         self.assertIn("numeric_transcription", noise_types)
         self.assertIn("app_transcription", noise_types)

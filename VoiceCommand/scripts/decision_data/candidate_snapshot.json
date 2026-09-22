@@ -1,5 +1,6 @@
 {
   "candidate_labels": [
+    "adjust_volume",
     "analyze_image_file",
     "analyze_screenshot",
     "api_call",
@@ -23,7 +24,9 @@
     "launch_app",
     "list_directory",
     "list_scheduled_tasks",
+    "mcp_call",
     "move_file",
+    "play_youtube",
     "read_emails",
     "read_file",
     "run_agent_task",
@@ -32,6 +35,7 @@
     "send_email",
     "set_clipboard",
     "set_timer",
+    "shutdown_computer",
     "take_screenshot",
     "web_fetch",
     "web_search",
@@ -960,6 +964,7 @@
     "write_file"
   ],
   "source": {
+    "candidate_registry": "agent.decision.candidates.REGISTRY",
     "intent_mapping": "agent.tool_selection._TOOL_NAMES_BY_INTENT",
     "schemas": "agent.tool_schemas.CORE_TOOL_SCHEMAS"
   },
@@ -969,15 +974,19 @@
       "analyze_image_file",
       "analyze_screenshot",
       "api_call",
+      "close_app",
       "create_calendar_event",
       "delegate_to_subagent",
       "delete_file",
       "edit_file",
       "execute_python_code",
       "execute_shell_command",
+      "focus_window",
       "generate_image",
       "get_calendar_events",
+      "get_running_apps",
       "get_screen_status",
+      "launch_app",
       "list_directory",
       "move_file",
       "read_emails",
@@ -1036,11 +1045,6 @@
     ]
   },
   "unknown_label": "unknown_or_complex",
-  "unsupported_schema_tools": [
-    "adjust_volume",
-    "mcp_call",
-    "play_youtube",
-    "shutdown_computer"
-  ],
+  "unsupported_schema_tools": [],
   "version": 1
 }

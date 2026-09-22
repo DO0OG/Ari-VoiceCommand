@@ -1,4 +1,5 @@
 import builtins
+from dataclasses import FrozenInstanceError
 import hashlib
 import json
 import tempfile
@@ -64,12 +65,21 @@ class DecisionEngineTests(unittest.TestCase):
             route=Mock(return_value=SimpleNamespace(task_type="simple_chat"))
         )
 
-    def _config_patch(self, *, enabled=True, backend="linear", threshold=0.92, direct=True):
+    def _config_patch(
+        self,
+        *,
+        enabled=True,
+        backend="linear",
+        threshold=0.92,
+        direct=True,
+        mode="shadow",
+    ):
         values = {
             "local_decision_engine_enabled": enabled,
             "local_decision_backend": backend,
             "local_decision_threshold": threshold,
             "local_decision_direct_execution": direct,
+            "local_decision_mode": mode,
         }
 
         def get(key, default=None):
@@ -77,20 +87,34 @@ class DecisionEngineTests(unittest.TestCase):
 
         return patch("core.config_manager.ConfigManager.get", side_effect=get)
 
-    def test_candidate_names_come_from_registered_intents(self):
+    def test_candidate_names_come_from_the_registry(self):
         engine = _engine_module()
-        registered = {
-            schema["function"]["name"] for schema in engine.CORE_TOOL_SCHEMAS
-        }
-        mapped = set().union(*engine._TOOL_NAMES_BY_INTENT.values())
-        expected = tuple(sorted(registered & mapped)) + (engine.UNKNOWN,)
+        from agent.decision.candidates import candidate_names as registry_names
 
+        expected = registry_names()
         self.assertEqual(engine.candidate_names(), expected)
-        self.assertIn("delete_file", expected)
-        self.assertIn("send_email", expected)
-        self.assertIn("execute_shell_command", expected)
-        self.assertIn("execute_python_code", expected)
-        self.assertNotIn("shutdown_computer", expected)
+        self.assertEqual(len(expected), 41)
+        for name in ("adjust_volume", "play_youtube", "mcp_call", "shutdown_computer"):
+            self.assertIn(name, expected)
+
+    def test_registry_entries_are_immutable_and_policy_fields_are_explicit(self):
+        from agent.decision.candidates import (
+            DIRECT_ALLOWLIST,
+            PERMANENTLY_FORBIDDEN,
+            REGISTRY,
+            get_candidate,
+        )
+
+        self.assertEqual(set(REGISTRY), set(_engine_module().candidate_names()))
+        with self.assertRaises(TypeError):
+            REGISTRY["new"] = get_candidate("get_weather")
+        with self.assertRaises(FrozenInstanceError):
+            get_candidate("get_weather").risk = "high"
+        self.assertEqual(len(DIRECT_ALLOWLIST), 10)
+        self.assertEqual(len(PERMANENTLY_FORBIDDEN), 11)
+        self.assertTrue(all(get_candidate(name).classifiable for name in REGISTRY))
+        self.assertTrue(all(get_candidate(name).direct_capable for name in DIRECT_ALLOWLIST))
+        self.assertTrue(all(not get_candidate(name).direct_capable for name in PERMANENTLY_FORBIDDEN))
 
     def test_hash_features_are_stable_for_nfkc_casefolded_unicode(self):
         import numpy as np
@@ -239,7 +263,7 @@ class DecisionEngineTests(unittest.TestCase):
                 local.choice = Mock(return_value=decision)
                 with self._config_patch():
                     self.assertIsNone(local.try_fast_path("what time is it"))
-                self.assertIsNone(local.last_decision)
+                self.assertIs(local.last_decision, decision)
                 local.choice.assert_called_once_with("what time is it")
 
     def test_high_confidence_decision_is_diagnostic_only_even_when_direct_flag_true(self):
@@ -250,11 +274,107 @@ class DecisionEngineTests(unittest.TestCase):
         local = engine.LocalDecisionEngine("unused")
         local.choice = Mock(return_value=decision)
 
-        with self._config_patch(direct=True):
+        with self._config_patch(direct=True, mode="fast"):
             self.assertIsNone(local.try_fast_path("what time is it"))
 
         self.assertIs(local.last_decision, decision)
         local.choice.assert_called_once_with("what time is it")
+
+    def test_direct_policy_rejects_unregistered_and_forbidden_at_confidence_one(self):
+        engine = _engine_module()
+        from agent.decision.candidates import (
+            DIRECT_ALLOWLIST,
+            candidate_names,
+            is_direct_allowed,
+        )
+
+        names = (set(candidate_names()) - DIRECT_ALLOWLIST) | {"not_registered"}
+        for mode in ("fast", "adaptive"):
+            for name in DIRECT_ALLOWLIST:
+                with self.subTest(mode=mode, name=name):
+                    self.assertTrue(is_direct_allowed(name, mode))
+            for name in names:
+                with self.subTest(mode=mode, name=name):
+                    decision = engine.DecisionResult(
+                        name, {name: 1.0}, 1.0, 1.0, "linear", 1.0
+                    )
+                    local = engine.LocalDecisionEngine("unused")
+                    local.choice = Mock(return_value=decision)
+                    with self._config_patch(mode=mode):
+                        self.assertIsNone(local.try_fast_path("do it"))
+                    self.assertIs(local.last_decision, decision)
+                    self.assertFalse(is_direct_allowed(name, mode))
+
+        for mode in ("off", "shadow", "invalid"):
+            for name in candidate_names():
+                with self.subTest(mode=mode, name=name):
+                    self.assertFalse(is_direct_allowed(name, mode))
+    def test_modes_keep_direct_execution_disabled_and_invalid_mode_shadows(self):
+        engine = _engine_module()
+        decision = engine.DecisionResult(
+            "get_current_time", {"get_current_time": 1.0}, 1.0, 1.0, "linear", 1.0
+        )
+        for mode in ("fast", "adaptive"):
+            with self.subTest(mode=mode):
+                local = engine.LocalDecisionEngine("unused")
+                local.choice = Mock(return_value=decision)
+                with self._config_patch(mode=mode):
+                    self.assertIsNone(local.try_fast_path("what time is it"))
+                self.assertIs(local.last_decision, decision)
+
+        local = engine.LocalDecisionEngine("unused")
+        local.choice = Mock(return_value=decision)
+        with self._config_patch(mode="invalid"):
+            self.assertIsNone(local.try_fast_path("what time is it"))
+        self.assertIs(local.last_decision, decision)
+
+    def test_off_mode_stops_before_prediction(self):
+        engine = _engine_module()
+        local = engine.LocalDecisionEngine("unused")
+        local.choice = Mock()
+        with self._config_patch(mode="off"):
+            self.assertIsNone(local.try_fast_path("what time is it"))
+        local.choice.assert_not_called()
+        self.assertIsNone(local.last_decision)
+
+    def test_missing_mode_defaults_to_shadow(self):
+        engine = _engine_module()
+        decision = engine.DecisionResult(
+            engine.UNKNOWN, {engine.UNKNOWN: 1.0}, 1.0, 1.0, "linear", 1.0
+        )
+        local = engine.LocalDecisionEngine("unused")
+        local.choice = Mock(return_value=decision)
+        values = {
+            "local_decision_engine_enabled": True,
+            "local_decision_backend": "linear",
+            "local_decision_threshold": 0.92,
+        }
+
+        def get(key, default=None):
+            return values.get(key, default)
+
+        with patch("core.config_manager.ConfigManager.get", side_effect=get):
+            self.assertIsNone(local.try_fast_path("hello"))
+        self.assertIs(local.last_decision, decision)
+        local.choice.assert_called_once_with("hello")
+
+    def test_non_finite_confidence_and_margin_are_rejected(self):
+        engine = _engine_module()
+        for confidence, margin in ((float("nan"), 1.0), (1.0, float("inf"))):
+            with self.subTest(confidence=confidence, margin=margin):
+                decision = engine.DecisionResult(
+                    "get_current_time",
+                    {"get_current_time": 1.0},
+                    confidence,
+                    margin,
+                    "linear",
+                    1.0,
+                )
+                local = engine.LocalDecisionEngine("unused")
+                local.choice = Mock(return_value=decision)
+                with self._config_patch(mode="fast"):
+                    self.assertIsNone(local.try_fast_path("what time is it"))
+                self.assertIs(local.last_decision, decision)
 
     def test_ai_command_flags_off_preserve_chat_without_decision_or_numpy_import(self):
         events = []
@@ -284,6 +404,79 @@ class DecisionEngineTests(unittest.TestCase):
         self.assertEqual(events[0], ("chat", "hello", True))
         self.assertEqual(imported, [])
 
+    def test_ai_command_off_mode_stops_before_decision_import(self):
+        events = []
+
+        class Assistant:
+            def chat_with_tools(self, text, include_context=True):
+                events.append(("chat", text, include_context))
+                return "ordinary chat response", []
+
+        command = AICommand(Assistant(), events.append, {"enabled": True})
+        command._get_skill_context = Mock(return_value=_simple_skill_context())
+        imported = []
+        original_import = builtins.__import__
+
+        def observe_import(name, *args, **kwargs):
+            if name == "numpy" or name == "agent.decision.engine":
+                imported.append(name)
+            return original_import(name, *args, **kwargs)
+
+        with self._config_patch(enabled=True, mode="off"):
+            with patch("memory.conversation_history.add_conversation"):
+                with patch("core.VoiceCommand.emit_plugin_event"):
+                    with patch("builtins.__import__", side_effect=observe_import):
+                        result = command.run_interaction("hello")
+
+        self.assertEqual(result, "ordinary chat response")
+        self.assertEqual(events[0], ("chat", "hello", True))
+        self.assertEqual(imported, [])
+
+    def test_ai_command_default_and_missing_mode_preserve_chat_for_direct_candidate(self):
+        engine = _engine_module()
+        decision = engine.DecisionResult(
+            "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
+        )
+
+        for mode_setting in ("shadow", None):
+            with self.subTest(mode_setting=mode_setting):
+                events = []
+
+                class Assistant:
+                    def chat_with_tools(self, text, include_context=True):
+                        events.append(("chat", text, include_context))
+                        return "ordinary chat response", []
+
+                command = AICommand(Assistant(), events.append, {"enabled": False})
+                command._get_skill_context = Mock(return_value=_simple_skill_context())
+                local = engine.LocalDecisionEngine("unused")
+                local.choice = Mock(return_value=decision)
+                command._decision_engine = local
+                dispatch = Mock()
+                command._dispatch["get_current_time"] = dispatch
+                values = {
+                    "local_decision_engine_enabled": True,
+                    "local_decision_backend": "linear",
+                    "local_decision_threshold": 0.92,
+                    "local_decision_direct_execution": True,
+                }
+                if mode_setting is not None:
+                    values["local_decision_mode"] = mode_setting
+
+                def get(key, default=None):
+                    return values.get(key, default)
+
+                with patch("core.config_manager.ConfigManager.get", side_effect=get):
+                    with patch("memory.conversation_history.add_conversation"):
+                        with patch("core.VoiceCommand.emit_plugin_event"):
+                            result = command.run_interaction("what time is it")
+
+                self.assertEqual(result, "ordinary chat response")
+                self.assertEqual(events[0], ("chat", "what time is it", True))
+                self.assertIs(local.last_decision, decision)
+                local.choice.assert_called_once_with("what time is it")
+                dispatch.assert_not_called()
+
     def test_ai_command_high_risk_prediction_uses_chat_and_existing_safety_handler(self):
         engine = _engine_module()
         messages = []
@@ -306,7 +499,7 @@ class DecisionEngineTests(unittest.TestCase):
                 return "existing safety response"
 
         decision = engine.DecisionResult(
-            "delete_file", {"delete_file": 0.99}, 0.99, 0.80, "linear", 1.0
+            "delete_file", {"delete_file": 1.0}, 1.0, 1.0, "linear", 1.0
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -316,7 +509,7 @@ class DecisionEngineTests(unittest.TestCase):
             command = AICommand(assistant, messages.append, {"enabled": False})
             command._get_skill_context = Mock(return_value=_simple_skill_context())
 
-            with self._config_patch(enabled=True, direct=True):
+            with self._config_patch(enabled=True, direct=True, mode="fast"):
                 with patch(
                     "core.resource_manager.ResourceManager.get_bundle_path",
                     return_value="unused",
@@ -400,10 +593,13 @@ class DecisionEngineTests(unittest.TestCase):
 
         template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
         template = json.loads(template_path.read_text(encoding="utf-8"))
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "shadow")
+        self.assertEqual(template["local_decision_mode"], "shadow")
         for key in (
             "local_decision_engine_enabled",
             "local_decision_backend",
             "local_decision_threshold",
+            "local_decision_mode",
             "local_decision_direct_execution",
         ):
             with self.subTest(key=key):

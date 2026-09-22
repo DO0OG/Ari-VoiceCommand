@@ -14,6 +14,34 @@ from typing import Iterable
 LanguageText = tuple[str, str, str]
 
 
+SLOT_FAMILY_GROUPS: dict[str, dict[int, str]] = {
+    "launch_app": {
+        1: "launch_open_app_basic",
+        2: "launch_open_app_basic",
+        5: "launch_open_app_basic",
+        6: "launch_open_app_basic",
+        7: "launch_open_app_basic",
+        8: "launch_open_app_basic",
+    },
+    "close_app": {
+        1: "close_app_basic",
+        2: "close_app_basic",
+        5: "close_app_basic",
+        6: "close_app_basic",
+        7: "close_app_basic",
+        8: "close_app_basic",
+    },
+    "focus_window": {
+        1: "focus_window_basic",
+        2: "focus_window_basic",
+        3: "focus_window_basic",
+        5: "focus_window_basic",
+        6: "focus_window_basic",
+        8: "focus_window_basic",
+    },
+}
+
+
 # At least four distinct paraphrase families per built-in candidate.  The
 # examples are deliberately short and concrete because this is a routing seed,
 # not a claim of production language coverage.  Candidates that are reached
@@ -39,6 +67,12 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("시간 좀 알려줘", "Give me the time", "時間を教えて"),
         ("지금 시각 알려줘", "Tell me the time right now", "今の時刻を教えて"),
         ("몇 시인지 말해줄래", "Could you tell me what time it is", "何時か言ってくれる"),
+    ),
+    "adjust_volume": (
+        ("볼륨을 높여줘", "Turn up the volume", "音量を上げて"),
+        ("소리 좀 줄여", "Lower the volume", "音量を下げて"),
+        ("볼륨을 50으로 맞춰줘", "Set the volume to 50", "音量を50に設定して"),
+        ("현재 소리에서 10만 올려줘", "Increase the volume by ten", "音量を10上げて"),
     ),
     "web_search": (
         ("인터넷에서 고양이 사료를 찾아줘", "Search the web for cat food", "ネットで猫用フードを検索して"),
@@ -164,6 +198,12 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("그 창 다시 보여줘", "Show that window again", "そのウィンドウをもう一度見せて"),
         ("네이버 웨일 창 선택해", "Select the Naver Whale window", "Naver Whaleのウィンドウを選んで"),
     ),
+    "play_youtube": (
+        ("유튜브에서 재즈 틀어줘", "Play jazz on YouTube", "YouTubeでジャズを再生して"),
+        ("유튜브로 이 노래 찾아서 재생해", "Find and play this song on YouTube", "YouTubeでこの曲を探して再生して"),
+        ("유튜브에서 공부 음악 틀어", "Play study music on YouTube", "YouTubeで勉強用の音楽を流して"),
+        ("유튜브 뮤직비디오 재생해줘", "Play the music video on YouTube", "YouTubeのミュージックビデオを再生して"),
+    ),
     "take_screenshot": (
         ("화면 캡처를 저장해줘", "Take and save a screenshot", "画面をキャプチャして保存して"),
         ("지금 화면을 스크린샷으로 찍어", "Capture the current screen", "今の画面をスクリーンショットして"),
@@ -222,6 +262,12 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("서비스에 API 요청을 보내줘", "Send an API request to the service", "サービスにAPIリクエストを送って"),
         ("연동된 API를 사용해 데이터를 가져와", "Use the connected API to get the data", "接続されたAPIでデータを取得して"),
     ),
+    "mcp_call": (
+        ("연결된 MCP 도구를 호출해줘", "Call the connected MCP tool", "接続されたMCPツールを呼び出して"),
+        ("MCP 서버에 요청을 보내", "Send a request to the MCP server", "MCPサーバーにリクエストを送って"),
+        ("외부 MCP 기능으로 이 작업을 처리해줘", "Handle this through an external MCP capability", "外部MCP機能でこの作業を処理して"),
+        ("MCP를 사용해서 데이터를 가져와줘", "Use MCP to retrieve the data", "MCPを使ってデータを取得して"),
+    ),
     "create_calendar_event": (
         ("내일 회의 일정을 캘린더에 추가해줘", "Add tomorrow's meeting to my calendar", "明日の会議をカレンダーに追加して"),
         ("금요일에 약속을 만들어줘", "Create an appointment for Friday", "金曜日に予定を作って"),
@@ -263,6 +309,12 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("등록한 예약 하나를 지워", "Remove one scheduled job", "登録した予約を一つ削除して"),
         ("스케줄 ID 작업을 취소해", "Cancel the task with this schedule ID", "このスケジュールIDのタスクを取り消して"),
         ("나중에 실행할 작업을 취소해줘", "Cancel the task that will run later", "後で実行するタスクをキャンセルして"),
+    ),
+    "shutdown_computer": (
+        ("컴퓨터를 종료해줘", "Shut down the computer", "コンピューターをシャットダウンして"),
+        ("PC 전원을 꺼줘", "Turn off the PC", "PCの電源を切って"),
+        ("시스템 종료를 실행해줘", "Power off the system", "システムを終了して"),
+        ("컴퓨터 전원을 내려줘", "Power down the computer", "コンピューターの電源を落として"),
     ),
 }
 
@@ -324,8 +376,10 @@ UNKNOWN_FAMILIES: dict[str, tuple[LanguageText, ...]] = {
 
 
 def _family(label: str, index: int, texts: LanguageText, bucket: str = "single_action") -> dict:
+    family_id = f"{label}.{bucket}.{index:02d}"
     return {
-        "family_id": f"{label}.{bucket}.{index:02d}",
+        "family_id": family_id,
+        "template_id": family_id,
         "label": label,
         "bucket": bucket,
         "texts": {"ko": texts[0], "en": texts[1], "ja": texts[2]},
@@ -343,8 +397,10 @@ def seed_families() -> list[dict]:
             # object particle does not change the template either.  Keep those
             # variants together so a slot swap cannot leak between train and
             # test -- and so the spoken short form trains next to its parent.
-            if label in {"launch_app", "close_app"} and index in {1, 2, 5, 6}:
-                family["family_id"] = f"{label}.single.app_slot"
+            grouped_family = SLOT_FAMILY_GROUPS.get(label, {}).get(index)
+            if grouped_family is not None:
+                family["family_id"] = grouped_family
+                family["template_id"] = grouped_family
             families.append(family)
 
     for index, (label, slug, texts) in enumerate(HARD_NEGATIVE_FAMILIES, start=1):

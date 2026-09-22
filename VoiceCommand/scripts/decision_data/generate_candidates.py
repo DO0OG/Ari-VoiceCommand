@@ -1,9 +1,4 @@
-"""Derive and snapshot the local router candidate set from Ari's schemas.
-
-The intent mapping is deliberately not copied here.  ``agent.tool_selection``
-remains the source of intent membership and ``CORE_TOOL_SCHEMAS`` remains the
-source of valid built-in tool names.
-"""
+"""Build a serializable candidate registry snapshot with source diagnostics."""
 
 from __future__ import annotations
 
@@ -41,6 +36,11 @@ def build_snapshot() -> dict[str, Any]:
     """Return a JSON-serializable, current snapshot of routing candidates."""
 
     mapping, schemas = _load_sources()
+    _ensure_voicecommand_on_path()
+    from agent.decision.candidates import candidate_names as registry_candidate_names
+
+    registered_names = registry_candidate_names()
+    registered_tool_names = set(registered_names) - {UNKNOWN_LABEL}
     schema_names = sorted(
         {
             str(schema["function"]["name"])
@@ -51,11 +51,11 @@ def build_snapshot() -> dict[str, Any]:
         }
     )
     mapped_names = sorted(set().union(*mapping.values()) if mapping else set())
-    supported = sorted(set(schema_names).intersection(mapped_names))
     return {
         "version": 1,
         "unknown_label": UNKNOWN_LABEL,
         "source": {
+            "candidate_registry": "agent.decision.candidates.REGISTRY",
             "intent_mapping": "agent.tool_selection._TOOL_NAMES_BY_INTENT",
             "schemas": "agent.tool_schemas.CORE_TOOL_SCHEMAS",
         },
@@ -64,15 +64,15 @@ def build_snapshot() -> dict[str, Any]:
         },
         "core_tool_names": schema_names,
         "mapped_tool_names": mapped_names,
-        "candidate_labels": supported + [UNKNOWN_LABEL],
-        "unsupported_schema_tools": sorted(set(schema_names) - set(mapped_names)),
+        "candidate_labels": list(registered_names),
+        "unsupported_schema_tools": sorted(set(schema_names) - registered_tool_names),
         "stale_mapping_tools": sorted(set(mapped_names) - set(schema_names)),
         "core_tool_schemas": schemas,
     }
 
 
 def candidate_names() -> tuple[str, ...]:
-    """Return sorted supported tool names plus the mandatory abstain label."""
+    """Return the registered candidate names with the abstain label last."""
 
     snapshot = build_snapshot()
     return tuple(snapshot["candidate_labels"])

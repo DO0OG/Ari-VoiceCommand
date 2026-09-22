@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
 
 from agent.decision.engine import LinearScorer, UNKNOWN
+from agent.decision.candidates import is_direct_allowed
 from agent.llm_router import get_llm_router
 from .build_dataset import build_examples
 
@@ -55,9 +57,23 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
     }
 
 
-def evaluate(model_dir: Path, threshold=0.92) -> dict:
+def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
     rows, manifest = build_examples()
-    test = [row for row in rows if row["split"] == "test"]
+    if gold:
+        from .gold_data import build_gold_examples
+        from .dataset_guards import validate_gold_isolation
+
+        test = build_gold_examples()
+        validate_gold_isolation(rows, test)
+        manifest = {
+            "dataset_version": "decision-gold-v1",
+            "row_count": len(test),
+            "family_count": len({row["family_id"] for row in test}),
+            "evaluation_only": True,
+            "review_status": sorted({row["review_status"] for row in test}),
+        }
+    else:
+        test = [row for row in rows if row["split"] == "test"]
     scorer = LinearScorer(model_dir)
     predictions = [scorer.predict(row["text"]) for row in test]
     probabilities = np.array([list(result.probabilities.values()) for result in predictions])
@@ -65,10 +81,15 @@ def evaluate(model_dir: Path, threshold=0.92) -> dict:
     labels = list(scorer.labels)
     result = {"dataset": manifest, "threshold": threshold, "margin": 0.30,
               "overall": metrics(probabilities, targets, labels, threshold)}
+    result["evaluation_rows_sha256"] = hashlib.sha256(
+        json.dumps(test, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
     result["by_language"] = {}
     for language in ("ko", "en", "ja"):
         mask = np.array([row["language"] == language for row in test])
-        result["by_language"][language] = metrics(probabilities[mask], targets[mask], labels, threshold)
+        result["by_language"][language] = metrics(
+            probabilities[mask], targets[mask], labels, threshold
+        )
     buckets = ["hard_negative" if row["bucket"].startswith("hard_negative") else row["bucket"]
                for row in test]
     result["by_bucket"] = {}
@@ -81,6 +102,18 @@ def evaluate(model_dir: Path, threshold=0.92) -> dict:
             probabilities[mask], targets[mask], labels, threshold)
     eligible = [get_llm_router().route(row["text"]).task_type == "simple_chat" for row in test]
     result["with_existing_rule_gate"] = metrics(probabilities, targets, labels, threshold, eligible)
+    direct_eligible = [
+        rule_pass and is_direct_allowed(prediction.choice, "fast")
+        for rule_pass, prediction in zip(eligible, predictions)
+    ]
+    for language in ("ko", "en", "ja"):
+        mask = np.array([row["language"] == language for row in test])
+        result["by_language"][language]["with_direct_policy_gate"] = metrics(
+            probabilities[mask], targets[mask], labels, threshold,
+            np.asarray(direct_eligible, dtype=bool)[mask],
+        )
+    result["with_direct_policy_gate"] = metrics(
+        probabilities, targets, labels, threshold, direct_eligible)
     result["direct_executions"] = 0
     return result
 
@@ -88,9 +121,13 @@ def evaluate(model_dir: Path, threshold=0.92) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=Path("resources/decision"))
-    parser.add_argument("--output", type=Path, default=Path("scripts/decision_data/evaluation.json"))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--gold", action="store_true", help="evaluate the reserved partition")
     args = parser.parse_args(argv)
-    result = evaluate(args.model)
+    if args.output is None:
+        filename = "gold_evaluation.json" if args.gold else "evaluation.json"
+        args.output = Path("scripts/decision_data") / filename
+    result = evaluate(args.model, gold=args.gold)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     import matplotlib
@@ -102,7 +139,7 @@ def main(argv=None) -> int:
     axis.plot([0, 1], [0, 1], "--", color="gray", label="Perfect calibration")
     axis.plot([row["confidence"] for row in bins], [row["accuracy"] for row in bins], "o-")
     axis.set(xlim=(0, 1), ylim=(0, 1), xlabel="Mean confidence", ylabel="Accuracy",
-             title="Held-out seed reliability (10 bins)")
+             title="Reserved reliability (10 bins)" if args.gold else "Held-out reliability (10 bins)")
     axis.legend()
     figure.tight_layout()
     figure.savefig(args.output.with_suffix(".png"), dpi=150)

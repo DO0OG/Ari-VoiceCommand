@@ -43,6 +43,7 @@ DEFAULT_SETTINGS = {
     "local_decision_engine_enabled": True,
     "local_decision_backend": "linear",
     "local_decision_threshold": 0.92,
+    "local_decision_mode": "shadow",
     "local_decision_direct_execution": False,
     "vision_enabled": True,
     "max_context_tokens": 8000,

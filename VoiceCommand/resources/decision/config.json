@@ -1,6 +1,7 @@
 {
   "version": 1,
   "labels": [
+    "adjust_volume",
     "analyze_image_file",
     "analyze_screenshot",
     "api_call",
@@ -24,7 +25,9 @@
     "launch_app",
     "list_directory",
     "list_scheduled_tasks",
+    "mcp_call",
     "move_file",
+    "play_youtube",
     "read_emails",
     "read_file",
     "run_agent_task",
@@ -33,6 +36,7 @@
     "send_email",
     "set_clipboard",
     "set_timer",
+    "shutdown_computer",
     "take_screenshot",
     "web_fetch",
     "web_search",
@@ -40,10 +44,10 @@
     "unknown_or_complex"
   ],
   "buckets": 8192,
-  "temperature": 0.8826538438450512,
+  "temperature": 0.8396660302054415,
   "dataset_version": "decision-seed-v2",
   "calibration_version": "temperature-nll-v1",
-  "training_sha256": "94a16791be8e412c0987f7e515cc788861b3fde22692bafda004f4b34d9bedd3",
-  "sha256": "8608a07d498d9d57e0625f23bfb991247f951ed24552bb811a93b0c447dc3490",
+  "training_sha256": "c489f7382d2147949acf470a027ee80b919e3da78fb32b217287293abb7177d4",
+  "sha256": "367321236012aeb031787bf940c57de6bbb5eab0c0a2503a9dea7348e62a706c",
   "epochs": 160
 }
