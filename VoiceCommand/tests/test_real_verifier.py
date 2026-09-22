@@ -113,16 +113,18 @@ class _PlannerFallbackLLM:
 
 
 class RealVerifierTests(unittest.TestCase):
-    def test_open_action_can_verify_from_open_window_titles(self):
-        verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
+    def test_open_action_can_verify_from_current_url(self):
+        executor = _DummyExecutor()
+        executor.execution_globals["get_browser_state"] = lambda: {"current_url": "https://example.com/"}
+        verifier = RealVerifier(llm_provider=None, executor=executor)
         result = verifier.verify(
-            "example 사이트 열어줘",
+            "https://example.com 열어줘",
             [_DummyStepResult("브라우저 열기", output="opened https://example.com")],
         )
 
         self.assertTrue(result.verified)
         self.assertEqual(result.method, "heuristic")
-        self.assertIn("Example Domain", result.evidence)
+        self.assertIn("https://example.com", result.evidence)
 
     def test_image_visibility_can_verify_gui_state(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
@@ -135,7 +137,7 @@ class RealVerifierTests(unittest.TestCase):
         self.assertEqual(result.method, "heuristic")
         self.assertIn("confirm.png", result.evidence)
 
-    def test_workflow_json_output_can_verify_desktop_state(self):
+    def test_save_shortcut_alone_does_not_verify_saved_file(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
         result = verifier.verify(
             "메모장에 메모 저장",
@@ -147,11 +149,9 @@ class RealVerifierTests(unittest.TestCase):
             ],
         )
 
-        self.assertTrue(result.verified)
-        self.assertEqual(result.method, "heuristic")
-        self.assertIn("메모장", result.evidence)
+        self.assertFalse(result.verified)
 
-    def test_browser_last_action_summary_can_verify_state(self):
+    def test_browser_last_action_summary_alone_does_not_verify_state(self):
         executor = _DummyExecutor()
         executor.execution_globals["get_browser_state"] = lambda: {
             "last_action_summary": "성공: wait_url(https://example.com/dashboard) | 성공: click"
@@ -163,20 +163,49 @@ class RealVerifierTests(unittest.TestCase):
             [_DummyStepResult("브라우저 열기", output="opened browser")],
         )
 
-        self.assertTrue(result.verified)
-        self.assertEqual(result.method, "heuristic")
-        self.assertIn("성공: wait_url", result.evidence)
+        self.assertFalse(result.verified)
 
-    def test_state_delta_summary_can_verify_open_action(self):
+    def test_state_delta_without_matching_current_target_is_not_success(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
         result = verifier.verify(
             "example 사이트 열어줘",
             [_DummyStepResult("브라우저 열기", output="opened browser", state_delta_summary="browser_url=https://example.com | new_windows=Example Domain - Chrome")],
         )
 
+        self.assertFalse(result.verified)
+
+    def test_wrong_site_and_unrelated_window_do_not_verify_application(self):
+        executor = _DummyExecutor()
+        executor.execution_globals["get_active_window_title"] = lambda: "NAVER - Chrome"
+        executor.execution_globals["get_browser_state"] = lambda: {
+            "current_url": "https://www.naver.com", "title": "NAVER",
+        }
+        verifier = RealVerifier(llm_provider=None, executor=executor)
+        result = verifier.verify("네이버 웨일 열어줘", [
+            _DummyStepResult("웹사이트 열기", output="https://www.naver.com",
+                             state_delta_summary="browser_url=https://www.naver.com"),
+        ])
+        self.assertFalse(result.verified)
+
+    def test_matching_application_window_is_verified(self):
+        executor = _DummyExecutor()
+        executor.execution_globals["list_open_windows"] = lambda: ["네이버 웨일"]
+        result = RealVerifier(None, executor).verify(
+            "네이버 웨일 열어줘", [_DummyStepResult("앱 실행", output="네이버 웨일")],
+        )
         self.assertTrue(result.verified)
-        self.assertEqual(result.method, "heuristic")
-        self.assertIn("browser_url=https://example.com", result.evidence)
+        self.assertEqual(result.evidence, "네이버 웨일")
+
+    def test_empty_results_are_not_verified(self):
+        self.assertFalse(RealVerifier(None, _DummyExecutor()).verify("네이버 열어줘", []).verified)
+
+    def test_code_verdict_uses_last_boolean_line(self):
+        executor = _DummyExecutor()
+        for output, expected in [("True\nFalse", False), ("not true", None), ("False\nTrue", True)]:
+            with self.subTest(output=output):
+                executor._do_run_python = lambda *args, **kwargs: _DummyExecResult(output=output)
+                result = RealVerifier(None, executor)._run_verification("print(False)")
+                self.assertEqual(result.verified if result else None, expected)
 
     def test_storage_verification_does_not_accept_wrong_folder_target(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())
@@ -186,6 +215,19 @@ class RealVerifierTests(unittest.TestCase):
             [_DummyStepResult("분석 보고서 저장", output=r"C:\Users\안지훈\Desktop\summary.md")],
         )
 
+        self.assertIsNone(result)
+
+    def test_existing_wrong_file_is_not_storage_success(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            wrong_file = Path(directory) / "B.txt"
+            wrong_file.write_text("old", encoding="utf-8")
+            result = RealVerifier(None, _DummyExecutor())._heuristic_verify(
+                "보고서를 A.txt로 저장해줘",
+                [_DummyStepResult("파일 저장", output=str(wrong_file))],
+            )
         self.assertIsNone(result)
 
     def test_extract_goal_folder_name_supports_unquoted_name(self):

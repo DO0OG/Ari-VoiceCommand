@@ -600,6 +600,22 @@ class AICommandTests(unittest.TestCase):
         self.assertFalse(repeat)
         self.assertEqual(repeat_seconds, 0)
 
+    def test_agent_dashboard_skipped_outside_gui_thread(self):
+        """명령 실행 스레드에서 Qt 위젯을 만들면 앱이 멈추므로 생성하지 않는다."""
+        from PySide6.QtCore import QThread
+
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        other_thread = QThread()
+        fake_app = SimpleNamespace(thread=lambda: other_thread)
+
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            with patch("PySide6.QtWidgets.QApplication.instance", return_value=fake_app):
+                with patch("ui.agent_dashboard.AgentDashboard") as dashboard_cls:
+                    result = command._maybe_show_agent_dashboard("목표")
+
+        self.assertIsNone(result)
+        dashboard_cls.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

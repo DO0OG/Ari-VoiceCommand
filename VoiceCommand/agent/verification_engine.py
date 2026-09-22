@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 from agent.agent_planner import AgentPlanner
 
 from agent.execution_analysis import is_read_only_step_content
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -36,21 +37,21 @@ class VerificationEngine:
         step_results: List,
     ) -> Tuple[bool, str]:
         """목표와 단계 결과를 받아 (달성 여부, 한국어 요약) 반환."""
+        if not step_results:
+            return False, _("검증할 실행 결과가 없습니다.")
+        if any(not sr.exec_result.success for sr in step_results):
+            return False, "일부 단계 실패"
         developer_precheck = self._verify_developer_goal_completion(goal, step_results)
         if developer_precheck is not None:
             return developer_precheck
         try:
             from agent.real_verifier import get_real_verifier
             v = get_real_verifier().verify(goal, step_results)
-            return v.verified, v.summary
+            verified = v.verified is True and bool(v.evidence) and v.method != "llm"
+            return verified, v.summary if verified or not v.verified else _("요청한 결과를 실제 상태로 검증하지 못했습니다.")
         except Exception as exc:
             logger.debug("[VerificationEngine] RealVerifier 폴백: %s", exc)
-        if any(not sr.exec_result.success for sr in step_results):
-            return False, "일부 단계 실패"
-        verdict = self.planner.verify(
-            goal, [sr.exec_result for sr in step_results]
-        )
-        return verdict.get("achieved", False), verdict.get("summary", "검증 실패")
+        return False, _("요청한 결과를 실제 상태로 검증하지 못했습니다.")
 
     # ── 내부 메서드 ────────────────────────────────────────────────────────────
 

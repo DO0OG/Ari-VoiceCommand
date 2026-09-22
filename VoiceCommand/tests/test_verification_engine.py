@@ -28,6 +28,23 @@ class _PlannerStub:
 
 
 class VerificationEngineTests(unittest.TestCase):
+    def test_compiled_execution_requires_verification_before_positive_feedback(self):
+        import threading
+        from agent.agent_orchestrator import AgentOrchestrator
+
+        runner = AgentOrchestrator.__new__(AgentOrchestrator)
+        runner._interrupt_requested = threading.Event()
+        runner._verify_engine = SimpleNamespace(verify=MagicMock(return_value=(False, "미확인")))
+        skill = SimpleNamespace(skill_id="saved", name="앱 실행")
+        with patch("agent.skill_optimizer.get_skill_optimizer") as optimizer, \
+             patch("agent.skill_library.get_skill_library") as library:
+            optimizer.return_value.run_compiled.return_value = (True, "done")
+            optimizer.return_value.load_compiled.return_value = "print('done')"
+            result = runner._run_compiled_skill(skill, "메모장 열어줘")
+        self.assertFalse(result.achieved)
+        runner._verify_engine.verify.assert_called_once()
+        library.return_value.record_feedback.assert_not_called()
+
     def test_invalid_developer_validation_rejects_py_compile_only(self):
         engine = VerificationEngine(_PlannerStub())
 
@@ -84,7 +101,7 @@ class VerificationEngineTests(unittest.TestCase):
         self.assertFalse(verified)
         self.assertIn("허용 범위를 벗어난", summary)
 
-    def test_verify_falls_back_to_planner_when_real_verifier_unavailable(self):
+    def test_unavailable_state_verification_cannot_fall_back_to_success(self):
         planner = _PlannerStub(
             developer_goal=False,
             verify_result={"achieved": True, "summary": "플래너 폴백 성공"},
@@ -97,9 +114,18 @@ class VerificationEngineTests(unittest.TestCase):
                 [_step_result(content="edit_file()", description="파일 수정", success=True, output="done")],
             )
 
-        self.assertTrue(verified)
-        self.assertEqual(summary, "플래너 폴백 성공")
-        planner.verify.assert_called_once()
+        self.assertFalse(verified)
+        self.assertIn("검증하지 못", summary)
+        planner.verify.assert_not_called()
+
+    def test_positive_verdict_without_state_evidence_is_rejected(self):
+        engine = VerificationEngine(_PlannerStub(developer_goal=False))
+        with patch("agent.real_verifier.get_real_verifier") as factory:
+            factory.return_value.verify.return_value = SimpleNamespace(
+                verified=True, method="llm", evidence="", summary="완료",
+            )
+            verified, _ = engine.verify("메모장 열어줘", [_step_result()])
+        self.assertFalse(verified)
 
     def test_verify_returns_step_failure_before_planner_fallback(self):
         planner = _PlannerStub(developer_goal=False)

@@ -43,7 +43,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: VoiceCommand
-        run: .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+        run: .venv\Scripts\python.exe -m unittest discover -t . -s tests -p "test_*.py" -v
 
       - name: Security scan (bandit)
         working-directory: VoiceCommand

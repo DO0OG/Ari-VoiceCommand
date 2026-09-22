@@ -166,6 +166,7 @@ cython_debug/
 .idea/
 
 config.json
+!VoiceCommand/resources/decision/config.json
 
 # ── 개발 도구 ──────────────────────────────────────────────────────────────────
 .claude/
@@ -196,6 +197,12 @@ market/supabase/.temp/
 
 # ── Ari 런타임 산출물 (커밋 제외) ───────────────────────────────────────────────
 VoiceCommand/.ari_runtime/
+ari_secrets.dpapi
+ari_settings.pre-secrets.*.dpapi
+.env
+.env.*
+!.env.example
+!.env.local.example
 collected.json
 package-lock.json
 AGENT_HANDOFF_*.md

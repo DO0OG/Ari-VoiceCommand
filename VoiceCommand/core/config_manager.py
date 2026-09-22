@@ -4,15 +4,17 @@ import json
 import logging
 import os
 import threading
-import shutil
 import tempfile
+from pathlib import Path
 from typing import Callable, Optional, cast
 
 from core.settings_schema import (
     DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
     SETTINGS_FILE as SETTINGS_FILENAME,
     SETTINGS_TEMPLATE_FILE as SETTINGS_TEMPLATE_FILENAME,
+    SENSITIVE_SETTINGS_KEYS,
 )
+from core.secret_store import SecretStore, SecretStoreError
 
 
 def _settings_path() -> str:
@@ -29,6 +31,7 @@ class ConfigManager:
     SETTINGS_TEMPLATE_FILE = SETTINGS_TEMPLATE_FILENAME
     DEFAULT_SETTINGS = SETTINGS_DEFAULTS
     _cached_settings: Optional[SettingsDict] = None
+    _dotenv_settings: dict[str, str] = {}
     # RLock: set_value → load_settings → save_settings 재진입 허용
     _lock: threading.RLock = threading.RLock()
 
@@ -36,26 +39,78 @@ class ConfigManager:
     def load_settings(cls) -> SettingsDict:
         """설정 파일 로드. 캐시 적중 시 락 없이 반환(읽기 전용 사용 권장)."""
         if cls._cached_settings is not None:
-            return dict(cls._cached_settings)
+            return cls._effective_settings()
         with cls._lock:
             # 락 획득 후 재확인 (다른 스레드가 먼저 로드했을 수 있음)
             if cls._cached_settings is not None:
-                return dict(cls._cached_settings)
+                return cls._effective_settings()
             path = _settings_path()
+            cls._load_dotenv(path)
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    settings = cast(ConfigManager.SettingsDict, json.load(f))
+                original = Path(path).read_bytes()
+                settings = json.loads(original.decode("utf-8"))
+                if not isinstance(settings, dict):
+                    raise ValueError("Invalid settings object")
                 logging.info("설정 파일을 로드했습니다.")
-                cls._cached_settings = {**cls.DEFAULT_SETTINGS, **settings}
             except FileNotFoundError:
-                cls._cached_settings = cls._restore_default_settings(path)
-            except json.JSONDecodeError as e:
-                logging.error("설정 파일 파싱 오류: %s", e)
-                cls._cached_settings = cls.DEFAULT_SETTINGS.copy()
-            except Exception as e:
-                logging.error("설정 로드 중 예외 발생: %s", e)
-                cls._cached_settings = cls.DEFAULT_SETTINGS.copy()
-            return dict(cls._cached_settings)
+                settings = cls._restore_default_settings(path)
+                original = b""
+            except Exception:
+                logging.error("설정 파일을 읽을 수 없어 기본값을 사용합니다.")
+                settings = cls.DEFAULT_SETTINGS.copy()
+                original = b""
+            legacy = cls._secret_values(settings)
+            public = cls._public_settings(settings)
+            store = SecretStore(path)
+            try:
+                stored = store.read()
+            except SecretStoreError:
+                logging.warning("Encrypted credentials unavailable; environment credentials remain usable")
+                stored = {}
+                legacy = {}
+            else:
+                merged = {**legacy, **stored}
+                if original and any(key in settings for key in SENSITIVE_SETTINGS_KEYS):
+                    try:
+                        if any(settings.get(key) for key in SENSITIVE_SETTINGS_KEYS):
+                            store.backup(original)
+                        if merged != stored:
+                            store.write(merged)
+                        cls._write_public_settings(path, public)
+                    except Exception:
+                        logging.warning("Credential migration deferred; original settings preserved; use environment variables if encryption is unavailable")
+                stored = merged
+            cls._cached_settings = {**cls.DEFAULT_SETTINGS, **public, **stored}
+            return cls._effective_settings()
+
+    @staticmethod
+    def _public_settings(settings: SettingsDict) -> SettingsDict:
+        return {key: value for key, value in settings.items() if key not in SENSITIVE_SETTINGS_KEYS}
+
+    @staticmethod
+    def _secret_values(settings: SettingsDict) -> dict[str, str]:
+        return {key: value for key, value in settings.items()
+                if key in SENSITIVE_SETTINGS_KEYS and isinstance(value, str) and value}
+
+    @classmethod
+    def _load_dotenv(cls, path: str) -> None:
+        cls._dotenv_settings = {}
+        try:
+            from dotenv import dotenv_values
+            values = dotenv_values(Path(path).with_name(".env"), interpolate=False)
+            cls._dotenv_settings = {key: value for key, value in values.items() if value}
+        except Exception:
+            logging.warning("Runtime .env could not be read")
+
+    @classmethod
+    def _environment_secrets(cls) -> dict[str, str]:
+        return {key: value for key in SENSITIVE_SETTINGS_KEYS
+                if (value := os.environ.get("ARI_" + key.upper())
+                    or cls._dotenv_settings.get("ARI_" + key.upper()))}
+
+    @classmethod
+    def _effective_settings(cls) -> SettingsDict:
+        return {**(cls._cached_settings or {}), **cls._environment_secrets()}
 
     @classmethod
     def _restore_default_settings(cls, dest_path: str) -> SettingsDict:
@@ -64,13 +119,13 @@ class ConfigManager:
         template_src = ResourceManager.get_bundle_path(cls.SETTINGS_TEMPLATE_FILE)
         if os.path.exists(template_src):
             try:
-                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                shutil.copy2(template_src, dest_path)
-                logging.info("설정 템플릿을 사용자 런타임 경로로 복사했습니다.")
-                with open(dest_path, "r", encoding="utf-8") as f:
-                    return {**cls.DEFAULT_SETTINGS, **cast(ConfigManager.SettingsDict, json.load(f))}
-            except Exception as e:
-                logging.warning("설정 템플릿 복사 실패: %s", e)
+                with open(template_src, "r", encoding="utf-8") as f:
+                    settings = {**cls.DEFAULT_SETTINGS, **cast(ConfigManager.SettingsDict, json.load(f))}
+                settings = cls._public_settings(settings)
+                cls._write_public_settings(dest_path, settings)
+                return settings
+            except Exception:
+                logging.warning("설정 템플릿을 복원할 수 없습니다.")
         return cls.DEFAULT_SETTINGS.copy()
 
     @classmethod
@@ -79,27 +134,63 @@ class ConfigManager:
         with cls._lock:
             path = _settings_path()
             try:
+                requested = {key: value for key, value in settings.items() if key in SENSITIVE_SETTINGS_KEYS}
+                if any(not isinstance(value, str) for value in requested.values()):
+                    raise SecretStoreError("Invalid credential type")
                 normalized = cls._normalize_settings(settings)
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                temp_path = None
+                cls._load_dotenv(path)
+                environment = cls._environment_secrets()
+                requested = {key: value for key, value in requested.items()
+                             if value != environment.get(key)}
+                original = Path(path).read_bytes() if Path(path).exists() else b""
+                previous = json.loads(original.decode("utf-8")) if original else {}
+                legacy = cls._secret_values(previous)
+                store = SecretStore(path)
+                stored = store.read()
+                updated = {**legacy, **stored}
+                for key, value in requested.items():
+                    if value:
+                        updated[key] = value
+                    else:
+                        updated.pop(key, None)
+                if any(previous.get(key) for key in SENSITIVE_SETTINGS_KEYS):
+                    store.backup(original)
+                public = cls._public_settings(normalized)
+                rollback = store.path.read_bytes() if store.path.exists() else None
+                if updated != stored:
+                    store.write(updated)
                 try:
-                    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(path), delete=False) as f:
-                        temp_path = f.name
-                        json.dump(normalized, f, indent=2, ensure_ascii=False)
-                    os.replace(temp_path, path)
-                    temp_path = None
-                finally:
-                    if temp_path is not None:
-                        try:
-                            os.unlink(temp_path)
-                        except OSError:
-                            pass
+                    cls._write_public_settings(path, public)
+                except Exception:
+                    # 공개 설정 기록이 실패하면 비밀 저장소도 이전 상태로 되돌린다.
+                    if updated != stored:
+                        store.restore(rollback)
+                    raise
                 logging.info("설정을 저장했습니다.")
-                cls._cached_settings = dict(normalized)
+                cls._cached_settings = {**cls.DEFAULT_SETTINGS, **public, **updated}
                 return True
-            except Exception as e:
-                logging.error("설정 저장 실패: %s", e)
+            except Exception:
+                logging.error("Settings save failed; existing files and encrypted backups were preserved")
                 return False
+
+    @classmethod
+    def _write_public_settings(cls, path: str, settings: SettingsDict) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(path), delete=False) as f:
+                temp_path = f.name
+                json.dump(cls._public_settings(settings), f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, path)
+            temp_path = None
+        finally:
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
 
     @classmethod
     def _normalize_settings(cls, settings: SettingsDict) -> SettingsDict:
@@ -110,10 +201,10 @@ class ConfigManager:
             value = normalized[key]
             if isinstance(expected, bool):
                 if not isinstance(value, bool):
-                    logging.warning("[ConfigManager] bool 타입 불일치 무시: %s=%r", key, value)
+                    logging.warning("[ConfigManager] bool 타입 불일치 무시: %s", key)
                     normalized[key] = copy.deepcopy(expected)
             elif isinstance(value, bool) or not isinstance(value, type(expected)):
-                logging.warning("[ConfigManager] 타입 불일치 무시: %s=%r", key, value)
+                logging.warning("[ConfigManager] 타입 불일치 무시: %s", key)
                 normalized[key] = copy.deepcopy(expected)
         return normalized
 

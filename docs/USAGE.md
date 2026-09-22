@@ -422,6 +422,8 @@ Ari는 한국어 외에도 **영어(English)**와 **일본어(日本語)**를 �
 
 아래 키는 소스 실행이라면 `VoiceCommand/.ari_runtime/ari_settings.json`, 빌드된 exe라면 `%AppData%\Ari\ari_settings.json`에서 직접 고칠 수 있습니다. 초기값은 `VoiceCommand/ari_settings.template.json`을 참고하세요.
 
+> API 키와 봇 토큰 같은 인증값은 이 파일에 저장되지 않습니다. 같은 폴더의 암호화 저장소에 따로 보관하며, 설정 창이나 환경변수로 넣습니다. `ari_settings.json`에 직접 적어도 저장 시점에 지워집니다. 자세한 내용은 [API 키 보관](./CREDENTIALS.md)을 참고하세요.
+
 ### LLM 응답 캐시
 
 | 키 | 기본값 | 설명 |
@@ -433,12 +435,14 @@ TTL을 `0` 이하로 두면 기본값인 600초가 적용됩니다. 캐시를 �
 
 ### Telegram 원격 명령
 
-`ari_settings.json`에 아래 값을 채우면 허용된 Telegram 채팅에서 Ari에게 명령을 보낼 수 있습니다. 기본값은 비활성화이고, 허용 목록에 없는 `chat_id`는 처리하지 않고 로그만 남깁니다.
+아래 값을 채우면 허용된 Telegram 채팅에서 Ari에게 명령을 보낼 수 있습니다. 기본값은 비활성화이고, 허용 목록에 없는 `chat_id`는 처리하지 않고 로그만 남깁니다.
+
+`telegram_bot_token`은 인증값이라 `ari_settings.json`이 아니라 암호화 저장소에 보관합니다. 설정 창에서 입력하거나 `ARI_TELEGRAM_BOT_TOKEN` 환경변수로 넣으세요. 나머지 키는 `ari_settings.json`에서 직접 고칠 수 있습니다.
 
 | 키 | 기본값 | 설명 |
 |----|--------|------|
 | `telegram_enabled` | `false` | Telegram long-polling 브리지 활성화 여부 |
-| `telegram_bot_token` | `""` | BotFather에서 발급한 봇 토큰 |
+| `telegram_bot_token` | `""` | BotFather에서 발급한 봇 토큰. 암호화 저장소 또는 `ARI_TELEGRAM_BOT_TOKEN`에 보관 |
 | `telegram_allowed_chat_ids` | `[]` | 명령을 허용할 chat_id 목록. 문자열과 숫자 모두 가능 |
 | `telegram_poll_timeout_seconds` | `25` | getUpdates long-polling timeout |
 

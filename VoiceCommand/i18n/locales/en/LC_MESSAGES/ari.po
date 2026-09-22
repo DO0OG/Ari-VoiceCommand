@@ -2959,3 +2959,36 @@ msgstr "."
 
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "An error occurred while retrieving weather information."
+
+msgid "settings.save_failed"
+msgstr "Settings could not be saved"
+
+msgid "settings.secret_save_failed"
+msgstr "Check file write permissions and the encrypted store. Where encrypted storage is unavailable, configure keys through environment variables or the runtime folder's .env file. Your input remains in this window."
+
+msgid "검증할 실행 결과가 없습니다."
+msgstr "No execution result is available to verify."
+
+msgid "요청한 대상의 실제 상태를 확인하지 못했습니다."
+msgstr "Could not determine the actual state of the requested target."
+
+msgid "요청한 결과를 실제 상태로 검증하지 못했습니다."
+msgstr "Could not verify the requested result against the actual state."
+
+msgid "(걱정) 연결 설정을 확인해주세요. 기본 명령은 그대로 쓸 수 있어요."
+msgstr "(Worried) Please check your connection settings. Basic commands will still work."
+
+msgid "(걱정) 서버에 연결할 수 없어요. 네트워크 상태를 확인해주세요."
+msgstr "(Worried) I can't connect to the server. Please check your network connection."
+
+msgid "(걱정) 인증에 실패했어요. 설정에서 인증 정보를 확인해주세요."
+msgstr "(Worried) Authentication failed. Please check your credentials in Settings."
+
+msgid "(걱정) 서버 오류로 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
+msgstr "(Worried) A server error prevented the request from being processed. Please try again later."
+
+msgid "(걱정) 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요."
+msgstr "(Worried) You have exceeded the request limit. Please try again later."
+
+msgid "(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
+msgstr "(Worried) I couldn't process the request. Please try again later."

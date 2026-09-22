@@ -9,6 +9,29 @@ from agent.llm_provider import LLMProvider
 
 
 class LLMProviderTests(unittest.TestCase):
+    def test_application_request_sends_available_controls_to_completion(self):
+        provider = LLMProvider(model="test")
+        provider.client = Mock()
+        provider.client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(message=SimpleNamespace(content="", tool_calls=[SimpleNamespace(
+                id="open-1", function=SimpleNamespace(name="launch_app", arguments='{"app_name":"네이버 웨일"}'),
+            )])),
+        ])
+        with patch.object(provider, "_build_system", return_value="system"), \
+             patch.object(provider, "_get_skill_context", return_value={}), \
+             patch("memory.memory_manager.get_memory_manager") as memory:
+            memory.return_value.clean_response.side_effect = lambda value: value
+            for goal in ("네이버 웨일 열어줘", "디스코드 켜줘"):
+                _, calls = provider.chat_with_tools(goal)
+                request = provider.client.chat.completions.create.call_args.kwargs
+                names = {item["function"]["name"] for item in request["tools"]}
+                self.assertIn("launch_app", names)
+        request = provider.client.chat.completions.create.call_args.kwargs
+        names = {item["function"]["name"] for item in request["tools"]}
+        self.assertTrue({"launch_app", "close_app", "get_running_apps", "focus_window"} <= names)
+        self.assertEqual(request["tool_choice"], "required")
+        self.assertEqual(calls, [{"id": "open-1", "name": "launch_app", "arguments": {"app_name": "네이버 웨일"}}])
+
     def test_unsaved_chat_sends_current_message_without_memory_side_effects(self):
         for backend in ("openai", "anthropic"):
             with self.subTest(backend=backend):

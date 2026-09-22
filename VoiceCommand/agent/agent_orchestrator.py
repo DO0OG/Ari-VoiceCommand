@@ -762,10 +762,14 @@ class AgentOrchestrator:
             if self._interrupt_requested.is_set():
                 return result
             if success:
-                result.achieved = True
-                result.summary = output
-                get_skill_library().record_feedback(skill.skill_id, positive=True)
-                logger.info("[Orchestrator] 컴파일 스킬 실행 성공: %s", skill.name)
+                result.step_results = [StepResult(
+                    step=ActionStep(0, "python", optimizer.load_compiled(skill.skill_id) or "", skill.name),
+                    exec_result=ExecutionResult(success=True, output=output),
+                )]
+                result.achieved, result.summary = self._verify_engine.verify(goal, result.step_results)
+                if result.achieved:
+                    get_skill_library().record_feedback(skill.skill_id, positive=True)
+                    logger.info("[Orchestrator] 컴파일 스킬 실행 성공: %s", skill.name)
                 return result
             # 실패 → 코드 수정 트리거 후 None 반환 (스텝 폴백)
             logger.info(

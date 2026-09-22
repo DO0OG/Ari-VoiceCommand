@@ -23,6 +23,7 @@ from agent.response_cache import ResponseCache, build_response_cache_key
 from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
 from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP
+from i18n.translator import _
 
 _EN_MONTHS = {
     "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
@@ -250,7 +251,46 @@ class LLMProvider:
         return any(signal in text for signal in static_signals) and not any(keyword in text for keyword in skip_keywords)
 
     def _offline_response(self, message: str) -> str:
-        return "(걱정) 인터넷 연결이 없어서 AI 기능이 제한돼요. 기본 명령은 그대로 쓸 수 있어요."
+        return _("(걱정) 연결 설정을 확인해주세요. 기본 명령은 그대로 쓸 수 있어요.")
+
+    @staticmethod
+    def _error_response(error: Exception) -> str:
+        status = getattr(error, "status_code", None)
+        if status in {401, 403}:
+            return _("(걱정) 인증에 실패했어요. 설정에서 인증 정보를 확인해주세요.")
+        if status == 429:
+            return _("(걱정) 요청 한도를 초과했어요. 잠시 후 다시 시도해주세요.")
+        if isinstance(status, int) and 500 <= status < 600:
+            return _("(걱정) 서버 오류로 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요.")
+        if isinstance(error, (ConnectionError, TimeoutError)) or type(error).__name__ in {
+            "APIConnectionError", "APITimeoutError", "ConnectError", "ConnectTimeout", "ReadTimeout",
+        }:
+            return _("(걱정) 서버에 연결할 수 없어요. 네트워크 상태를 확인해주세요.")
+        return _("(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요.")
+
+    def _create_completion_with_fallback(self, client, provider, model, **kwargs):
+        targets = [(client, provider, model)]
+        attempted = set()
+        last_error = None
+        while targets:
+            candidate, backend, selected = targets.pop(0)
+            if backend in attempted or backend == "anthropic":
+                continue
+            attempted.add(backend)
+            try:
+                return candidate.chat.completions.create(
+                    model=selected, **kwargs, extra_body=self._reasoning_extra_body(backend),
+                )
+            except Exception as exc:
+                status = getattr(exc, "status_code", None)
+                if not isinstance(status, int) or not 500 <= status < 600:
+                    raise
+                last_error = exc
+                if len(attempted) == 1:
+                    targets.extend(self.get_role_fallback_targets())
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("요청을 전송할 연결이 없습니다.")
 
     def _build_cache_key(
         self,
@@ -402,7 +442,7 @@ class LLMProvider:
             return msg
         except Exception as e:
             logging.error("LLM chat 오류 (%s): %s", model, e)
-            return self._offline_response(user_message)
+            return self._error_response(e)
 
     def chat_with_tools(self, user_message, include_context=True, model_override="", stream_callback=None):
         """도구 포함 대화"""
@@ -455,11 +495,10 @@ class LLMProvider:
                     stream_callback=stream_callback,
                 )
 
-            response = client.chat.completions.create(
-                model=model, messages=messages, tools=tools, tool_choice=tool_choice,
+            response = self._create_completion_with_fallback(
+                client, provider, model, messages=messages, tools=tools, tool_choice=tool_choice,
                 temperature=0.1 if request_ctx["force_tool"] else 0.3,
                 max_tokens=self._estimate_max_tokens(user_message) + 200,
-                extra_body=self._reasoning_extra_body(provider),
             )
             choice = response.choices[0]
             tool_calls = []
@@ -497,7 +536,7 @@ class LLMProvider:
             return msg, tool_calls
         except Exception as e:
             logging.error("LLM chat_with_tools 오류 (%s): %s", model, e)
-            return self._offline_response(user_message), []
+            return self._error_response(e), []
 
     def stream_chat(
         self,
@@ -742,7 +781,7 @@ class LLMProvider:
             return msg, tool_calls
         except Exception as e:
             logging.error("Anthropic API 오류: %s", e)
-            return f"오류 발생: {e}", []
+            return self._error_response(e), []
 
     def _anthropic_feed_tool_result(self, original_msg, tool_calls, results, model_override="", client_override=None, stream_callback=None):
         model = model_override or self.model
@@ -799,24 +838,21 @@ class LLMProvider:
         provider: str = "",
     ) -> str:
         streaming_enabled = bool(self._load_int_setting("llm_streaming_enabled", 1))
-        extra_body = self._reasoning_extra_body(provider)
         if not stream_callback or not streaming_enabled:
-            resp = client.chat.completions.create(
-                model=model,
+            resp = self._create_completion_with_fallback(
+                client, provider, model,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                extra_body=extra_body,
             )
             return resp.choices[0].message.content or ""
         try:
-            stream = client.chat.completions.create(
-                model=model,
+            stream = self._create_completion_with_fallback(
+                client, provider, model,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=True,
-                extra_body=extra_body,
             )
             parts: List[str] = []
             for chunk in stream:
@@ -834,12 +870,11 @@ class LLMProvider:
                 return text
         except Exception as exc:
             logging.debug("[LLMProvider] 스트리밍 폴백: %s", exc)
-        resp = client.chat.completions.create(
-            model=model,
+        resp = self._create_completion_with_fallback(
+            client, provider, model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_body=extra_body,
         )
         text = resp.choices[0].message.content or ""
         self._emit_stream_text(text, stream_callback)

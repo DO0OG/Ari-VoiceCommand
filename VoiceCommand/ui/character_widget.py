@@ -9,7 +9,6 @@ import time
 import sys
 import logging
 import ctypes
-from collections import OrderedDict
 from queue import Queue
 from typing import Optional
 from PySide6.QtWidgets import QWidget, QLabel, QMenu, QApplication
@@ -19,7 +18,7 @@ from ui.speech_bubble import SpeechBubble, register_fonts
 from i18n.translator import _
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
-    GREETING_INTERVAL, IMAGE_CACHE_CAPACITY
+    GREETING_INTERVAL
 )
 
 _RNG = secrets.SystemRandom()

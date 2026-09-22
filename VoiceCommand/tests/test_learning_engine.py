@@ -2,12 +2,35 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 from agent.learning_engine import LearningEngine
 
 
 class LearningEngineTests(unittest.TestCase):
+    def test_wrong_open_target_is_never_recorded_as_success(self):
+        from agent.real_verifier import RealVerifier
+
+        step = SimpleNamespace(content='open_url("https://www.naver.com")', description_kr="웹사이트 열기")
+        result = SimpleNamespace(step=step, exec_result=SimpleNamespace(
+            success=True, output="https://www.naver.com", error="",
+        ), failure_kind="")
+        executor = SimpleNamespace(execution_globals={
+            "get_active_window_title": lambda: "NAVER - Chrome",
+            "get_browser_state": lambda: {"current_url": "https://www.naver.com", "title": "NAVER"},
+        })
+        verdict = RealVerifier(None, executor).verify("네이버 웨일 열어줘", [result])
+        run = SimpleNamespace(step_results=[result], achieved=verdict.verified, summary=verdict.summary)
+        with patch("agent.strategy_memory.get_strategy_memory") as memory, \
+             patch("agent.skill_library.get_skill_library") as library:
+            library.return_value.get_applicable_skill.return_value = None
+            LearningEngine(lambda goal: False).record_strategy("네이버 웨일 열어줘", run, 10)
+        record = memory.return_value.record.call_args.kwargs
+        self.assertIs(record["success"], False)
+        self.assertIs(record["few_shot_eligible"], False)
+        self.assertEqual(record["user_feedback"], "")
+
     def test_schedule_post_run_update_uses_daemon_thread(self):
         event = threading.Event()
         engine = LearningEngine(is_developer_goal_fn=lambda goal: False)
