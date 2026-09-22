@@ -199,6 +199,8 @@ def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
     result["macro_with_direct_policy_gate"] = macro_metrics(
         test, probabilities, targets, labels, threshold, direct_eligible)
     result["direct_executions"] = 0
+    # 산출물이 어느 모델의 결과인지 배포 검사에서 대조한다.
+    result["model_sha256"] = getattr(scorer, "sha256", None)
     return result
 
 

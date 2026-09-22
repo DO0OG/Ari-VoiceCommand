@@ -45,6 +45,10 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe -m unittest discover -t . -s tests -p "test_*.py" -v
 
+      - name: Validate decision release
+        working-directory: VoiceCommand
+        run: .venv\Scripts\python.exe -m scripts.decision_data.validate_release
+
       - name: Security scan (bandit)
         working-directory: VoiceCommand
         run: |

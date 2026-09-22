@@ -69,6 +69,23 @@ def fit_linear(
     return weights, bias, temperature
 
 
+def training_rows(rows: list[dict], augment: bool) -> list[dict]:
+    """Rows whose hash is recorded as ``training_sha256`` in the model config."""
+    return [
+        row for row in rows
+        if row["split"] == "train" and (augment or not row.get("augmentation", False))
+    ] + [
+        row for row in rows
+        if row["split"] == "calibration" and not row.get("augmentation", False)
+    ]
+
+
+def training_sha256(rows: list[dict], augment: bool) -> str:
+    return hashlib.sha256(
+        json.dumps(training_rows(rows, augment), sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
@@ -92,21 +109,12 @@ def main(argv=None) -> int:
     output.mkdir(parents=True, exist_ok=True)
     weights_path = output / "weights.npz"
     np.savez_compressed(weights_path, weights=weights, bias=bias)
-    training_rows = [
-        row for row in rows
-        if row["split"] == "train" and (args.augment or not row.get("augmentation", False))
-    ] + [
-        row for row in rows
-        if row["split"] == "calibration" and not row.get("augmentation", False)
-    ]
     config = {
         "version": 1, "labels": list(candidate_names()), "buckets": args.buckets,
         "temperature": temperature, "dataset_version": DATASET_VERSION,
         "augmentation_enabled": args.augment,
         "calibration_version": "temperature-nll-v1",
-        "training_sha256": hashlib.sha256(
-            json.dumps(training_rows, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        ).hexdigest(),
+        "training_sha256": training_sha256(rows, args.augment),
         "sha256": hashlib.sha256(weights_path.read_bytes()).hexdigest(), "epochs": args.epochs,
     }
     (output / "config.json").write_text(
