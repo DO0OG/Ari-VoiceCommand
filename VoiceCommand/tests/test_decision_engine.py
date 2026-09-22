@@ -110,11 +110,47 @@ class DecisionEngineTests(unittest.TestCase):
             REGISTRY["new"] = get_candidate("get_weather")
         with self.assertRaises(FrozenInstanceError):
             get_candidate("get_weather").risk = "high"
-        self.assertEqual(len(DIRECT_ALLOWLIST), 10)
-        self.assertEqual(len(PERMANENTLY_FORBIDDEN), 11)
+        self.assertEqual(
+            DIRECT_ALLOWLIST,
+            frozenset({
+                "get_current_time",
+                "get_weather",
+                "adjust_volume",
+                "set_timer",
+                "cancel_timer",
+                "launch_app",
+                "focus_window",
+                "get_running_apps",
+                "play_youtube",
+                "take_screenshot",
+            }),
+        )
+        self.assertEqual(
+            PERMANENTLY_FORBIDDEN,
+            frozenset({
+                "delete_file",
+                "write_file",
+                "edit_file",
+                "send_email",
+                "execute_shell_command",
+                "execute_python_code",
+                "shutdown_computer",
+                "api_call",
+                "mcp_call",
+                "run_agent_task",
+                "delegate_to_subagent",
+            }),
+        )
         self.assertTrue(all(get_candidate(name).classifiable for name in REGISTRY))
-        self.assertTrue(all(get_candidate(name).direct_capable for name in DIRECT_ALLOWLIST))
-        self.assertTrue(all(not get_candidate(name).direct_capable for name in PERMANENTLY_FORBIDDEN))
+        self.assertTrue(all(
+            get_candidate(name).direct_capable and get_candidate(name).risk == "low"
+            and get_candidate(name).parser is not None
+            for name in DIRECT_ALLOWLIST
+        ))
+        self.assertTrue(all(
+            not get_candidate(name).direct_capable and get_candidate(name).risk == "high"
+            for name in PERMANENTLY_FORBIDDEN
+        ))
 
     def test_hash_features_are_stable_for_nfkc_casefolded_unicode(self):
         import numpy as np

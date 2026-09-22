@@ -70,6 +70,7 @@ class DecisionVariantTests(unittest.TestCase):
             ("화면을 보여줘", "하면을 보여줘"),
             ("크롬을 켜줘", "크론을 켜줘"),
             ("닫아줘", "다다줘"),
+            ("띄워줘", "띠워줘"),
         )
         for source, expected in transcription:
             with self.subTest(source=source, expected=expected):
@@ -122,6 +123,38 @@ class DecisionVariantTests(unittest.TestCase):
         self.assertIn("5시에 알려줘", times)
         durations = {text for text, _ in generate_variants("삼십분 타이머를 맞춰줘", "ko", limit=64)}
         self.assertIn("30분 타이머를 맞춰줘", durations)
+
+        for source in ("1.5분 타이머", "-5분 타이머", "1,500분 타이머"):
+            with self.subTest(source=source):
+                self.assertNotIn(
+                    "numeric_transcription",
+                    {kind for _, kind in generate_variants(source, "ko", limit=64)},
+                )
+
+    def test_generic_number_forms_preserve_duration_and_clock_values(self):
+        examples = (
+            ("15분 후", "십오 분 후"),
+            ("20초 뒤", "이십 초 뒤"),
+            ("3시간 뒤", "세 시간 뒤"),
+            ("5시에", "다섯 시에"),
+            ("스물세시간 뒤", "23시간 뒤"),
+            ("백오십 분 뒤", "150분 뒤"),
+        )
+        for source, expected in examples:
+            with self.subTest(source=source, expected=expected):
+                self.assertIn(expected, {text for text, _ in generate_variants(source, "ko", limit=64)})
+
+        quarter = generate_variants("5분기 보고서", "ko", limit=64)
+        self.assertNotIn("numeric_transcription", {kind for _, kind in quarter})
+        self.assertNotIn("오 분기 보고서", {text for text, _ in quarter})
+
+    def test_default_limit_reserves_numeric_and_related_composition(self):
+        source = "30분 뒤 알려줘"
+        variants = generate_variants(source, "ko")
+        self.assertLessEqual(len(variants), 12)
+        self.assertTrue(any(kind == "numeric_transcription" for _, kind in variants))
+        self.assertTrue(any(kind.startswith("composed:numeric_transcription+") for _, kind in variants))
+        self.assertEqual(generate_variants(source, "ko", limit=1)[0][1], "numeric_transcription")
 
     def test_non_korean_input_is_left_to_the_existing_generators(self):
         korean = generate_variants("크롬을 켜줘", "ko")

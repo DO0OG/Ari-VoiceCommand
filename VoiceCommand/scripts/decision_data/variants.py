@@ -17,12 +17,20 @@ _OBJECTS = frozenset(
 
 _SIMPLE_VERBS = frozenset(
     """
-    켜줘 켜주세요 켜줘요 켜 줘 켜 주세요 열어줘 열어주세요 열어줘요 열어 줘 열어 주세요
-    닫아줘 닫아주세요 실행해줘 실행해주세요 종료해줘 종료해주세요 보여줘 보여주세요 찾아줘
-    찾아주세요 읽어줘 읽어주세요 알려줘 알려주세요 검색해줘 검색해주세요 재생해줘 재생해주세요
-    캡처해줘 캡처해주세요 설정해줘 설정해주세요 올려줘 올려주세요 내려줘 내려주세요
+    켜줘 켜주세요 켜줘요 열어줘 열어주세요 열어줘요 닫아줘 닫아주세요 닫아줘요
+    꺼줘 꺼주세요 꺼줘요 띄워줘 띄워주세요 실행해줘 실행해주세요 종료해줘 종료해주세요
+    보여줘 보여주세요 찾아줘 찾아주세요 읽어줘 읽어주세요 알려줘 알려주세요
+    검색해줘 검색해주세요 재생해줘 재생해주세요 캡처해줘 캡처해주세요 설정해줘
+    설정해주세요 올려줘 올려주세요 내려줘 내려주세요 켜봐 켜주실래요 켜주라 켜줄래
+    열어봐 열어주실래요 닫아봐
     """.split()
-) | frozenset({"켜 줘", "켜 주세요", "열어 줘", "열어 주세요", "닫아 줘", "꺼 줘"})
+) | frozenset(
+    {
+        "켜 줘", "켜 주세요", "열어 줘", "열어 주세요",
+        "닫아 줘", "닫아 주세요", "꺼 줘", "꺼 주세요",
+        "띄워 줘", "띄워 주세요",
+    }
+)
 
 _TRANSCRIPTION_ERRORS = (
     ("켜줘", "겨줘"),
@@ -39,6 +47,7 @@ _TRANSCRIPTION_ERRORS = (
     ("유튜브", "유투브"),
     ("스크린샷", "스크린셧"),
     ("엑셀", "액셀"),
+    ("띄워줘", "띠워줘"),
 )
 
 _OVERSEGMENTED = (
@@ -51,22 +60,106 @@ _OVERSEGMENTED = (
     ("켜줘", "켜 줘"),
 )
 
-_NUMERIC_PHRASES = (
-    ("5분", "오 분"),
-    ("5시", "다섯 시"),
-    ("10초", "십 초"),
-    ("1시간", "한 시간"),
-    ("30분", "삼십 분"),
-    ("삼십분", "30분"),
-    ("50", "오십"),
-    ("다섯 시", "5시"),
-    ("오 분", "5분"),
-    ("십 초", "10초"),
-    ("한 시간", "1시간"),
-    ("삼십 분", "30분"),
-    ("30분", "삼십분"),
-    ("오십", "50"),
+_SINO_DIGITS = {
+    "영": 0, "공": 0, "일": 1, "이": 2, "삼": 3, "사": 4,
+    "오": 5, "육": 6, "칠": 7, "팔": 8, "구": 9,
+}
+_SINO_PLACES = {"십": 10, "백": 100, "천": 1000}
+_SINO_NAMES = {value: key for key, value in _SINO_DIGITS.items() if value}
+_SINO_NAME_PATTERN = "[영공일이삼사오육칠팔구십백천]+"
+_KOREAN_PARTICLE_PATTERN = r"(?:으로|부터|까지|정도|동안|후에|뒤에|이후|쯤|후|뒤|만|이|가|은|는|을|를|에|로)?"
+_WORD_BOUNDARY = r"[\w가-힣]"
+_NUMBER_PREFIX = r"[\w가-힣.,+/\-]"
+_DIGIT_TIME = re.compile(
+    rf"(?<!{_NUMBER_PREFIX})(?P<number>0|[1-9][0-9]{{0,3}})\s*"
+    rf"(?P<unit>시간|분|초|시)(?P<particle>{_KOREAN_PARTICLE_PATTERN})(?!{_WORD_BOUNDARY})"
 )
+_SPOKEN_HOUR_SMALL = {
+    1: "한", 2: "두", 3: "세", 4: "네", 5: "다섯",
+    6: "여섯", 7: "일곱", 8: "여덟", 9: "아홉",
+}
+_SPOKEN_HOUR_TENS = {
+    20: "스물", 30: "서른", 40: "마흔", 50: "쉰",
+    60: "예순", 70: "일흔", 80: "여든", 90: "아흔",
+}
+
+
+def _spoken_hour(number: int) -> str | None:
+    if number in _SPOKEN_HOUR_SMALL:
+        return _SPOKEN_HOUR_SMALL[number]
+    if number == 10:
+        return "열"
+    if 11 <= number <= 19:
+        return "열" + _SPOKEN_HOUR_SMALL[number - 10]
+    if number == 20:
+        return "스무"
+    tens, ones = divmod(number, 10)
+    prefix = _SPOKEN_HOUR_TENS.get(tens * 10)
+    if prefix and ones:
+        return prefix + _SPOKEN_HOUR_SMALL[ones]
+    if prefix:
+        return prefix
+    return None
+
+
+_SPOKEN_HOURS = {number: _spoken_hour(number) for number in range(1, 100)}
+_SPOKEN_HOUR_VALUES = {word: number for number, word in _SPOKEN_HOURS.items()}
+_SPOKEN_HOUR_PATTERN = "|".join(
+    re.escape(value) for value in sorted(_SPOKEN_HOUR_VALUES, key=len, reverse=True)
+)
+_SPOKEN_TIME = re.compile(
+    rf"(?<!{_NUMBER_PREFIX})(?P<number>(?:{_SPOKEN_HOUR_PATTERN}|{_SINO_NAME_PATTERN}))\s*"
+    rf"(?P<unit>시간|분|초|시)(?P<particle>{_KOREAN_PARTICLE_PATTERN})(?!{_WORD_BOUNDARY})"
+)
+_DIGIT_SCALAR = re.compile(
+    rf"(?<!{_NUMBER_PREFIX})(?P<number>0|[1-9][0-9]{{0,3}})"
+    rf"(?P<particle>(?:으로|부터|까지|이|가|은|는|을|를|에|로))"
+    rf"(?!{_WORD_BOUNDARY})"
+)
+_SPOKEN_SCALAR = re.compile(
+    rf"(?<!{_NUMBER_PREFIX})(?P<number>{_SINO_NAME_PATTERN})"
+    rf"(?P<particle>(?:으로|부터|까지|이|가|은|는|을|를|에|로))"
+    rf"(?!{_WORD_BOUNDARY})"
+)
+_SAFE_SCALAR_CONTEXTS = (
+    "볼륨", "음량", "소리", "밝기", "화면", "크기",
+    "용량", "온도", "속도", "퍼센트",
+)
+
+
+def _sino_number(value: int) -> str:
+    if value == 0:
+        return "영"
+    result = []
+    remainder = value
+    for place, syllable in ((1000, "천"), (100, "백"), (10, "십")):
+        digit, remainder = divmod(remainder, place)
+        if digit:
+            if digit != 1:
+                result.append(_SINO_NAMES[digit])
+            result.append(syllable)
+    if remainder:
+        result.append(_SINO_NAMES[remainder])
+    return "".join(result)
+
+
+def _parse_sino_number(value: str) -> int | None:
+    if value in ("영", "공"):
+        return 0
+    total = 0
+    current = None
+    for syllable in value:
+        if syllable in _SINO_DIGITS:
+            current = _SINO_DIGITS[syllable]
+        elif syllable in _SINO_PLACES:
+            total += (current or 1) * _SINO_PLACES[syllable]
+            current = None
+        else:
+            return None
+    number = total + (current or 0)
+    return number if 0 <= number <= 9999 and _sino_number(number) == value else None
+
+
 
 _ENDING_ALTERNATIVES = (
     ("주실래요", ("줘", "주세요", "줘요", "주라", "줄래")),
@@ -173,12 +266,39 @@ def _spacing_oversegmentation(text: str) -> list[str]:
 
 def _numeric_transcriptions(text: str) -> list[str]:
     variants = []
-    for source, target in _NUMERIC_PHRASES:
-        pattern = re.compile(rf"(?<![\w]){re.escape(source)}(?P<particle>으로|로|이|가|은|는|을|를|에|부터|까지)?(?![\w])")
-        candidate = pattern.sub(lambda match: target + (match.group("particle") or ""), text, count=1)
-        if candidate != text:
-            variants.append(candidate)
-    return variants
+    for match in _DIGIT_TIME.finditer(text):
+        number = int(match.group("number"))
+        unit = match.group("unit")
+        spoken = _SPOKEN_HOURS.get(number) if unit in ("시간", "시") else _sino_number(number)
+        if spoken is None:
+            continue
+        suffix = match.group("particle") or ""
+        for rendered in (spoken + " " + unit + suffix, spoken + unit + suffix):
+            variants.append(text[:match.start()] + rendered + text[match.end():])
+
+    for match in _SPOKEN_TIME.finditer(text):
+        number_text = match.group("number")
+        unit = match.group("unit")
+        number = (
+            _SPOKEN_HOUR_VALUES.get(number_text)
+            if unit in ("시간", "시")
+            else _parse_sino_number(number_text)
+        )
+        if number is not None:
+            rendered = str(number) + unit + (match.group("particle") or "")
+            variants.append(text[:match.start()] + rendered + text[match.end():])
+
+    for match in _DIGIT_SCALAR.finditer(text):
+        rendered = _sino_number(int(match.group("number"))) + match.group("particle")
+        variants.append(text[:match.start()] + rendered + text[match.end():])
+
+    if any(context in text for context in _SAFE_SCALAR_CONTEXTS):
+        for match in _SPOKEN_SCALAR.finditer(text):
+            number = _parse_sino_number(match.group("number"))
+            if number is not None:
+                rendered = str(number) + match.group("particle")
+                variants.append(text[:match.start()] + rendered + text[match.end():])
+    return _unique(variants, text)
 
 
 def _punctuation_removal(text: str) -> list[str]:
@@ -248,11 +368,27 @@ def generate_variants(
                 seen.add(values[depth])
                 singles.append((values[depth], _OPERATIONS[index][0]))
 
-    pairs = [(first, second) for first in operation_order for second in operation_order if first != second]
-    rng.shuffle(pairs)
     composed: list[tuple[str, str]] = []
     composed_seen = set(seen)
     composition_cap = max(8, min(24, limit * 2))
+    operation_indexes = {name: index for index, (name, _) in enumerate(_OPERATIONS)}
+    numeric_index = operation_indexes["numeric_transcription"]
+    if groups[numeric_index]:
+        for second_name in ("verb_ending", "softener"):
+            second_index = operation_indexes[second_name]
+            for middle in groups[numeric_index][:2]:
+                candidates = _unique(_OPERATIONS[second_index][1](middle), middle)
+                if candidates:
+                    result = candidates[0]
+                    if result not in composed_seen:
+                        composed_seen.add(result)
+                        composed.append(
+                            (result, f"composed:numeric_transcription+{second_name}")
+                        )
+                    break
+
+    pairs = [(first, second) for first in operation_order for second in operation_order if first != second]
+    rng.shuffle(pairs)
     for first, second in pairs:
         if not groups[first]:
             continue
@@ -270,7 +406,25 @@ def generate_variants(
             break
 
     composition_count = min(4, max(1, limit // 4), max(0, limit - 1)) if limit >= 3 else 0
-    chosen = singles[: max(0, limit - composition_count)]
+    priority_singles = []
+    priority_names = (
+        ("numeric_transcription", "verb_ending", "softener")
+        if groups[numeric_index] else ()
+    )
+    for name in priority_names:
+        index = operation_indexes[name]
+        if groups[index]:
+            candidate = (groups[index][0], name)
+            if candidate[0] not in {value for value, _ in priority_singles}:
+                priority_singles.append(candidate)
+    chosen = priority_singles[: max(0, limit - composition_count)]
+    chosen_texts = {value for value, _ in chosen}
+    chosen.extend(
+        (value, kind)
+        for value, kind in singles
+        if value not in chosen_texts
+    )
+    chosen = chosen[: max(0, limit - composition_count)]
     chosen.extend(composed[:composition_count])
     if len(chosen) < limit:
         chosen.extend(composed[composition_count : composition_count + limit - len(chosen)])
