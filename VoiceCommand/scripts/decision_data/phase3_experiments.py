@@ -17,6 +17,14 @@ from agent.decision.candidates import is_direct_allowed
 from agent.decision.engine import LinearScorer, candidate_names, hash_features, softmax
 from agent.llm_router import get_llm_router
 from .evaluate import metrics
+from .expanded_data import (
+    APP_ALIAS_SLOTS,
+    APP_SLOTS,
+    TIMER_SLOTS,
+    TIMEZONE_SLOTS,
+    WEATHER_SLOTS,
+    YOUTUBE_QUERIES,
+)
 from .train import fit_temperature
 from .dataset_guards import validate_gold_isolation
 from .gold_data import build_gold_examples
@@ -29,7 +37,24 @@ CHAR_BUCKETS = 8192
 WORD_BUCKETS = 4096
 THRESHOLD = 0.92
 MARGIN = 0.30
-FEATURE_GROUPS = ("word_unigram_bigram", "numeric_duration", "sentence_command")
+FEATURE_GROUPS = (
+    "word_unigram_bigram",
+    "numeric_duration",
+    "sentence_command",
+    "url_presence",
+    "file_path_presence",
+    "app_alias",
+    "entity_signal",
+)
+FEATURE_WIDTHS = {
+    "word_unigram_bigram": WORD_BUCKETS,
+    "numeric_duration": 2,
+    "sentence_command": 5,
+    "url_presence": 1,
+    "file_path_presence": 1,
+    "app_alias": 1,
+    "entity_signal": 1,
+}
 
 _WORDS = re.compile(r"[^\W_]+", re.UNICODE)
 _EN_NUMBER = re.compile(
@@ -60,10 +85,39 @@ _COMMAND_EN = re.compile(
     r"search|write|take|capture|save|check|increase|lower|stop|switch|bring)\b"
 )
 _COMMAND_JA = re.compile(r"(?:して|ください|しろ|くれ|お願い|頼む)[。？!?]*$")
+_URL_PATTERN = re.compile(
+    r"(?:https?://|www\.)[^\s]+|(?<![@\w])(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?",
+    re.IGNORECASE,
+)
+_FILE_PATH_PATTERN = re.compile(
+    r"(?<!\w)(?:[a-z]:[\\/]|\\\\|(?<!\w)(?:~|\.{1,2})[\\/])[^\s]+"
+    r"|(?<![:/\\\w])/(?:[^\s/]+/)*[^\s/]+"
+    r"|(?<![\w])[\w.-]+\.(?:txt|md|pdf|docx?|xlsx?|csv|json|py|jpg|jpeg|png|wav|mp3)(?![\w])",
+    re.IGNORECASE,
+)
 
 
 def _normalize(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+
+
+def _slot_values(*groups) -> frozenset[str]:
+    values = set()
+    for group in groups:
+        for slot in group:
+            for value in slot:
+                normalized = _normalize(value)
+                if len(normalized) > 1 and not normalized.isdecimal():
+                    values.add(normalized)
+    return frozenset(values)
+
+
+_APP_ALIAS_VALUES = _slot_values(APP_ALIAS_SLOTS)
+_ENTITY_VALUES = tuple(sorted(
+    _slot_values(APP_SLOTS, APP_ALIAS_SLOTS, WEATHER_SLOTS, TIMEZONE_SLOTS, TIMER_SLOTS, YOUTUBE_QUERIES),
+    key=len,
+    reverse=True,
+))
 
 
 def _normalized_sparse(counts: Counter[int]) -> tuple[np.ndarray, np.ndarray]:
@@ -131,6 +185,12 @@ def _sentence_command_features(text: str, start: int) -> tuple[np.ndarray, np.nd
     return np.asarray(features, dtype=np.intp), values
 
 
+def _binary_feature(enabled: bool, start: int) -> tuple[np.ndarray, np.ndarray]:
+    if not enabled:
+        return np.empty(0, dtype=np.intp), np.empty(0, dtype=np.float32)
+    return np.asarray([start], dtype=np.intp), np.ones(1, dtype=np.float32)
+
+
 def extract_features(
     text: str, groups: tuple[str, ...] = (), buckets: int = CHAR_BUCKETS
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -153,19 +213,28 @@ def extract_features(
         elif group == "numeric_duration":
             group_indices, group_values = _numeric_features(text, next_offset)
             next_offset += 2
-        else:
+        elif group == "sentence_command":
             group_indices, group_values = _sentence_command_features(text, next_offset)
             next_offset += 5
+        else:
+            normalized = _normalize(text)
+            if group == "url_presence":
+                enabled = _URL_PATTERN.search(normalized) is not None
+            elif group == "file_path_presence":
+                enabled = _FILE_PATH_PATTERN.search(normalized) is not None
+            elif group == "app_alias":
+                enabled = any(value in normalized for value in _APP_ALIAS_VALUES)
+            else:
+                enabled = any(value in normalized for value in _ENTITY_VALUES)
+            group_indices, group_values = _binary_feature(enabled, next_offset)
+            next_offset += 1
         all_indices.append(group_indices)
         all_values.append(group_values)
     return np.concatenate(all_indices), np.concatenate(all_values)
 
 
 def _feature_width(groups: tuple[str, ...], buckets: int) -> int:
-    return buckets + sum(
-        WORD_BUCKETS if group == "word_unigram_bigram" else 2 if group == "numeric_duration" else 5
-        for group in FEATURE_GROUPS if group in groups
-    )
+    return buckets + sum(FEATURE_WIDTHS[group] for group in FEATURE_GROUPS if group in groups)
 
 
 def _logits(weights: np.ndarray, bias: np.ndarray, text: str, groups: tuple[str, ...]) -> np.ndarray:
@@ -327,7 +396,14 @@ def run_experiments(
     *,
     split_map_path: Path | None = None,
     baseline_evaluation_path: Path | None = None,
+    feature_groups: tuple[str, ...] | None = None,
 ) -> dict:
+    groups_to_run = tuple(FEATURE_GROUPS if feature_groups is None else feature_groups)
+    unknown_groups = set(groups_to_run) - set(FEATURE_GROUPS)
+    if unknown_groups:
+        raise ValueError(f"unknown feature groups: {sorted(unknown_groups)}")
+    if len(set(groups_to_run)) != len(groups_to_run):
+        raise ValueError("duplicate feature groups")
     rows = _read_rows(rows_path)
     if split_map_path:
         supplied_map = json.loads(split_map_path.read_text(encoding="utf-8"))
@@ -383,7 +459,7 @@ def run_experiments(
         }
     }
     fit_results: dict[str, tuple[np.ndarray, np.ndarray, float]] = {}
-    for group in FEATURE_GROUPS:
+    for group in groups_to_run:
         fit = _fit(rows, (group,))
         fit_results[group] = fit
         weights, bias, temperature = fit
@@ -398,7 +474,7 @@ def run_experiments(
             },
         }
 
-    eligible = [name for name in FEATURE_GROUPS if _calibration_eligible(trials[name]["calibration"], trials["baseline"]["calibration"])]
+    eligible = [name for name in groups_to_run if _calibration_eligible(trials[name]["calibration"], trials["baseline"]["calibration"])]
     selected = min(
         eligible,
         key=lambda name: (
@@ -435,6 +511,7 @@ def run_experiments(
             "word_buckets": WORD_BUCKETS,
             "threshold": THRESHOLD,
             "margin": MARGIN,
+            "feature_groups": list(groups_to_run),
             "snapshot": snapshot,
             "split_counts": {
                 split: sum(row["split"] == split for row in rows)
@@ -469,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--baseline-evaluation", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--groups", nargs="+", choices=FEATURE_GROUPS)
     args = parser.parse_args(argv)
     result = run_experiments(
         args.rows,
@@ -476,6 +554,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output,
         split_map_path=args.split_map,
         baseline_evaluation_path=args.baseline_evaluation,
+        feature_groups=tuple(args.groups) if args.groups else None,
     )
     print(json.dumps({
         "selected_group": result["selected_group"],
