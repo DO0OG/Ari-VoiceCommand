@@ -12,7 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from agent.decision.candidates import UNKNOWN, candidate_names
+from agent.decision.candidates import DIRECT_ALLOWLIST, UNKNOWN, candidate_names
 from .build_dataset import build_examples
 from .dataset_guards import validate_gold_isolation
 from .evaluate import (
@@ -224,8 +224,14 @@ def check_artifacts(result: dict, data_dir: Path, model_dir: Path = MODEL_DIR) -
     return failures
 
 
+# Approval floors keep a release from passing on a handful of accepted rows with the
+# rest rejected: each floor is about 80% of what the corpora were generated with.
+MIN_APPROVED_PER_LANGUAGE = {"release_gold": 220, "safety_gold": 80}
+MIN_DIRECT_APPROVED_PER_TOOL_LANGUAGE = 45
+
+
 def check_review_corpora(strict_release: bool = False, loader=load_review_corpora) -> list[str]:
-    """Validate the human-review corpora; a release build also needs every row reviewed."""
+    """Validate the human-review corpora; a release build also needs them reviewed in bulk."""
     try:
         release_rows, safety_rows = loader()
     except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -237,10 +243,29 @@ def check_review_corpora(strict_release: bool = False, loader=load_review_corpor
         pending = sum(row["review_status"] == "pending_human_review" for row in rows)
         if pending:
             failures.append(f"{name}: {pending} rows are pending human review")
-        approved = {row["language"] for row in rows if row["review_status"] == "human_approved"}
-        missing = sorted(REVIEW_LANGUAGES - approved)
-        if missing:
-            failures.append(f"{name}: no approved rows for {', '.join(missing)}")
+        approved = [row for row in rows if row["review_status"] == "human_approved"]
+        for language in sorted(REVIEW_LANGUAGES):
+            count = sum(row["language"] == language for row in approved)
+            if count < MIN_APPROVED_PER_LANGUAGE[name]:
+                failures.append(
+                    f"{name}: {language} has {count} approved rows, "
+                    f"below the minimum of {MIN_APPROVED_PER_LANGUAGE[name]}"
+                )
+    # Counted on the reviewed label, so an edit that moves a row away from a tool
+    # or marks it fallback-only does not count toward that tool.
+    direct = [
+        row for row in release_rows
+        if row["review_status"] == "human_approved" and row["label"] in DIRECT_ALLOWLIST
+        and row["expected_outcome"] != "fallback_required"
+    ]
+    for tool in sorted(DIRECT_ALLOWLIST):
+        for language in sorted(REVIEW_LANGUAGES):
+            count = sum(row["label"] == tool and row["language"] == language for row in direct)
+            if count < MIN_DIRECT_APPROVED_PER_TOOL_LANGUAGE:
+                failures.append(
+                    f"release_gold: {tool}/{language} has {count} approved direct rows, "
+                    f"below the minimum of {MIN_DIRECT_APPROVED_PER_TOOL_LANGUAGE}"
+                )
     return failures
 
 

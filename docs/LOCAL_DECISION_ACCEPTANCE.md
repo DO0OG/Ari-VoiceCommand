@@ -5,9 +5,9 @@
 
 | 단계 | 누가 | 도구 | 통과 기준 |
 |---|---|---|---|
-| 1. 후보 문장 검수 | 사람 | `scripts.decision_data.review_corpus` | 두 코퍼스의 모든 행이 승인·수정·거절 중 하나로 기록됨 |
-| 2. 텍스트 확인 | 스크립트 | `scripts.decision_data.acceptance` | 잘못된 직접 처리 0, 응답 누락 0, 중복 실행 0 |
-| 3. 배포 실행 파일 확인 | 배포 워크플로 | `Ari.exe --decision-self-test` | 모델 적재·체크섬·고정 문장 5개 통과 |
+| 1. 후보 문장 검수 | 사람 | `scripts.decision_data.review_corpus` | 미검수 0, 승인 행이 언어별 release 220·safety 80, 직접 처리 도구×언어별 45 이상 |
+| 2. 텍스트 확인 | 스크립트 | `scripts.decision_data.acceptance` | 잘못된 직접 처리 0, 응답 누락 0, 중복 실행 0, 대표 문장 직접 처리 누락 0 |
+| 3. 배포 실행 파일 확인 | 배포 워크플로 | `Ari.exe --decision-self-test` | 모델 적재·체크섬·고정 문장 5개, 영어·일본어 번역 적재 통과 |
 | 4. 음성 확인 | 사람 | 이 문서의 기록 양식 | 언어별 기준 전부 통과 |
 
 ## 1. 후보 문장 검수

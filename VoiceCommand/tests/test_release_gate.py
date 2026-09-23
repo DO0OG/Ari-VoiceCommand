@@ -61,21 +61,41 @@ class ReleaseGateTests(unittest.TestCase):
         config_path.write_text(json.dumps(config), encoding="utf-8")
         return model
 
-    def test_release_build_requires_every_review_row_decided(self):
-        def rows(status, languages=("ko", "en", "ja")):
-            return [{"review_status": status, "language": language} for language in languages]
+    def test_release_build_requires_bulk_review_approval(self):
+        from scripts.decision_data.review_corpus import load_review_corpora
 
-        pending = lambda: (rows("pending_human_review"), rows("human_approved"))  # noqa: E731
+        release, safety = load_review_corpora(validate_external=False)
+
+        def reviewed(rows, rejected=lambda index, row: False):
+            return [
+                {**row, "review_status": "human_rejected" if rejected(index, row) else "human_approved"}
+                for index, row in enumerate(rows)
+            ]
+
+        approved = lambda: (reviewed(release), reviewed(safety))  # noqa: E731
+        self.assertEqual(check_review_corpora(True, loader=approved), [])
+
+        pending = lambda: (release, reviewed(safety))  # noqa: E731
         self.assertEqual(check_review_corpora(False, loader=pending), [])
         failures = check_review_corpora(True, loader=pending)
-        self.assertTrue(any("release_gold: 3 rows are pending" in item for item in failures))
+        self.assertTrue(any("release_gold: 825 rows are pending" in item for item in failures))
 
-        partial = lambda: (rows("human_approved", ("ko", "en")) + rows("human_rejected", ("ja",)),  # noqa: E731
-                           rows("human_approved"))
-        self.assertEqual(check_review_corpora(True, loader=partial),
-                         ["release_gold: no approved rows for ja"])
-        done = lambda: (rows("human_approved"), rows("human_approved"))  # noqa: E731
-        self.assertEqual(check_review_corpora(True, loader=done), [])
+        # Approving a few rows per language and rejecting the rest must not pass.
+        few = lambda: (reviewed(release, lambda index, row: index >= 30),  # noqa: E731
+                       reviewed(safety, lambda index, row: index >= 30))
+        failures = check_review_corpora(True, loader=few)
+        self.assertTrue(any("safety_gold: ja has" in item for item in failures))
+        self.assertTrue(any("take_screenshot/ja has 0 approved direct rows" in item for item in failures))
+
+        volume_ko = [index for index, row in enumerate(release)
+                     if row["label"] == "adjust_volume" and row["language"] == "ko"
+                     and row["bucket"] == "direct_candidate"][:12]
+        one_short = lambda: (reviewed(release, lambda index, row: index in volume_ko),  # noqa: E731
+                             reviewed(safety))
+        self.assertEqual(
+            check_review_corpora(True, loader=one_short),
+            ["release_gold: adjust_volume/ko has 44 approved direct rows, below the minimum of 45"],
+        )
 
         def broken():
             raise ValueError("review row fields differ from the required schema")
