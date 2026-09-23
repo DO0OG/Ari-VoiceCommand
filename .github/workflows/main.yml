@@ -49,6 +49,10 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe -m scripts.decision_data.validate_release
 
+      - name: Run decision text acceptance
+        working-directory: VoiceCommand
+        run: .venv\Scripts\python.exe -m scripts.decision_data.acceptance
+
       - name: Security scan (bandit)
         working-directory: VoiceCommand
         run: |
