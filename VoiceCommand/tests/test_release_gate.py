@@ -29,7 +29,12 @@ SNAPSHOT = DATA_DIR / "candidate_snapshot.json"
 
 
 def _passing_result():
-    gated = {"false_direct_count": 0, "unknown_false_accept_count": 0, "selective_accuracy": 1.0}
+    gated = {
+        "selected_count": 1,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "selective_accuracy": 1.0,
+    }
     return {
         "with_direct_policy_gate": dict(gated),
         "family_with_direct_policy_gate": {"family_false_direct": 0},
@@ -75,13 +80,22 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertTrue(any("moved" in item for item in failures))
 
     def test_artifact_from_another_model_fails(self):
-        result = {"model_sha256": "a" * 64, "evaluation_rows_sha256": "b" * 64}
+        result = {
+            "model_sha256": "a" * 64,
+            "provenance": {"candidate_policy_sha256": "a" * 64},
+            "evaluation_rows_sha256": "b" * 64,
+        }
         with tempfile.TemporaryDirectory() as directory:
             for name in ("evaluation.json", "benchmark_results.json"):
-                payload = {"model_sha256": "c" * 64, "evaluation_rows_sha256": "b" * 64}
+                payload = {
+                    "model_sha256": "c" * 64,
+                    "provenance": {"candidate_policy_sha256": "d" * 64},
+                    "evaluation_rows_sha256": "b" * 64,
+                }
                 (Path(directory) / name).write_text(json.dumps(payload), encoding="utf-8")
             failures = check_artifacts(result, Path(directory))
-        self.assertEqual(len(failures), 2)
+        self.assertTrue(any("not produced by the shipped model" in item for item in failures))
+        self.assertTrue(any("provenance differs" in item for item in failures))
 
     def test_false_direct_and_low_language_accuracy_fail(self):
         self.assertEqual(check_metrics(_passing_result()), [])

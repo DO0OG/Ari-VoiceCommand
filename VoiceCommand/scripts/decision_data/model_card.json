@@ -1,0 +1,95 @@
+{
+  "model_name": "local_command_classifier",
+  "model_version": 1,
+  "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
+  "task": "classify short Korean, English, and Japanese command requests",
+  "supported_languages": [
+    "en",
+    "ja",
+    "ko"
+  ],
+  "architecture": "hashed character n-gram linear classifier",
+  "intended_use": "development evaluation and conservative local command selection",
+  "direct_eligible_tools": [
+    "adjust_volume",
+    "get_current_time",
+    "get_running_apps",
+    "take_screenshot"
+  ],
+  "runtime_policy_default": {
+    "mode": "shadow",
+    "direct_execution": false
+  },
+  "training": {
+    "dataset_version": "decision-dataset-v2",
+    "training_sha256": "f403fa1d38a0d24594df91f551a22e68d9228554d5ce012e2f306e6f7d8b3d5d",
+    "augmentation_enabled": true
+  },
+  "evaluation": {
+    "partition": "held_out_test",
+    "row_count": 7217,
+    "top1_accuracy": 0.8182070112235,
+    "parser_confirmed_selected_count": 51,
+    "parser_confirmed_precision": 1.0,
+    "false_direct_count": 0,
+    "by_language": {
+      "ko": {
+        "selected_count": 21,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0
+      },
+      "en": {
+        "selected_count": 17,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0
+      },
+      "ja": {
+        "selected_count": 13,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0
+      }
+    },
+    "commands_dispatched": 0
+  },
+  "resource_usage": {
+    "model_resource_bytes": 1233389,
+    "additional_steady_rss_bytes": 17702912,
+    "warm_p95_ms": 0.07970500023475324,
+    "gpu_used": false
+  },
+  "review": {
+    "gold_rows": 369,
+    "gold_status": [
+      "pending_human_review"
+    ],
+    "release_approval": "pending_human_review",
+    "safety_corpus": "not_separated"
+  },
+  "limitations": [
+    "The evaluation set is generated and does not represent microphone acceptance.",
+    "The held-out measurements do not establish release readiness.",
+    "The evaluator checks parser confirmation but does not dispatch commands."
+  ],
+  "provenance": {
+    "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
+    "model_config_sha256": "ec970c6c09022659552f9a26bbb9c4581b542f3698d1271edf526d1229cc7dab",
+    "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
+    "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
+    "parser_sha256": "acf7d2f75a43cd0a1dbb3d0ad4efab7e7184facb93d3301ebfdd7899be89a53f",
+    "engine_sha256": "01878103bf1f114afb04f1cde6bd8c10dbaaa652fa49431b8280709750caa0e0",
+    "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
+    "runtime_settings_sha256": "c3f03d0dbd29d3340a04770b41d28a5e7eab45d02b45e5db7c573e31b574a95a",
+    "settings_schema_sha256": "f29827c37b1f2768b78d1ce113602243ccb8f13ccf6e0e8a606d8124bb159196",
+    "split_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
+    "gold_dataset_version": "decision-gold-v1",
+    "gold_dataset_sha256": "7b405930ac925557e8b85e15c90807b4db29e7e8b7da6efa93a7e4183457239b"
+  },
+  "split_baseline": {
+    "ref": "origin/137-release-quality-gate",
+    "commit": "ac2d4f9140a981035c46865b51dccf385d470092",
+    "manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "snapshot_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39"
+  }
+}

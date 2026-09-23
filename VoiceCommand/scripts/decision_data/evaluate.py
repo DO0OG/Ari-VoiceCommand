@@ -9,9 +9,19 @@ from pathlib import Path
 import numpy as np
 
 from agent.decision.engine import LinearScorer, UNKNOWN
-from agent.decision.candidates import is_direct_allowed
+from agent.decision.candidates import DIRECT_ALLOWLIST, is_direct_allowed
+from agent.decision.semantics import parse_candidate
 from agent.llm_router import get_llm_router
+from core.settings_schema import DEFAULT_SETTINGS
 from .build_dataset import build_examples
+from .gold_data import build_gold_examples
+from .provenance import (
+    BASELINE_COMMIT,
+    BASELINE_MANIFEST_SHA256,
+    BASELINE_REF,
+    artifact_fingerprints,
+    sha256_file,
+)
 
 
 def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
@@ -68,6 +78,15 @@ def _selection(probabilities, targets, labels, threshold, eligible=None):
     if eligible is not None:
         selected &= np.asarray(eligible, dtype=bool)
     return predicted == targets, selected
+
+
+def parser_confirmed_eligibility(rows, predictions, eligible):
+    """Require the semantic parser to confirm each policy-eligible prediction."""
+
+    return [
+        allowed and parse_candidate(row["text"], prediction.choice).parse_success
+        for row, prediction, allowed in zip(rows, predictions, eligible)
+    ]
 
 
 def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
@@ -134,6 +153,119 @@ def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible
     }
 
 
+def confusion_comparison(current: dict, previous: dict | None, previous_sha256: str | None) -> dict:
+    """Summarize top classifier errors and increases over the prior artifact."""
+
+    def pairs(matrix):
+        result = {}
+        if not isinstance(matrix, dict):
+            return result
+        for actual, predicted_counts in matrix.items():
+            if not isinstance(predicted_counts, dict):
+                continue
+            for predicted, count in predicted_counts.items():
+                if actual != predicted and isinstance(count, int) and count > 0:
+                    result[(str(actual), str(predicted))] = count
+        return result
+
+    current_pairs = pairs(current)
+    prior_overall = previous.get("overall", {}) if isinstance(previous, dict) else {}
+    previous_pairs = pairs(prior_overall.get("confusion_matrix", {}))
+    major = sorted(current_pairs.items(), key=lambda item: (-item[1], item[0]))[:10]
+    worsened = []
+    for pair, current_count in current_pairs.items():
+        previous_count = previous_pairs.get(pair, 0)
+        if current_count > previous_count:
+            worsened.append({
+                "actual": pair[0], "predicted": pair[1],
+                "current_count": current_count, "previous_count": previous_count,
+                "increase": current_count - previous_count,
+            })
+    worsened.sort(key=lambda row: (-row["increase"], -row["current_count"], row["actual"], row["predicted"]))
+    return {
+        "scope": "classifier_top1",
+        "previous_artifact_sha256": previous_sha256,
+        "major_pairs": [
+            {"actual": pair[0], "predicted": pair[1], "count": count}
+            for pair, count in major
+        ],
+        "top_10_worsened_pairs": worsened[:10],
+    }
+
+
+def build_model_card(result: dict, model_dir: Path, data_dir: Path) -> dict:
+    config = json.loads((Path(model_dir) / "config.json").read_text(encoding="utf-8"))
+    gold_rows = build_gold_examples()
+    review_status = sorted({str(row.get("review_status", "unspecified")) for row in gold_rows})
+    gated = result["with_direct_policy_gate"]
+    benchmark_path = Path(data_dir) / "benchmark_results.json"
+    benchmark = (
+        json.loads(benchmark_path.read_text(encoding="utf-8"))
+        if benchmark_path.is_file() else {}
+    )
+    warm_ms = benchmark.get("warm_ms") or {}
+    return {
+        "model_name": "local_command_classifier",
+        "model_version": config.get("version", 1),
+        "model_sha256": result["model_sha256"],
+        "task": "classify short Korean, English, and Japanese command requests",
+        "supported_languages": sorted(result["by_language"]),
+        "architecture": "hashed character n-gram linear classifier",
+        "intended_use": "development evaluation and conservative local command selection",
+        "direct_eligible_tools": sorted(DIRECT_ALLOWLIST),
+        "runtime_policy_default": {
+            "mode": DEFAULT_SETTINGS["local_decision_mode"],
+            "direct_execution": DEFAULT_SETTINGS["local_decision_direct_execution"],
+        },
+        "training": {
+            "dataset_version": config.get("dataset_version"),
+            "training_sha256": config.get("training_sha256"),
+            "augmentation_enabled": bool(config.get("augmentation_enabled")),
+        },
+        "evaluation": {
+            "partition": "held_out_test",
+            "row_count": result["overall"]["count"],
+            "top1_accuracy": result["overall"]["accuracy"],
+            "parser_confirmed_selected_count": gated["selected_count"],
+            "parser_confirmed_precision": gated["selective_accuracy"],
+            "false_direct_count": gated["false_direct_count"],
+            "by_language": {
+                language: {
+                    "selected_count": values["with_direct_policy_gate"]["selected_count"],
+                    "selective_accuracy": values["with_direct_policy_gate"]["selective_accuracy"],
+                    "false_direct_count": values["with_direct_policy_gate"]["false_direct_count"],
+                }
+                for language, values in result["by_language"].items()
+            },
+            "commands_dispatched": 0,
+        },
+        "resource_usage": {
+            "model_resource_bytes": benchmark.get("resource_bytes"),
+            "additional_steady_rss_bytes": benchmark.get("additional_steady_rss_bytes"),
+            "warm_p95_ms": warm_ms.get("p95"),
+            "gpu_used": benchmark.get("gpu_used"),
+        },
+        "review": {
+            "gold_rows": len(gold_rows),
+            "gold_status": review_status,
+            "release_approval": "pending_human_review",
+            "safety_corpus": "not_separated",
+        },
+        "limitations": [
+            "The evaluation set is generated and does not represent microphone acceptance.",
+            "The held-out measurements do not establish release readiness.",
+            "The evaluator checks parser confirmation but does not dispatch commands.",
+        ],
+        "provenance": result["provenance"],
+        "split_baseline": {
+            "ref": BASELINE_REF,
+            "commit": BASELINE_COMMIT,
+            "manifest_sha256": BASELINE_MANIFEST_SHA256,
+            "snapshot_sha256": sha256_file(Path(data_dir) / "split_manifest_baseline.json"),
+        },
+    }
+
+
 def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
     rows, manifest = build_examples()
     if gold:
@@ -183,24 +315,43 @@ def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
         rule_pass and is_direct_allowed(prediction.choice, "fast")
         for rule_pass, prediction in zip(eligible, predictions)
     ]
+    parser_eligible = parser_confirmed_eligibility(test, predictions, direct_eligible)
+    candidate_gate_selected = _selection(
+        probabilities, targets, labels, threshold, direct_eligible
+    )[1]
+    parser_gate_selected = _selection(
+        probabilities, targets, labels, threshold, parser_eligible
+    )[1]
+    result["parser_rejected_count"] = int((candidate_gate_selected & ~parser_gate_selected).sum())
+    result["with_candidate_policy_gate"] = metrics(
+        probabilities, targets, labels, threshold, direct_eligible
+    )
     for language in ("ko", "en", "ja"):
         mask = np.array([row["language"] == language for row in test])
-        result["by_language"][language]["with_direct_policy_gate"] = metrics(
+        result["by_language"][language]["with_candidate_policy_gate"] = metrics(
             probabilities[mask], targets[mask], labels, threshold,
             np.asarray(direct_eligible, dtype=bool)[mask],
         )
+        result["by_language"][language]["with_direct_policy_gate"] = metrics(
+            probabilities[mask], targets[mask], labels, threshold,
+            np.asarray(parser_eligible, dtype=bool)[mask],
+        )
     result["with_direct_policy_gate"] = metrics(
-        probabilities, targets, labels, threshold, direct_eligible)
+        probabilities, targets, labels, threshold, parser_eligible)
     # 계열 하나가 수백 행으로 늘어나므로 행 평균과 별개로 계열 한 표 기준을 함께 낸다.
     result["family"] = family_metrics(test, probabilities, targets, labels, threshold)
     result["family_with_direct_policy_gate"] = family_metrics(
+        test, probabilities, targets, labels, threshold, parser_eligible)
+    result["family_with_candidate_policy_gate"] = family_metrics(
         test, probabilities, targets, labels, threshold, direct_eligible)
     result["macro"] = macro_metrics(test, probabilities, targets, labels, threshold)
     result["macro_with_direct_policy_gate"] = macro_metrics(
+        test, probabilities, targets, labels, threshold, parser_eligible)
+    result["macro_with_candidate_policy_gate"] = macro_metrics(
         test, probabilities, targets, labels, threshold, direct_eligible)
     result["direct_executions"] = 0
-    # 산출물이 어느 모델의 결과인지 배포 검사에서 대조한다.
-    result["model_sha256"] = getattr(scorer, "sha256", None)
+    result["provenance"] = artifact_fingerprints(model_dir)
+    result["model_sha256"] = result["provenance"]["model_sha256"]
     return result
 
 
@@ -208,14 +359,34 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=Path("resources/decision"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--compare-with", type=Path,
+                        help="prior evaluation artifact used for confusion-pair comparison")
     parser.add_argument("--gold", action="store_true", help="evaluate the reserved partition")
     args = parser.parse_args(argv)
     if args.output is None:
         filename = "gold_evaluation.json" if args.gold else "evaluation.json"
         args.output = Path("scripts/decision_data") / filename
+    comparison_path = args.compare_with or args.output
+    previous = None
+    previous_sha256 = None
+    if comparison_path.is_file():
+        previous_bytes = comparison_path.read_bytes()
+        previous_sha256 = hashlib.sha256(previous_bytes).hexdigest()
+        try:
+            previous = json.loads(previous_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            previous = None
     result = evaluate(args.model, gold=args.gold)
+    result["confusion_comparison"] = confusion_comparison(
+        result["overall"]["confusion_matrix"], previous, previous_sha256
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if not args.gold and args.output.resolve() == Path("scripts/decision_data/evaluation.json").resolve():
+        card = build_model_card(result, args.model, args.output.parent)
+        (args.output.parent / "model_card.json").write_text(
+            json.dumps(card, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     import matplotlib
     matplotlib.use("Agg")
     from matplotlib import pyplot as plt

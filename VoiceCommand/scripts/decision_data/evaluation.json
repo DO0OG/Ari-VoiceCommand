@@ -749,11 +749,286 @@
           "unknown_or_complex": 65
         }
       },
+      "with_candidate_policy_gate": {
+        "count": 2607,
+        "accuracy": 0.7786728039892596,
+        "selected_count": 126,
+        "coverage": 0.04833141542002301,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.062178053997146265,
+        "brier": 0.29203456940229927,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 8,
+            "accuracy": 0.375,
+            "confidence": 0.08848038539793858
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 115,
+            "accuracy": 0.20869565217391303,
+            "confidence": 0.16284941605528894
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 215,
+            "accuracy": 0.2744186046511628,
+            "confidence": 0.2496658316582624
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 172,
+            "accuracy": 0.4418604651162791,
+            "confidence": 0.34871337275798947
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 160,
+            "accuracy": 0.50625,
+            "confidence": 0.4540031448278611
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 187,
+            "accuracy": 0.5989304812834224,
+            "confidence": 0.5479694802191931
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 207,
+            "accuracy": 0.8019323671497585,
+            "confidence": 0.6495299361807587
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 205,
+            "accuracy": 0.8634146341463415,
+            "confidence": 0.7490201327011311
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 233,
+            "accuracy": 0.9785407725321889,
+            "confidence": 0.8543848827174773
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1105,
+            "accuracy": 0.9990950226244344,
+            "confidence": 0.9707014803069949
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 90,
+            "launch_app": 1
+          },
+          "analyze_image_file": {
+            "focus_window": 10,
+            "take_screenshot": 2,
+            "unknown_or_complex": 1
+          },
+          "analyze_screenshot": {
+            "analyze_screenshot": 1,
+            "take_screenshot": 12
+          },
+          "api_call": {
+            "api_call": 11,
+            "launch_app": 2
+          },
+          "cancel_scheduled_task": {
+            "cancel_scheduled_task": 2,
+            "schedule_task": 11
+          },
+          "cancel_timer": {
+            "cancel_timer": 435,
+            "get_weather": 1,
+            "launch_app": 1,
+            "set_timer": 1,
+            "unknown_or_complex": 10
+          },
+          "close_app": {
+            "close_app": 14
+          },
+          "create_calendar_event": {
+            "launch_app": 2,
+            "unknown_or_complex": 11
+          },
+          "delegate_to_subagent": {
+            "launch_app": 1,
+            "unknown_or_complex": 12
+          },
+          "delete_file": {
+            "delete_file": 2,
+            "launch_app": 4,
+            "read_file": 6,
+            "take_screenshot": 1
+          },
+          "edit_file": {
+            "launch_app": 2,
+            "search_in_files": 11
+          },
+          "execute_python_code": {
+            "unknown_or_complex": 13
+          },
+          "execute_shell_command": {
+            "launch_app": 13
+          },
+          "focus_window": {
+            "focus_window": 216,
+            "launch_app": 118
+          },
+          "generate_image": {
+            "generate_image": 10,
+            "take_screenshot": 3
+          },
+          "get_calendar_events": {
+            "create_calendar_event": 10,
+            "launch_app": 3
+          },
+          "get_clipboard": {
+            "get_clipboard": 12,
+            "get_current_time": 1
+          },
+          "get_current_time": {
+            "get_current_time": 69,
+            "launch_app": 4,
+            "unknown_or_complex": 5
+          },
+          "get_running_apps": {
+            "get_current_time": 2,
+            "get_running_apps": 50,
+            "get_weather": 7,
+            "launch_app": 4,
+            "unknown_or_complex": 2
+          },
+          "get_screen_status": {
+            "launch_app": 3,
+            "take_screenshot": 10
+          },
+          "get_weather": {
+            "get_weather": 336,
+            "launch_app": 2
+          },
+          "launch_app": {
+            "launch_app": 107
+          },
+          "list_directory": {
+            "get_weather": 2,
+            "read_file": 9,
+            "unknown_or_complex": 2
+          },
+          "list_scheduled_tasks": {
+            "get_running_apps": 12,
+            "unknown_or_complex": 1
+          },
+          "mcp_call": {
+            "launch_app": 4,
+            "mcp_call": 2,
+            "unknown_or_complex": 7
+          },
+          "move_file": {
+            "move_file": 2,
+            "search_in_files": 7,
+            "take_screenshot": 1,
+            "unknown_or_complex": 3
+          },
+          "play_youtube": {
+            "play_youtube": 221
+          },
+          "read_emails": {
+            "focus_window": 1,
+            "get_running_apps": 8,
+            "launch_app": 2,
+            "unknown_or_complex": 2
+          },
+          "read_file": {
+            "unknown_or_complex": 13
+          },
+          "run_agent_task": {
+            "launch_app": 2,
+            "unknown_or_complex": 11
+          },
+          "schedule_task": {
+            "get_weather": 1,
+            "launch_app": 1,
+            "schedule_task": 8,
+            "take_screenshot": 2,
+            "unknown_or_complex": 1
+          },
+          "search_in_files": {
+            "search_in_files": 1,
+            "web_search": 3,
+            "unknown_or_complex": 9
+          },
+          "send_email": {
+            "launch_app": 1,
+            "send_email": 3,
+            "unknown_or_complex": 9
+          },
+          "set_clipboard": {
+            "get_clipboard": 13
+          },
+          "set_timer": {
+            "get_current_time": 16,
+            "launch_app": 15,
+            "set_timer": 293,
+            "unknown_or_complex": 1
+          },
+          "shutdown_computer": {
+            "adjust_volume": 2,
+            "launch_app": 1,
+            "shutdown_computer": 10
+          },
+          "take_screenshot": {
+            "take_screenshot": 65
+          },
+          "web_fetch": {
+            "get_clipboard": 1,
+            "get_current_time": 1,
+            "get_weather": 3,
+            "read_file": 8
+          },
+          "web_search": {
+            "get_weather": 2,
+            "search_in_files": 8,
+            "web_search": 5,
+            "unknown_or_complex": 11
+          },
+          "write_file": {
+            "read_file": 1,
+            "take_screenshot": 10,
+            "unknown_or_complex": 2
+          },
+          "unknown_or_complex": {
+            "focus_window": 1,
+            "get_calendar_events": 11,
+            "get_current_time": 11,
+            "get_weather": 4,
+            "launch_app": 26,
+            "send_email": 13,
+            "unknown_or_complex": 65
+          }
+        }
+      },
       "with_direct_policy_gate": {
         "count": 2607,
         "accuracy": 0.7786728039892596,
-        "selected_count": 985,
-        "coverage": 0.3778289221327196,
+        "selected_count": 21,
+        "coverage": 0.00805523590333717,
         "selective_accuracy": 1.0,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
@@ -1264,11 +1539,251 @@
           "unknown_or_complex": 52
         }
       },
+      "with_candidate_policy_gate": {
+        "count": 2095,
+        "accuracy": 0.8620525059665871,
+        "selected_count": 188,
+        "coverage": 0.08973747016706445,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.05083477696156045,
+        "brier": 0.18368842856492623,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 0,
+            "accuracy": null,
+            "confidence": null
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 53,
+            "accuracy": 0.3018867924528302,
+            "confidence": 0.16440212534065782
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 110,
+            "accuracy": 0.11818181818181818,
+            "confidence": 0.24701230365286173
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 91,
+            "accuracy": 0.37362637362637363,
+            "confidence": 0.349044679551325
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 101,
+            "accuracy": 0.6138613861386139,
+            "confidence": 0.4516899131133048
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 75,
+            "accuracy": 0.64,
+            "confidence": 0.5475285830386635
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 79,
+            "accuracy": 0.810126582278481,
+            "confidence": 0.6499704114499117
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 75,
+            "accuracy": 0.9466666666666667,
+            "confidence": 0.7535220763307362
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 134,
+            "accuracy": 0.9626865671641791,
+            "confidence": 0.8570107798957044
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1377,
+            "accuracy": 0.9941902687000727,
+            "confidence": 0.9809800504701555
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 74
+          },
+          "analyze_image_file": {
+            "get_weather": 6,
+            "read_file": 7
+          },
+          "analyze_screenshot": {
+            "focus_window": 10,
+            "take_screenshot": 3
+          },
+          "api_call": {
+            "adjust_volume": 12
+          },
+          "cancel_scheduled_task": {
+            "cancel_timer": 10,
+            "launch_app": 1,
+            "schedule_task": 1
+          },
+          "cancel_timer": {
+            "cancel_timer": 257,
+            "get_current_time": 1,
+            "launch_app": 2
+          },
+          "close_app": {
+            "close_app": 11
+          },
+          "create_calendar_event": {
+            "get_calendar_events": 11
+          },
+          "delegate_to_subagent": {
+            "unknown_or_complex": 11
+          },
+          "delete_file": {
+            "delete_file": 5,
+            "list_directory": 5,
+            "search_in_files": 3
+          },
+          "edit_file": {
+            "read_file": 13
+          },
+          "execute_python_code": {
+            "execute_python_code": 11
+          },
+          "execute_shell_command": {
+            "execute_shell_command": 9,
+            "launch_app": 1,
+            "unknown_or_complex": 3
+          },
+          "focus_window": {
+            "focus_window": 298
+          },
+          "generate_image": {
+            "generate_image": 12
+          },
+          "get_calendar_events": {
+            "create_calendar_event": 13
+          },
+          "get_clipboard": {
+            "get_clipboard": 12
+          },
+          "get_current_time": {
+            "get_current_time": 47
+          },
+          "get_running_apps": {
+            "get_running_apps": 59,
+            "unknown_or_complex": 1
+          },
+          "get_screen_status": {
+            "focus_window": 10,
+            "launch_app": 3
+          },
+          "get_weather": {
+            "get_calendar_events": 1,
+            "get_weather": 233
+          },
+          "launch_app": {
+            "launch_app": 99
+          },
+          "list_directory": {
+            "get_clipboard": 9,
+            "unknown_or_complex": 2
+          },
+          "list_scheduled_tasks": {
+            "cancel_scheduled_task": 4,
+            "list_scheduled_tasks": 3,
+            "schedule_task": 1,
+            "take_screenshot": 5
+          },
+          "mcp_call": {
+            "mcp_call": 11
+          },
+          "move_file": {
+            "move_file": 13
+          },
+          "play_youtube": {
+            "play_youtube": 212
+          },
+          "read_emails": {
+            "adjust_volume": 1,
+            "read_emails": 1,
+            "send_email": 10
+          },
+          "read_file": {
+            "search_in_files": 1,
+            "unknown_or_complex": 11
+          },
+          "run_agent_task": {
+            "run_agent_task": 13
+          },
+          "schedule_task": {
+            "schedule_task": 11
+          },
+          "search_in_files": {
+            "list_directory": 8,
+            "web_search": 4
+          },
+          "send_email": {
+            "send_email": 6,
+            "unknown_or_complex": 6
+          },
+          "set_clipboard": {
+            "get_clipboard": 12
+          },
+          "set_timer": {
+            "set_timer": 253
+          },
+          "shutdown_computer": {
+            "shutdown_computer": 13
+          },
+          "take_screenshot": {
+            "take_screenshot": 59
+          },
+          "web_fetch": {
+            "write_file": 13
+          },
+          "web_search": {
+            "get_weather": 2,
+            "web_search": 22
+          },
+          "write_file": {
+            "read_file": 2,
+            "write_file": 10
+          },
+          "unknown_or_complex": {
+            "focus_window": 12,
+            "get_calendar_events": 8,
+            "get_current_time": 1,
+            "get_running_apps": 7,
+            "get_weather": 18,
+            "launch_app": 2,
+            "search_in_files": 9,
+            "write_file": 13,
+            "unknown_or_complex": 52
+          }
+        }
+      },
       "with_direct_policy_gate": {
         "count": 2095,
         "accuracy": 0.8620525059665871,
-        "selected_count": 1236,
-        "coverage": 0.5899761336515513,
+        "selected_count": 17,
+        "coverage": 0.008114558472553698,
         "selective_accuracy": 1.0,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
@@ -1761,11 +2276,268 @@
           "unknown_or_complex": 53
         }
       },
+      "with_candidate_policy_gate": {
+        "count": 2515,
+        "accuracy": 0.8226640159045726,
+        "selected_count": 160,
+        "coverage": 0.0636182902584493,
+        "selective_accuracy": 1.0,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.054939198610044246,
+        "brier": 0.24378959382900667,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 13,
+            "accuracy": 0.5384615384615384,
+            "confidence": 0.0894283468756944
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 179,
+            "accuracy": 0.22905027932960895,
+            "confidence": 0.15980305165335973
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 163,
+            "accuracy": 0.31901840490797545,
+            "confidence": 0.24910849891824674
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 120,
+            "accuracy": 0.49166666666666664,
+            "confidence": 0.34857259876697333
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 117,
+            "accuracy": 0.5641025641025641,
+            "confidence": 0.4480978902424098
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 92,
+            "accuracy": 0.6630434782608695,
+            "confidence": 0.5488004263376368
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 101,
+            "accuracy": 0.801980198019802,
+            "confidence": 0.6489934273140378
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 122,
+            "accuracy": 0.8360655737704918,
+            "confidence": 0.7453725916414758
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 152,
+            "accuracy": 0.9473684210526315,
+            "confidence": 0.8542936549120682
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1456,
+            "accuracy": 1.0,
+            "confidence": 0.9817126945725656
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 71,
+            "launch_app": 9
+          },
+          "analyze_image_file": {
+            "focus_window": 3,
+            "launch_app": 3,
+            "read_emails": 5,
+            "read_file": 3
+          },
+          "analyze_screenshot": {
+            "get_screen_status": 1,
+            "take_screenshot": 9,
+            "unknown_or_complex": 3
+          },
+          "api_call": {
+            "unknown_or_complex": 13
+          },
+          "cancel_scheduled_task": {
+            "cancel_scheduled_task": 13
+          },
+          "cancel_timer": {
+            "cancel_timer": 379,
+            "get_weather": 1,
+            "launch_app": 9,
+            "set_timer": 3
+          },
+          "close_app": {
+            "close_app": 12,
+            "launch_app": 1
+          },
+          "create_calendar_event": {
+            "get_calendar_events": 13
+          },
+          "delegate_to_subagent": {
+            "delegate_to_subagent": 13
+          },
+          "delete_file": {
+            "delete_file": 9,
+            "list_directory": 4
+          },
+          "edit_file": {
+            "read_file": 13
+          },
+          "execute_python_code": {
+            "unknown_or_complex": 13
+          },
+          "execute_shell_command": {
+            "execute_shell_command": 13
+          },
+          "focus_window": {
+            "focus_window": 324
+          },
+          "generate_image": {
+            "launch_app": 1,
+            "take_screenshot": 9,
+            "unknown_or_complex": 4
+          },
+          "get_calendar_events": {
+            "get_calendar_events": 13
+          },
+          "get_clipboard": {
+            "get_clipboard": 13
+          },
+          "get_current_time": {
+            "get_current_time": 59,
+            "launch_app": 2
+          },
+          "get_running_apps": {
+            "get_running_apps": 59,
+            "unknown_or_complex": 3
+          },
+          "get_screen_status": {
+            "adjust_volume": 1,
+            "get_weather": 3,
+            "launch_app": 7,
+            "play_youtube": 1,
+            "unknown_or_complex": 1
+          },
+          "get_weather": {
+            "get_running_apps": 1,
+            "get_weather": 301,
+            "launch_app": 1,
+            "take_screenshot": 5,
+            "unknown_or_complex": 6
+          },
+          "launch_app": {
+            "launch_app": 104
+          },
+          "list_directory": {
+            "list_directory": 3,
+            "unknown_or_complex": 10
+          },
+          "list_scheduled_tasks": {
+            "launch_app": 2,
+            "list_directory": 1,
+            "unknown_or_complex": 10
+          },
+          "mcp_call": {
+            "get_weather": 1,
+            "mcp_call": 10,
+            "unknown_or_complex": 3
+          },
+          "move_file": {
+            "move_file": 13
+          },
+          "play_youtube": {
+            "play_youtube": 237
+          },
+          "read_emails": {
+            "get_running_apps": 1,
+            "get_weather": 5,
+            "launch_app": 4,
+            "read_emails": 4
+          },
+          "read_file": {
+            "launch_app": 11,
+            "unknown_or_complex": 2
+          },
+          "run_agent_task": {
+            "adjust_volume": 9,
+            "get_current_time": 1,
+            "get_weather": 3,
+            "launch_app": 1
+          },
+          "schedule_task": {
+            "schedule_task": 13
+          },
+          "search_in_files": {
+            "list_directory": 1,
+            "unknown_or_complex": 12
+          },
+          "send_email": {
+            "send_email": 13
+          },
+          "set_clipboard": {
+            "get_clipboard": 14
+          },
+          "set_timer": {
+            "cancel_timer": 1,
+            "get_weather": 11,
+            "launch_app": 64,
+            "set_timer": 248,
+            "unknown_or_complex": 9
+          },
+          "shutdown_computer": {
+            "shutdown_computer": 13
+          },
+          "take_screenshot": {
+            "take_screenshot": 66
+          },
+          "web_fetch": {
+            "get_current_time": 1,
+            "unknown_or_complex": 12
+          },
+          "web_search": {
+            "web_search": 13,
+            "unknown_or_complex": 13
+          },
+          "write_file": {
+            "read_file": 13
+          },
+          "unknown_or_complex": {
+            "adjust_volume": 1,
+            "get_calendar_events": 1,
+            "get_current_time": 10,
+            "get_weather": 8,
+            "launch_app": 32,
+            "send_email": 14,
+            "take_screenshot": 14,
+            "unknown_or_complex": 53
+          }
+        }
+      },
       "with_direct_policy_gate": {
         "count": 2515,
         "accuracy": 0.8226640159045726,
-        "selected_count": 1335,
-        "coverage": 0.5308151093439364,
+        "selected_count": 13,
+        "coverage": 0.005168986083499006,
         "selective_accuracy": 1.0,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
@@ -5227,11 +5999,350 @@
       }
     }
   },
+  "parser_rejected_count": 423,
+  "with_candidate_policy_gate": {
+    "count": 7217,
+    "accuracy": 0.8182070112235,
+    "selected_count": 474,
+    "coverage": 0.06567825966468062,
+    "selective_accuracy": 1.0,
+    "false_direct_count": 0,
+    "unknown_false_accept_count": 0,
+    "ece": 0.052435419454851175,
+    "brier": 0.24377057070185207,
+    "reliability_bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.1,
+        "count": 21,
+        "accuracy": 0.47619047619047616,
+        "confidence": 0.08906721869369219
+      },
+      {
+        "lower": 0.1,
+        "upper": 0.2,
+        "count": 347,
+        "accuracy": 0.2334293948126801,
+        "confidence": 0.16151510586560372
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.3,
+        "count": 488,
+        "accuracy": 0.2540983606557377,
+        "confidence": 0.24888154207380214
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.4,
+        "count": 383,
+        "accuracy": 0.4412532637075718,
+        "confidence": 0.34874798382658373
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.5,
+        "count": 378,
+        "accuracy": 0.5529100529100529,
+        "confidence": 0.45155724220969173
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.6,
+        "count": 354,
+        "accuracy": 0.6242937853107344,
+        "confidence": 0.5480920218981681
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.7,
+        "count": 387,
+        "accuracy": 0.8036175710594315,
+        "confidence": 0.6494798332110541
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.8,
+        "count": 402,
+        "accuracy": 0.8706467661691543,
+        "confidence": 0.748753082360192
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.9,
+        "count": 519,
+        "accuracy": 0.9653179190751445,
+        "confidence": 0.8550361420536243
+      },
+      {
+        "lower": 0.9,
+        "upper": 1.0,
+        "count": 3938,
+        "accuracy": 0.9977145759268664,
+        "confidence": 0.9783667721011399
+      }
+    ],
+    "confusion_matrix": {
+      "adjust_volume": {
+        "adjust_volume": 235,
+        "launch_app": 10
+      },
+      "analyze_image_file": {
+        "focus_window": 13,
+        "get_weather": 6,
+        "launch_app": 3,
+        "read_emails": 5,
+        "read_file": 10,
+        "take_screenshot": 2,
+        "unknown_or_complex": 1
+      },
+      "analyze_screenshot": {
+        "analyze_screenshot": 1,
+        "focus_window": 10,
+        "get_screen_status": 1,
+        "take_screenshot": 24,
+        "unknown_or_complex": 3
+      },
+      "api_call": {
+        "adjust_volume": 12,
+        "api_call": 11,
+        "launch_app": 2,
+        "unknown_or_complex": 13
+      },
+      "cancel_scheduled_task": {
+        "cancel_scheduled_task": 15,
+        "cancel_timer": 10,
+        "launch_app": 1,
+        "schedule_task": 12
+      },
+      "cancel_timer": {
+        "cancel_timer": 1071,
+        "get_current_time": 1,
+        "get_weather": 2,
+        "launch_app": 12,
+        "set_timer": 4,
+        "unknown_or_complex": 10
+      },
+      "close_app": {
+        "close_app": 37,
+        "launch_app": 1
+      },
+      "create_calendar_event": {
+        "get_calendar_events": 24,
+        "launch_app": 2,
+        "unknown_or_complex": 11
+      },
+      "delegate_to_subagent": {
+        "delegate_to_subagent": 13,
+        "launch_app": 1,
+        "unknown_or_complex": 23
+      },
+      "delete_file": {
+        "delete_file": 16,
+        "launch_app": 4,
+        "list_directory": 9,
+        "read_file": 6,
+        "search_in_files": 3,
+        "take_screenshot": 1
+      },
+      "edit_file": {
+        "launch_app": 2,
+        "read_file": 26,
+        "search_in_files": 11
+      },
+      "execute_python_code": {
+        "execute_python_code": 11,
+        "unknown_or_complex": 26
+      },
+      "execute_shell_command": {
+        "execute_shell_command": 22,
+        "launch_app": 14,
+        "unknown_or_complex": 3
+      },
+      "focus_window": {
+        "focus_window": 838,
+        "launch_app": 118
+      },
+      "generate_image": {
+        "generate_image": 22,
+        "launch_app": 1,
+        "take_screenshot": 12,
+        "unknown_or_complex": 4
+      },
+      "get_calendar_events": {
+        "create_calendar_event": 23,
+        "get_calendar_events": 13,
+        "launch_app": 3
+      },
+      "get_clipboard": {
+        "get_clipboard": 37,
+        "get_current_time": 1
+      },
+      "get_current_time": {
+        "get_current_time": 175,
+        "launch_app": 6,
+        "unknown_or_complex": 5
+      },
+      "get_running_apps": {
+        "get_current_time": 2,
+        "get_running_apps": 168,
+        "get_weather": 7,
+        "launch_app": 4,
+        "unknown_or_complex": 6
+      },
+      "get_screen_status": {
+        "adjust_volume": 1,
+        "focus_window": 10,
+        "get_weather": 3,
+        "launch_app": 13,
+        "play_youtube": 1,
+        "take_screenshot": 10,
+        "unknown_or_complex": 1
+      },
+      "get_weather": {
+        "get_calendar_events": 1,
+        "get_running_apps": 1,
+        "get_weather": 870,
+        "launch_app": 3,
+        "take_screenshot": 5,
+        "unknown_or_complex": 6
+      },
+      "launch_app": {
+        "launch_app": 310
+      },
+      "list_directory": {
+        "get_clipboard": 9,
+        "get_weather": 2,
+        "list_directory": 3,
+        "read_file": 9,
+        "unknown_or_complex": 14
+      },
+      "list_scheduled_tasks": {
+        "cancel_scheduled_task": 4,
+        "get_running_apps": 12,
+        "launch_app": 2,
+        "list_directory": 1,
+        "list_scheduled_tasks": 3,
+        "schedule_task": 1,
+        "take_screenshot": 5,
+        "unknown_or_complex": 11
+      },
+      "mcp_call": {
+        "get_weather": 1,
+        "launch_app": 4,
+        "mcp_call": 23,
+        "unknown_or_complex": 10
+      },
+      "move_file": {
+        "move_file": 28,
+        "search_in_files": 7,
+        "take_screenshot": 1,
+        "unknown_or_complex": 3
+      },
+      "play_youtube": {
+        "play_youtube": 670
+      },
+      "read_emails": {
+        "adjust_volume": 1,
+        "focus_window": 1,
+        "get_running_apps": 9,
+        "get_weather": 5,
+        "launch_app": 6,
+        "read_emails": 5,
+        "send_email": 10,
+        "unknown_or_complex": 2
+      },
+      "read_file": {
+        "launch_app": 11,
+        "search_in_files": 1,
+        "unknown_or_complex": 26
+      },
+      "run_agent_task": {
+        "adjust_volume": 9,
+        "get_current_time": 1,
+        "get_weather": 3,
+        "launch_app": 3,
+        "run_agent_task": 13,
+        "unknown_or_complex": 11
+      },
+      "schedule_task": {
+        "get_weather": 1,
+        "launch_app": 1,
+        "schedule_task": 32,
+        "take_screenshot": 2,
+        "unknown_or_complex": 1
+      },
+      "search_in_files": {
+        "list_directory": 9,
+        "search_in_files": 1,
+        "web_search": 7,
+        "unknown_or_complex": 21
+      },
+      "send_email": {
+        "launch_app": 1,
+        "send_email": 22,
+        "unknown_or_complex": 15
+      },
+      "set_clipboard": {
+        "get_clipboard": 39
+      },
+      "set_timer": {
+        "cancel_timer": 1,
+        "get_current_time": 16,
+        "get_weather": 11,
+        "launch_app": 79,
+        "set_timer": 794,
+        "unknown_or_complex": 10
+      },
+      "shutdown_computer": {
+        "adjust_volume": 2,
+        "launch_app": 1,
+        "shutdown_computer": 36
+      },
+      "take_screenshot": {
+        "take_screenshot": 190
+      },
+      "web_fetch": {
+        "get_clipboard": 1,
+        "get_current_time": 2,
+        "get_weather": 3,
+        "read_file": 8,
+        "write_file": 13,
+        "unknown_or_complex": 12
+      },
+      "web_search": {
+        "get_weather": 4,
+        "search_in_files": 8,
+        "web_search": 40,
+        "unknown_or_complex": 24
+      },
+      "write_file": {
+        "read_file": 16,
+        "take_screenshot": 10,
+        "write_file": 10,
+        "unknown_or_complex": 2
+      },
+      "unknown_or_complex": {
+        "adjust_volume": 1,
+        "focus_window": 13,
+        "get_calendar_events": 20,
+        "get_current_time": 22,
+        "get_running_apps": 7,
+        "get_weather": 30,
+        "launch_app": 60,
+        "search_in_files": 9,
+        "send_email": 27,
+        "take_screenshot": 14,
+        "write_file": 13,
+        "unknown_or_complex": 170
+      }
+    }
+  },
   "with_direct_policy_gate": {
     "count": 7217,
     "accuracy": 0.8182070112235,
-    "selected_count": 3556,
-    "coverage": 0.492725509214355,
+    "selected_count": 51,
+    "coverage": 0.007066648191769434,
     "selective_accuracy": 1.0,
     "false_direct_count": 0,
     "unknown_false_accept_count": 0,
@@ -5575,7 +6686,14 @@
   "family_with_direct_policy_gate": {
     "family_count": 77,
     "family_top1_accuracy": 0.6307555932279577,
-    "family_coverage": 0.44155844155844154,
+    "family_coverage": 0.11688311688311688,
+    "family_selective_accuracy": 1.0,
+    "family_false_direct": 0
+  },
+  "family_with_candidate_policy_gate": {
+    "family_count": 77,
+    "family_top1_accuracy": 0.6307555932279577,
+    "family_coverage": 0.2077922077922078,
     "family_selective_accuracy": 1.0,
     "family_false_direct": 0
   },
@@ -5589,6 +6707,84 @@
     "accuracy_by_language": 0.8211297752868064,
     "direct_precision": 1.0
   },
+  "macro_with_candidate_policy_gate": {
+    "accuracy_by_label": 0.493593507754727,
+    "accuracy_by_language": 0.8211297752868064,
+    "direct_precision": 1.0
+  },
   "direct_executions": 0,
-  "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a"
+  "provenance": {
+    "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
+    "model_config_sha256": "ec970c6c09022659552f9a26bbb9c4581b542f3698d1271edf526d1229cc7dab",
+    "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
+    "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
+    "parser_sha256": "acf7d2f75a43cd0a1dbb3d0ad4efab7e7184facb93d3301ebfdd7899be89a53f",
+    "engine_sha256": "01878103bf1f114afb04f1cde6bd8c10dbaaa652fa49431b8280709750caa0e0",
+    "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
+    "runtime_settings_sha256": "c3f03d0dbd29d3340a04770b41d28a5e7eab45d02b45e5db7c573e31b574a95a",
+    "settings_schema_sha256": "f29827c37b1f2768b78d1ce113602243ccb8f13ccf6e0e8a606d8124bb159196",
+    "split_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
+    "gold_dataset_version": "decision-gold-v1",
+    "gold_dataset_sha256": "7b405930ac925557e8b85e15c90807b4db29e7e8b7da6efa93a7e4183457239b"
+  },
+  "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
+  "confusion_comparison": {
+    "scope": "classifier_top1",
+    "previous_artifact_sha256": "574013d5c1a3ccf55f10c56cf4aef98ce70288c6d2a8c9353d3439a135d21dec",
+    "major_pairs": [
+      {
+        "actual": "focus_window",
+        "predicted": "launch_app",
+        "count": 118
+      },
+      {
+        "actual": "set_timer",
+        "predicted": "launch_app",
+        "count": 79
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "launch_app",
+        "count": 60
+      },
+      {
+        "actual": "set_clipboard",
+        "predicted": "get_clipboard",
+        "count": 39
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "get_weather",
+        "count": 30
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "send_email",
+        "count": 27
+      },
+      {
+        "actual": "edit_file",
+        "predicted": "read_file",
+        "count": 26
+      },
+      {
+        "actual": "execute_python_code",
+        "predicted": "unknown_or_complex",
+        "count": 26
+      },
+      {
+        "actual": "read_file",
+        "predicted": "unknown_or_complex",
+        "count": 26
+      },
+      {
+        "actual": "analyze_screenshot",
+        "predicted": "take_screenshot",
+        "count": 24
+      }
+    ],
+    "top_10_worsened_pairs": []
+  }
 }

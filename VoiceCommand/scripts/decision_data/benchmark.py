@@ -8,6 +8,7 @@ import platform
 import time
 
 import psutil
+from .provenance import artifact_fingerprints
 
 
 def benchmark(model_dir: Path, iterations: int = 1000) -> dict:
@@ -46,6 +47,7 @@ def benchmark(model_dir: Path, iterations: int = 1000) -> dict:
         "resource_bytes": sum(path.stat().st_size for path in model_dir.iterdir() if path.is_file()),
         "gpu_used": False,
         "model_sha256": scorer.sha256,
+        "provenance": artifact_fingerprints(model_dir),
         "rss_scope": "Fresh process: baseline after psutil, before NumPy and runtime import; OS peak if available",
     }
 

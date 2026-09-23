@@ -155,6 +155,27 @@ def manifest_drift(
     }
 
 
+def baseline_manifest_drift(
+    current: dict[str, str] | None = None,
+    baseline: dict[str, str] | None = None,
+) -> dict[str, list[str]]:
+    """Compare current placements with the pinned historical family mapping."""
+
+    current = load_manifest() if current is None else dict(current)
+    baseline = (
+        load_manifest(Path(__file__).with_name("split_manifest_baseline.json"))
+        if baseline is None else dict(baseline)
+    )
+    return {
+        "moved": sorted(
+            family for family in baseline.keys() & current.keys()
+            if baseline[family] != current[family]
+        ),
+        "removed": sorted(baseline.keys() - current.keys()),
+        "added": sorted(current.keys() - baseline.keys()),
+    }
+
+
 def validate_manifest(
     rows: Iterable[dict], manifest: dict[str, str] | None = None
 ) -> None:

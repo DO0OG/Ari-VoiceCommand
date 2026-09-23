@@ -27,9 +27,15 @@ class DecisionMetricsTests(unittest.TestCase):
         with patch("scripts.decision_data.evaluate.build_examples", return_value=(rows, {})):
             with patch("scripts.decision_data.evaluate.LinearScorer", return_value=scorer):
                 with patch("scripts.decision_data.evaluate.get_llm_router", return_value=router):
-                    result = evaluate(Path("unused"))
+                    with patch(
+                        "scripts.decision_data.evaluate.artifact_fingerprints",
+                        return_value={"model_sha256": "fixture"},
+                    ):
+                        result = evaluate(Path("unused"))
         self.assertEqual(result["overall"]["selected_count"], 2)
-        self.assertEqual(result["with_direct_policy_gate"]["selected_count"], 1)
+        self.assertEqual(result["with_candidate_policy_gate"]["selected_count"], 1)
+        self.assertEqual(result["with_direct_policy_gate"]["selected_count"], 0)
+        self.assertEqual(result["parser_rejected_count"], 1)
         self.assertEqual(result["with_direct_policy_gate"]["false_direct_count"], 0)
         self.assertEqual(result["direct_executions"], 0)
 
