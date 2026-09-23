@@ -105,6 +105,22 @@ class PluginSystemTests(unittest.TestCase):
         self.assertEqual(events[0][1]["command_type"], "dummy")
         self.assertEqual(events[0][1]["response"], "ok")
 
+    def test_command_registry_log_does_not_contain_user_text(self):
+        spoken = "private phrase 4821"
+
+        class _PrivateCommand(_DummyCommand):
+            def matches(self, text: str) -> bool:
+                return text == spoken
+
+        registry = CommandRegistry(None, object(), object(), lambda *_: None, lambda *_: None, {"enabled": False})
+        registry.register_command(_PrivateCommand())
+
+        with self.assertLogs(level="INFO") as captured:
+            registry.execute(spoken)
+
+        self.assertTrue(any("_PrivateCommand" in line for line in captured.output))
+        self.assertFalse(any(spoken in line for line in captured.output))
+
     def test_llm_provider_register_plugin_tool_extends_tools(self):
         provider = LLMProvider()
         provider.register_plugin_tool(

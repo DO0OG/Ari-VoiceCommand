@@ -134,7 +134,7 @@ class AriCore(QObject):
             self.voice_thread.set_microphone(None)
 
     def handle_voice_result(self, text):
-        logging.info(f"인식된 명령: {text}")
+        logging.info("인식된 명령 수신 (%d자)", len(text or ""))
         self.command_thread.execute(text)
 
     def cleanup(self):
