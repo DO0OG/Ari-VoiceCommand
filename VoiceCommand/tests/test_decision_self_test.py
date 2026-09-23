@@ -5,9 +5,20 @@ import unittest
 from pathlib import Path
 
 from agent.decision.self_test import run_self_test
+from scripts.compile_po import compile_po
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "resources" / "decision"
+
+
+def _compiled_locales(directory: str) -> Path:
+    locales = Path(directory) / "locales"
+    for language in ("ko", "en", "ja"):
+        target = locales / language / "LC_MESSAGES"
+        target.mkdir(parents=True)
+        source = ROOT / "i18n" / "locales" / language / "LC_MESSAGES" / "ari.po"
+        compile_po(str(source), str(target / "ari.mo"))
+    return locales
 
 
 class DecisionSelfTestTests(unittest.TestCase):
@@ -15,13 +26,24 @@ class DecisionSelfTestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "report.json"
 
-            self.assertEqual(run_self_test(str(output), MODEL_DIR), 0)
+            self.assertEqual(run_self_test(str(output), MODEL_DIR, _compiled_locales(directory)), 0)
             report = json.loads(output.read_text(encoding="utf-8"))
 
         config = json.loads((MODEL_DIR / "config.json").read_text(encoding="utf-8"))
         self.assertTrue(report["ok"])
         self.assertEqual(report["sha256"], config["sha256"])
         self.assertTrue(all(row["choice"] == row["expected"] for row in report["predictions"]))
+        self.assertEqual(report["translations"], {"en": True, "ja": True})
+
+    def test_missing_compiled_translations_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "report.json"
+            # Only the .po sources, as in a clean checkout before compile_po runs.
+            self.assertEqual(run_self_test(str(output), MODEL_DIR, Path(directory) / "empty"), 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["translations"], {"en": False, "ja": False})
 
     def test_corrupt_weights_fail_with_error(self):
         with tempfile.TemporaryDirectory() as directory:

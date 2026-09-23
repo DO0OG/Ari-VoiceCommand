@@ -46,11 +46,16 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe -m scripts.decision_data.acceptance
 
+      # .mo files are not committed; without this step the EXE ships untranslated.
+      - name: Compile translations
+        working-directory: VoiceCommand
+        run: .venv\Scripts\python.exe scripts\compile_po.py
+
       - name: Build EXE (Standalone Folder)
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe build_exe.py --clean
 
-      - name: Smoke test bundled decision model
+      - name: Smoke test bundled decision model and translations
         working-directory: VoiceCommand
         shell: pwsh
         timeout-minutes: 5
