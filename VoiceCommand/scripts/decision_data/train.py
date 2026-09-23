@@ -28,7 +28,9 @@ def fit_temperature(logits: np.ndarray, targets: np.ndarray) -> float:
 
 
 def fit_linear(
-    rows: list[dict], *, buckets: int = 8192, epochs: int = 160, augment: bool = False
+    rows: list[dict], *, buckets: int = 8192, epochs: int = 160,
+    augment: bool = False,
+    sample_weights: np.ndarray | None = None,
 ):
     """Fit on clean train rows plus optional train-only generated variants."""
     validate_no_gold_rows(rows)
@@ -44,6 +46,28 @@ def fit_linear(
     ]
     if not train or not calibration:
         raise ValueError("train and clean calibration partitions must not be empty")
+    if sample_weights is not None:
+        sample_weights = np.asarray(sample_weights, dtype=np.float64)
+        if (
+            sample_weights.shape != (len(train),)
+            or not np.isfinite(sample_weights).all()
+            or (sample_weights <= 0).any()
+        ):
+            raise ValueError(
+                "sample_weights must be finite, positive, and match the selected train rows"
+        )
+        scaled_weights = sample_weights / sample_weights.max()
+        mean_weight = scaled_weights.mean()
+        if (
+            not np.isfinite(scaled_weights).all()
+            or (scaled_weights <= 0).any()
+            or not np.isfinite(mean_weight)
+            or mean_weight <= 0
+        ):
+            raise ValueError("sample_weights cannot be normalized to positive float32 values")
+        sample_weights = (scaled_weights / mean_weight).astype(np.float32)
+        if not np.isfinite(sample_weights).all() or (sample_weights <= 0).any():
+            raise ValueError("sample_weights cannot be normalized to positive float32 values")
     features = [hash_features(row["text"], buckets) for row in train]
     targets = np.array([labels.index(row["label"]) for row in train])
     weights = np.zeros((len(labels), buckets), dtype=np.float32)
@@ -57,6 +81,8 @@ def fit_linear(
             logits = (weights[:, indices] * values).sum(axis=1) + bias
             error = softmax(logits).astype(np.float32)
             error[targets[row]] -= 1
+            if sample_weights is not None:
+                error *= sample_weights[row]
             weights[:, indices] -= rate * error[:, None] * values
             bias -= rate * error
     logits = []
@@ -123,7 +149,7 @@ def main(argv=None) -> int:
     write_snapshot(Path(__file__).with_name("candidate_snapshot.json"))
     print(json.dumps({"temperature": temperature, "weights_bytes": weights_path.stat().st_size,
                       "output": str(output), "augmentation_enabled": args.augment,
-                      "used_rows": len(training_rows), "rows": manifest["split_counts"],
+                      "used_rows": len(training_rows(rows, args.augment)), "rows": manifest["split_counts"],
                       "labels": len(config["labels"])}))
     return 0
 
