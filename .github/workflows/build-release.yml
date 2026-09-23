@@ -42,6 +42,23 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe build_exe.py --clean
 
+      - name: Smoke test bundled decision model
+        working-directory: VoiceCommand
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $exe = @("dist\Ari\Ari.exe", "dist\Main.dist\Ari.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { throw "빌드된 실행 파일을 찾지 못했습니다." }
+          $report = Join-Path $env:RUNNER_TEMP "decision-self-test.json"
+          $proc = Start-Process -FilePath (Resolve-Path $exe) -ArgumentList @("--decision-self-test", $report) -PassThru
+          $null = $proc.Handle
+          if (-not $proc.WaitForExit(180000)) {
+            Stop-Process -Id $proc.Id -Force
+            throw "판단 모델 자체 검사가 시간 안에 끝나지 않았습니다."
+          }
+          if (Test-Path $report) { Get-Content $report -Encoding utf8 }
+          if ($proc.ExitCode -ne 0) { throw "판단 모델 자체 검사 실패 (exit $($proc.ExitCode))" }
+
       - name: Zip Artifact
         working-directory: VoiceCommand
         shell: pwsh
