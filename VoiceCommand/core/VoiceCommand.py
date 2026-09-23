@@ -461,7 +461,7 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
             logging.debug("[STT] 반복 오인식 무시: %r", text)
             return
         history.append(text)
-        logging.info("인식된 텍스트: %s", text)
+        logging.info("인식된 텍스트 수신 (%d자)", len(text))
         signal.emit(text)
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")

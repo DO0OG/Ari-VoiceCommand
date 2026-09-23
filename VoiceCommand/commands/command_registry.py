@@ -57,7 +57,7 @@ class CommandRegistry:
 
         for command in self.commands:
             if command.matches(text):
-                logging.info("[CommandRegistry] 매칭 명령: %s / 입력: %s", command.__class__.__name__, text)
+                logging.info("[CommandRegistry] 매칭 명령: %s", command.__class__.__name__)
                 # 명령어 유형 기록 (클래스 이름에서 'Command' 제외)
                 cmd_type = command.__class__.__name__.replace("Command", "").lstrip("_").lower()
                 try:

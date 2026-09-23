@@ -462,4 +462,10 @@ def main():
         logging.info("=== 앱 종료 완료 ===")
 
 if __name__ == "__main__":
+    # The release workflow runs the packaged executable with this flag to confirm
+    # the bundled decision model loads; the app is windowed, so it writes a file.
+    if len(sys.argv) == 3 and sys.argv[1] == "--decision-self-test":
+        from agent.decision.self_test import run_self_test
+
+        sys.exit(run_self_test(sys.argv[2]))
     main()

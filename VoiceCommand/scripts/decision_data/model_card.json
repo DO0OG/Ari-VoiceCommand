@@ -29,25 +29,25 @@
     "partition": "held_out_test",
     "row_count": 7217,
     "top1_accuracy": 0.8182070112235,
-    "parser_confirmed_selected_count": 51,
+    "parser_confirmed_selected_count": 308,
     "parser_confirmed_precision": 1.0,
     "parser_confirmed_precision_wilson95_lower": 0.9299533801014686,
     "false_direct_count": 0,
     "by_language": {
       "ko": {
-        "selected_count": 21,
+        "selected_count": 99,
         "selective_accuracy": 1.0,
         "selective_accuracy_wilson95_lower": 0.8453609810751531,
         "false_direct_count": 0
       },
       "en": {
-        "selected_count": 17,
+        "selected_count": 84,
         "selective_accuracy": 1.0,
         "selective_accuracy_wilson95_lower": 0.8156818649911483,
         "false_direct_count": 0
       },
       "ja": {
-        "selected_count": 13,
+        "selected_count": 125,
         "selective_accuracy": 1.0,
         "selective_accuracy_wilson95_lower": 0.7719046276458015,
         "false_direct_count": 0
@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1233389,
-    "additional_steady_rss_bytes": 17702912,
-    "warm_p95_ms": 0.07970500023475324,
+    "additional_steady_rss_bytes": 17195008,
+    "warm_p95_ms": 0.08772500013947135,
     "gpu_used": false
   },
   "review": {
@@ -108,7 +108,7 @@
     "model_config_sha256": "ec970c6c09022659552f9a26bbb9c4581b542f3698d1271edf526d1229cc7dab",
     "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
     "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
-    "parser_sha256": "acf7d2f75a43cd0a1dbb3d0ad4efab7e7184facb93d3301ebfdd7899be89a53f",
+    "parser_sha256": "6cb1a6f1dc8384bd76c0f5ebec49aae8fe9c8149f08fc516889ce9222591aa36",
     "engine_sha256": "01878103bf1f114afb04f1cde6bd8c10dbaaa652fa49431b8280709750caa0e0",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "c3f03d0dbd29d3340a04770b41d28a5e7eab45d02b45e5db7c573e31b574a95a",
