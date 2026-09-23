@@ -1,4 +1,6 @@
 import gettext
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -323,6 +325,26 @@ class SafeFastPathTests(unittest.TestCase):
                             self.assertEqual(self.command.run_interaction(sentence), failure)
         self.assistant.chat_with_tools.assert_not_called()
         self.assistant.feed_tool_result.assert_not_called()
+
+
+class DisabledEngineImportTests(unittest.TestCase):
+    def test_off_mode_does_not_import_numpy_or_the_engine(self):
+        script = "\n".join((
+            "import sys",
+            "from unittest.mock import patch",
+            "from commands.ai_command import AICommand",
+            "with patch('core.config_manager.ConfigManager.get',",
+            "           side_effect=lambda key, default=None: 'off' if key == 'local_decision_mode' else default):",
+            "    assert AICommand.try_fast_path(object(), 'volume up') is None",
+            "print('numpy' in sys.modules, 'agent.decision.engine' in sys.modules)",
+        ))
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "-c", script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", timeout=120, check=True,
+        )
+
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "False False")
 
 
 if __name__ == "__main__":
