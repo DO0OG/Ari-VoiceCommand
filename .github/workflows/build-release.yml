@@ -38,6 +38,10 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe validate_repo.py
 
+      - name: Validate decision release (release sample floors)
+        working-directory: VoiceCommand
+        run: .venv\Scripts\python.exe -m scripts.decision_data.validate_release --strict-release
+
       - name: Build EXE (Standalone Folder)
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe build_exe.py --clean

@@ -226,6 +226,8 @@ def check_artifacts(result: dict, data_dir: Path, model_dir: Path = MODEL_DIR) -
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=MODEL_DIR)
+    parser.add_argument("--strict-release", action="store_true",
+                        help="require the release sample floors instead of the development ones")
     args = parser.parse_args(argv)
 
     rows, _manifest = build_examples()
@@ -234,7 +236,7 @@ def main(argv=None) -> int:
     checks = {
         "model": check_model(args.model, rows, DATA_DIR / "candidate_snapshot.json"),
         "data": check_data(rows, gold_rows),
-        "metrics": check_metrics(result),
+        "metrics": check_metrics(result, strict_release=args.strict_release),
         "artifacts": check_artifacts(result, DATA_DIR, args.model),
     }
     for name, failures in checks.items():

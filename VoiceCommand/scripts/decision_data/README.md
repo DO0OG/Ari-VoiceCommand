@@ -27,6 +27,10 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
   언어별 선택 정확도 0.99 이상
 - `evaluation.json`, `benchmark_results.json`의 `model_sha256`과 평가 행 해시
 
+PR CI는 직접 처리 선택 수의 개발 하한(전체 50, 언어별 10)을 쓴다. 배포 빌드는
+`--strict-release`로 릴리즈 하한(전체 100, 언어별 30)을 요구하며, 넘지 못하면
+실행 파일을 만들기 전에 멈춘다.
+
 모델을 바꾸면 `evaluate`, `evaluate --gold`, `benchmark`를 다시 실행해 산출물을 함께
 커밋한다. 예비 자료 결과는 사람 검토 전이므로 판정에 쓰지 않는다.
 
