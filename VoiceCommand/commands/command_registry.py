@@ -95,7 +95,7 @@ class CommandRegistry:
             self._emit_event(
                 "command.executed",
                 {
-                    "input": "[redacted]",
+                    "input": text,
                     "command_type": cmd_type,
                     "command_class": command.__class__.__name__ if command else "",
                     "success": result.success,

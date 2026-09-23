@@ -1577,7 +1577,7 @@ class AICommand(BaseCommand):
                     logging.debug("대화 기록 저장 생략: %s", exc)
                 try:
                     from core.VoiceCommand import emit_plugin_event
-                    emit_plugin_event("on_voice_command", {"text": "[redacted]", "response": response})
+                    emit_plugin_event("on_voice_command", {"text": text, "response": response})
                 except Exception as exc:
                     logging.debug("음성 명령 이벤트 발행 생략: %s", exc)
 

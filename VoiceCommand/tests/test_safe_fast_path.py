@@ -189,16 +189,15 @@ class SafeFastPathTests(unittest.TestCase):
         self.assertNotIn(query, "\n".join(captured.output))
         self.handlers["web_search"].assert_called_once_with({"query": query})
 
-    def test_voice_command_event_keeps_shape_and_redacts_original_text(self):
+    def test_voice_command_event_preserves_original_text_and_shape(self):
         spoken = "private phrase 4821"
         self.command.run_interaction(spoken)
 
         self.events.assert_called_once()
         event_name, payload = self.events.call_args.args
         self.assertEqual(event_name, "on_voice_command")
-        self.assertEqual(payload["text"], "[redacted]")
+        self.assertEqual(payload["text"], spoken)
         self.assertEqual(payload["response"], "기존 응답")
-        self.assertNotIn(spoken, str(payload))
 
     def test_malformed_mcp_argument_log_omits_user_text(self):
         secret = "private phrase 4821"

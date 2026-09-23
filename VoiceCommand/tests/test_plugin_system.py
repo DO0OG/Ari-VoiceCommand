@@ -102,11 +102,11 @@ class PluginSystemTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(events[0][0], "command.executed")
-        self.assertEqual(events[0][1]["input"], "[redacted]")
+        self.assertEqual(events[0][1]["input"], "dummy")
         self.assertEqual(events[0][1]["command_type"], "dummy")
         self.assertEqual(events[0][1]["response"], "ok")
 
-    def test_command_event_redacts_text_but_user_memory_keeps_it(self):
+    def test_command_event_and_user_memory_keep_original_text(self):
         import unittest.mock
 
         spoken = "private phrase 4821"
@@ -132,8 +132,7 @@ class PluginSystemTests(unittest.TestCase):
             registry.execute(spoken)
 
         context.record_command.assert_called_once_with("private", {"input": spoken})
-        self.assertNotIn(spoken, repr(events[0][1]))
-        self.assertEqual(events[0][1]["input"], "[redacted]")
+        self.assertEqual(events[0][1]["input"], spoken)
 
     def test_command_registry_log_does_not_contain_user_text(self):
         spoken = "private phrase 4821"
