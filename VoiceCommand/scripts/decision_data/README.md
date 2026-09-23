@@ -94,10 +94,13 @@ bucket별 결과와 오선택 수가 들어 있다. Selective accuracy는 신뢰
 `local_decision_backend=linear`, `local_decision_threshold=0.92`가 기본값이다.
 `local_decision_mode`는 `off` / `shadow` / `fast` / `adaptive`이며 기본값은 `shadow`다.
 설정 키가 없거나 값이 잘못되어도 `shadow`로 처리한다. `off`는 분류를 건너뛴다.
-`local_decision_direct_execution=false`이며, true로 바꾸더라도 Phase 5의 인자 파서와
-안전 정책 검증 전에는 직접 실행하지 않는다. 판단은 메모리에만 보관하고 기존 호출을
-진행한다. 플래그를 끄면 분류 모듈을 로드하지 않는다. 위험 작업에 새 실행 경로를
-만들지 않는다. 직접 실행, 개인별 학습 및 실사용 발화 수집은 이번 범위에 포함하지 않는다.
+`local_decision_direct_execution` 기본값은 false다. 직접 처리는 모드가 `fast` 또는
+`adaptive`이고 이 설정이 true일 때만 열리며, 그때도 허용 후보(시간, 실행 앱 목록,
+스크린샷, 음량)이면서 의미 해석기가 인자와 의도를 확정하고 모순이나 남은 동작이
+없어야 한다. 하나라도 어긋나면 기존 호출을 진행한다. 직접 처리는 기존 처리기를
+그대로 호출하고 응답은 번역된 고정 문구를 쓰므로 대화 호출이 생기지 않는다.
+플래그를 끄면 분류 모듈을 로드하지 않는다. 위험 작업에 새 실행 경로를 만들지 않는다.
+개인별 학습 및 실사용 발화 수집은 이번 범위에 포함하지 않는다.
 
 ## 초기 기준선 기록
 
