@@ -91,12 +91,17 @@
     "gpu_used": false
   },
   "review": {
-    "gold_rows": 369,
-    "gold_status": [
+    "legacy_gold_rows": 369,
+    "legacy_gold_status": [
       "pending_human_review"
     ],
-    "release_approval": "pending_human_review",
-    "safety_corpus": "not_separated"
+    "release_gold_rows": 825,
+    "release_pending": 825,
+    "release_rejected": 0,
+    "safety_gold_rows": 300,
+    "safety_pending": 300,
+    "safety_rejected": 0,
+    "release_approval": "pending_human_review"
   },
   "limitations": [
     "The evaluation set is generated and does not represent microphone acceptance.",

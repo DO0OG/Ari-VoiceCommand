@@ -231,6 +231,39 @@ def confusion_comparison(current: dict, previous: dict | None, previous_sha256: 
     }
 
 
+def review_corpus_summary(data_dir: Path) -> dict:
+    """Count review states of the human-review corpora shipped next to the artifacts."""
+    summary = {}
+    for name in ("release_gold", "safety_gold"):
+        path = Path(data_dir) / f"{name}.jsonl"
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+        statuses = [json.loads(line).get("review_status") for line in lines if line.strip()]
+        summary[name] = {
+            "rows": len(statuses),
+            "pending": statuses.count("pending_human_review"),
+            "approved": statuses.count("human_approved"),
+            "rejected": statuses.count("human_rejected"),
+        }
+    return summary
+
+
+def _review_section(gold_rows: list, gold_status: list, corpora: dict) -> dict:
+    release, safety = corpora["release_gold"], corpora["safety_gold"]
+    complete = bool(release["rows"] and safety["rows"]
+                    and not release["pending"] and not safety["pending"])
+    return {
+        "legacy_gold_rows": len(gold_rows),
+        "legacy_gold_status": gold_status,
+        "release_gold_rows": release["rows"],
+        "release_pending": release["pending"],
+        "release_rejected": release["rejected"],
+        "safety_gold_rows": safety["rows"],
+        "safety_pending": safety["pending"],
+        "safety_rejected": safety["rejected"],
+        "release_approval": "human_review_complete" if complete else "pending_human_review",
+    }
+
+
 def build_model_card(result: dict, model_dir: Path, data_dir: Path) -> dict:
     config = json.loads((Path(model_dir) / "config.json").read_text(encoding="utf-8"))
     gold_rows = build_gold_examples()
@@ -322,12 +355,7 @@ def build_model_card(result: dict, model_dir: Path, data_dir: Path) -> dict:
             "warm_p95_ms": warm_ms.get("p95"),
             "gpu_used": benchmark.get("gpu_used"),
         },
-        "review": {
-            "gold_rows": len(gold_rows),
-            "gold_status": review_status,
-            "release_approval": "pending_human_review",
-            "safety_corpus": "not_separated",
-        },
+        "review": _review_section(gold_rows, review_status, review_corpus_summary(data_dir)),
         "limitations": [
             "The evaluation set is generated and does not represent microphone acceptance.",
             "The held-out measurements do not establish release readiness.",

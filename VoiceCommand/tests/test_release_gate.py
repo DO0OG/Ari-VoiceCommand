@@ -23,6 +23,7 @@ from scripts.decision_data.validate_release import (
     check_data,
     check_metrics,
     check_model,
+    check_review_corpora,
 )
 
 SNAPSHOT = DATA_DIR / "candidate_snapshot.json"
@@ -59,6 +60,30 @@ class ReleaseGateTests(unittest.TestCase):
         config.update(config_changes)
         config_path.write_text(json.dumps(config), encoding="utf-8")
         return model
+
+    def test_release_build_requires_every_review_row_decided(self):
+        def rows(status, languages=("ko", "en", "ja")):
+            return [{"review_status": status, "language": language} for language in languages]
+
+        pending = lambda: (rows("pending_human_review"), rows("human_approved"))  # noqa: E731
+        self.assertEqual(check_review_corpora(False, loader=pending), [])
+        failures = check_review_corpora(True, loader=pending)
+        self.assertTrue(any("release_gold: 3 rows are pending" in item for item in failures))
+
+        partial = lambda: (rows("human_approved", ("ko", "en")) + rows("human_rejected", ("ja",)),  # noqa: E731
+                           rows("human_approved"))
+        self.assertEqual(check_review_corpora(True, loader=partial),
+                         ["release_gold: no approved rows for ja"])
+        done = lambda: (rows("human_approved"), rows("human_approved"))  # noqa: E731
+        self.assertEqual(check_review_corpora(True, loader=done), [])
+
+        def broken():
+            raise ValueError("review row fields differ from the required schema")
+
+        self.assertEqual(len(check_review_corpora(False, loader=broken)), 1)
+        # The shipped corpora are valid but not reviewed yet, so only a release build stops.
+        self.assertEqual(check_review_corpora(False), [])
+        self.assertTrue(check_review_corpora(True))
 
     def test_shipped_model_and_data_pass(self):
         self.assertEqual(check_model(MODEL_DIR, self.rows, SNAPSHOT), [])

@@ -27,6 +27,7 @@ from .evaluate import (
     evaluate,
 )
 from .gold_data import build_gold_examples
+from .review_corpus import LANGUAGES as REVIEW_LANGUAGES, load_review_corpora
 from .provenance import (
     BASELINE_MANIFEST_SHA256,
     BASELINE_MANIFEST_PATH,
@@ -223,6 +224,26 @@ def check_artifacts(result: dict, data_dir: Path, model_dir: Path = MODEL_DIR) -
     return failures
 
 
+def check_review_corpora(strict_release: bool = False, loader=load_review_corpora) -> list[str]:
+    """Validate the human-review corpora; a release build also needs every row reviewed."""
+    try:
+        release_rows, safety_rows = loader()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return [f"review corpora are invalid: {exc}"]
+    if not strict_release:
+        return []
+    failures = []
+    for name, rows in (("release_gold", release_rows), ("safety_gold", safety_rows)):
+        pending = sum(row["review_status"] == "pending_human_review" for row in rows)
+        if pending:
+            failures.append(f"{name}: {pending} rows are pending human review")
+        approved = {row["language"] for row in rows if row["review_status"] == "human_approved"}
+        missing = sorted(REVIEW_LANGUAGES - approved)
+        if missing:
+            failures.append(f"{name}: no approved rows for {', '.join(missing)}")
+    return failures
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=MODEL_DIR)
@@ -238,6 +259,7 @@ def main(argv=None) -> int:
         "data": check_data(rows, gold_rows),
         "metrics": check_metrics(result, strict_release=args.strict_release),
         "artifacts": check_artifacts(result, DATA_DIR, args.model),
+        "review": check_review_corpora(args.strict_release),
     }
     for name, failures in checks.items():
         print(json.dumps({"check": name, "ok": not failures, "failures": failures}))
