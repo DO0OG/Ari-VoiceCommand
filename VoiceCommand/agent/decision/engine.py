@@ -19,6 +19,7 @@ from agent.decision.candidates import (
     is_direct_allowed,
 )
 from agent.llm_router import get_llm_router
+from agent.decision.semantics import parse_candidate
 
 
 UNKNOWN = "unknown_or_complex"
@@ -65,6 +66,18 @@ class DecisionResult:
     margin: float
     source: str
     latency_ms: float
+
+
+@dataclass(frozen=True)
+class FastPathResult:
+    """검증을 마친 단일 실행 요청과 판정 근거만 담는다."""
+
+    tool_name: str
+    arguments: dict[str, object]
+    confidence: float
+    margin: float
+    source: str
+    parse_success: bool
 
 
 class LinearScorer:
@@ -147,8 +160,8 @@ class LocalDecisionEngine:
         except Exception:
             return None
 
-    def try_fast_path(self, text: str) -> None:
-        """통합 지점: 직접 실행은 Phase 5의 검증된 인자 파서 도입까지 보류한다."""
+    def try_fast_path(self, text: str) -> FastPathResult | None:
+        """분류와 의미 해석, 허용 정책이 모두 일치할 때만 실행 요청을 반환한다."""
         self.last_decision = None
         try:
             from core.config_manager import ConfigManager
@@ -173,6 +186,9 @@ class LocalDecisionEngine:
             self.last_decision = decision
             if mode == "shadow":
                 return None
+            # 모드와 별개로 직접 실행 설정이 명시적으로 켜져 있어야 한다.
+            if ConfigManager.get("local_decision_direct_execution", False) is not True:
+                return None
             direct_allowed = is_direct_allowed(decision.choice, mode)
             if (
                 decision.choice == UNKNOWN
@@ -183,7 +199,16 @@ class LocalDecisionEngine:
                 or not direct_allowed
             ):
                 return None
-            # 인자 파서와 안전 정책이 검증되기 전에는 어떤 도구도 직접 실행하지 않는다.
-            return None
+            parsed = parse_candidate(text, decision.choice)
+            if not parsed.parse_success:
+                return None
+            return FastPathResult(
+                tool_name=decision.choice,
+                arguments=dict(parsed.arguments),
+                confidence=decision.confidence,
+                margin=decision.margin,
+                source=decision.source,
+                parse_success=parsed.parse_success,
+            )
         except Exception:
             return None

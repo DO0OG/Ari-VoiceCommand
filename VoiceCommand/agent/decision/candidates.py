@@ -10,14 +10,8 @@ UNKNOWN = "unknown_or_complex"
 DIRECT_ALLOWLIST = frozenset(
     {
         "get_current_time",
-        "get_weather",
         "adjust_volume",
-        "set_timer",
-        "cancel_timer",
-        "launch_app",
-        "focus_window",
         "get_running_apps",
-        "play_youtube",
         "take_screenshot",
     }
 )

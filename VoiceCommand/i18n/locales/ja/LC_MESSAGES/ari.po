@@ -20,6 +20,21 @@ msgstr "音量を{volume}%に調整しました。"
 msgid "볼륨 조절 실패"
 msgstr "音量調整に失敗しました"
 
+msgid "볼륨을 조절했습니다."
+msgstr "音量を調整しました。"
+
+msgid "음소거했습니다."
+msgstr "ミュートしました。"
+
+msgid "음소거를 해제했습니다."
+msgstr "ミュートを解除しました。"
+
+msgid "실행 중인 앱 목록입니다.\n{apps}"
+msgstr "実行中のアプリ一覧です。\n{apps}"
+
+msgid "스크린샷을 저장했습니다: {path}"
+msgstr "スクリーンショットを保存しました: {path}"
+
 msgid "게임 모드 ON. GPU 메모리 해제했습니다."
 msgstr "ゲームモードON。GPUメモリを解放しました。"
 

@@ -482,21 +482,70 @@ def wake_detector_recalibrate_helper(detector, source):
 weather_service = WeatherService(api_key="")
 timer_manager = TimerManager(tts_callback=lambda text: tts_wrapper(text=text))
 
-def adjust_volume(change):
+def adjust_volume(change, *, amount=None, announce=True):
+    """시스템 볼륨을 수치 또는 방향과 백분율로 조절한다."""
     try:
         from ctypes import cast, POINTER
         from comtypes import CLSCTX_ALL
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+        mute = False
+        unmute = False
+        if isinstance(change, bool):
+            raise ValueError("invalid volume change")
+        if isinstance(change, (int, float)):
+            delta = float(change)
+        elif isinstance(change, str):
+            normalized = change.strip().casefold()
+            if normalized in {"mute", "음소거", "ミュート"}:
+                mute = True
+                delta = 0.0
+            elif normalized in {"unmute", "음소거 해제", "ミュート解除"}:
+                unmute = True
+                delta = 0.0
+            elif normalized in {"up", "올려", "上げて", "down", "줄여", "下げて"}:
+                sign = 1.0 if normalized in {"up", "올려", "上げて"} else -1.0
+                if amount in (None, ""):
+                    step = 10.0
+                elif isinstance(amount, bool):
+                    raise ValueError("invalid volume amount")
+                else:
+                    step = float(str(amount).strip().rstrip("%"))
+                    if not 1.0 <= step <= 100.0:
+                        raise ValueError("invalid volume amount")
+                delta = sign * (step / 100.0)
+            else:
+                delta = float(normalized)
+        else:
+            delta = float(change)
+
+        if not (mute or unmute) and not (-1.0 <= delta <= 1.0):
+            raise ValueError("volume change out of range")
+
         devices = AudioUtilities.GetSpeakers()
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume = cast(interface, POINTER(IAudioEndpointVolume))
+        if mute:
+            volume.SetMute(1, None)
+            if announce:
+                tts_wrapper(_("음소거했습니다."))
+            return True
+        if unmute:
+            volume.SetMute(0, None)
+            if announce:
+                tts_wrapper(_("음소거를 해제했습니다."))
+            return True
         curr = volume.GetMasterVolumeLevelScalar()
-        new_v = max(0.0, min(1.0, curr + change))
+        new_v = max(0.0, min(1.0, curr + delta))
         volume.SetMasterVolumeLevelScalar(new_v, None)
-        tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
-    except (AttributeError, ImportError, OSError, RuntimeError, ValueError) as exc:
+        if announce:
+            tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
+        return True
+    except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
         logging.debug("시스템 볼륨 조절 실패: %s", exc)
-        tts_wrapper(_("볼륨 조절 실패"))
+        if announce:
+            tts_wrapper(_("볼륨 조절 실패"))
+        return False
 
 _state.command_registry = CommandRegistry(
     ai_assistant=None,
