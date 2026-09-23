@@ -109,7 +109,7 @@ _GRAMMARS: dict[str, dict[str, tuple[str, ...]]] = {
         "ja": (
             r"(?:現在|今)?(?:実行中|起動中|開いている|開いてる|動いている|動いてる)(?:の)?"
             r"(?:アプリ|プログラム|プロセス|アプリケーション)(?:一覧)?(?:を)?"
-            r"(?:教え|見せ|確認し)" + _JA_REQ,
+            r"(?:教え|見せ|確認し|表示し)" + _JA_REQ,
             r"(?:現在|今)?何が(?:起動|実行|動い)(?:している|してる|ている|てる)か"
             r"(?:教え|見せ|確認し)" + _JA_REQ,
         ),
@@ -125,6 +125,7 @@ _GRAMMARS: dict[str, dict[str, tuple[str, ...]]] = {
         "en": (
             r"(?:take|grab)\s+(?:a\s+)?(?:screenshot|screen\s*shot)"
             r"(?:\s+of\s+(?:the\s+)?(?:current\s+|whole\s+|entire\s+)?screen)?",
+            r"capture\s+(?:a\s+)?(?:screenshot|screen\s*shot)",
             r"(?:take\s+and\s+)?save\s+(?:a\s+)?(?:screenshot|screen\s*shot)",
             r"capture\s+(?:the\s+)?(?:current\s+|whole\s+|entire\s+)?screen",
             r"save\s+(?:the\s+)?(?:current\s+)?screen",
@@ -311,6 +312,81 @@ _NEGATIONS = {
     "ja": (r"ないで", r"なく", r"ずに", r"ではなく", r"ない"),
 }
 
+_UNSAFE_CONTEXT_ACTIONS = {
+    "ko": (r"삭제|지워|전송|보내|구매|결제|포맷|초기화|종료",),
+    "en": (r"\b(?:delete|erase|remove|send|purchase|buy|format|reset|shut\s+down)\b",),
+    "ja": (r"削除|消去|送信|購入|支払|フォーマット|初期化|終了",),
+}
+
+_SAFE_CONTEXTS = {
+    "en": (
+        r"(?:for|before)\s+(?:(?:my|the|this|our)\s+)?(?:meeting|call|presentation|class|work|task|travel(?:\s+notes?)?|notes?|report|recording|conversation|discussion)",
+        r"because\s+(?:the\s+)?(?:room|dialogue|recording|presentation|conversation|video)\s+(?:is|was|seems|sounds|stays)\s+(?:clear|quiet|loud|hard\s+to\s+hear|easy\s+to\s+hear)",
+        r"so\s+(?:that\s+)?(?:I|we)\s+can\s+(?:focus|hear(?:\s+clearly)?|listen(?:\s+better)?|read(?:\s+clearly)?|understand)",
+        r"to\s+(?:document|record|reference)\s+(?:this|the|my)\s+(?:issue|work|notes?|meeting)",
+    ),
+    "ko": (
+        r"(?:회의|통화|발표|수업|업무|작업|여행|메모|기록|대화|토론|문서|자료|오류|문제)(?:\s*(?:내용|준비|상황|자료|기록|작성))?(?:을|를|의)?\s*(?:위해(?:서)?|때문에|하려고|목적으로)",
+        r"(?:회의\s*내용|오류\s*상황)(?:을|를)\s*(?:적어두|기록하)려고",
+        r"영상\s*소리(?:가)?\s*(?:커서|높아서|작아서)",
+    ),
+    "ja": (
+        r"(?:会議|通話|発表|授業|作業|旅行|メモ|記録|会話|議論|資料|問題|エラー|動画|音声)(?:(?:の)?(?:準備|内容|記録|資料))?(?:の)?(?:ために|ため|ので|ように|用に)",
+        r"動画の音が大きいので",
+    ),
+}
+
+_CANDIDATE_ALIASES: dict[str, dict[str, tuple[tuple[str, str], ...]]] = {
+    "adjust_volume": {
+        "ko": ((r"(?<![가-힣])(?:(?:시스템|출력|재생|스피커|전체)(?:의|\s+)?){1,2}(?:음량|볼륨|소리|레벨)(?=(?:을|를|은|는|이|가|[^가-힣]|$))", "볼륨"),),
+        "en": (
+            (r"(?<![a-z0-9])(?:(?:system|output|playback|speaker|overall)\s+){0,2}(?:audio|sound|volume)(?:\s+(?:level|output))?(?![a-z0-9])", "volume"),
+            (r"(?<![a-z0-9])speaker\s+output(?![a-z0-9])", "volume"),
+        ),
+        "ja": ((r"(?:(?:システム|出力|再生|スピーカー|全体)(?:の)?){1,2}(?:音量|ボリューム|音声|サウンド|レベル)(?=を|は|が|も|の|$|[、,。\s])", "音量"),),
+    },
+    "get_current_time": {
+        "ko": ((r"(?<![가-힣])(?:(?:내\s*지역|이\s*지역)(?:의)?\s*)?(?:현지(?:의)?\s*)?(?:현재\s*)?(?:시간|시각)(?=(?:을|를|은|는|이|가|[^가-힣]|$))", "현재시간"),),
+        "en": ((r"(?<![a-z0-9])(?:current\s+)?local\s+(?:time|clock)(?:\s+(?:here|in\s+my\s+area))?(?![a-z0-9])", "current time"),),
+        "ja": ((r"(?:(?:この)?地域の)?(?:現地の?|現在の?)(?:時間|時刻)(?=を|は|が|$|[、,。\s])", "現在時刻"),),
+    },
+    "take_screenshot": {
+        "ko": ((r"(?<![가-힣])(?:디스플레이|화면)(?:을|를)?(?:의|\s+)?(?:이미지|사진|스냅샷)(?:로)?(?=[을를은는이가]|[^가-힣]|$)|스샷(?=[을를은는이가]|[^가-힣]|$)", "스크린샷"),),
+        "en": (
+            (r"(?<![a-z0-9])(?:screen\s+image|display\s+(?:image|snapshot)|snapshot|screen\s+capture)(?![a-z0-9])", "screenshot"),
+        ),
+        "ja": ((r"(?<![ぁ-んァ-ン一-龯])(?:ディスプレイ|画面|スクリーン)(?:の)?(?:画像|イメージ|スナップショット)|スナップショット(?=を|で|$|[、,。\s])", "スクリーンショット"),),
+    },
+    "get_running_apps": {
+        "ko": (
+            (r"(?<![가-힣])(?:실행\s*상태인|작동\s*중인|활성\s*상태인)(?=[가-힣\s]|$)", "실행중인"),
+            (r"(?<![가-힣])(?:소프트웨어|소프트)(?=[을를은는이가]|[^가-힣]|$)", "앱"),
+        ),
+        "en": (),
+        "ja": (
+            (r"(?:稼働中|動作中|実行状態の|アクティブな)(?=の|アプリ|プログラム|プロセス|ソフト|$)", "実行中"),
+            (r"(?:ソフトウェア|ソフト)(?=を|一覧|$|[、,。\s])", "アプリ"),
+        ),
+    },
+}
+
+_CONTEXT_PREFIXES = {
+    "ko": (r"(?P<context>.{1,72}?(?:하기\s*위해|위해(?:서)?|때문에|려고|목적으로|라서|아서|어서|니까|커서|작아서))\s*[,，]?\s*(?P<core>.+)",),
+    "en": (r"(?P<context>(?:for|before|because|so\s+that)\s+[^,;]{1,72}),\s*(?P<core>.+)",),
+    "ja": (r"(?P<context>.{1,72}?(?:ために|ため|ので|ように|用に))[、,]?\s*(?P<core>.+)",),
+}
+_CONTEXT_SUFFIXES = {
+    "ko": (r"(?P<core>.+?)[、,]?\s+(?P<context>.{1,72}?(?:하기\s*위해|위해(?:서)?|때문에|려고|목적으로|수\s*있도록|라서|아서|어서|니까|커서|작아서))",),
+    "en": (r"(?P<core>.+?)\s+(?P<context>(?:for|so(?:\s+that)?|because|before|to)\s+[^,;.!?]{1,72})",),
+    "ja": (r"(?P<core>.+?)(?:[、,]\s*|\s+)(?P<context>.{1,72}?(?:ために|ため|ので|ように|用に))",),
+}
+
+_CONTEXT_QUANTITY = re.compile(
+    r"(?:\d|\b(?:one|two|three|four|five|ten|twenty)\s+(?:seconds?|minutes?|hours?|percent)\b|"
+    r"초|분|시간|퍼센트|秒|分|時間|パーセント)",
+    flags=re.IGNORECASE,
+)
+
 
 def _normalise(text: str) -> str:
     value = unicodedata.normalize("NFKC", text).strip()
@@ -384,6 +460,12 @@ def is_multi_intent(text: str) -> bool:
     if language not in _CONNECTORS:
         return False
     value = _strip_fillers(value, language)
+    safe_context_views = _context_views(value, language)
+    if safe_context_views:
+        return any(
+            connector_count(view, language) and action_anchor_count(view, language) > 1
+            for view in safe_context_views
+        )
     return bool(connector_count(value, language) and action_anchor_count(value, language) > 1)
 
 
@@ -394,6 +476,80 @@ def _grammar_match(value: str, candidate: str, language: str) -> re.Match[str] |
         if match:
             return match
     return None
+
+
+def _candidate_aliases(value: str, candidate: str, language: str) -> str:
+    for pattern, replacement in _CANDIDATE_ALIASES.get(candidate, {}).get(language, ()):
+        value = re.sub(pattern, replacement, value, flags=re.IGNORECASE)
+    if candidate == "get_current_time" and language == "en":
+        value = re.sub(r"\bcurrent\s+current\s+time\b", "current time", value, flags=re.IGNORECASE)
+    return value
+
+
+def _display_variant(value: str, candidate: str, language: str) -> str:
+    if candidate != "get_running_apps":
+        return value
+    if language == "en":
+        return re.sub(
+            r"\s+(?:as|in)\s+(?:a\s+)?(?:(?:complete|full|detailed)\s+)?(?:list|bullet\s+points)(?:\s+form)?$",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        ).strip()
+    if language == "ko":
+        value = re.sub(r"(?:빠짐없이|누락\s*없이|전부|모두)", "", value)
+        value = re.sub(r"(앱|어플|프로그램|프로세스|애플리케이션)(?:들)?(?:을|를)\s*(?=(?:목록|리스트))", r"\1", value)
+        value = re.sub(r"(?:리스트|목록)(?:으로|로|형태로)", "목록", value)
+        return value.strip()
+    value = re.sub(r"(アプリケーション|アプリ|プログラム|プロセス)(を)(?=(?:漏れなく|すべて|全部)?(?:一覧|リスト))", r"\1", value)
+    value = re.sub(r"(?:一覧|リスト)(?:で|として|形式で)", "一覧", value)
+    value = re.sub(r"(?:漏れなく|すべて|全部)", "", value)
+    return value.strip()
+
+
+def _safe_context_clause(context: str, language: str) -> bool:
+    value = context.strip(" \t,，。、")
+    if not value or len(value) > 72 or _CONTEXT_QUANTITY.search(value):
+        return False
+    if _has_any(value, _NEGATIONS[language]) or _has_any(value, _UNSAFE_CONTEXT_ACTIONS[language]):
+        return False
+
+    return any(re.fullmatch(pattern, value, flags=re.IGNORECASE) for pattern in _SAFE_CONTEXTS[language])
+
+
+def _context_views(value: str, language: str) -> list[str]:
+    views = []
+    for pattern in _CONTEXT_PREFIXES[language] + _CONTEXT_SUFFIXES[language]:
+        match = re.fullmatch(pattern, value, flags=re.IGNORECASE)
+        if not match or not _safe_context_clause(match.group("context"), language):
+            continue
+        core = match.group("core").strip(" \t,，。、")
+        if core and core not in views:
+            views.append(core)
+    return views
+
+
+def _candidate_grammar_match_with_view(
+    value: str, candidate: str, language: str
+) -> tuple[re.Match[str] | None, str]:
+    if candidate not in DIRECT_CANDIDATES:
+        return _grammar_match(value, candidate, language), value
+    views = [value, *_context_views(value, language)]
+    for view in views:
+        display = _display_variant(view, candidate, language)
+        match = _grammar_match(_candidate_aliases(view, candidate, language), candidate, language)
+        if match:
+            return match, view
+        if display and display != view:
+            match = _grammar_match(_candidate_aliases(display, candidate, language), candidate, language)
+            if match:
+                return match, view
+    return None, value
+
+
+def _candidate_grammar_match(value: str, candidate: str, language: str) -> re.Match[str] | None:
+    match, _ = _candidate_grammar_match_with_view(value, candidate, language)
+    return match
 
 
 def _target_group(candidate: str) -> str:
@@ -473,11 +629,16 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
     value = _strip_fillers(value, language)
     if not value:
         return SemanticParse(candidate, language)
-    match = _grammar_match(value, candidate, language)
-    anchors = action_anchor_count(value, language)
-    connectors = connector_count(value, language)
+    match, matched_view = _candidate_grammar_match_with_view(value, candidate, language)
+    # Count residual actions on the exact core whose surrounding context was
+    # fully validated against the harmless-context allowlist. Negation checks
+    # below still use the original text.
+    anchors = action_anchor_count(matched_view, language)
+    connectors = connector_count(matched_view, language)
     target_match = bool(match)
     negation_text = re.sub(_JA_REQUEST_NEGATIVE, "", value) if language == "ja" else value
+    if language == "ja" and candidate == "get_running_apps":
+        negation_text = negation_text.replace("漏れなく", "")
     contradiction = _has_any(negation_text, _NEGATIONS[language])
     if candidate == "focus_window" and _has_any(value, _ACTION_ANCHORS["close"][language]):
         contradiction = True

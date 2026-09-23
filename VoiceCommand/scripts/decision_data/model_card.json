@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1233389,
-    "additional_steady_rss_bytes": 17649664,
-    "warm_p95_ms": 0.1298699990002205,
+    "additional_steady_rss_bytes": 17281024,
+    "warm_p95_ms": 0.07890000415500253,
     "gpu_used": false
   },
   "review": {
@@ -108,7 +108,7 @@
     "model_config_sha256": "ec970c6c09022659552f9a26bbb9c4581b542f3698d1271edf526d1229cc7dab",
     "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
     "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
-    "parser_sha256": "9ca31927e988b9584930231b15e19d1b62fb91c00a4dfcc5c356341202c69ff0",
+    "parser_sha256": "e5facc319470b48424405069ed9958e81e2e8e5aacc2e10195752acf3954799f",
     "engine_sha256": "874ee9e926653c7730f9cf0b9a794f68579e3d833b376867cdab938e9829dead",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
