@@ -26,6 +26,24 @@ _SETTINGS = {
 }
 # The existing volume handler steps by 10 when no amount is given.
 _DEFAULT_VOLUME_STEP = 10
+# Plain requests that must run directly, so a harness where every positive row
+# falls back to the conversation path cannot pass.
+_REQUIRED = (
+    ("get_current_time", {}, {"ko": "지금 몇 시야", "en": "what time is it", "ja": "今何時"}),
+    ("adjust_volume", {"direction": "up", "amount_percent": 10},
+     {"ko": "볼륨 10 올려줘", "en": "turn the volume up by 10", "ja": "音量を10上げて"}),
+    ("take_screenshot", {},
+     {"ko": "화면 캡처해줘", "en": "take a screenshot", "ja": "スクリーンショットを撮って"}),
+    ("get_running_apps", {},
+     {"ko": "실행 중인 앱 알려줘", "en": "list running apps", "ja": "実行中のアプリを教えて"}),
+)
+DIRECT_REQUIRED_ROWS = tuple(
+    {"id": f"required:{tool}:{language}", "corpus": "direct_required", "language": language,
+     "text": text, "label": tool, "expected_outcome": "direct_required",
+     "expected_arguments": dict(arguments)}
+    for tool, arguments, texts in _REQUIRED
+    for language, text in texts.items()
+)
 
 
 def _skill_context() -> dict:
@@ -62,7 +80,7 @@ def classify(row: dict, handler_calls: list[tuple[str, dict]], chat_calls: int) 
     if not handler_calls and not chat_calls:
         return "fallback_failure"
     if not handler_calls:
-        return "fallback"
+        return "direct_miss" if row.get("expected_outcome") == "direct_required" else "fallback"
     tool, arguments = handler_calls[0]
     if (
         row.get("expected_outcome") == "fallback_required"
@@ -95,7 +113,19 @@ def _command():
     return command, assistant, calls
 
 
-def run(corpora: list[Path]) -> dict:
+def _rows(corpora: list[Path], required_rows) -> list[dict]:
+    rows = [dict(row) for row in required_rows]
+    for path in corpora:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                row.setdefault("corpus", path.stem)
+                rows.append(row)
+    # Rows a reviewer rejected are not part of the release judgement.
+    return [row for row in rows if row.get("review_status") != "human_rejected"]
+
+
+def run(corpora: list[Path], required_rows=()) -> dict:
     from agent.decision.engine import LocalDecisionEngine
     from core.resource_manager import ResourceManager
 
@@ -109,20 +139,16 @@ def run(corpora: list[Path]) -> dict:
                side_effect=lambda key, default=None: _SETTINGS.get(key, default)), \
             patch("memory.conversation_history.add_conversation"), \
             patch("core.VoiceCommand.emit_plugin_event"):
-        for path in corpora:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                calls.clear()
-                assistant.chat_with_tools.reset_mock()
-                command.run_interaction(row["text"])
-                outcome = classify(row, list(calls), assistant.chat_with_tools.call_count)
-                group = f"{row.get('corpus', path.stem)}:{row.get('language', '')}"
-                totals[outcome] += 1
-                by_group.setdefault(group, Counter())[outcome] += 1
-                if outcome not in {"direct", "fallback"}:
-                    failures.append({"id": row.get("id"), "outcome": outcome})
+        for row in _rows(corpora, required_rows):
+            calls.clear()
+            assistant.chat_with_tools.reset_mock()
+            command.run_interaction(row["text"])
+            outcome = classify(row, list(calls), assistant.chat_with_tools.call_count)
+            group = f"{row['corpus']}:{row.get('language', '')}"
+            totals[outcome] += 1
+            by_group.setdefault(group, Counter())[outcome] += 1
+            if outcome not in {"direct", "fallback"}:
+                failures.append({"id": row.get("id"), "outcome": outcome})
     health = engine.health()
     return {
         "model_sha256": health.get("model_sha256", ""),
@@ -141,7 +167,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="JSONL file with text, label, expected_outcome; repeatable")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
-    result = run(list(args.corpus or DEFAULT_CORPORA))
+    result = run(list(args.corpus or DEFAULT_CORPORA),
+                 required_rows=() if args.corpus else DIRECT_REQUIRED_ROWS)
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.write_text(text, encoding="utf-8")

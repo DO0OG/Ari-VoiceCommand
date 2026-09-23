@@ -27,7 +27,7 @@ CORPUS_PATHS = {
 }
 LANGUAGES = frozenset(families.LANGUAGES)
 REVIEW_STATUSES = frozenset({"pending_human_review", "human_approved", "human_rejected"})
-EXPECTED_OUTCOMES = frozenset({"direct_or_fallback", "fallback_required"})
+EXPECTED_OUTCOMES = frozenset({"direct_required", "direct_or_fallback", "fallback_required"})
 _CORE_FIELDS = (
     "dataset_version", "id", "family_id", "template_id", "corpus", "candidate_tool",
     "label", "expected_outcome", "expected_arguments", "text", "language", "bucket",

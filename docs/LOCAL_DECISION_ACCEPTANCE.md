@@ -31,6 +31,10 @@ py -m scripts.decision_data.review_corpus validate
 
 두 코퍼스 전체를 실제 명령 처리 경로에 통과시킨다. 처리기와 대화 모델은 호출 횟수만 세는
 대체물로 바뀌므로 시스템 상태는 바뀌지 않는다. 빠른 처리와 직접 처리를 켠 상태로 돈다.
+검수에서 거절된 행은 제외한다. 도구 4개 × 언어 3개의 대표 문장 12개("지금 몇 시야",
+"볼륨 10 올려줘" 등)는 반드시 직접 처리돼야 하므로, 모든 문장이 대화 경로로 넘어가도
+통과하는 일은 없다. 검수 때 `expected_outcome`을 `direct_required`로 고친 행도 같은
+기준을 따른다.
 
 ```powershell
 cd VoiceCommand
@@ -41,6 +45,7 @@ py -m scripts.decision_data.acceptance --output acceptance.json
 |---|---|
 | `direct` | 기대한 도구와 인자로 한 번만 직접 처리됨 |
 | `fallback` | 기존 대화 경로로 한 번 넘어감 |
+| `direct_miss` | 직접 처리해야 할 문장이 대화 경로로 넘어감 |
 | `direct_mistake` | 넘겨야 할 문장을 직접 처리했거나 도구·음량 인자가 틀림 |
 | `fallback_failure` | 직접 처리도 대화 경로도 실행되지 않아 응답이 없음 |
 | `duplicate_action` | 처리기가 두 번 불렸거나 직접 처리 뒤 대화 경로도 불림 |
