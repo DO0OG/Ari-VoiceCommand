@@ -37,92 +37,153 @@ _JAPANESE_MARKERS = (
     "音量", "撮って", "撮る", "開いて", "閉じて", "教えて", "見せて",
 )
 
+# Korean and Japanese grammars match against text with all spaces removed.
+_KO_REQ = (
+    r"(?:줘|줘요|주라|줄래|줄래요|주세요|주실래요|주시겠어요|주겠니|줄수있어|줄수있어요|"
+    r"봐|봐줘|봐요)?"
+)
+_JA_REQ = (
+    r"(?:て|てね|てよ|てください|てくれる|てくれない|てくれますか|てくれませんか|"
+    r"てもらえる|てもらえますか|てもらえない|てほしい|て欲しい|ていただけますか|"
+    r"ていただけませんか)"
+)
+_EN_NUMBER = r"\d{1,3}|five|ten|fifteen|twenty|twenty[\s-]five|thirty|forty|fifty"
+_EN_NUMBER_WORDS = {
+    "five": 5, "ten": 10, "fifteen": 15, "twenty": 20, "twenty-five": 25,
+    "thirty": 30, "forty": 40, "fifty": 50,
+}
+
 _GRAMMARS: dict[str, dict[str, tuple[str, ...]]] = {
     "get_current_time": {
         "ko": (
-            r"(?:지금\s+|현재\s+)?몇\s*시(?:야|인지)?",
-            r"(?:지금\s+|현재\s+)?(?:현재\s*)?(?:시간|시각|시계)(?:을|를|이|가|은|는)?"
-            r"(?:\s*(?:좀\s*)?(?:알려|말해|확인)(?:\s*(?:줘|주라|주세요|주시겠어요|줘요))?)?",
+            r"(?:지금|현재)?몇시(?:야|예요|에요|지|인지|인가요|니)?",
+            r"(?:지금|현재)?몇시인지(?:좀)?(?:알려|말해)" + _KO_REQ,
+            r"(?:지금|현재)(?:시간|시각)",
+            r"(?:지금|현재)?(?:시간|시각)(?:을|를|이|좀)*(?:알려|말해|확인해)" + _KO_REQ,
+            r"(?:지금)?시계(?:를|좀)*(?:확인해|봐)" + _KO_REQ,
         ),
         "en": (
-            r"(?:please\s+)?(?:what(?:\s+is)?\s+the\s+time|what\s+time\s+is\s+it|"
-            r"what's\s+the\s+time|current\s+time|tell\s+(?:me\s+)?(?:the\s+)?time|"
-            r"check\s+(?:the\s+)?(?:current\s+)?time|what\s+time|time\s+please)"
-            r"(?:\s+please)?",
+            r"what\s+time\s+is\s+it(?:\s+(?:now|right\s+now))?",
+            r"what(?:'s|\s+is)\s+the\s+(?:current\s+)?time(?:\s+(?:now|right\s+now))?",
+            r"(?:tell|show|give)\s+me\s+(?:the\s+)?(?:current\s+)?time(?:\s+now)?",
+            r"(?:tell\s+me\s+)?what\s+time\s+it\s+is(?:\s+now)?",
+            r"check\s+(?:the\s+)?(?:current\s+)?time",
+            r"check\s+(?:the\s+)?clock",
+            r"(?:the\s+)?current\s+time",
+            r"do\s+you\s+(?:know|have)\s+the\s+time",
+            r"time\s+check",
         ),
         "ja": (
-            r"(?:今(?:の)?|現在の)?(?:何時|時刻|時計|時間)(?:を)?"
-            r"(?:教えて|確認して|言って)?(?:ください)?",
+            r"(?:今|現在)?何時(?:ですか|だ|なの|か)?",
+            r"(?:今|現在)?何時か(?:教え|確認し)" + _JA_REQ,
+            r"(?:今の|現在の|今|現在)?(?:時刻|時間)(?:を)?(?:教え|確認し)" + _JA_REQ,
+            r"現在時刻",
+            r"時計(?:を)?(?:確認し|見)" + _JA_REQ,
         ),
     },
     "get_running_apps": {
         "ko": (
-            r"(?:지금\s+|현재\s+)?(?:(?:실행\s*중|켜져\s*있는|열려\s*있는)\s*인?\s*)?"
-            r"(?:앱|프로그램|프로세스)(?:\s*(?:목록|리스트))?(?:을|를)?\s*"
-            r"(?:보여|알려|확인|나열)(?:\s*(?:줘|주세요|해줘|해|주시겠어요))?",
-            r"(?:지금\s+)?뭐가\s*켜져\s*있는지\s*(?:보여|알려|확인)(?:\s*줘)?",
+            r"(?:지금|현재)?(?:실행중인|실행중|켜져있는|켜진|열려있는|열린|돌아가는|떠있는)?"
+            r"(?:앱|어플|프로그램|프로세스|애플리케이션)(?:들)?(?:목록|리스트)?(?:을|를|좀)*"
+            r"(?:보여|알려|확인해|나열해)" + _KO_REQ,
+            r"(?:지금|현재)?(?:뭐가|어떤앱이|어떤프로그램이)(?:켜져|실행되고|돌아가고|열려)있는지"
+            r"(?:좀)?(?:보여|알려|확인해)" + _KO_REQ,
         ),
         "en": (
-            r"(?:please\s+)?(?:list|show)\s+(?:the\s+)?(?:currently\s+)?"
-            r"(?:running|open)\s+(?:apps?|applications?|programs?|processes?)"
-            r"(?:\s+please)?",
-            r"(?:please\s+)?tell\s+me\s+(?:which\s+)?(?:apps?|applications?|"
-            r"programs?)\s+are\s+(?:currently\s+)?(?:running|open)(?:\s+please)?",
-            r"(?:please\s+)?what(?:'s|\s+is)\s+running(?:\s+please)?",
+            r"(?:list|show(?:\s+me)?|display|check)\s+(?:all\s+)?(?:the\s+)?(?:currently\s+)?"
+            r"(?:running|open|active)\s+(?:apps?|applications?|programs?|processes?)",
+            r"tell\s+me\s+(?:which|what)\s+(?:apps?|applications?|programs?|processes?)\s+"
+            r"are\s+(?:currently\s+)?(?:running|open)(?:\s+(?:now|right\s+now))?",
+            r"(?:which|what)\s+(?:apps?|applications?|programs?|processes?)\s+are\s+"
+            r"(?:currently\s+)?(?:running|open)(?:\s+(?:now|right\s+now))?",
+            r"what(?:'s|\s+is)\s+(?:currently\s+)?running(?:\s+(?:now|right\s+now))?",
+            r"(?:list|show(?:\s+me)?|display)\s+(?:all\s+)?(?:the\s+)?(?:apps?|applications?|programs?|processes?)\s+"
+            r"(?:that\s+are|which\s+are|currently)\s+(?:running|open)",
+            r"(?:list|show(?:\s+me)?|display|check)\s+(?:the\s+)?list\s+of\s+(?:currently\s+)?"
+            r"(?:running|open|active)\s+(?:apps?|applications?|programs?|processes?)",
         ),
         "ja": (
-            r"(?:現在|今)?(?:実行中|起動中|開いている)(?:の)?"
-            r"(?:アプリ|プログラム|プロセス)(?:一覧)?(?:を)?"
-            r"(?:教えて|見せて|確認して)(?:ください)?",
-            r"(?:現在|今)?何が起動しているか(?:教えて|見せて|確認して)(?:ください)?",
+            r"(?:現在|今)?(?:実行中|起動中|開いている|開いてる|動いている|動いてる)(?:の)?"
+            r"(?:アプリ|プログラム|プロセス|アプリケーション)(?:一覧)?(?:を)?"
+            r"(?:教え|見せ|確認し)" + _JA_REQ,
+            r"(?:現在|今)?何が(?:起動|実行|動い)(?:している|してる|ている|てる)か"
+            r"(?:教え|見せ|確認し)" + _JA_REQ,
         ),
     },
     "take_screenshot": {
         "ko": (
-            r"(?:지금\s+|현재\s+)?(?:화면|스크린\s*샷)(?:을|를)?"
-            r"\s*(?:캡처|찍|촬영)(?:해|해서\s*저장)?"
-            r"(?:\s*(?:줘|주세요|해줘|해|주시겠어요))?",
-            r"(?:지금\s+|현재\s+)?(?:화면|스크린\s*샷)(?:을|를)?\s*"
-            r"(?:그대로\s*)?저장(?:해|해서)?(?:\s*(?:줘|주세요|해줘))?",
+            r"(?:지금|현재)?(?:의)?(?:화면|스크린샷|스샷)(?:을|를|좀)*"
+            r"(?:(?:캡처|캡쳐|촬영)(?:해|해서저장해)|찍어)" + _KO_REQ,
+            r"(?:지금|현재)?(?:의)?화면(?:을|를)?스크린샷으로(?:찍어|저장해)" + _KO_REQ,
+            r"(?:지금|현재)?(?:의)?(?:화면|화면캡처|스크린샷|스샷)(?:을|를|좀)*(?:그대로)?저장해"
+            + _KO_REQ,
         ),
         "en": (
-            r"(?:please\s+)?take\s+(?:a\s+)?screenshot(?:\s+please)?",
-            r"(?:please\s+)?capture\s+(?:the\s+)?(?:current\s+)?screen(?:\s+please)?",
-            r"(?:please\s+)?save\s+(?:the\s+)?screen(?:\s+please)?",
+            r"(?:take|grab)\s+(?:a\s+)?(?:screenshot|screen\s*shot)"
+            r"(?:\s+of\s+(?:the\s+)?(?:current\s+|whole\s+|entire\s+)?screen)?",
+            r"(?:take\s+and\s+)?save\s+(?:a\s+)?(?:screenshot|screen\s*shot)",
+            r"capture\s+(?:the\s+)?(?:current\s+|whole\s+|entire\s+)?screen",
+            r"save\s+(?:the\s+)?(?:current\s+)?screen",
+            r"screenshot\s+(?:the\s+)?screen",
         ),
         "ja": (
-            r"(?:今の|現在の)?(?:画面を)?(?:スクリーンショット|スクリーンショト)"
-            r"(?:を)?撮って(?:ください)?",
-            r"(?:今の|現在の)?画面をキャプチャして(?:ください)?",
-            r"(?:今の|現在の)?画面を保存して(?:ください)?",
+            r"(?:今の|現在の)?(?:画面|スクリーンショット|スクショ)(?:を)?(?:そのまま)?"
+            r"(?:キャプチャし|保存し|撮っ)" + _JA_REQ,
+            r"(?:今の|現在の)?画面(?:を)?(?:スクリーンショット|スクショ)(?:を)?撮っ" + _JA_REQ,
+            r"(?:今の|現在の)?画面キャプチャ(?:を)?(?:し|保存し)" + _JA_REQ,
+            r"(?:今の|現在の)?画面(?:を)?キャプチャして保存し" + _JA_REQ,
+            r"(?:今の|現在の)?(?:画面(?:を)?)?(?:スクリーンショット|スクショ)し" + _JA_REQ,
         ),
     },
     "adjust_volume": {
         "ko": (
-            r"(?:볼륨|음량|소리)(?:을|를)?\s*"
-            r"(?P<amount>\d{1,3})\s*(?:퍼센트|%)?\s*(?P<direction>올려|높여|키워|내려|낮춰|줄여)"
-            r"(?:\s*(?:줘|주세요|해줘|해|주시겠어요))?",
-            r"(?:볼륨|음량|소리)(?:을|를)?\s*(?P<direction>올려|높여|키워|내려|낮춰|줄여)"
-            r"\s*(?P<amount>\d{1,3})\s*(?:퍼센트|%)?"
-            r"(?:\s*(?:줘|주세요|해줘|해))?",
-            r"(?:(?:볼륨|음량|소리)(?:을|를)?\s*)?(?P<direction>음소거|무음)"
-            r"(?:\s*(?:해|해줘|해주세요|해 주세요))?",
+            r"(?:볼륨|음량|소리)(?:을|를|좀|이|가)*"
+            r"(?:(?P<amount>\d{1,3})(?:퍼센트|%)?(?:만큼|정도)?)?(?:좀|조금|더|살짝)*"
+            r"(?P<direction>올려|높여|키워|크게해|내려|낮춰|줄여|작게해)" + _KO_REQ,
+            r"(?:볼륨|음량|소리)(?:을|를)?(?P<direction>올려|높여|키워|내려|낮춰|줄여)"
+            r"(?P<amount>\d{1,3})(?:퍼센트|%)?" + _KO_REQ,
+            r"(?:(?:볼륨|음량|소리)(?:을|를|좀)*)?(?P<direction>음소거|무음)(?:으로)?(?:해)?" + _KO_REQ,
         ),
         "en": (
-            r"(?:please\s+)?(?:increase|raise|lower|decrease|turn\s+up|turn\s+down)"
-            r"\s+(?:the\s+)?(?:volume|sound)(?:\s+by)?\s*"
-            r"(?P<amount>\d{1,3})\s*%(?:\s+please)?",
-            r"(?:please\s+)?(?:mute|silence)\s+(?:the\s+)?(?:volume|sound)"
-            r"(?:\s+please)?",
+            r"(?P<direction>increase|raise|lower|decrease|reduce|turn\s+up|turn\s+down)"
+            r"\s+(?:the\s+)?(?:volume|sound)"
+            r"(?:\s+(?:by\s+)?(?P<amount>" + _EN_NUMBER + r")\s*(?:%|percent)?)?",
+            r"turn\s+(?:the\s+)?(?:volume|sound)\s+(?P<direction>up|down)"
+            r"(?:\s+by\s+(?P<amount>" + _EN_NUMBER + r")\s*(?:%|percent)?)?",
+            r"(?:volume|sound)\s+(?P<direction>up|down)",
+            r"(?P<direction>mute|silence)(?:\s+(?:the\s+)?(?:volume|sound|audio))?",
         ),
         "ja": (
-            r"(?:音量|ボリューム)(?:を)?\s*(?P<amount>\d{1,3})\s*%?\s*"
-            r"(?P<direction>上げ|高く|下げ|低く)(?:て|てください)?",
-            r"(?:(?:音量|ボリューム)(?:を)?\s*)?(?P<direction>ミュート|消音)"
-            r"(?:して|してください)?",
+            r"(?:音量|ボリューム|音)(?:を)?(?:(?P<amount>\d{1,3})(?:%|パーセント)?)?"
+            r"(?:少し|ちょっと|もう少し)?(?P<direction>上げ|下げ)" + _JA_REQ,
+            r"(?:音量|ボリューム|音)(?:を)?(?:少し|ちょっと|もう少し)?"
+            r"(?P<direction>高く|大きく|低く|小さく)し" + _JA_REQ,
+            r"(?:(?:音量|ボリューム|音)(?:を)?)?(?P<direction>ミュート|消音)(?:にし|し)" + _JA_REQ,
+            r"(?:(?:音量|ボリューム|音)(?:を)?)?(?P<direction>ミュート|消音)",
         ),
     },
 }
+
+_LEADING_FILLERS = {
+    "ko": (
+        r"^(?:(?:음+|어+|아+|저기요?|그거|그|혹시|미안한데|미안하지만|죄송한데|죄송하지만|"
+        r"가능하면|제발|그냥|저)(?:\s*[,，]\s*|\s+))+"
+    ),
+    "en": (
+        r"^(?:(?:um+|uh+|so|well|hey|ok(?:ay)?|sorry|please|just|if\s+you\s+can|"
+        r"(?:could|can|would|will)\s+you(?:\s+please)?(?:\s+just)?)\b\s*,?\s*)+"
+    ),
+    "ja": (
+        r"^(?:(?:あの|あのー|えっと|ええと|えー|ちょっと|すみませんが|すみません|"
+        r"できれば|悪いけど|ねえ)\s*[、,]?\s*)+"
+    ),
+}
+_TRAILING_FILLERS = {
+    "ko": r"(?:\s*좀)+$",
+    "en": r"(?:\s*,?\s*\b(?:please|thanks|thank\s+you|for\s+me))+$",
+    "ja": r"(?:\s*(?:ね|よ|な))+$",
+}
+_JA_REQUEST_NEGATIVE = r"(?:くれ|もらえ)(?:ない|ません)"
 
 _ACTION_ANCHORS: dict[str, dict[str, tuple[str, ...]]] = {
     "time": {
@@ -238,9 +299,21 @@ def action_anchor_count(text: str, language: str | None = None) -> int:
     )
 
 
+def _strip_fillers(value: str, language: str) -> str:
+    """Remove hesitation and politeness words that never add an action."""
+    previous = None
+    while previous != value:
+        previous = value
+        value = re.sub(_LEADING_FILLERS[language], "", value, flags=re.IGNORECASE).strip()
+        value = re.sub(_TRAILING_FILLERS[language], "", value, flags=re.IGNORECASE).strip()
+        value = re.sub(r"[!?！？。．.,、]+$", "", value).strip()
+    return value
+
+
 def _grammar_match(value: str, candidate: str, language: str) -> re.Match[str] | None:
+    subject = value.replace(" ", "") if language in {"ko", "ja"} else value
     for pattern in _GRAMMARS.get(candidate, {}).get(language, ()):
-        match = re.fullmatch(pattern, value, flags=re.IGNORECASE)
+        match = re.fullmatch(pattern, subject, flags=re.IGNORECASE)
         if match:
             return match
     return None
@@ -259,27 +332,27 @@ def _volume_arguments(match: re.Match[str] | None, candidate: str) -> tuple[dict
     if candidate != "adjust_volume" or match is None:
         return {}, bool(match), False
     values = match.groupdict()
-    direction = str(values.get("direction") or "").casefold()
-    if not direction:
-        phrase = match.group(0).casefold()
-        if re.search(r"\b(?:increase|raise|turn\s+up)\b", phrase):
-            direction = "up"
-        elif re.search(r"\b(?:lower|decrease|turn\s+down)\b", phrase):
-            direction = "down"
-        elif re.search(r"\b(?:mute|silence)\b", phrase):
-            direction = "mute"
-    if direction in {"올려", "높여", "키워", "上げ", "高く"}:
+    direction = re.sub(r"\s+", " ", str(values.get("direction") or "").casefold())
+    if direction in {"up", "increase", "raise", "turn up", "올려", "높여", "키워", "크게해",
+                     "上げ", "高く", "大きく"}:
         direction = "up"
-    elif direction in {"내려", "낮춰", "줄여", "下げ", "低く"}:
+    elif direction in {"down", "lower", "decrease", "reduce", "turn down", "내려", "낮춰",
+                       "줄여", "작게해", "下げ", "低く", "小さく"}:
         direction = "down"
-    elif direction in {"음소거", "무음", "ミュート", "消音"} or not direction:
+    elif direction in {"mute", "silence", "음소거", "무음", "ミュート", "消音"}:
         direction = "mute"
-    raw_amount = values.get("amount")
+    else:
+        return {}, False, True
     if direction == "mute":
         return {"direction": "mute", "amount": 100}, True, False
+    raw_amount = values.get("amount")
+    # Without an amount the existing handler applies its default step.
     if raw_amount is None:
-        return {}, False, True
-    amount = int(raw_amount)
+        return {"direction": direction}, True, False
+    raw_amount = re.sub(r"[\s-]+", "-", raw_amount.casefold())
+    amount = _EN_NUMBER_WORDS.get(raw_amount)
+    if amount is None:
+        amount = int(raw_amount)
     if not 1 <= amount <= 100:
         return {}, False, True
     return {"direction": direction, "amount": amount}, True, False
@@ -295,16 +368,22 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
         return SemanticParse(candidate, language)
 
     target = _target_group(candidate)
+    value = _strip_fillers(value, language)
+    if not value:
+        return SemanticParse(candidate, language)
     match = _grammar_match(value, candidate, language)
     anchors = action_anchor_count(value, language)
     connectors = connector_count(value, language)
     target_match = bool(match)
-    contradiction = _has_any(value, _NEGATIONS[language])
+    negation_text = re.sub(_JA_REQUEST_NEGATIVE, "", value) if language == "ja" else value
+    contradiction = _has_any(negation_text, _NEGATIONS[language])
     if candidate == "focus_window" and _has_any(value, _ACTION_ANCHORS["close"][language]):
         contradiction = True
     if target and _has_any(value, _ACTION_ANCHORS["close"][language] + _ACTION_ANCHORS["open"][language]):
         contradiction = contradiction or not target_match
-    residual = bool(anchors > 1 or (connectors and anchors > 1))
+    # A full grammar match consumes the whole sentence as one action, so extra
+    # anchors inside it ("open" in "list the open apps") belong to that action.
+    residual = bool(connectors and anchors > 1)
     if target and not target_match:
         residual = True
     arguments, argument_ok, argument_conflict = _volume_arguments(match, candidate)

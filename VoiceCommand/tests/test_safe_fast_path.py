@@ -199,7 +199,7 @@ class SafeFastPathTests(unittest.TestCase):
             "increase volume by 101%",
             "increase volume by -10%",
             "increase volume by 10.5%",
-            "increase volume",
+            "set volume to 50",
             "turn the volume up and down by 10%",
             "take a screenshot of the second monitor",
             "take a screenshot and save it to private.png",
