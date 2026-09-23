@@ -41,14 +41,18 @@ def _skill_context() -> dict:
 
 
 def _arguments_match(tool: str, expected: dict, actual: dict) -> bool:
-    """Only volume carries arguments the handler acts on; other tools take none."""
+    """Check handler arguments, distinct from semantic corpus metadata."""
     if tool != "adjust_volume":
-        return True
-    if expected.get("direction") != actual.get("direction"):
+        # Time, app-list and screenshot corpus expectations describe intent;
+        # their existing handlers take no arguments.
+        return not actual
+    if set(actual) - {"direction", "amount"}:
         return False
-    if "amount_percent" in expected:
-        return expected["amount_percent"] == actual.get("amount", _DEFAULT_VOLUME_STEP)
-    return True
+    expected_amount = expected.get("amount_percent", _DEFAULT_VOLUME_STEP)
+    return (
+        expected.get("direction") == actual.get("direction")
+        and expected_amount == actual.get("amount", _DEFAULT_VOLUME_STEP)
+    )
 
 
 def classify(row: dict, handler_calls: list[tuple[str, dict]], chat_calls: int) -> str:

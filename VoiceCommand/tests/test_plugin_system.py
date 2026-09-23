@@ -102,8 +102,38 @@ class PluginSystemTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(events[0][0], "command.executed")
+        self.assertEqual(events[0][1]["input"], "[redacted]")
         self.assertEqual(events[0][1]["command_type"], "dummy")
         self.assertEqual(events[0][1]["response"], "ok")
+
+    def test_command_event_redacts_text_but_user_memory_keeps_it(self):
+        import unittest.mock
+
+        spoken = "private phrase 4821"
+        events = []
+        context = unittest.mock.Mock()
+
+        class _PrivateCommand(_DummyCommand):
+            def matches(self, text: str) -> bool:
+                return text == spoken
+
+        registry = CommandRegistry(
+            None,
+            object(),
+            object(),
+            lambda *_: None,
+            lambda *_: None,
+            {"enabled": False},
+            emit_event=lambda name, payload: events.append((name, payload)),
+        )
+        registry.register_command(_PrivateCommand())
+
+        with unittest.mock.patch("commands.command_registry.get_context_manager", return_value=context):
+            registry.execute(spoken)
+
+        context.record_command.assert_called_once_with("private", {"input": spoken})
+        self.assertNotIn(spoken, repr(events[0][1]))
+        self.assertEqual(events[0][1]["input"], "[redacted]")
 
     def test_command_registry_log_does_not_contain_user_text(self):
         spoken = "private phrase 4821"

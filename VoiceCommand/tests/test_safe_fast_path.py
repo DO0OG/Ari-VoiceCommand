@@ -178,6 +178,42 @@ class SafeFastPathTests(unittest.TestCase):
         self.assertEqual(counts["fast_executed"], 1)
         self.assertEqual(counts["llm_calls_saved"], 1)
 
+    def test_tool_execution_log_omits_user_supplied_arguments(self):
+        query = "private phrase 4821"
+        with self.assertLogs(level="INFO") as captured:
+            self.command._execute_tool_calls([{
+                "name": "web_search",
+                "arguments": {"query": query},
+            }])
+
+        self.assertNotIn(query, "\n".join(captured.output))
+        self.handlers["web_search"].assert_called_once_with({"query": query})
+
+    def test_voice_command_event_keeps_shape_and_redacts_original_text(self):
+        spoken = "private phrase 4821"
+        self.command.run_interaction(spoken)
+
+        self.events.assert_called_once()
+        event_name, payload = self.events.call_args.args
+        self.assertEqual(event_name, "on_voice_command")
+        self.assertEqual(payload["text"], "[redacted]")
+        self.assertEqual(payload["response"], "기존 응답")
+        self.assertNotIn(spoken, str(payload))
+
+    def test_malformed_mcp_argument_log_omits_user_text(self):
+        secret = "private phrase 4821"
+        with patch("agent.mcp_client.get_mcp_pool") as get_pool:
+            with self.assertLogs(level="WARNING") as captured:
+                result = self.command._handle_mcp_call({
+                    "endpoint": "local",
+                    "tool": "echo",
+                    "arguments": secret,
+                })
+
+        self.assertEqual(result, get_pool.return_value.call.return_value)
+        get_pool.return_value.call.assert_called_once_with("local", "echo", {"input": secret})
+        self.assertNotIn(secret, "\n".join(captured.output))
+
     def test_successful_payload_with_error_word_is_not_a_failure(self):
         from i18n.translator import _
 

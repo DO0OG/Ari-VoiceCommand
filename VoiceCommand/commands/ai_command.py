@@ -465,7 +465,7 @@ class AICommand(BaseCommand):
             try:
                 raw_arguments = json.loads(raw_arguments)
             except json.JSONDecodeError:
-                logging.warning("[AICommand] MCP arguments JSON 파싱 실패, input 래핑: %r", raw_arguments)
+                logging.warning("[AICommand] MCP arguments JSON 파싱 실패, input 래핑")
                 raw_arguments = {"input": raw_arguments}
         if raw_arguments is None:
             raw_arguments = {}
@@ -1577,7 +1577,7 @@ class AICommand(BaseCommand):
                     logging.debug("대화 기록 저장 생략: %s", exc)
                 try:
                     from core.VoiceCommand import emit_plugin_event
-                    emit_plugin_event("on_voice_command", {"text": text, "response": response})
+                    emit_plugin_event("on_voice_command", {"text": "[redacted]", "response": response})
                 except Exception as exc:
                     logging.debug("음성 명령 이벤트 발행 생략: %s", exc)
 
@@ -1694,7 +1694,7 @@ class AICommand(BaseCommand):
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
-            logging.info("AI tool 실행: %s %s", name, args)
+            logging.info("AI tool 실행: %s", name)
 
             handler = self._dispatch.get(name)
             if handler:
