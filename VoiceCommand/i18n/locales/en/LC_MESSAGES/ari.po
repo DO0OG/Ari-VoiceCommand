@@ -32,6 +32,9 @@ msgstr "Unmuted."
 msgid "실행 중인 앱 목록입니다.\n{apps}"
 msgstr "Here is the list of running apps.\n{apps}"
 
+msgid "실행 중인 앱이 {count}개 있어요: {apps}"
+msgstr "{count} apps are running: {apps}"
+
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "Screenshot saved: {path}"
 

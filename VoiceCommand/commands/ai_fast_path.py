@@ -1,4 +1,5 @@
 """AICommand의 빠른 로컬 처리: 판단 엔진 결과를 기존 도구 처리기로 한 번 실행한다."""
+import json
 from typing import TYPE_CHECKING, Callable, Optional
 
 from i18n.translator import _
@@ -15,6 +16,7 @@ class FastPathMixin:
         "take_screenshot": "스크린샷을 저장했습니다.",
         "adjust_volume": "볼륨을 조절했습니다.",
     }
+    _RUNNING_APPS_SHOWN = 10
 
     def try_fast_path(self, text: str) -> Optional["FastPathResult"]:
         """선택적 로컬 분류 실패는 기존 대화 경로에 영향을 주지 않는다."""
@@ -61,6 +63,23 @@ class FastPathMixin:
             )
         return result is None
 
+    @classmethod
+    def _running_apps_summary(cls, handler_result) -> Optional[str]:
+        """Shorten the handler's JSON list so a spoken reply does not read hundreds of names."""
+        try:
+            payload = json.loads(handler_result)
+        except (TypeError, ValueError):
+            return None
+        apps = payload.get("apps") if isinstance(payload, dict) else None
+        if not isinstance(apps, list) or not apps:
+            return None
+        count = payload.get("count")
+        count = count if isinstance(count, int) else len(apps)
+        shown = ", ".join(str(app) for app in apps[:cls._RUNNING_APPS_SHOWN])
+        if count > cls._RUNNING_APPS_SHOWN:
+            shown += " …"
+        return _("실행 중인 앱이 {count}개 있어요: {apps}").format(count=count, apps=shown)
+
     def _fast_response(self, name: str, handler_result: Optional[str]) -> Optional[str]:
         if name == "get_current_time" and handler_result:
             return str(handler_result)
@@ -71,6 +90,9 @@ class FastPathMixin:
         if name == "take_screenshot" and handler_result:
             return _("스크린샷을 저장했습니다: {path}").format(path=handler_result)
         if name == "get_running_apps" and handler_result:
+            summary = self._running_apps_summary(handler_result)
+            if summary:
+                return summary
             return _("실행 중인 앱 목록입니다.\n{apps}").format(apps=handler_result)
         return _(message)
 

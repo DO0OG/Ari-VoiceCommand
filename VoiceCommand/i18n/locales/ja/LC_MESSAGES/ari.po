@@ -32,6 +32,9 @@ msgstr "ミュートを解除しました。"
 msgid "실행 중인 앱 목록입니다.\n{apps}"
 msgstr "実行中のアプリ一覧です。\n{apps}"
 
+msgid "실행 중인 앱이 {count}개 있어요: {apps}"
+msgstr "実行中のアプリは{count}個です: {apps}"
+
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "スクリーンショットを保存しました: {path}"
 

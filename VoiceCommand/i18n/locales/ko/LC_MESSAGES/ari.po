@@ -32,6 +32,9 @@ msgstr "음소거를 해제했습니다."
 msgid "실행 중인 앱 목록입니다.\n{apps}"
 msgstr "실행 중인 앱 목록입니다.\n{apps}"
 
+msgid "실행 중인 앱이 {count}개 있어요: {apps}"
+msgstr "실행 중인 앱이 {count}개 있어요: {apps}"
+
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "스크린샷을 저장했습니다: {path}"
 

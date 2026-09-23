@@ -409,5 +409,23 @@ class DisabledEngineImportTests(unittest.TestCase):
         self.assertEqual(result.stdout.strip().splitlines()[-1], "False False")
 
 
+class RunningAppsResponseTests(unittest.TestCase):
+    def test_json_app_list_is_shortened_for_the_reply(self):
+        import json
+
+        from commands.ai_fast_path import FastPathMixin
+
+        apps = [f"app{index}.exe" for index in range(54)]
+        payload = json.dumps({"apps": apps, "count": len(apps)})
+        reply = FastPathMixin()._fast_response("get_running_apps", payload)
+
+        self.assertTrue(reply.startswith("실행 중인 앱이 54개 있어요: app0.exe, "))
+        self.assertIn("app9.exe …", reply)
+        self.assertNotIn("app10.exe", reply)
+        # Plain text from a replaced handler keeps the existing list reply.
+        self.assertEqual(FastPathMixin()._fast_response("get_running_apps", "sample.exe"),
+                         "실행 중인 앱 목록입니다.\nsample.exe")
+
+
 if __name__ == "__main__":
     unittest.main()
