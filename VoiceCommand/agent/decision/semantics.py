@@ -310,6 +310,22 @@ def _strip_fillers(value: str, language: str) -> str:
     return value
 
 
+def is_multi_intent(text: str) -> bool:
+    """Flag requests that clearly chain several actions before any scoring.
+
+    This replaces the general conversation router as the pre-check, so word
+    collisions such as an app named "Code" no longer skip local scoring.
+    """
+    if not isinstance(text, str) or not text.strip() or len(text) > 4096:
+        return False
+    value = _normalise(text)
+    language = detect_language(value)
+    if language not in _CONNECTORS:
+        return False
+    value = _strip_fillers(value, language)
+    return bool(connector_count(value, language) and action_anchor_count(value, language) > 1)
+
+
 def _grammar_match(value: str, candidate: str, language: str) -> re.Match[str] | None:
     subject = value.replace(" ", "") if language in {"ko", "ja"} else value
     for pattern in _GRAMMARS.get(candidate, {}).get(language, ()):
@@ -410,5 +426,6 @@ __all__ = [
     "action_anchor_count",
     "connector_count",
     "detect_language",
+    "is_multi_intent",
     "parse_candidate",
 ]

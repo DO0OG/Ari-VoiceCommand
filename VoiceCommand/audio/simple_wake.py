@@ -83,12 +83,12 @@ class SimpleWakeWord:
             text = self._stt.transcribe(audio) if self._stt else None
             if not text:
                 return False
-            logging.debug(f"들은 내용: {text}")
+            logging.debug("들은 내용 (%d자)", len(text))
 
             for wake_word in self.wake_words:
                 if self._matches_wake_word(text, wake_word):
                     if detection_allowed is not None and not detection_allowed():
-                        logging.debug("[WakeWord] TTS 재생/보호 구간 중 감지 후보 무시: %s", text)
+                        logging.debug("[WakeWord] TTS 재생/보호 구간 중 감지 후보 무시")
                         return False
                     return True
             return False

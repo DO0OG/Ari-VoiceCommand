@@ -168,7 +168,7 @@ class AgentPlanner(TemplatePlansMixin):
 
         templated = self._build_template_plan(goal)
         if templated:
-            logging.info("[Planner] 템플릿 계획 사용: %s", goal)
+            logging.info("[Planner] 템플릿 계획 사용 (%d자)", len(goal))
             self._last_learning_signals = signals
             return _annotate(templated)
 

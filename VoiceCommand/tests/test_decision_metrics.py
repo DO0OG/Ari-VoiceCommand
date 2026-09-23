@@ -23,10 +23,9 @@ class DecisionMetricsTests(unittest.TestCase):
             for index, values in enumerate(([0.99, 0.005, 0.005], [0.005, 0.99, 0.005]))
         ]
         scorer = SimpleNamespace(labels=labels, predict=Mock(side_effect=predictions))
-        router = SimpleNamespace(route=Mock(return_value=SimpleNamespace(task_type="simple_chat")))
         with patch("scripts.decision_data.evaluate.build_examples", return_value=(rows, {})):
             with patch("scripts.decision_data.evaluate.LinearScorer", return_value=scorer):
-                with patch("scripts.decision_data.evaluate.get_llm_router", return_value=router):
+                with patch("scripts.decision_data.evaluate.is_multi_intent", return_value=False):
                     with patch(
                         "scripts.decision_data.evaluate.artifact_fingerprints",
                         return_value={"model_sha256": "fixture"},

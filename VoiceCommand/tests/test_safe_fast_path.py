@@ -151,6 +151,33 @@ class SafeFastPathTests(unittest.TestCase):
         self.assistant.feed_tool_result.assert_not_called()
         self.assertFalse(self.command._exec_lock.locked())
 
+    def test_empty_handler_failure_reports_fixed_message_once(self):
+        from i18n.translator import _
+
+        self.predict("take_screenshot")
+        self.handlers["take_screenshot"].return_value = None
+        output = self.command.run_interaction("take a screenshot")
+        self.assertEqual(output, _("요청한 작업을 완료하지 못했어요."))
+        self.handlers["take_screenshot"].assert_called_once()
+        self.assistant.chat_with_tools.assert_not_called()
+        self.assertEqual(self.local.metrics()["execution_failed"], 1)
+
+    def test_rejection_before_dispatch_keeps_conversation_path(self):
+        from agent.decision.engine import FastPathResult
+
+        self.command.try_fast_path = Mock(return_value=FastPathResult(
+            "delete_file", {}, 1.0, 1.0, "linear", True,
+        ))
+        self.assert_fallback("delete this file")
+
+    def test_direct_run_updates_local_counters(self):
+        self.predict("get_current_time")
+        self.command.run_interaction("what time is it")
+        counts = self.local.metrics()
+        self.assertEqual(counts["fast_selected"], 1)
+        self.assertEqual(counts["fast_executed"], 1)
+        self.assertEqual(counts["llm_calls_saved"], 1)
+
     def test_successful_payload_with_error_word_is_not_a_failure(self):
         from i18n.translator import _
 

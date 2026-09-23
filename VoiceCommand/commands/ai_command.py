@@ -432,7 +432,7 @@ class AICommand(BaseCommand):
         max_results = int(args.get("max_results", 5))
         try:
             from services.web_tools import web_search
-            logging.info("[AICommand] web_search 실행: query=%r, max_results=%s", query, max_results)
+            logging.info("[AICommand] web_search 실행: query=%d자, max_results=%s", len(query), max_results)
             result = web_search(query, max_results=max_results)
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
@@ -1475,11 +1475,10 @@ class AICommand(BaseCommand):
             response = None
             tool_calls: List[dict] = []
             fast_result = self.try_fast_path(text)
-            if fast_result is not None:
-                self._execute_fast_path_result(
-                    fast_result,
-                    tool_result_callback=tool_result_callback,
-                )
+            if fast_result is not None and self._execute_fast_path_result(
+                fast_result,
+                tool_result_callback=tool_result_callback,
+            ):
                 return
 
             self._current_goal = text
@@ -1519,7 +1518,7 @@ class AICommand(BaseCommand):
                             "explanation": "복합 작업으로 판단되어 단계별 실행으로 전환할게요.",
                         },
                     }]
-                    logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격: %s", text[:80])
+                    logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격 (%d자)", len(text))
 
                 if tool_calls:
                     data_source = self._infer_data_source_from_tool_calls(tool_calls)
@@ -1642,37 +1641,54 @@ class AICommand(BaseCommand):
             return _("실행 중인 앱 목록입니다.\n{apps}").format(apps=handler_result)
         return _(message)
 
+    def _decision_engine_call(self, method: str, *args) -> None:
+        engine = getattr(self, "_decision_engine", None)
+        if engine is None:
+            return
+        try:
+            getattr(engine, method)(*args)
+        except Exception:
+            pass
+
     def _execute_fast_path_result(
         self,
         result,
         *,
         tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None,
-    ) -> None:
+    ) -> bool:
+        """Return False only when nothing ran, so the caller keeps the conversation path."""
         name = str(getattr(result, "tool_name", "") or "")
         arguments = getattr(result, "arguments", {})
-        if not name or not isinstance(arguments, dict):
-            return
-        try:
-            from agent.decision.candidates import is_direct_allowed
+        allowed = False
+        if name and isinstance(arguments, dict):
+            try:
+                from agent.decision.candidates import is_direct_allowed
 
-            allowed = is_direct_allowed(name, "fast")
-        except Exception:
-            allowed = False
+                allowed = is_direct_allowed(name, "fast")
+            except Exception:
+                allowed = False
         if not allowed:
-            return
+            self._decision_engine_call("record", "llm_fallback")
+            return False
 
         results = self._execute_tool_calls(
             [{"id": "fast_path_1", "name": name, "arguments": arguments}],
             tool_result_callback=tool_result_callback,
         )
         handler_result = results[0] if results else None
+        # The handler may already have had side effects, so a failure is reported
+        # once and never retried through the conversation path.
         if self._fast_handler_failed(handler_result):
-            if handler_result:
-                self._emit_user_message(str(handler_result))
-            return
+            self._decision_engine_call("record", "execution_failed")
+            self._emit_user_message(
+                str(handler_result) if handler_result else _("요청한 작업을 완료하지 못했어요.")
+            )
+            return True
+        self._decision_engine_call("note_executed", result)
         response = self._fast_response(name, handler_result)
         if response:
             self._emit_user_message(response)
+        return True
 
     def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""

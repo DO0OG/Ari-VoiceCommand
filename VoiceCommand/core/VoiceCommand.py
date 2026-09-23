@@ -454,11 +454,11 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
             return
         text = text.strip()
         if len(text) < 2:
-            logging.debug("[STT] 너무 짧은 인식 결과 무시: %r", text)
+            logging.debug("[STT] 너무 짧은 인식 결과 무시 (%d자)", len(text))
             return
         history = previous_texts if previous_texts is not None else deque(maxlen=3)
         if history.count(text) >= 2:
-            logging.debug("[STT] 반복 오인식 무시: %r", text)
+            logging.debug("[STT] 반복 오인식 무시 (%d자)", len(text))
             return
         history.append(text)
         logging.info("인식된 텍스트 수신 (%d자)", len(text))

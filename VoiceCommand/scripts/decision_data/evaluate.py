@@ -11,8 +11,7 @@ import numpy as np
 
 from agent.decision.engine import LinearScorer, UNKNOWN
 from agent.decision.candidates import DIRECT_ALLOWLIST, is_direct_allowed
-from agent.decision.semantics import parse_candidate
-from agent.llm_router import get_llm_router
+from agent.decision.semantics import is_multi_intent, parse_candidate
 from core.settings_schema import DEFAULT_SETTINGS
 from .build_dataset import build_examples
 from .gold_data import build_gold_examples
@@ -387,7 +386,7 @@ def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
         mask = np.array([row["is_noise"] == kind for row in test])
         result["by_bucket"]["noise" if kind else "clean"] = metrics(
             probabilities[mask], targets[mask], labels, threshold)
-    eligible = [get_llm_router().route(row["text"]).task_type == "simple_chat" for row in test]
+    eligible = [not is_multi_intent(row["text"]) for row in test]
     result["with_existing_rule_gate"] = metrics(probabilities, targets, labels, threshold, eligible)
     direct_eligible = [
         rule_pass and is_direct_allowed(prediction.choice, "fast")

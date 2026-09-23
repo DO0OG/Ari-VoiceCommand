@@ -3007,3 +3007,6 @@ msgstr "(Worried) You have exceeded the request limit. Please try again later."
 
 msgid "(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
 msgstr "(Worried) I couldn't process the request. Please try again later."
+
+msgid "요청한 작업을 완료하지 못했어요."
+msgstr "I couldn't finish that request."
