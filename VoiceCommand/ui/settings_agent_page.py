@@ -161,6 +161,10 @@ class _AgentSettingsPage(QWidget):
         self.timeout_label.setText(_("{seconds}초").format(seconds=int(value)))
 
     def get_values(self) -> dict:
+        mode = self.local_decision_mode.currentData() or "off"
+        # The checkbox is the source of truth: a stored fast + direct=false pair must
+        # not turn into direct execution just because another setting was saved.
+        direct = mode == "fast" and self.local_decision_checkbox.isChecked()
         return {
             "agent_timeout_seconds": int(self.timeout_slider.value()),
             "agent_dashboard_enabled": self.dashboard_checkbox.isChecked(),
@@ -172,6 +176,6 @@ class _AgentSettingsPage(QWidget):
             "google_client_secret": self.google_client_secret.text().strip(),
             "image_generation_enabled": self.image_checkbox.isChecked(),
             "image_gen_provider": self.image_provider.text().strip() or "openai",
-            "local_decision_mode": self.local_decision_mode.currentData() or "off",
-            "local_decision_direct_execution": self.local_decision_mode.currentData() == "fast",
+            "local_decision_mode": mode,
+            "local_decision_direct_execution": direct,
         }
