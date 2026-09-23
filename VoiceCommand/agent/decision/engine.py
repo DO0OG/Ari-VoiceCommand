@@ -90,6 +90,7 @@ class LinearScorer:
         payload = (directory / "weights.npz").read_bytes()
         if hashlib.sha256(payload).hexdigest() != config["sha256"]:
             raise ValueError("Checksum mismatch")
+        self.sha256 = config["sha256"]
         with np.load(io.BytesIO(payload), allow_pickle=False) as arrays:
             self.weights = arrays["weights"].astype(np.float32)
             self.bias = arrays["bias"].astype(np.float32)

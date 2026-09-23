@@ -12,7 +12,23 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
 .venv/Scripts/python.exe -m scripts.decision_data.split_dataset --check-manifest
 .venv/Scripts/python.exe -m scripts.decision_data.split_dataset --write-manifest
 .venv/Scripts/python.exe -m scripts.decision_data.robustness
+.venv/Scripts/python.exe -m scripts.decision_data.validate_release
 ```
+
+## 배포 검사
+
+`validate_release`는 `resources/decision/`의 모델만 평가하며 학습하지 않는다. 다음 중
+하나라도 어긋나면 실패하고 CI도 같은 명령을 실행한다.
+
+- 가중치 SHA-256과 설정의 값, 모델 라벨과 후보 registry, `candidate_snapshot.json`
+- 설정의 학습 자료 해시와 현재 자료로 다시 계산한 값
+- 분할 기록의 이동·누락·미사용 family, 예비 자료 누출
+- 고정 test의 직접 처리 정책 적용 후 오선택과 unknown 오수락(행·family 모두 0건),
+  언어별 선택 정확도 0.99 이상
+- `evaluation.json`, `benchmark_results.json`의 `model_sha256`과 평가 행 해시
+
+모델을 바꾸면 `evaluate`, `evaluate --gold`, `benchmark`를 다시 실행해 산출물을 함께
+커밋한다. 예비 자료 결과는 사람 검토 전이므로 판정에 쓰지 않는다.
 
 ## 분할 고정
 
