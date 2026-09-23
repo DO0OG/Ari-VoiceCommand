@@ -57,6 +57,83 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
     }
 
 
+def _selection(probabilities, targets, labels, threshold, eligible=None):
+    """Return the per-row correct and selected masks the gates agree on."""
+    predicted = probabilities.argmax(axis=1)
+    confidence = probabilities.max(axis=1)
+    sorted_probs = np.sort(probabilities, axis=1)
+    selected = ((confidence >= threshold)
+                & (sorted_probs[:, -1] - sorted_probs[:, -2] >= 0.30)
+                & (predicted != labels.index(UNKNOWN)))
+    if eligible is not None:
+        selected &= np.asarray(eligible, dtype=bool)
+    return predicted == targets, selected
+
+
+def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
+    """Score each template family once so large variant groups cannot dominate.
+
+    A family expands into dozens or hundreds of rows through spacing, noise and
+    number variants.  Averaging over rows therefore reports how well the model
+    handles the families that happened to generate the most variants, not how
+    well it generalizes to a phrasing it has never seen.  Every family gets one
+    vote here regardless of how many rows it produced.
+    """
+    probabilities = np.asarray(probabilities, dtype=float)
+    targets = np.asarray(targets, dtype=int)
+    if not len(targets):
+        return {"family_count": 0, "family_top1_accuracy": None, "family_coverage": 0.0,
+                "family_selective_accuracy": None, "family_false_direct": 0}
+    correct, selected = _selection(probabilities, targets, labels, threshold, eligible)
+    grouped: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        grouped.setdefault(str(row.get("family_id") or ""), []).append(index)
+    accuracies, selective, false_direct, covered = [], [], 0, 0
+    for indexes in grouped.values():
+        member = np.array(indexes, dtype=int)
+        accuracies.append(float(correct[member].mean()))
+        chosen = selected[member]
+        if chosen.any():
+            covered += 1
+            selective.append(float(correct[member][chosen].mean()))
+            false_direct += int((chosen & ~correct[member]).any())
+    return {
+        "family_count": len(grouped),
+        "family_top1_accuracy": float(np.mean(accuracies)),
+        "family_coverage": covered / len(grouped),
+        "family_selective_accuracy": float(np.mean(selective)) if selective else None,
+        "family_false_direct": false_direct,
+    }
+
+
+def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
+    """Average per label and per language so rare classes keep their weight."""
+    probabilities = np.asarray(probabilities, dtype=float)
+    targets = np.asarray(targets, dtype=int)
+    if not len(targets):
+        return {"accuracy_by_label": None, "accuracy_by_language": None,
+                "direct_precision": None}
+    correct, selected = _selection(probabilities, targets, labels, threshold, eligible)
+
+    def grouped_mean(keys, mask=None):
+        scores = []
+        for key in sorted(set(keys)):
+            member = np.array([value == key for value in keys])
+            if mask is not None:
+                member = member & mask
+            if member.any():
+                scores.append(float(correct[member].mean()))
+        return float(np.mean(scores)) if scores else None
+
+    return {
+        "accuracy_by_label": grouped_mean([labels[index] for index in targets]),
+        "accuracy_by_language": grouped_mean([str(row.get("language") or "") for row in rows]),
+        "direct_precision": grouped_mean(
+            [labels[index] for index in probabilities.argmax(axis=1)], selected
+        ),
+    }
+
+
 def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
     rows, manifest = build_examples()
     if gold:
@@ -114,6 +191,13 @@ def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
         )
     result["with_direct_policy_gate"] = metrics(
         probabilities, targets, labels, threshold, direct_eligible)
+    # 계열 하나가 수백 행으로 늘어나므로 행 평균과 별개로 계열 한 표 기준을 함께 낸다.
+    result["family"] = family_metrics(test, probabilities, targets, labels, threshold)
+    result["family_with_direct_policy_gate"] = family_metrics(
+        test, probabilities, targets, labels, threshold, direct_eligible)
+    result["macro"] = macro_metrics(test, probabilities, targets, labels, threshold)
+    result["macro_with_direct_policy_gate"] = macro_metrics(
+        test, probabilities, targets, labels, threshold, direct_eligible)
     result["direct_executions"] = 0
     return result
 
@@ -147,6 +231,8 @@ def main(argv=None) -> int:
     print(json.dumps({key: result["overall"][key] for key in (
         "count", "accuracy", "selective_accuracy", "coverage", "ece", "brier", "false_direct_count")}))
     print(json.dumps({language: value["accuracy"] for language, value in result["by_language"].items()}))
+    print(json.dumps(result["family_with_direct_policy_gate"]))
+    print(json.dumps(result["macro_with_direct_policy_gate"]))
     return 0
 
 

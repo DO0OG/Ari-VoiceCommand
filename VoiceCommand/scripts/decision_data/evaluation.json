@@ -5565,5 +5565,29 @@
       }
     }
   },
+  "family": {
+    "family_count": 77,
+    "family_top1_accuracy": 0.6307555932279577,
+    "family_coverage": 0.45454545454545453,
+    "family_selective_accuracy": 1.0,
+    "family_false_direct": 0
+  },
+  "family_with_direct_policy_gate": {
+    "family_count": 77,
+    "family_top1_accuracy": 0.6307555932279577,
+    "family_coverage": 0.44155844155844154,
+    "family_selective_accuracy": 1.0,
+    "family_false_direct": 0
+  },
+  "macro": {
+    "accuracy_by_label": 0.493593507754727,
+    "accuracy_by_language": 0.8211297752868064,
+    "direct_precision": 1.0
+  },
+  "macro_with_direct_policy_gate": {
+    "accuracy_by_label": 0.493593507754727,
+    "accuracy_by_language": 0.8211297752868064,
+    "direct_precision": 1.0
+  },
   "direct_executions": 0
 }

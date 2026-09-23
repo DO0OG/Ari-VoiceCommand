@@ -9,7 +9,41 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
 .venv/Scripts/python.exe -m scripts.decision_data.evaluate
 .venv/Scripts/python.exe -m scripts.decision_data.evaluate --gold
 .venv/Scripts/python.exe -m scripts.decision_data.benchmark
+.venv/Scripts/python.exe -m scripts.decision_data.split_dataset --check-manifest
+.venv/Scripts/python.exe -m scripts.decision_data.split_dataset --write-manifest
+.venv/Scripts/python.exe -m scripts.decision_data.robustness
 ```
+
+## 분할 고정
+
+family별 분할은 `split_manifest.json`에 기록하고 그 값을 그대로 따른다. 한 번
+배정한 family는 문장을 고쳐도 분할이 바뀌지 않으며, 기록에 없는 새 family만
+해당 라벨에서 가장 부족한 분할에 배정한다. 기록이 비어 있을 때의 배정 규칙은
+이전의 train 두 칸 순환과 같은 결과를 낸다.
+
+이 장치가 없을 때는 family가 하나만 늘어도 뒤쪽 배정이 통째로 밀렸고, 같은
+자료에서 시험 분할의 `false_direct_count`가 0에서 111과 118까지 움직였다.
+기존 family의 문장만 고친 경우에도 0에서 12로 바뀌었다. 지금은 family를 추가해도
+기존 배정이 0건 바뀐다.
+
+`--check-manifest`는 기록된 family가 다른 분할로 옮겨졌거나 기록에 없는 family가
+생기면 실패한다. `--write-manifest`는 새 family의 배정을 기록에 추가한다.
+family 이름을 바꿀 때는 기록도 함께 옮긴다.
+
+## 계열 단위 지표
+
+자료는 행 수가 family 수보다 100배 가까이 많다. family 하나가 띄어쓰기, 받아쓰기
+잡음, 말더듬, 높임, 숫자 변형으로 수십에서 수백 행이 되므로 행 평균은 변형이 많이
+생성된 family 쪽으로 기운다. 평가 JSON에는 행 기준 지표와 별개로 family를 한 표로
+계산한 `family`, `family_with_direct_policy_gate`와 라벨·언어별 거시 평균인
+`macro`, `macro_with_direct_policy_gate`를 함께 기록한다.
+
+`robustness.py`는 고정 분할과 별개로 seed 131, 271, 911의 대체 분할을 만들어
+각각 학습하고 선택 정확도 평균과 최소, 오선택 최대, coverage 평균을
+`robustness.json`에 남긴다. 배포 판정용 평가를 대체하지 않으며, 특정 분할에서만
+좋아지는 구성을 걸러내기 위한 참고 자료다.
+
+## 자료 구성
 
 `seed_data.py`와 `expanded_data.py`는 한·영·일 예문과 슬롯 확장 규칙을 담는다.
 번역, 동일 문형, 엔티티 교체, 말투와 음성인식 오류 변형을 같은 family에 묶어
