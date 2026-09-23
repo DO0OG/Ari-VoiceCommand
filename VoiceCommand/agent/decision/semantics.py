@@ -10,6 +10,10 @@ from agent.decision.candidates import DIRECT_ALLOWLIST
 
 
 DIRECT_CANDIDATES = DIRECT_ALLOWLIST
+# Parsed so their meaning can be checked and measured, but never run directly:
+# they stay out of the direct allowlist until they pass the release gate.
+TIER_B_CANDIDATES = frozenset({"get_weather", "set_timer", "cancel_timer", "launch_app"})
+PARSED_CANDIDATES = frozenset(DIRECT_CANDIDATES) | TIER_B_CANDIDATES
 
 
 @dataclass(frozen=True)
@@ -161,6 +165,63 @@ _GRAMMARS: dict[str, dict[str, tuple[str, ...]]] = {
             r"(?:(?:音量|ボリューム|音)(?:を)?)?(?P<direction>ミュート|消音)(?:にし|し)" + _JA_REQ,
             r"(?:(?:音量|ボリューム|音)(?:を)?)?(?P<direction>ミュート|消音)",
         ),
+    },
+    "set_timer": {
+        "ko": (
+            r"(?P<minutes>\d{1,3})분(?:(?P<seconds>\d{1,2})초)?(?:짜리)?(?:으로|로)?타이머(?:를|좀)*"
+            r"(?:맞춰|설정해|켜|시작해|걸어|해)" + _KO_REQ,
+            r"(?P<seconds>\d{1,3})초(?:짜리)?(?:으로|로)?타이머(?:를|좀)*"
+            r"(?:맞춰|설정해|켜|시작해|걸어|해)" + _KO_REQ,
+            r"타이머(?:를|좀)*(?P<minutes>\d{1,3})분(?:(?P<seconds>\d{1,2})초)?(?:으로|로)?"
+            r"(?:맞춰|설정해|걸어|해)" + _KO_REQ,
+        ),
+        "en": (
+            r"(?:set|start)\s+(?:a\s+)?timer\s+for\s+(?P<minutes>\d{1,3})\s+minutes?"
+            r"(?:\s+and\s+(?P<seconds>\d{1,2})\s+seconds?)?",
+            r"(?:set|start)\s+(?:a\s+)?timer\s+for\s+(?P<seconds>\d{1,3})\s+seconds?",
+            r"(?:set|start)\s+(?:a\s+)?(?P<minutes>\d{1,3})[\s-]minutes?\s+timer",
+        ),
+        "ja": (
+            r"(?P<minutes>\d{1,3})分(?:(?P<seconds>\d{1,2})秒)?(?:の)?タイマー(?:を)?"
+            r"(?:セットし|かけ|設定し|始め|スタートし)" + _JA_REQ,
+            r"(?P<seconds>\d{1,3})秒(?:の)?タイマー(?:を)?(?:セットし|かけ|設定し|始め|スタートし)" + _JA_REQ,
+            r"タイマー(?:を)?(?P<minutes>\d{1,3})分(?:(?P<seconds>\d{1,2})秒)?(?:に|で)?"
+            r"(?:セットし|設定し|かけ)" + _JA_REQ,
+        ),
+    },
+    "cancel_timer": {
+        "ko": (
+            r"(?:지금|진행중인|설정한|맞춘)?타이머(?:를|좀)*(?:취소해|꺼|멈춰|중지해|끝내|없애)" + _KO_REQ,
+        ),
+        "en": (r"(?:cancel|stop|clear|turn\s+off)\s+(?:the\s+|my\s+)?timer",),
+        "ja": (r"タイマー(?:を)?(?:キャンセルし|止め|停止し|解除し|消し)" + _JA_REQ,),
+    },
+    # Only the current weather: the handler takes a place, not a day or a comparison.
+    "get_weather": {
+        "ko": (
+            r"(?!.*(?:내일|어제|모레|주말|다음주|비교|아침|오전|오후|저녁|밤|나중))(?:지금|오늘)?"
+            r"(?:(?P<location>[가-힣]{2,8}?)(?:의)?)?(?:지금|오늘)?날씨(?:는|가|를|좀)*"
+            r"(?:어때(?:요)?|알려" + _KO_REQ + r"|확인해" + _KO_REQ + r")",
+        ),
+        "en": (
+            r"(?!.*\b(?:tomorrow|yesterday|tonight|weekend|week|compare|and|morning|afternoon|evening|later)\b)"
+            r"(?:what(?:'s|\s+is)\s+the\s+weather(?:\s+like)?|how(?:'s|\s+is)\s+the\s+weather"
+            r"|(?:tell\s+me|check|show\s+me)\s+the\s+weather)"
+            r"(?:\s+(?:in|for)\s+(?P<location>[a-z][a-z .'-]{0,30}?))?(?:\s+(?:today|now|right\s+now))?",
+        ),
+        "ja": (
+            r"(?!.*(?:明日|昨日|明後日|週末|来週|比べ|比較|朝|午前|午後|夕方|夜|後で))(?:今日の|今の)?"
+            r"(?:(?P<location>[一-龯ァ-ヺー]{1,8})の)?(?:今日の|今の)?天気(?:は)?"
+            r"(?:どう(?:ですか)?|(?:を)?教え" + _JA_REQ + r")",
+        ),
+    },
+    "launch_app": {
+        "ko": (r"(?P<app>.{1,30}?)(?:을|를|좀)*(?:열어|실행해|켜|띄워)" + _KO_REQ,),
+        "en": (
+            r"(?:open|launch|start|run)\s+(?:the\s+|up\s+)?(?P<app>[a-z0-9][a-z0-9 .+-]{0,40}?)"
+            r"(?:\s+(?:app|application|program))?",
+        ),
+        "ja": (r"(?P<app>.{1,30}?)(?:を)?(?:開い|起動し|立ち上げ)" + _JA_REQ,),
     },
 }
 
@@ -374,6 +435,31 @@ def _volume_arguments(match: re.Match[str] | None, candidate: str) -> tuple[dict
     return {"direction": direction, "amount": amount}, True, False
 
 
+def _known_app(name: str) -> str:
+    """Return the alias the launch handler already knows, or "" when unresolved."""
+    from agent.automation_helpers import _APP_ALIAS_CANDIDATES
+
+    key = re.sub(r"\s+", "", name.casefold())
+    for alias in _APP_ALIAS_CANDIDATES:
+        if re.sub(r"\s+", "", alias.casefold()) == key:
+            return alias
+    return ""
+
+
+def _tier_b_arguments(match: re.Match[str], candidate: str) -> tuple[dict[str, object], bool]:
+    values = match.groupdict()
+    if candidate == "set_timer":
+        minutes = int(values.get("minutes") or 0)
+        seconds = int(values.get("seconds") or 0)
+        return {"minutes": minutes, "seconds": seconds}, minutes * 60 + seconds > 0
+    if candidate == "get_weather":
+        return {"location": (values.get("location") or "").strip()}, True
+    if candidate == "launch_app":
+        app = _known_app(values.get("app") or "")
+        return ({"name": app}, True) if app else ({}, False)
+    return {}, True
+
+
 def parse_candidate(text: str, candidate: str) -> SemanticParse:
     """후보 하나가 문장 전체를 설명하는지와 필요한 인자를 확인한다."""
     if not isinstance(text, str) or not text.strip() or len(text) > 4096:
@@ -403,10 +489,12 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
     if target and not target_match:
         residual = True
     arguments, argument_ok, argument_conflict = _volume_arguments(match, candidate)
+    if candidate in TIER_B_CANDIDATES and match is not None:
+        arguments, argument_ok = _tier_b_arguments(match, candidate)
     contradiction = contradiction or argument_conflict
     intent_confirmed = target_match and argument_ok
     valid = bool(match) and argument_ok
-    if candidate not in DIRECT_CANDIDATES:
+    if candidate not in PARSED_CANDIDATES:
         intent_confirmed = False
         residual = True
     return SemanticParse(
@@ -422,6 +510,8 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
 
 __all__ = [
     "DIRECT_CANDIDATES",
+    "PARSED_CANDIDATES",
+    "TIER_B_CANDIDATES",
     "SemanticParse",
     "action_anchor_count",
     "connector_count",

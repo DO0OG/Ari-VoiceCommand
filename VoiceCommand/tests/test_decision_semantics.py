@@ -105,5 +105,48 @@ class DecisionSemanticsTests(unittest.TestCase):
         self.assertEqual(parsed.arguments, {"direction": "mute", "amount": 100})
 
 
+    def test_tier_b_requests_parse_with_handler_arguments(self):
+        cases = (
+            ("set_timer", "30분 타이머 맞춰줘", {"minutes": 30, "seconds": 0}),
+            ("set_timer", "set a timer for 5 minutes and 30 seconds", {"minutes": 5, "seconds": 30}),
+            ("set_timer", "10分のタイマーをセットして", {"minutes": 10, "seconds": 0}),
+            ("cancel_timer", "타이머 취소해줘", {}),
+            ("cancel_timer", "cancel the timer", {}),
+            ("get_weather", "서울 날씨 어때", {"location": "서울"}),
+            ("get_weather", "what's the weather like in Paris", {"location": "Paris"}),
+            ("get_weather", "今日の東京の天気を教えて", {"location": "東京"}),
+            ("launch_app", "크롬 열어줘", {"name": "크롬"}),
+            ("launch_app", "Visual Studio Code 열어줘", {"name": "visual studio code"}),
+            ("launch_app", "open notepad", {"name": "notepad"}),
+        )
+        for candidate, text, arguments in cases:
+            with self.subTest(text=text):
+                parsed = parse_candidate(text, candidate)
+                self.assertTrue(parsed.parse_success)
+                self.assertEqual(parsed.arguments, arguments)
+
+    def test_tier_b_rejects_questions_comparisons_and_unknown_apps(self):
+        cases = (
+            ("set_timer", "30분에 뭐할까?"),
+            ("get_weather", "어제 서울 날씨랑 오늘 부산 날씨 비교해줘"),
+            ("get_weather", "내일 날씨 어때"),
+            ("get_weather", "오늘 저녁 대전 날씨 어때?"),
+            ("get_weather", "what is the weather tomorrow"),
+            ("launch_app", "포토샵 열어줘"),
+            ("launch_app", "open the pod bay doors"),
+            ("launch_app", "크롬 열고 메모장 열어줘"),
+        )
+        for candidate, text in cases:
+            with self.subTest(text=text):
+                self.assertFalse(parse_candidate(text, candidate).parse_success)
+
+    def test_tier_b_is_parsed_but_never_allowed_directly(self):
+        from agent.decision.candidates import is_direct_allowed
+        from agent.decision.semantics import TIER_B_CANDIDATES
+
+        for candidate in TIER_B_CANDIDATES:
+            with self.subTest(candidate=candidate):
+                self.assertFalse(is_direct_allowed(candidate, "fast"))
+
 if __name__ == "__main__":
     unittest.main()
