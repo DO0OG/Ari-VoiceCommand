@@ -92,10 +92,19 @@ bucket별 결과와 오선택 수가 들어 있다. Selective accuracy는 신뢰
 
 이번 범위는 후보 정책과 자료 확장이다. `local_decision_engine_enabled=true`,
 `local_decision_backend=linear`, `local_decision_threshold=0.92`가 기본값이다.
-`local_decision_mode`는 `off` / `shadow` / `fast` / `adaptive`이며 기본값은 `shadow`다.
-설정 키가 없거나 값이 잘못되어도 `shadow`로 처리한다. `off`는 분류를 건너뛴다.
-`local_decision_direct_execution` 기본값은 false다. 직접 처리는 모드가 `fast` 또는
-`adaptive`이고 이 설정이 true일 때만 열리며, 그때도 허용 후보(시간, 실행 앱 목록,
+`local_decision_mode`는 `off` / `shadow` / `fast`이며 기본값은 `off`다. 사람 검수와
+실사용 검증을 포함한 배포 판정을 통과하기 전까지 기본값을 켜지 않는다. 설정 키가 없거나
+값이 잘못되면 `off`로 처리하고, `off`는 분류 모듈과 NumPy를 불러오지 않는다. `shadow`는
+실행하지 않고 판단만 남기는 진단용이다. `adaptive`는 내부 이름으로만 남아 있고 설정에서
+고를 수 없으며, 저장된 값은 직접 처리가 켜져 있으면 같은 조건의 `fast`로, 아니면 `off`로
+옮긴다. 이전 기본값(`shadow` + 직접 처리 false)으로 저장된 설정은 한 번만 `off`로 옮기고
+`local_decision_settings_version=2`를 기록해 이후 사용자가 고른 값은 그대로 둔다. 설정
+파일에 아직 옮기지 않은 인증 정보가 있거나 암호화 저장소를 읽을 수 없으면 파일은 다시 쓰지
+않고 이번 실행에만 적용한다. `off`·`shadow`에서 직접 처리가 true로 남아 있으면 false로
+맞춘다. 설정 화면의 토글 하나가 모드와 직접 처리 값을 함께 바꾸고, 고급 목록에서만 세
+모드를 고를 수 있다.
+`local_decision_direct_execution` 기본값은 false다. 직접 처리는 모드가 `fast`이고 이
+설정이 true일 때만 열리며, 그때도 허용 후보(시간, 실행 앱 목록,
 스크린샷, 음량)이면서 의미 해석기가 인자와 의도를 확정하고 모순이나 남은 동작이
 없어야 한다. 하나라도 어긋나면 기존 호출을 진행한다. 직접 처리는 기존 처리기를
 그대로 호출하고 응답은 번역된 고정 문구를 쓰므로 대화 호출이 생기지 않는다.

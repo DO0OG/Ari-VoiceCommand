@@ -157,8 +157,8 @@ _OPPOSITE_DIRECTION = {"up": "down", "down": "up"}
 def _configured_mode() -> str:
     from core.config_manager import ConfigManager
 
-    mode = ConfigManager.get("local_decision_mode", "shadow")
-    return mode if isinstance(mode, str) and mode in _MODES else "shadow"
+    mode = ConfigManager.get("local_decision_mode", "off")
+    return mode if isinstance(mode, str) and mode in _MODES else "off"
 
 
 def _disabled_reason() -> str:

@@ -43,8 +43,9 @@ DEFAULT_SETTINGS = {
     "local_decision_engine_enabled": True,
     "local_decision_backend": "linear",
     "local_decision_threshold": 0.92,
-    "local_decision_mode": "shadow",
+    "local_decision_mode": "off",
     "local_decision_direct_execution": False,
+    "local_decision_settings_version": 2,
     "vision_enabled": True,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
@@ -125,6 +126,52 @@ DEFAULT_SETTINGS = {
     "image_generation_enabled": False,
     "image_gen_provider": "openai",
 }
+
+LOCAL_DECISION_SETTINGS_VERSION = 2
+LOCAL_DECISION_MODES = ("off", "shadow", "fast")
+
+
+def normalize_local_decision_settings(settings: dict) -> bool:
+    """Resolve contradictory local decision flags in place; return True if anything changed.
+
+    ``adaptive`` stays an internal policy name but is no longer offered, so a stored
+    value becomes ``fast`` when direct execution was on (same gates) and ``off`` otherwise.
+    Direct execution only means something in ``fast`` mode.
+    """
+    changed = False
+    mode = settings.get("local_decision_mode")
+    direct = settings.get("local_decision_direct_execution") is True
+    if mode == "adaptive":
+        mode = "fast" if direct else "off"
+    elif mode is not None and mode not in LOCAL_DECISION_MODES:
+        mode = "off"
+    if mode is not None and mode != settings.get("local_decision_mode"):
+        settings["local_decision_mode"] = mode
+        changed = True
+    if mode in ("off", "shadow") and settings.get("local_decision_direct_execution") is True:
+        settings["local_decision_direct_execution"] = False
+        changed = True
+    return changed
+
+
+def migrate_local_decision_settings(settings: dict) -> bool:
+    """Move stored settings to the release defaults once; return True if anything changed.
+
+    Earlier builds wrote ``shadow`` with direct execution off as the default. That exact
+    pair becomes ``off`` because the release gate has not passed yet. Anything a user
+    chose on purpose after this version is recorded is left alone.
+    """
+    changed = False
+    if settings.get("local_decision_settings_version") != LOCAL_DECISION_SETTINGS_VERSION:
+        if (
+            settings.get("local_decision_mode") == "shadow"
+            and settings.get("local_decision_direct_execution") is not True
+        ):
+            settings["local_decision_mode"] = "off"
+        settings["local_decision_settings_version"] = LOCAL_DECISION_SETTINGS_VERSION
+        changed = True
+    return normalize_local_decision_settings(settings) or changed
+
 
 _TTS_VOICE_BY_LANG = {
     "ko": "ko-KR-SunHiNeural",

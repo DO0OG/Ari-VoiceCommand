@@ -58,6 +58,53 @@ class ConfigManagerTests(unittest.TestCase):
                 self.assertEqual(json.load(handle), original)
             self.assertEqual(os.listdir(tmp), ["settings.json"])
 
+    def test_local_decision_contradictions_are_normalized(self):
+        from core.settings_schema import normalize_local_decision_settings
+
+        cases = (
+            ({"local_decision_mode": "adaptive", "local_decision_direct_execution": True}, "fast", True),
+            ({"local_decision_mode": "adaptive", "local_decision_direct_execution": False}, "off", False),
+            ({"local_decision_mode": "turbo", "local_decision_direct_execution": True}, "off", False),
+            ({"local_decision_mode": "shadow", "local_decision_direct_execution": True}, "shadow", False),
+            ({"local_decision_mode": "fast", "local_decision_direct_execution": False}, "fast", False),
+        )
+        for settings, mode, direct in cases:
+            with self.subTest(settings=dict(settings)):
+                normalize_local_decision_settings(settings)
+                self.assertEqual(settings["local_decision_mode"], mode)
+                self.assertIs(settings["local_decision_direct_execution"], direct)
+
+    def test_old_default_shadow_moves_to_off_once_and_later_choice_stays(self):
+        previous = ConfigManager._cached_settings
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "settings.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"local_decision_mode": "shadow", "local_decision_direct_execution": False}, handle)
+            try:
+                with patch("core.config_manager._settings_path", return_value=path):
+                    ConfigManager._cached_settings = None
+                    self.assertEqual(ConfigManager.get("local_decision_mode"), "off")
+                    with open(path, encoding="utf-8") as handle:
+                        stored = json.load(handle)
+                    self.assertEqual(stored["local_decision_mode"], "off")
+                    self.assertEqual(stored["local_decision_settings_version"], 2)
+
+                    stored["local_decision_mode"] = "shadow"
+                    with open(path, "w", encoding="utf-8") as handle:
+                        json.dump(stored, handle)
+                    ConfigManager._cached_settings = None
+                    self.assertEqual(ConfigManager.get("local_decision_mode"), "shadow")
+            finally:
+                ConfigManager._cached_settings = previous
+
+    def test_explicit_fast_choice_survives_migration(self):
+        from core.settings_schema import migrate_local_decision_settings
+
+        settings = {"local_decision_mode": "fast", "local_decision_direct_execution": True}
+        migrate_local_decision_settings(settings)
+        self.assertEqual(settings["local_decision_mode"], "fast")
+        self.assertTrue(settings["local_decision_direct_execution"])
+
 
 if __name__ == "__main__":
     unittest.main()

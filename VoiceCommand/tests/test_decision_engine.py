@@ -395,7 +395,7 @@ class DecisionEngineTests(unittest.TestCase):
             for name in candidate_names():
                 with self.subTest(mode=mode, name=name):
                     self.assertFalse(is_direct_allowed(name, mode))
-    def test_explicit_modes_allow_proven_request_and_invalid_mode_shadows(self):
+    def test_explicit_modes_allow_proven_request_and_invalid_mode_is_off(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             "get_current_time", {"get_current_time": 1.0}, 1.0, 1.0, "linear", 1.0
@@ -420,7 +420,8 @@ class DecisionEngineTests(unittest.TestCase):
         local.choice = Mock(return_value=decision)
         with self._config_patch(mode="invalid"):
             self.assertIsNone(local.try_fast_path("what time is it"))
-        self.assertIs(local.last_decision, decision)
+        local.choice.assert_not_called()
+        self.assertIsNone(local.last_decision)
 
     def test_off_mode_stops_before_prediction(self):
         engine = _engine_module()
@@ -431,7 +432,7 @@ class DecisionEngineTests(unittest.TestCase):
         local.choice.assert_not_called()
         self.assertIsNone(local.last_decision)
 
-    def test_missing_mode_defaults_to_shadow(self):
+    def test_missing_mode_defaults_to_off(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             engine.UNKNOWN, {engine.UNKNOWN: 1.0}, 1.0, 1.0, "linear", 1.0
@@ -449,8 +450,8 @@ class DecisionEngineTests(unittest.TestCase):
 
         with patch("core.config_manager.ConfigManager.get", side_effect=get):
             self.assertIsNone(local.try_fast_path("hello"))
-        self.assertIs(local.last_decision, decision)
-        local.choice.assert_called_once_with("hello")
+        self.assertIsNone(local.last_decision)
+        local.choice.assert_not_called()
 
     def test_non_finite_confidence_and_margin_are_rejected(self):
         engine = _engine_module()
@@ -568,8 +569,13 @@ class DecisionEngineTests(unittest.TestCase):
 
                 self.assertEqual(result, "ordinary chat response")
                 self.assertEqual(events[0], ("chat", "what time is it", True))
-                self.assertIs(local.last_decision, decision)
-                local.choice.assert_called_once_with("what time is it")
+                if mode_setting is None:
+                    # A missing mode is off, so nothing is scored at all.
+                    self.assertIsNone(local.last_decision)
+                    local.choice.assert_not_called()
+                else:
+                    self.assertIs(local.last_decision, decision)
+                    local.choice.assert_called_once_with("what time is it")
                 dispatch.assert_not_called()
 
     def test_ai_command_high_risk_prediction_uses_chat_and_existing_safety_handler(self):
@@ -688,8 +694,10 @@ class DecisionEngineTests(unittest.TestCase):
 
         template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
         template = json.loads(template_path.read_text(encoding="utf-8"))
-        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "shadow")
-        self.assertEqual(template["local_decision_mode"], "shadow")
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "off")
+        self.assertEqual(template["local_decision_mode"], "off")
+        self.assertEqual(template["local_decision_settings_version"], 2)
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_settings_version"], 2)
         for key in (
             "local_decision_engine_enabled",
             "local_decision_backend",
