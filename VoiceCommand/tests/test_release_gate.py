@@ -30,15 +30,19 @@ SNAPSHOT = DATA_DIR / "candidate_snapshot.json"
 
 def _passing_result():
     gated = {
-        "selected_count": 1,
+        "selected_count": 50,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
-        "selective_accuracy": 1.0,
+        "selective_accuracy": 0.995,
     }
+    language_gate = dict(gated, selected_count=10, selective_accuracy=0.99)
     return {
         "with_direct_policy_gate": dict(gated),
         "family_with_direct_policy_gate": {"family_false_direct": 0},
-        "by_language": {language: {"with_direct_policy_gate": dict(gated)} for language in ("ko", "en", "ja")},
+        "by_language": {
+            language: {"with_direct_policy_gate": dict(language_gate)}
+            for language in ("ko", "en", "ja")
+        },
     }
 
 
@@ -108,6 +112,51 @@ class ReleaseGateTests(unittest.TestCase):
         result = _passing_result()
         result["by_language"]["ja"]["with_direct_policy_gate"]["selective_accuracy"] = 0.95
         self.assertTrue(check_metrics(result))
+
+    def test_development_sample_and_precision_floors_pass_at_boundary(self):
+        self.assertEqual(check_metrics(_passing_result()), [])
+
+        result = _passing_result()
+        result["with_direct_policy_gate"]["selected_count"] = 49
+        self.assertTrue(any("minimum of 50" in item for item in check_metrics(result)))
+
+        result = _passing_result()
+        result["by_language"]["ja"]["with_direct_policy_gate"]["selected_count"] = 9
+        self.assertTrue(any("ja direct selection" in item for item in check_metrics(result)))
+
+        result = _passing_result()
+        result["with_direct_policy_gate"]["selective_accuracy"] = 0.994
+        self.assertTrue(any("overall selective accuracy" in item for item in check_metrics(result)))
+
+        result = _passing_result()
+        result["by_language"]["ja"]["with_direct_policy_gate"]["selective_accuracy"] = 0.989
+        self.assertTrue(any("ja selective accuracy" in item for item in check_metrics(result)))
+
+    def test_strict_release_sample_floors_are_separate_from_dev_floors(self):
+        result = _passing_result()
+        result["with_direct_policy_gate"]["selected_count"] = 100
+        for values in result["by_language"].values():
+            values["with_direct_policy_gate"]["selected_count"] = 30
+        self.assertEqual(check_metrics(result, strict_release=True), [])
+
+        result["with_direct_policy_gate"]["selected_count"] = 99
+        failures = check_metrics(result, strict_release=True)
+        self.assertTrue(any("minimum of 100" in item for item in failures))
+
+        result["with_direct_policy_gate"]["selected_count"] = 100
+        result["by_language"]["ja"]["with_direct_policy_gate"]["selected_count"] = 29
+        failures = check_metrics(result, strict_release=True)
+        self.assertTrue(any("ja direct selection" in item and "minimum of 30" in item for item in failures))
+
+    def test_current_fixed_split_sample_counts_do_not_meet_strict_floors(self):
+        result = _passing_result()
+        result["with_direct_policy_gate"]["selected_count"] = 51
+        for language, count in (("ko", 21), ("en", 17), ("ja", 13)):
+            result["by_language"][language]["with_direct_policy_gate"]["selected_count"] = count
+        failures = check_metrics(result, strict_release=True)
+        self.assertTrue(any("minimum of 100" in item for item in failures))
+        for language in ("ko", "en", "ja"):
+            self.assertTrue(any(language in item and "minimum of 30" in item for item in failures))
 
 
 if __name__ == "__main__":

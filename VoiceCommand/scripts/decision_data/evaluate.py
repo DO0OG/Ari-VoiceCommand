@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -24,12 +25,45 @@ from .provenance import (
 )
 
 
+# These sample floors are regression and non-vacuity checks. The reported
+# Wilson bounds describe uncertainty separately; the floors do not establish
+# a 99% precision claim.
+MIN_DEV_OVERALL_DIRECT_SELECTIONS = 50
+MIN_DEV_LANGUAGE_DIRECT_SELECTIONS = 10
+MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS = 100
+MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS = 30
+MIN_OVERALL_DIRECT_PRECISION = 0.995
+MIN_LANGUAGE_DIRECT_PRECISION = 0.99
+WILSON_95_Z = 1.959963984540054
+
+
+def wilson_lower_bound_95(successes: int, trials: int) -> float | None:
+    """Return the two-sided 95% Wilson lower bound, or None for no trials."""
+    if trials < 0 or successes < 0 or successes > trials:
+        raise ValueError("successes and trials must satisfy 0 <= successes <= trials")
+    if trials == 0:
+        return None
+    z_squared = WILSON_95_Z**2
+    proportion = successes / trials
+    denominator = 1 + z_squared / trials
+    center = proportion + z_squared / (2 * trials)
+    margin = WILSON_95_Z * math.sqrt(
+        proportion * (1 - proportion) / trials
+        + z_squared / (4 * trials**2)
+    )
+    return max(0.0, min(1.0, (center - margin) / denominator))
+
+
 def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
     """Compute multiclass Brier/ECE and selection with unknown abstention."""
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
     if not len(targets):
-        return {"count": 0, "accuracy": None, "coverage": 0.0, "selective_accuracy": None}
+        return {
+            "count": 0, "accuracy": None, "selected_count": 0, "coverage": 0.0,
+            "selective_accuracy": None, "selective_accuracy_wilson95_lower": None,
+            "false_direct_count": 0, "unknown_false_accept_count": 0,
+        }
     predicted = probabilities.argmax(axis=1)
     confidence = probabilities.max(axis=1)
     correct = predicted == targets
@@ -54,10 +88,15 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
     one_hot = np.eye(len(labels))[targets]
     confusion = np.zeros((len(labels), len(labels)), dtype=int)
     np.add.at(confusion, (targets, predicted), 1)
+    selected_count = int(selected.sum())
+    selected_correct = int(correct[selected].sum())
     return {
         "count": len(targets), "accuracy": float(correct.mean()),
-        "selected_count": int(selected.sum()), "coverage": float(selected.mean()),
-        "selective_accuracy": float(correct[selected].mean()) if selected.any() else None,
+        "selected_count": selected_count, "coverage": float(selected.mean()),
+        "selective_accuracy": selected_correct / selected_count if selected_count else None,
+        "selective_accuracy_wilson95_lower": wilson_lower_bound_95(
+            selected_correct, selected_count
+        ),
         "false_direct_count": int((selected & ~correct).sum()),
         "unknown_false_accept_count": int((selected & (targets == labels.index(UNKNOWN))).sum()),
         "ece": float(ece), "brier": float(np.square(probabilities - one_hot).sum(axis=1).mean()),
@@ -228,14 +267,53 @@ def build_model_card(result: dict, model_dir: Path, data_dir: Path) -> dict:
             "top1_accuracy": result["overall"]["accuracy"],
             "parser_confirmed_selected_count": gated["selected_count"],
             "parser_confirmed_precision": gated["selective_accuracy"],
+            "parser_confirmed_precision_wilson95_lower": gated[
+                "selective_accuracy_wilson95_lower"
+            ],
             "false_direct_count": gated["false_direct_count"],
             "by_language": {
                 language: {
                     "selected_count": values["with_direct_policy_gate"]["selected_count"],
                     "selective_accuracy": values["with_direct_policy_gate"]["selective_accuracy"],
+                    "selective_accuracy_wilson95_lower": values[
+                        "with_direct_policy_gate"
+                    ]["selective_accuracy_wilson95_lower"],
                     "false_direct_count": values["with_direct_policy_gate"]["false_direct_count"],
                 }
                 for language, values in result["by_language"].items()
+            },
+            "precision_evidence": {
+                "sample_floors": {
+                    "development": {
+                        "overall": MIN_DEV_OVERALL_DIRECT_SELECTIONS,
+                        "per_language": MIN_DEV_LANGUAGE_DIRECT_SELECTIONS,
+                    },
+                    "strict_release": {
+                        "overall": MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS,
+                        "per_language": MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS,
+                    },
+                },
+                "observed_parser_confirmed_selection_counts": {
+                    "overall": gated["selected_count"],
+                    "by_language": {
+                        language: values["with_direct_policy_gate"]["selected_count"]
+                        for language, values in result["by_language"].items()
+                    },
+                },
+                "wilson95_lower_bounds": {
+                    "overall": gated["selective_accuracy_wilson95_lower"],
+                    "by_language": {
+                        language: values["with_direct_policy_gate"][
+                            "selective_accuracy_wilson95_lower"
+                        ]
+                        for language, values in result["by_language"].items()
+                    },
+                },
+                "interpretation": (
+                    "Sample floors guard against vacuous regression results; they do not "
+                    "establish 99% precision. With zero errors, at least 381 samples are "
+                    "needed for a two-sided 95% Wilson lower bound of 0.99."
+                ),
             },
             "commands_dispatched": 0,
         },

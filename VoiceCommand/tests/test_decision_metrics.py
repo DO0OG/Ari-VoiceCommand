@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from agent.decision.engine import UNKNOWN, softmax
-from scripts.decision_data.evaluate import evaluate, metrics
+from scripts.decision_data.evaluate import evaluate, metrics, wilson_lower_bound_95
 from scripts.decision_data.train import fit_temperature
 
 
@@ -48,6 +48,20 @@ class DecisionMetricsTests(unittest.TestCase):
         self.assertAlmostEqual(result["ece"], (0.05 + 0.05 + 0.6) / 3)
         self.assertAlmostEqual(result["brier"], (0.005 + 0.005 + 0.72) / 3)
         self.assertEqual(result["confusion_matrix"][UNKNOWN], {"example": 1, UNKNOWN: 1})
+        self.assertEqual(result["selected_count"], 1)
+        self.assertAlmostEqual(
+            result["selective_accuracy_wilson95_lower"],
+            wilson_lower_bound_95(1, 1),
+        )
+
+    def test_wilson_95_lower_bound_handles_small_and_empty_samples(self):
+        z = 1.959963984540054
+        self.assertAlmostEqual(
+            wilson_lower_bound_95(51, 51),
+            51 / (51 + z**2),
+        )
+        self.assertIsNone(wilson_lower_bound_95(0, 0))
+        self.assertAlmostEqual(wilson_lower_bound_95(0, 3), 0.0, places=12)
 
     def test_confident_wrong_selection_and_empty_selection_are_reported(self):
         labels = ["example", UNKNOWN]
@@ -56,7 +70,10 @@ class DecisionMetricsTests(unittest.TestCase):
         self.assertEqual(result["unknown_false_accept_count"], 1)
         gated = metrics([[0.99, 0.01]], [1], labels, eligible=[False])
         self.assertIsNone(gated["selective_accuracy"])
+        self.assertIsNone(gated["selective_accuracy_wilson95_lower"])
         self.assertEqual(gated["coverage"], 0)
+        empty = metrics([], [], labels)
+        self.assertIsNone(empty["selective_accuracy_wilson95_lower"])
 
     def test_temperature_fit_reduces_calibration_loss_and_normalizes(self):
         logits = np.array([[10, 0], [10, 0], [0, 10], [0, 10]], dtype=float)

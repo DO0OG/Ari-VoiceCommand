@@ -15,7 +15,17 @@ from pathlib import Path
 from agent.decision.candidates import UNKNOWN, candidate_names
 from .build_dataset import build_examples
 from .dataset_guards import validate_gold_isolation
-from .evaluate import build_model_card, confusion_comparison, evaluate
+from .evaluate import (
+    MIN_DEV_LANGUAGE_DIRECT_SELECTIONS,
+    MIN_DEV_OVERALL_DIRECT_SELECTIONS,
+    MIN_LANGUAGE_DIRECT_PRECISION,
+    MIN_OVERALL_DIRECT_PRECISION,
+    MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS,
+    MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS,
+    build_model_card,
+    confusion_comparison,
+    evaluate,
+)
 from .gold_data import build_gold_examples
 from .provenance import (
     BASELINE_MANIFEST_SHA256,
@@ -28,8 +38,8 @@ from .train import training_sha256
 
 DATA_DIR = Path(__file__).resolve().parent
 MODEL_DIR = DATA_DIR.parents[1] / "resources" / "decision"
-MIN_SELECTIVE_ACCURACY = 0.99
-MIN_DIRECT_SELECTIONS = 1
+# Retained as the legacy overall threshold name for callers importing it.
+MIN_SELECTIVE_ACCURACY = MIN_OVERALL_DIRECT_PRECISION
 ARTIFACTS = ("evaluation.json", "benchmark_results.json", "model_card.json")
 
 
@@ -79,10 +89,35 @@ def check_data(rows: list[dict], gold_rows: list[dict]) -> list[str]:
     return failures
 
 
-def check_metrics(result: dict, minimum: float = MIN_SELECTIVE_ACCURACY) -> list[str]:
-    """Direct handling must not pick a wrong or unknown label on the frozen test split."""
+def check_metrics(
+    result: dict,
+    minimum: float | None = None,
+    *,
+    strict_release: bool = False,
+) -> list[str]:
+    """Check point-precision regressions and minimum parser-confirmed sample sizes.
+
+    Development floors prevent vacuous checks. Strict-release floors are a
+    stronger sample-volume guard for release-readiness checks, but neither set
+    of floors is evidence that the true precision is at least 99%; the Wilson
+    interval is published separately for that uncertainty context.
+    """
     failures = []
     gated = result["with_direct_policy_gate"]
+    minimum_overall_selections = (
+        MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS
+        if strict_release else MIN_DEV_OVERALL_DIRECT_SELECTIONS
+    )
+    minimum_language_selections = (
+        MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS
+        if strict_release else MIN_DEV_LANGUAGE_DIRECT_SELECTIONS
+    )
+    minimum_overall_precision = (
+        MIN_OVERALL_DIRECT_PRECISION if minimum is None else minimum
+    )
+    minimum_language_precision = (
+        MIN_LANGUAGE_DIRECT_PRECISION if minimum is None else minimum
+    )
     if gated["false_direct_count"]:
         failures.append(f"false direct rows: {gated['false_direct_count']}")
     if gated["unknown_false_accept_count"]:
@@ -90,15 +125,17 @@ def check_metrics(result: dict, minimum: float = MIN_SELECTIVE_ACCURACY) -> list
     family = result["family_with_direct_policy_gate"]["family_false_direct"]
     if family:
         failures.append(f"false direct families: {family}")
-    if int(gated.get("selected_count") or 0) < MIN_DIRECT_SELECTIONS:
+    if int(gated.get("selected_count") or 0) < minimum_overall_selections:
         failures.append(
-            f"overall direct selection count is below the minimum of {MIN_DIRECT_SELECTIONS}"
+            "overall direct selection count is below the minimum of "
+            f"{minimum_overall_selections}"
         )
     elif gated.get("selective_accuracy") is None:
         failures.append("overall direct precision is unavailable")
-    elif gated["selective_accuracy"] < minimum:
+    elif gated["selective_accuracy"] < minimum_overall_precision:
         failures.append(
-            f"overall selective accuracy {gated['selective_accuracy']:.4f} below {minimum}"
+            "overall selective accuracy "
+            f"{gated['selective_accuracy']:.4f} below {minimum_overall_precision}"
         )
     languages = result.get("by_language", {})
     for language in ("ko", "en", "ja"):
@@ -111,14 +148,18 @@ def check_metrics(result: dict, minimum: float = MIN_SELECTIVE_ACCURACY) -> list
             failures.append(f"{language} direct metrics are missing")
             continue
         accuracy = language_gate.get("selective_accuracy")
-        if int(language_gate.get("selected_count") or 0) < MIN_DIRECT_SELECTIONS:
+        if int(language_gate.get("selected_count") or 0) < minimum_language_selections:
             failures.append(
-                f"{language} direct selection count is below the minimum of {MIN_DIRECT_SELECTIONS}"
+                f"{language} direct selection count is below the minimum of "
+                f"{minimum_language_selections}"
             )
         elif accuracy is None:
             failures.append(f"{language} direct precision is unavailable")
-        elif accuracy < minimum:
-            failures.append(f"{language} selective accuracy {accuracy:.4f} below {minimum}")
+        elif accuracy < minimum_language_precision:
+            failures.append(
+                f"{language} selective accuracy {accuracy:.4f} "
+                f"below {minimum_language_precision}"
+            )
     return failures
 
 
@@ -204,7 +245,20 @@ def main(argv=None) -> int:
         "selected_count": gated["selected_count"],
         "parser_rejected_count": result["parser_rejected_count"],
         "selective_accuracy": gated["selective_accuracy"],
+        "selective_accuracy_wilson95_lower": gated[
+            "selective_accuracy_wilson95_lower"
+        ],
         "coverage": gated["coverage"],
+        "by_language": {
+            language: {
+                "selected_count": values["with_direct_policy_gate"]["selected_count"],
+                "selective_accuracy": values["with_direct_policy_gate"]["selective_accuracy"],
+                "selective_accuracy_wilson95_lower": values[
+                    "with_direct_policy_gate"
+                ]["selective_accuracy_wilson95_lower"],
+            }
+            for language, values in result["by_language"].items()
+        },
     }))
     return 1 if any(checks.values()) else 0
 

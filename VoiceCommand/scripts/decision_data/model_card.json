@@ -31,23 +31,56 @@
     "top1_accuracy": 0.8182070112235,
     "parser_confirmed_selected_count": 51,
     "parser_confirmed_precision": 1.0,
+    "parser_confirmed_precision_wilson95_lower": 0.9299533801014686,
     "false_direct_count": 0,
     "by_language": {
       "ko": {
         "selected_count": 21,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.8453609810751531,
         "false_direct_count": 0
       },
       "en": {
         "selected_count": 17,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.8156818649911483,
         "false_direct_count": 0
       },
       "ja": {
         "selected_count": 13,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.7719046276458015,
         "false_direct_count": 0
       }
+    },
+    "precision_evidence": {
+      "sample_floors": {
+        "development": {
+          "overall": 50,
+          "per_language": 10
+        },
+        "strict_release": {
+          "overall": 100,
+          "per_language": 30
+        }
+      },
+      "observed_parser_confirmed_selection_counts": {
+        "overall": 51,
+        "by_language": {
+          "ko": 21,
+          "en": 17,
+          "ja": 13
+        }
+      },
+      "wilson95_lower_bounds": {
+        "overall": 0.9299533801014686,
+        "by_language": {
+          "ko": 0.8453609810751531,
+          "en": 0.8156818649911483,
+          "ja": 0.7719046276458015
+        }
+      },
+      "interpretation": "Sample floors guard against vacuous regression results; they do not establish 99% precision. With zero errors, at least 381 samples are needed for a two-sided 95% Wilson lower bound of 0.99."
     },
     "commands_dispatched": 0
   },
