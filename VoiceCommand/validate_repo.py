@@ -96,6 +96,7 @@ COMPILE_TARGETS = [
     "memory/memory_manager.py",
     "memory/conversation_history.py",
     "commands/ai_command.py",
+    "commands/ai_fast_path.py",
     "tts/cosyvoice_tts.py",
     "tts/cosyvoice_utils.py",
     "tts/cosyvoice_worker.py",
