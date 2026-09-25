@@ -1,5 +1,6 @@
 """AICommand의 빠른 로컬 처리: 판단 엔진 결과를 기존 도구 처리기로 한 번 실행한다."""
 import json
+import logging
 from typing import TYPE_CHECKING, Callable, Optional
 
 from i18n.translator import _
@@ -103,7 +104,8 @@ class FastPathMixin:
         try:
             getattr(engine, method)(*args)
         except Exception:
-            pass
+            # 지표 기록 실패가 명령 처리를 막으면 안 된다.
+            logging.debug("[AICommand] 판단 엔진 지표 기록 실패: %s", method, exc_info=True)
 
     def _execute_fast_path_result(
         self,

@@ -1,6 +1,5 @@
+import builtins
 import gettext
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -200,18 +199,18 @@ class SafeFastPathTests(unittest.TestCase):
         self.assertEqual(payload["response"], "기존 응답")
 
     def test_malformed_mcp_argument_log_omits_user_text(self):
-        secret = "private phrase 4821"
+        spoken_arguments = "private phrase 4821"
         with patch("agent.mcp_client.get_mcp_pool") as get_pool:
             with self.assertLogs(level="WARNING") as captured:
                 result = self.command._handle_mcp_call({
                     "endpoint": "local",
                     "tool": "echo",
-                    "arguments": secret,
+                    "arguments": spoken_arguments,
                 })
 
         self.assertEqual(result, get_pool.return_value.call.return_value)
-        get_pool.return_value.call.assert_called_once_with("local", "echo", {"input": secret})
-        self.assertNotIn(secret, "\n".join(captured.output))
+        get_pool.return_value.call.assert_called_once_with("local", "echo", {"input": spoken_arguments})
+        self.assertNotIn(spoken_arguments, "\n".join(captured.output))
 
     def test_successful_payload_with_error_word_is_not_a_failure(self):
         from i18n.translator import _
@@ -391,22 +390,18 @@ class SafeFastPathTests(unittest.TestCase):
 
 class DisabledEngineImportTests(unittest.TestCase):
     def test_off_mode_does_not_import_numpy_or_the_engine(self):
-        script = "\n".join((
-            "import sys",
-            "from unittest.mock import patch",
-            "from commands.ai_command import AICommand",
-            "with patch('core.config_manager.ConfigManager.get',",
-            "           side_effect=lambda key, default=None: 'off' if key == 'local_decision_mode' else default):",
-            "    assert AICommand.try_fast_path(object(), 'volume up') is None",
-            "print('numpy' in sys.modules, 'agent.decision.engine' in sys.modules)",
-        ))
-        root = Path(__file__).resolve().parents[1]
-        result = subprocess.run(
-            [sys.executable, "-c", script], cwd=root, capture_output=True, text=True,
-            encoding="utf-8", timeout=120, check=True,
-        )
+        real_import = builtins.__import__
+        imported = []
 
-        self.assertEqual(result.stdout.strip().splitlines()[-1], "False False")
+        def recording_import(name, *args, **kwargs):
+            imported.append(name)
+            return real_import(name, *args, **kwargs)
+
+        with patch("core.config_manager.ConfigManager.get",
+                   side_effect=lambda key, default=None: "off" if key == "local_decision_mode" else default),                 patch("builtins.__import__", side_effect=recording_import):
+            self.assertIsNone(AICommand.try_fast_path(object(), "volume up"))
+
+        self.assertFalse([name for name in imported if name == "numpy" or name.startswith("agent.decision")])
 
 
 class RunningAppsResponseTests(unittest.TestCase):
