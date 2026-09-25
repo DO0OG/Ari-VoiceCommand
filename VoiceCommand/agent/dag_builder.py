@@ -4,13 +4,33 @@ ActionStep 목록으로부터 실행 DAG와 병렬 그룹을 계산한다.
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import logging
+import ntpath
 import os
 import re
 
 _STEP_OUTPUT_REF_RE = re.compile(r"step_(\d+)_output")
 _WINDOWS_PATH_RE = re.compile(r"([A-Za-z]:\\[^\\\n\"']+(?:\\[^\\\n\"']+)*)")
+_SHELL_FILE_COMMAND_RE = re.compile(
+    r"^\s*(?:&\s*)?(?:sudo\s+)?(?:[^\s]*[\\/])?(?P<command>"
+    r"get-content|set-content|add-content|out-file|import-csv|export-csv|"
+    r"remove-item|copy-item|move-item|new-item|mkdir|md|type|cat|more|cp|mv|rm|del|erase"
+    r")\b(?P<args>.*)$",
+    re.IGNORECASE,
+)
+_SHELL_ENV_VAR_RE = re.compile(
+    r"%([A-Za-z_]\w*)%|\$env:([A-Za-z_]\w*)|\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)",
+    re.IGNORECASE,
+)
+_SHELL_REDIRECTION_RE = re.compile(
+    r"(?P<operator>>>?|<)\s*(?P<target>'[^']*'|\"[^\"]*\"|[^\s;]+)"
+)
+_SHELL_ARGUMENT_RE = re.compile(r"'[^']*'|\"[^\"]*\"|[^\s]+")
+_SHELL_PATH_SWITCH_RE = re.compile(
+    r"(?i)-(?:Path|LiteralPath|Destination)\s+('[^']*'|\"[^\"]*\"|[^\s]+)"
+)
 _URL_RE = re.compile(r"https?://([A-Za-z0-9._:-]+)")
 _DESKTOP_STATE_CALL_RE = re.compile(
     r"\b(?:click_screen|click_image|move_mouse|type_text|press_keys|hotkey|"
@@ -46,6 +66,323 @@ def _norm_file(path: str) -> str:
     return f"file:{os.path.normpath(path)}"
 
 
+def _norm_relative_file(path: str) -> str | None:
+    """Normalize a relative path lexically, without resolving it against cwd."""
+    if not path or ntpath.isabs(path) or ntpath.splitdrive(path)[0]:
+        return None
+    # These markers indicate an expression/template rather than a literal path.
+    if any(marker in path for marker in ("$", "%", "{", "}", "*", "?")):
+        return None
+    normalized = ntpath.normpath(path).replace("\\", "/")
+    return f"file:{normalized}"
+
+
+def _normalize_resource(resource: str) -> str:
+    """Keep explicit relative file resources aligned with inferred path keys."""
+    if not isinstance(resource, str) or not resource.startswith("file:"):
+        return resource
+    path = resource[len("file:") :]
+    if path.startswith("envvar:") or "://" in path or ntpath.isabs(path) or ntpath.splitdrive(path)[0]:
+        return resource
+    normalized = _norm_relative_file(path)
+    return normalized or resource
+
+
+def _file_paths_overlap(first: str, second: str) -> bool:
+    if not first.startswith("file:") or not second.startswith("file:"):
+        return False
+    first_path, second_path = first[5:], second[5:]
+    if not first_path or not second_path or "://" in first_path or "://" in second_path:
+        return False
+    first_path = ntpath.normcase(ntpath.normpath(first_path)).replace("\\", "/")
+    second_path = ntpath.normcase(ntpath.normpath(second_path)).replace("\\", "/")
+    if first_path == second_path:
+        return True
+
+    def leading_parent_count(path: str) -> int:
+        if ntpath.isabs(path) or ntpath.splitdrive(path)[0]:
+            return 0
+        count = 0
+        for part in path.split("/"):
+            if part != "..":
+                break
+            count += 1
+        return count
+
+    if leading_parent_count(first_path) != leading_parent_count(second_path):
+        return False
+    if first_path == "." or second_path == ".":
+        descendant = second_path if first_path == "." else first_path
+        return not ntpath.isabs(descendant) and not descendant.startswith("..")
+    try:
+        common = ntpath.normcase(
+            ntpath.commonpath([first_path, second_path])
+        ).replace("\\", "/")
+    except ValueError:
+        return False
+    return common == first_path or common == second_path
+
+
+def _file_dependency_conflict(
+    reads: set[str],
+    writes: set[str],
+    other_reads: set[str],
+    other_writes: set[str],
+) -> bool:
+    # ponytail: pairwise resource scan is quadratic per step pair; index paths if plans grow large.
+    for write_resources, accessed_resources in (
+        (writes, other_reads | other_writes),
+        (other_writes, reads | writes),
+    ):
+        for write_resource in write_resources:
+            for accessed_resource in accessed_resources:
+                if _file_paths_overlap(write_resource, accessed_resource):
+                    return True
+    return False
+
+
+def _python_call_name(expression: ast.expr) -> str | None:
+    if isinstance(expression, ast.Name):
+        return expression.id
+    if isinstance(expression, ast.Attribute):
+        parent = _python_call_name(expression.value)
+        return f"{parent}.{expression.attr}" if parent else None
+    return None
+
+
+def _python_path_resource(expression: ast.expr) -> str | None:
+    if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+        return _norm_relative_file(expression.value)
+
+    if (
+        isinstance(expression, ast.Call)
+        and _python_call_name(expression.func) in {"os.getenv", "os.environ.get"}
+        and expression.args
+        and all(keyword.arg == "default" for keyword in expression.keywords)
+    ):
+        name = expression.args[0]
+        if isinstance(name, ast.Constant) and isinstance(name.value, str) and name.value:
+            return f"file:envvar:{name.value}"
+
+    if isinstance(expression, ast.Subscript) and _python_call_name(expression.value) == "os.environ":
+        name = expression.slice
+        if isinstance(name, ast.Constant) and isinstance(name.value, str) and name.value:
+            return f"file:envvar:{name.value}"
+    return None
+
+
+def _python_path_resources(expression: ast.expr) -> set[str]:
+    resource = _python_path_resource(expression)
+    if not resource:
+        return set()
+
+    resources = {resource}
+    if (
+        isinstance(expression, ast.Call)
+        and _python_call_name(expression.func) in {"os.getenv", "os.environ.get"}
+    ):
+        fallback = expression.args[1] if len(expression.args) > 1 else next(
+            (keyword.value for keyword in expression.keywords if keyword.arg == "default"),
+            None,
+        )
+        if fallback is not None:
+            resources.update(_python_path_resources(fallback))
+    return resources
+
+
+def _python_file_resources(text: str) -> tuple[set[str], set[str]]:
+    # ponytail: literal paths and simple env lookups only; add pathlib/computed-path
+    # AST support if generated plans need it.
+    reads: set[str] = set()
+    writes: set[str] = set()
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return reads, writes
+
+    read_calls = {"os.listdir", "os.scandir", "listdir", "scandir"}
+    write_calls = {
+        "os.makedirs", "os.mkdir", "os.rmdir", "os.remove", "os.unlink",
+        "makedirs", "mkdir", "rmdir", "remove", "unlink", "rmtree",
+        "shutil.rmtree", "save_document",
+    }
+    copy_calls = {"shutil.copy", "shutil.copy2", "shutil.copyfile", "shutil.move"}
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = _python_call_name(node.func)
+
+        if function in {"open", "io.open"}:
+            file_argument = node.args[0] if node.args else None
+            if file_argument is None:
+                file_keyword = next(
+                    (keyword.value for keyword in node.keywords if keyword.arg == "file"),
+                    None,
+                )
+                file_argument = file_keyword
+            if file_argument is None:
+                continue
+            resources = _python_path_resources(file_argument)
+            if not resources:
+                continue
+
+            mode = node.args[1] if len(node.args) > 1 else None
+            has_dynamic_keywords = any(keyword.arg is None for keyword in node.keywords)
+            for keyword in node.keywords:
+                if keyword.arg == "mode":
+                    mode = keyword.value
+            if mode is None and not has_dynamic_keywords:
+                reads.update(resources)  # open() defaults to read mode.
+            elif isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+                value = mode.value.lower()
+                if "r" in value or "+" in value:
+                    reads.update(resources)
+                if any(flag in value for flag in ("w", "a", "x", "+")):
+                    writes.update(resources)
+            else:
+                # A dynamic mode may read, write, or both; serialize conservatively.
+                reads.update(resources)
+                writes.update(resources)
+            continue
+
+        if function in copy_calls:
+            source = node.args[0] if node.args else None
+            destination = node.args[1] if len(node.args) > 1 else None
+            for keyword in node.keywords:
+                if keyword.arg in {"src", "source"} and source is None:
+                    source = keyword.value
+                if keyword.arg in {"dst", "destination"} and destination is None:
+                    destination = keyword.value
+            source_resources = _python_path_resources(source) if source else set()
+            destination_resources = _python_path_resources(destination) if destination else set()
+            if source_resources:
+                reads.update(source_resources)
+                if function == "shutil.move":
+                    writes.update(source_resources)
+            if destination_resources:
+                writes.update(destination_resources)
+            continue
+
+        if function in (read_calls | write_calls) and node.args:
+            resources = _python_path_resources(node.args[0])
+            if resources:
+                if function in read_calls:
+                    reads.update(resources)
+                if function in write_calls:
+                    writes.update(resources)
+    return reads, writes
+
+
+def _is_outside_quotes(text: str, position: int) -> bool:
+    quote: str | None = None
+    escaped = False
+    for char in text[:position]:
+        if escaped:
+            escaped = False
+        elif quote == '"' and char == "\\":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+    return quote is None
+
+
+def _shell_path_resource(value: str) -> str | None:
+    match = _SHELL_ENV_VAR_RE.match(value)
+    if not match:
+        return _norm_relative_file(value)
+
+    name = next(name for name in match.groups() if name)
+    suffix = value[match.end() :].lstrip("\\/")
+    if not suffix:
+        return f"file:envvar:{name}"
+    if any(marker in suffix for marker in ("$", "%", "{", "}")):
+        return None
+    suffix_resource = _norm_relative_file(suffix)
+    if not suffix_resource:
+        return None
+    return f"file:envvar:{name}/{suffix_resource[len('file:') :]}"
+
+
+def _shell_env_resources(text: str) -> tuple[set[str], set[str]]:
+    # ponytail: known commands and simple redirections only, one line at a time;
+    # add a shell parser if compound or multiline scripts need dependency safety.
+    reads: set[str] = set()
+    writes: set[str] = set()
+    read_commands = {"get-content", "import-csv", "type", "cat", "more"}
+    write_commands = {
+        "set-content", "add-content", "out-file", "export-csv", "remove-item",
+        "new-item", "mkdir", "md", "del", "erase", "rm",
+    }
+    copy_commands = {"copy-item", "move-item", "cp", "mv"}
+
+    for line in text.splitlines():
+        command_match = _SHELL_FILE_COMMAND_RE.match(line)
+        if command_match:
+            command = command_match.group("command").lower()
+            args = command_match.group("args")
+            value_arg = re.search(r"\s+-Value\b", args, re.IGNORECASE)
+            path_switches = list(_SHELL_PATH_SWITCH_RE.finditer(args))
+            switch_values = [match.group(1) for match in path_switches]
+            if path_switches and command not in copy_commands:
+                tokens = switch_values
+            else:
+                positional_args = args
+                if value_arg:
+                    positional_args = positional_args[: value_arg.start()]
+                switch_value_spans = [
+                    match.span(1) for match in path_switches
+                ]
+                tokens = [
+                    token.group(0)
+                    for token in _SHELL_ARGUMENT_RE.finditer(positional_args)
+                    if not token.group(0).startswith(("-", "/"))
+                    and not any(
+                        start <= token.start() < end
+                        for start, end in switch_value_spans
+                    )
+                ]
+                if path_switches:
+                    tokens.extend(switch_values)
+                elif command not in copy_commands:
+                    tokens = tokens[:1]
+                else:
+                    tokens = tokens[:2]
+            resources: set[str] = set()
+            for token in tokens:
+                value = token[1:-1] if len(token) >= 2 and token[0] == token[-1] and token[0] in "'\"" else token
+                resource = _shell_path_resource(value)
+                if resource:
+                    resources.add(resource)
+            if command in read_commands or command in copy_commands:
+                reads.update(resources)
+            if command in write_commands or command in copy_commands:
+                writes.update(resources)
+
+        for match in _SHELL_REDIRECTION_RE.finditer(line):
+            if not _is_outside_quotes(line, match.start()):
+                continue
+            target = match.group("target")
+            if (
+                re.fullmatch(r"&\d+", target)
+                and match.end("operator") == match.start("target")
+            ):
+                continue
+            if len(target) >= 2 and target[0] == target[-1] and target[0] in "'\"":
+                target = target[1:-1]
+            resource = _shell_path_resource(target)
+            if not resource:
+                continue
+            if match.group("operator") == "<":
+                reads.add(resource)
+            else:
+                writes.add(resource)
+    return reads, writes
+
+
 def extract_resources(step_content: str, step_type: str) -> tuple[list[str], list[str]]:
     text = step_content or ""
     if step_type == "think" or not text.strip():
@@ -57,6 +394,16 @@ def extract_resources(step_content: str, step_type: str) -> tuple[list[str], lis
             reads.append(_norm_file(path))
         if any(token in text for token in ("makedirs", "save_document", '"w"', "'w'", '"a"', "'a'", "os.remove", "shutil.copy", "shutil.move", "rmtree")):
             writes.append(_norm_file(path))
+
+    if step_type.lower() != "shell":
+        python_reads, python_writes = _python_file_resources(text)
+        reads.extend(python_reads)
+        writes.extend(python_writes)
+
+    if step_type.lower() == "shell":
+        shell_reads, shell_writes = _shell_env_resources(text)
+        reads.extend(shell_reads)
+        writes.extend(shell_writes)
     for domain in _URL_RE.findall(text):
         reads.append(f"net:{domain.lower()}")
     if "taskkill" in text.lower():
@@ -97,13 +444,30 @@ def build_dag(steps: list) -> list[DagNode]:
             getattr(step, "content", "") or "",
             getattr(step, "step_type", "python"),
         )
-        curr_reads = set(getattr(step, "reads", []) or []) | set(inferred_reads)
-        curr_writes = set(getattr(step, "writes", []) or []) | set(inferred_writes)
+        curr_reads = {
+            _normalize_resource(resource)
+            for resource in (set(getattr(step, "reads", []) or []) | set(inferred_reads))
+        }
+        curr_writes = {
+            _normalize_resource(resource)
+            for resource in (set(getattr(step, "writes", []) or []) | set(inferred_writes))
+        }
         resource_cache[step.step_id] = (curr_reads, curr_writes)
         for prev in steps[:idx]:
             prev_reads, prev_writes = resource_cache[prev.step_id]
             shared_desktop = "desktop:" in (curr_reads | curr_writes) and "desktop:" in (prev_reads | prev_writes)
-            if shared_desktop or (curr_reads & prev_writes) or (curr_writes & prev_writes) or (curr_writes & prev_reads):
+            if (
+                shared_desktop
+                or (curr_reads & prev_writes)
+                or (curr_writes & prev_writes)
+                or (curr_writes & prev_reads)
+                or _file_dependency_conflict(
+                    curr_reads,
+                    curr_writes,
+                    prev_reads,
+                    prev_writes,
+                )
+            ):
                 depends.add(prev.step_id)
         nodes.append(
             DagNode(
