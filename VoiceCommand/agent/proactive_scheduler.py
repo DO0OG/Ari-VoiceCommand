@@ -57,7 +57,7 @@ class ScheduledTask:
     task_id: str
     goal: str
     schedule_expr: str        # 자연어 스케줄 표현 (구: schedule_desc)
-    next_run: str             # ISO format
+    next_run: str             # ISO 형식
     name: str = ""            # 작업 이름 (선택, SchedulerPanel UI용)
     task_type: str = "agent"  # "agent" | "alarm" | "suggestion"
     repeat: bool = False

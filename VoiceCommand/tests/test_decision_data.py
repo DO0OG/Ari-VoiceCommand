@@ -1,4 +1,4 @@
-"""Unit checks for the Phase 0 dataset contract."""
+"""Phase 0 자료 계약에 대한 단위 검사."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import unittest
 import unicodedata
 from unittest.mock import patch
 
-# ``pytest`` loads tests/conftest.py, while direct unittest discovery does not.
+# ``pytest``는 tests/conftest.py를 불러오지만 unittest 직접 탐색은 그렇지 않다.
 VOICECOMMAND_ROOT = Path(__file__).resolve().parents[1]
 if str(VOICECOMMAND_ROOT) not in sys.path:
     sys.path.insert(0, str(VOICECOMMAND_ROOT))
@@ -285,8 +285,8 @@ class DecisionDataTests(unittest.TestCase):
         for text, label in expected.items():
             self.assertEqual(labels_by_text[text], label)
 
-        # Keep this golden list in sync with the hand-written seed itself: all
-        # hard-negative records must use a supported candidate or abstain.
+        # 이 기준 목록은 직접 작성한 seed와 맞춰 둔다. 모든 hard-negative
+        # 기록은 지원하는 후보나 판단 보류를 써야 한다.
         candidate_labels = set(self.manifest["candidate_labels"])
         self.assertTrue(all(label in candidate_labels for label, _, _ in HARD_NEGATIVE_FAMILIES))
 

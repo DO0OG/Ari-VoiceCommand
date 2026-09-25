@@ -1,9 +1,9 @@
-"""Run review corpora through the real command path and count unsafe outcomes.
+"""검수 코퍼스를 실제 명령 경로로 실행하고 안전하지 않은 결과를 센다.
 
-Each sentence goes through ``AICommand.run_interaction`` with the bundled model, fast
-mode and direct execution switched on. Tool handlers and the conversation model are
-replaced by counters, so nothing on the machine changes and no network call is made.
-The EXE self-test covers the packaged build; this harness covers the decision path.
+각 문장은 배포 모델, fast 모드, 직접 실행을 켠 상태로 ``AICommand.run_interaction``을
+거친다. 도구 처리기와 대화 모델은 호출 횟수만 세는 대체물로 바뀌므로 시스템 상태가
+바뀌거나 네트워크 호출이 일어나지 않는다. 배포 빌드는 EXE 자체 검사가, 판단 경로는
+이 도구가 확인한다.
 
     py -m scripts.decision_data.acceptance --output acceptance.json
 """
@@ -24,10 +24,10 @@ _SETTINGS = {
     "local_decision_threshold": 0.92,
     "local_decision_direct_execution": True,
 }
-# The existing volume handler steps by 10 when no amount is given.
+# 기존 음량 처리기는 양이 없으면 10씩 조절한다.
 _DEFAULT_VOLUME_STEP = 10
-# Plain requests that must run directly, so a harness where every positive row
-# falls back to the conversation path cannot pass.
+# 반드시 직접 처리돼야 하는 평범한 요청이다. 모든 긍정 행이 대화 경로로
+# 넘어가도 통과하는 일이 없게 한다.
 _REQUIRED = (
     ("get_current_time", {}, {"ko": "지금 몇 시야", "en": "what time is it", "ja": "今何時"}),
     ("adjust_volume", {"direction": "up", "amount_percent": 10},
@@ -59,10 +59,10 @@ def _skill_context() -> dict:
 
 
 def _arguments_match(tool: str, expected: dict, actual: dict) -> bool:
-    """Check handler arguments, distinct from semantic corpus metadata."""
+    """코퍼스의 의미 메타데이터와 별개로 처리기 인자를 확인한다."""
     if tool != "adjust_volume":
-        # Time, app-list and screenshot corpus expectations describe intent;
-        # their existing handlers take no arguments.
+        # 시각·앱 목록·스크린샷 코퍼스의 기대값은 의도를 나타낼 뿐이고,
+        # 기존 처리기는 인자를 받지 않는다.
         return not actual
     if set(actual) - {"direction", "amount"}:
         return False
@@ -74,7 +74,7 @@ def _arguments_match(tool: str, expected: dict, actual: dict) -> bool:
 
 
 def classify(row: dict, handler_calls: list[tuple[str, dict]], chat_calls: int) -> str:
-    """Return ``direct``, ``fallback`` or the failure kind for one sentence."""
+    """문장 하나에 대해 ``direct``, ``fallback`` 또는 실패 종류를 반환한다."""
     if len(handler_calls) > 1 or (handler_calls and chat_calls):
         return "duplicate_action"
     if not handler_calls and not chat_calls:
@@ -121,7 +121,7 @@ def _rows(corpora: list[Path], required_rows) -> list[dict]:
                 row = json.loads(line)
                 row.setdefault("corpus", path.stem)
                 rows.append(row)
-    # Rows a reviewer rejected are not part of the release judgement.
+    # 검수자가 거절한 행은 배포 판정에 넣지 않는다.
     return [row for row in rows if row.get("review_status") != "human_rejected"]
 
 

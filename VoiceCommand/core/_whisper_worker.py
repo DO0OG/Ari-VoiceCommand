@@ -24,13 +24,13 @@ WORKER_SELF_TEST_ARGUMENT = "--ari-whisper-worker-self-test"
 
 
 def normalize_language(language: str = "ko") -> str:
-    """Normalize supported speech locale tags for faster-whisper."""
+    """faster-whisper에서 지원하는 음성 언어 태그를 정규화한다."""
     value = str(language or "ko").strip().lower().replace("_", "-").split("-", 1)[0]
     return value if value in {"ko", "en", "ja"} else "ko"
 
 
 def _is_bundled_executable() -> bool:
-    """Return whether this module runs inside a frozen/Nuitka executable."""
+    """이 모듈이 frozen 또는 Nuitka 실행 파일 안에서 동작하는지 반환한다."""
     return bool(getattr(sys, "frozen", False)) or "__compiled__" in globals()
 
 
@@ -41,7 +41,7 @@ def _worker_process_command(worker_args: list[str]) -> list[str]:
 
 
 def dispatch_worker_command(argv: list[str]) -> int | None:
-    """Handle worker-only CLI modes before Main.py imports its GUI/runtime."""
+    """Main.py가 GUI/런타임을 가져오기 전에 워커 전용 CLI 모드를 처리한다."""
     if len(argv) < 2:
         return None
     if argv[1] == WORKER_ARGUMENT:
@@ -54,11 +54,11 @@ def dispatch_worker_command(argv: list[str]) -> int | None:
 
 
 def _stop_worker_process(process) -> bool:
-    """Best-effort kill and bounded reap for a failed IPC self-test child."""
+    """IPC 자체 검사에 실패한 자식 프로세스를 가능한 범위에서 종료하고 제한 시간 안에 회수한다."""
     try:
         process.kill()
     except (OSError, ValueError) as exc:
-        # The child can exit between the timeout and this termination attempt.
+        # 시간 초과 직후 종료 신호를 보내기 전에 자식 프로세스가 먼저 끝날 수 있다.
         logging.debug("Whisper worker self-test child kill failed: %s", type(exc).__name__)
 
     try:
@@ -67,7 +67,7 @@ def _stop_worker_process(process) -> bool:
         try:
             process.kill()
         except (OSError, ValueError) as exc:
-            # The second bounded reap below still determines whether it stopped.
+            # 아래에서 제한 시간 내 회수를 다시 시도해 종료 여부를 확인한다.
             logging.debug("Whisper worker self-test retry kill failed: %s", type(exc).__name__)
         try:
             process.communicate(timeout=3)
@@ -83,7 +83,7 @@ def run_worker_self_test(
     result_path: str | None = None,
     timeout_seconds: float = 10.0,
 ) -> int:
-    """Verify self-executable worker IPC without loading a model or audio device."""
+    """모델이나 오디오 장치를 불러오지 않고 실행 파일 자체의 워커 IPC를 확인한다."""
     language = normalize_language(language)
     result = {"ok": False, "scope": "worker_ipc_only", "language": language}
     process = None
@@ -126,7 +126,7 @@ def run_worker_self_test(
 
 
 def _run_worker_self_test(language: str) -> int:
-    """Serve the private no-model protocol used only by run_worker_self_test."""
+    """run_worker_self_test에서만 사용하는 모델 없는 비공개 프로토콜을 처리한다."""
     if sys.stdin is None or sys.stdout is None:
         return 2
     sys.stdout.write("READY\n")

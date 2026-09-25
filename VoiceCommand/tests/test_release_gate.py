@@ -1,4 +1,4 @@
-"""Release gate checks for the committed local decision model."""
+"""커밋된 로컬 판단 모델의 배포 검사 테스트."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ class ReleaseGateTests(unittest.TestCase):
         failures = check_review_corpora(True, loader=pending)
         self.assertTrue(any("release_gold: 825 rows are pending" in item for item in failures))
 
-        # Approving a few rows per language and rejecting the rest must not pass.
+        # 언어마다 몇 행만 승인하고 나머지를 거절하면 통과하면 안 된다.
         few = lambda: (reviewed(release, lambda index, row: index >= 30),  # noqa: E731
                        reviewed(safety, lambda index, row: index >= 30))
         failures = check_review_corpora(True, loader=few)
@@ -101,7 +101,7 @@ class ReleaseGateTests(unittest.TestCase):
             raise ValueError("review row fields differ from the required schema")
 
         self.assertEqual(len(check_review_corpora(False, loader=broken)), 1)
-        # The shipped corpora are valid but not reviewed yet, so only a release build stops.
+        # 배포된 코퍼스는 형식은 맞지만 아직 검수 전이므로 배포 빌드만 멈춘다.
         self.assertEqual(check_review_corpora(False), [])
         self.assertTrue(check_review_corpora(True))
 

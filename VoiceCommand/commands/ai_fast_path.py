@@ -66,7 +66,7 @@ class FastPathMixin:
 
     @classmethod
     def _running_apps_summary(cls, handler_result) -> Optional[str]:
-        """Shorten the handler's JSON list so a spoken reply does not read hundreds of names."""
+        """음성 응답이 앱 이름 수백 개를 읽지 않도록 처리기의 JSON 목록을 줄인다."""
         try:
             payload = json.loads(handler_result)
         except (TypeError, ValueError):
@@ -113,7 +113,7 @@ class FastPathMixin:
         *,
         tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None,
     ) -> bool:
-        """Return False only when nothing ran, so the caller keeps the conversation path."""
+        """아무것도 실행되지 않았을 때만 False를 반환해 호출자가 대화 경로를 유지하게 한다."""
         name = str(getattr(result, "tool_name", "") or "")
         arguments = getattr(result, "arguments", {})
         allowed = False
@@ -133,8 +133,8 @@ class FastPathMixin:
             tool_result_callback=tool_result_callback,
         )
         handler_result = results[0] if results else None
-        # The handler may already have had side effects, so a failure is reported
-        # once and never retried through the conversation path.
+        # 처리기가 이미 부작용을 냈을 수 있으므로 실패는 한 번만 안내하고
+        # 대화 경로로 다시 시도하지 않는다.
         if self._fast_handler_failed(handler_result):
             self._decision_engine_call("record", "execution_failed")
             self._emit_user_message(

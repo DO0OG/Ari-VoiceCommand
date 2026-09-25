@@ -46,7 +46,7 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe -m scripts.decision_data.acceptance
 
-      # .mo files are not committed; without this step the EXE ships untranslated.
+      # .mo 파일은 저장소에 포함되지 않으므로 이 단계를 빼면 EXE에 번역이 반영되지 않는다.
       - name: Compile translations
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe scripts\compile_po.py

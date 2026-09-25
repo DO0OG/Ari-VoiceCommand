@@ -6745,11 +6745,11 @@
     "model_config_sha256": "3307b13a8c4ad074fb3089b96870e1c44cd3531274cc808f9ad3bf0fc4bebaec",
     "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
     "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
-    "parser_sha256": "e5facc319470b48424405069ed9958e81e2e8e5aacc2e10195752acf3954799f",
-    "engine_sha256": "874ee9e926653c7730f9cf0b9a794f68579e3d833b376867cdab938e9829dead",
+    "parser_sha256": "23a5432b4d89ad17ab32590cb5f05a7ff79818cb30a7cb2a08e02ca6664f0da2",
+    "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
-    "settings_schema_sha256": "e989713538613e010f1a4acba562a58207e38f6f4b14d987383a790b47194877",
+    "settings_schema_sha256": "7b3b1c5e0e986a7fd792d65db518c6b392622155c487b8b59ec4170ea9f847b0",
     "split_manifest_sha256": "3cd060b4f6ee6f1e95dd7b089c22866701e395c98bad73344c73f2e4544697ab",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
@@ -6759,7 +6759,7 @@
   "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "ea4bf260a2241f6658d0aa6031234ce1071a7fd56f4c428a3d2a62ed2b33d118",
+    "previous_artifact_sha256": "c5de8c2e91665a05191eb13b244d3e8ddf98f24cd0e14cd4d791c6a4ed3c5070",
     "major_pairs": [
       {
         "actual": "focus_window",
@@ -6812,77 +6812,6 @@
         "count": 26
       }
     ],
-    "top_10_worsened_pairs": [
-      {
-        "actual": "focus_window",
-        "predicted": "launch_app",
-        "current_count": 125,
-        "previous_count": 118,
-        "increase": 7
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "launch_app",
-        "current_count": 66,
-        "previous_count": 60,
-        "increase": 6
-      },
-      {
-        "actual": "set_timer",
-        "predicted": "launch_app",
-        "current_count": 84,
-        "previous_count": 79,
-        "increase": 5
-      },
-      {
-        "actual": "read_emails",
-        "predicted": "get_running_apps",
-        "current_count": 13,
-        "previous_count": 9,
-        "increase": 4
-      },
-      {
-        "actual": "analyze_screenshot",
-        "predicted": "take_screenshot",
-        "current_count": 26,
-        "previous_count": 24,
-        "increase": 2
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "get_calendar_events",
-        "current_count": 22,
-        "previous_count": 20,
-        "increase": 2
-      },
-      {
-        "actual": "mcp_call",
-        "predicted": "launch_app",
-        "current_count": 6,
-        "previous_count": 4,
-        "increase": 2
-      },
-      {
-        "actual": "read_emails",
-        "predicted": "adjust_volume",
-        "current_count": 3,
-        "previous_count": 1,
-        "increase": 2
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "get_current_time",
-        "current_count": 23,
-        "previous_count": 22,
-        "increase": 1
-      },
-      {
-        "actual": "analyze_image_file",
-        "predicted": "read_file",
-        "current_count": 11,
-        "previous_count": 10,
-        "increase": 1
-      }
-    ]
+    "top_10_worsened_pairs": []
   }
 }

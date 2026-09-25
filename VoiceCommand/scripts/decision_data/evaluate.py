@@ -1,4 +1,4 @@
-"""Held-out classification, calibration, and selective routing measurements."""
+"""격리 분할에서의 분류, 보정, 선택적 라우팅 측정."""
 from __future__ import annotations
 
 import argparse
@@ -24,9 +24,9 @@ from .provenance import (
 )
 
 
-# These sample floors are regression and non-vacuity checks. The reported
-# Wilson bounds describe uncertainty separately; the floors do not establish
-# a 99% precision claim.
+# 이 표본 하한은 회귀와 빈 검사를 막기 위한 것이다. 보고하는
+# Wilson 하한은 불확실성을 따로 나타내며, 하한을 넘었다고 정밀도 99%가
+# 입증되지는 않는다.
 MIN_DEV_OVERALL_DIRECT_SELECTIONS = 50
 MIN_DEV_LANGUAGE_DIRECT_SELECTIONS = 10
 MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS = 100
@@ -37,7 +37,7 @@ WILSON_95_Z = 1.959963984540054
 
 
 def wilson_lower_bound_95(successes: int, trials: int) -> float | None:
-    """Return the two-sided 95% Wilson lower bound, or None for no trials."""
+    """양측 95% Wilson 하한을 반환하고, 시행이 없으면 None을 반환한다."""
     if trials < 0 or successes < 0 or successes > trials:
         raise ValueError("successes and trials must satisfy 0 <= successes <= trials")
     if trials == 0:
@@ -54,7 +54,7 @@ def wilson_lower_bound_95(successes: int, trials: int) -> float | None:
 
 
 def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Compute multiclass Brier/ECE and selection with unknown abstention."""
+    """다중 클래스 Brier/ECE와 unknown 보류를 포함한 선택 결과를 계산한다."""
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
     if not len(targets):
@@ -106,7 +106,7 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
 
 
 def _selection(probabilities, targets, labels, threshold, eligible=None):
-    """Return the per-row correct and selected masks the gates agree on."""
+    """게이트들이 공유하는 행별 정답·선택 마스크를 반환한다."""
     predicted = probabilities.argmax(axis=1)
     confidence = probabilities.max(axis=1)
     sorted_probs = np.sort(probabilities, axis=1)
@@ -119,7 +119,7 @@ def _selection(probabilities, targets, labels, threshold, eligible=None):
 
 
 def parser_confirmed_eligibility(rows, predictions, eligible):
-    """Require the semantic parser to confirm each policy-eligible prediction."""
+    """정책상 가능한 예측마다 의미 해석기의 확인을 요구한다."""
 
     return [
         allowed and parse_candidate(row["text"], prediction.choice).parse_success
@@ -128,13 +128,12 @@ def parser_confirmed_eligibility(rows, predictions, eligible):
 
 
 def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Score each template family once so large variant groups cannot dominate.
+    """변형이 많은 묶음이 결과를 좌우하지 않도록 템플릿 family마다 한 번씩 점수를 매긴다.
 
-    A family expands into dozens or hundreds of rows through spacing, noise and
-    number variants.  Averaging over rows therefore reports how well the model
-    handles the families that happened to generate the most variants, not how
-    well it generalizes to a phrasing it has never seen.  Every family gets one
-    vote here regardless of how many rows it produced.
+    family 하나는 띄어쓰기·잡음·숫자 변형으로 수십에서 수백 행으로 늘어난다.
+    그래서 행 평균은 처음 보는 표현에 얼마나 일반화하는지가 아니라, 변형을 가장
+    많이 만든 family를 얼마나 잘 처리하는지를 보여 준다. 여기서는 행 수와 관계없이
+    family마다 한 표씩 준다.
     """
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
@@ -164,7 +163,7 @@ def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligibl
 
 
 def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Average per label and per language so rare classes keep their weight."""
+    """드문 클래스도 비중을 잃지 않도록 라벨별·언어별로 평균한다."""
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
     if not len(targets):
@@ -192,7 +191,7 @@ def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible
 
 
 def confusion_comparison(current: dict, previous: dict | None, previous_sha256: str | None) -> dict:
-    """Summarize top classifier errors and increases over the prior artifact."""
+    """주요 분류 오류와 이전 산출물 대비 증가분을 요약한다."""
 
     def pairs(matrix):
         result = {}
@@ -232,7 +231,7 @@ def confusion_comparison(current: dict, previous: dict | None, previous_sha256: 
 
 
 def review_corpus_summary(data_dir: Path) -> dict:
-    """Count review states of the human-review corpora shipped next to the artifacts."""
+    """산출물과 함께 배포되는 사람 검수 코퍼스의 검수 상태를 센다."""
     summary = {}
     for name in ("release_gold", "safety_gold"):
         path = Path(data_dir) / f"{name}.jsonl"

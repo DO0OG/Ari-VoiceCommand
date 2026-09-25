@@ -67,10 +67,10 @@ def _norm_file(path: str) -> str:
 
 
 def _norm_relative_file(path: str) -> str | None:
-    """Normalize a relative path lexically, without resolving it against cwd."""
+    """cwd를 기준으로 실제 경로를 확인하지 않고 상대 경로를 정규화한다."""
     if not path or ntpath.isabs(path) or ntpath.splitdrive(path)[0]:
         return None
-    # These markers indicate an expression/template rather than a literal path.
+    # 이 표식은 실제 경로가 아니라 표현식/템플릿임을 나타낸다.
     if any(marker in path for marker in ("$", "%", "{", "}", "*", "?")):
         return None
     normalized = ntpath.normpath(path).replace("\\", "/")
@@ -78,7 +78,7 @@ def _norm_relative_file(path: str) -> str | None:
 
 
 def _normalize_resource(resource: str) -> str:
-    """Keep explicit relative file resources aligned with inferred path keys."""
+    """명시적 상대 파일 리소스를 추론된 경로 키와 일치시킨다."""
     if not isinstance(resource, str) or not resource.startswith("file:"):
         return resource
     path = resource[len("file:") :]
@@ -129,7 +129,8 @@ def _file_dependency_conflict(
     other_reads: set[str],
     other_writes: set[str],
 ) -> bool:
-    # ponytail: pairwise resource scan is quadratic per step pair; index paths if plans grow large.
+    # ponytail: 스텝 쌍 안에서 리소스를 모든 조합으로 비교해 이차 시간으로 늘어난다.
+    # 계획이 커지면 경로 인덱스를 도입한다.
     for write_resources, accessed_resources in (
         (writes, other_reads | other_writes),
         (other_writes, reads | writes),
@@ -191,8 +192,8 @@ def _python_path_resources(expression: ast.expr) -> set[str]:
 
 
 def _python_file_resources(text: str) -> tuple[set[str], set[str]]:
-    # ponytail: literal paths and simple env lookups only; add pathlib/computed-path
-    # AST support if generated plans need it.
+    # ponytail: 리터럴 경로와 단순한 환경 변수 조회만 처리한다.
+    # 생성 계획에서 pathlib/계산 경로 추적이 필요해지면 AST 지원을 추가한다.
     reads: set[str] = set()
     writes: set[str] = set()
     try:
@@ -233,7 +234,7 @@ def _python_file_resources(text: str) -> tuple[set[str], set[str]]:
                 if keyword.arg == "mode":
                     mode = keyword.value
             if mode is None and not has_dynamic_keywords:
-                reads.update(resources)  # open() defaults to read mode.
+                reads.update(resources)  # open()의 기본 모드는 읽기 모드다.
             elif isinstance(mode, ast.Constant) and isinstance(mode.value, str):
                 value = mode.value.lower()
                 if "r" in value or "+" in value:
@@ -241,7 +242,7 @@ def _python_file_resources(text: str) -> tuple[set[str], set[str]]:
                 if any(flag in value for flag in ("w", "a", "x", "+")):
                     writes.update(resources)
             else:
-                # A dynamic mode may read, write, or both; serialize conservatively.
+                # 동적 모드는 읽기/쓰기 여부를 알 수 없으므로 두 작업 모두로 분류해 병렬 실행을 제한한다.
                 reads.update(resources)
                 writes.update(resources)
             continue
@@ -308,8 +309,8 @@ def _shell_path_resource(value: str) -> str | None:
 
 
 def _shell_env_resources(text: str) -> tuple[set[str], set[str]]:
-    # ponytail: known commands and simple redirections only, one line at a time;
-    # add a shell parser if compound or multiline scripts need dependency safety.
+    # ponytail: 인식하는 명령과 단순 리디렉션만 줄 단위로 분석한다.
+    # 복합 또는 여러 줄 스크립트의 의존성 보장이 필요해지면 셸 파서를 추가한다.
     reads: set[str] = set()
     writes: set[str] = set()
     read_commands = {"get-content", "import-csv", "type", "cat", "more"}
@@ -418,9 +419,9 @@ def extract_resources(step_content: str, step_type: str) -> tuple[list[str], lis
     if _DESKTOP_STATE_CALL_RE.search(text) or any(
         token in lowered for token in _DESKTOP_STATE_TOKENS
     ):
-        # The desktop focus, pointer, and keyboard state is process-global.
-        # Treat every operation that observes or changes it as an exclusive
-        # resource so two such steps cannot share a parallel group.
+        # 데스크톱 포커스, 포인터, 키보드 상태는 프로세스 전역이다.
+        # 이 상태를 관찰하거나 변경하는 모든 작업을 배타적 리소스로 처리한다.
+        # 그래야 두 작업이 같은 병렬 그룹에서 동시에 실행되지 않는다.
         writes.append("desktop:")
     return sorted(set(reads)), sorted(set(writes))
 

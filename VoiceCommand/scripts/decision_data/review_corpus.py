@@ -1,4 +1,4 @@
-"""Pending multilingual release candidates and an auditable human review CLI."""
+"""검수 대기 다국어 배포 후보와 감사 가능한 사람 검수 CLI."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ from agent.decision.candidates import DIRECT_ALLOWLIST, UNKNOWN, candidate_names
 
 try:
     from . import candidate_families as families
-except ImportError:  # Direct ``python review_corpus.py`` invocation.
+except ImportError:  # ``python review_corpus.py``로 직접 실행할 때.
     import candidate_families as families
 
 
@@ -312,7 +312,7 @@ def _reference_rows() -> list[dict[str, Any]]:
     try:
         from .build_dataset import build_examples
         from .gold_data import build_gold_examples
-    except ImportError:  # Direct ``python review_corpus.py`` invocation.
+    except ImportError:  # ``python review_corpus.py``로 직접 실행할 때.
         from decision_data.build_dataset import build_examples
         from decision_data.gold_data import build_gold_examples
     rows, _manifest = build_examples(include_noise=True)

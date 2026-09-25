@@ -38,7 +38,7 @@ class DecisionSelfTestTests(unittest.TestCase):
     def test_missing_compiled_translations_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "report.json"
-            # Only the .po sources, as in a clean checkout before compile_po runs.
+            # compile_po 실행 전의 깨끗한 checkout처럼 .po 원본만 둔다.
             self.assertEqual(run_self_test(str(output), MODEL_DIR, Path(directory) / "empty"), 1)
             report = json.loads(output.read_text(encoding="utf-8"))
 

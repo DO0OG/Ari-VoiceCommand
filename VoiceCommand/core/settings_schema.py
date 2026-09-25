@@ -95,7 +95,7 @@ DEFAULT_SETTINGS = {
     "affinity_total_clicks": 0,
     "affinity_total_pets": 0,
     "affinity_total_chats": 0,
-    "affinity_last_login": "",      # YYYY-MM-DD
+    "affinity_last_login": "",      # YYYY-MM-DD 형식
     "focus_app_reaction_enabled": True,
     "system_monitor_enabled": True,
     "user_birthday": "",            # MM-DD
@@ -132,11 +132,11 @@ LOCAL_DECISION_MODES = ("off", "shadow", "fast")
 
 
 def normalize_local_decision_settings(settings: dict) -> bool:
-    """Resolve contradictory local decision flags in place; return True if anything changed.
+    """서로 모순되는 로컬 판단 설정을 제자리에서 정리하고, 바뀐 것이 있으면 True를 반환한다.
 
-    ``adaptive`` stays an internal policy name but is no longer offered, so a stored
-    value becomes ``fast`` when direct execution was on (same gates) and ``off`` otherwise.
-    Direct execution only means something in ``fast`` mode.
+    ``adaptive``는 내부 정책 이름으로 남지만 더는 선택지로 제공하지 않는다. 저장된 값은
+    직접 실행이 켜져 있었으면(같은 게이트) ``fast``, 아니면 ``off``가 된다.
+    직접 실행은 ``fast`` 모드에서만 의미가 있다.
     """
     changed = False
     mode = settings.get("local_decision_mode")
@@ -155,11 +155,11 @@ def normalize_local_decision_settings(settings: dict) -> bool:
 
 
 def migrate_local_decision_settings(settings: dict) -> bool:
-    """Move stored settings to the release defaults once; return True if anything changed.
+    """저장된 설정을 배포 기본값으로 한 번 옮기고, 바뀐 것이 있으면 True를 반환한다.
 
-    Earlier builds wrote ``shadow`` with direct execution off as the default. That exact
-    pair becomes ``off`` because the release gate has not passed yet. Anything a user
-    chose on purpose after this version is recorded is left alone.
+    예전 빌드는 직접 실행이 꺼진 ``shadow``를 기본값으로 저장했다. 배포 검사를 아직
+    통과하지 않았으므로 정확히 그 조합만 ``off``로 바꾼다. 이 버전이 기록된 뒤
+    사용자가 일부러 고른 값은 건드리지 않는다.
     """
     changed = False
     if settings.get("local_decision_settings_version") != LOCAL_DECISION_SETTINGS_VERSION:

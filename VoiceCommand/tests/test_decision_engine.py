@@ -196,7 +196,7 @@ class DecisionEngineTests(unittest.TestCase):
         model_dir = Path(__file__).resolve().parents[1] / "resources" / "decision"
         local = engine.LocalDecisionEngine(model_dir)
 
-        # The general router treats this as a coding request; the dedicated gate does not.
+        # 일반 라우터는 이 문장을 코딩 요청으로 보지만 전용 판정은 그렇지 않다.
         self.assertIsNotNone(local.choice("Visual Studio Code 열어줘"))
 
     def test_manual_reload_recovers_after_repair_and_health_has_no_text(self):
@@ -570,7 +570,7 @@ class DecisionEngineTests(unittest.TestCase):
                 self.assertEqual(result, "ordinary chat response")
                 self.assertEqual(events[0], ("chat", "what time is it", True))
                 if mode_setting is None:
-                    # A missing mode is off, so nothing is scored at all.
+                    # 모드가 없으면 꺼짐이므로 점수를 전혀 매기지 않는다.
                     self.assertIsNone(local.last_decision)
                     local.choice.assert_not_called()
                 else:

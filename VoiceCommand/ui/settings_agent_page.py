@@ -22,7 +22,7 @@ from i18n.translator import _
 
 
 def _live_decision_engine():
-    """Return the running local decision engine without importing the app core."""
+    """앱 핵심 모듈을 import하지 않고 실행 중인 로컬 판단 엔진을 반환한다."""
     state = getattr(sys.modules.get("core.VoiceCommand"), "_state", None)
     registry = getattr(state, "command_registry", None)
     for command in getattr(registry, "commands", ()) or ():
@@ -113,7 +113,7 @@ class _AgentSettingsPage(QWidget):
             self.local_decision_mode.addItem(label, value)
         self.local_decision_mode.setCurrentIndex(self.local_decision_mode.findData(mode))
         box.addWidget(self.local_decision_mode)
-        # One toggle writes both stored values; the advanced list follows it.
+        # 토글 하나가 저장값 두 개를 함께 쓰고, 고급 목록은 토글을 따른다.
         self.local_decision_checkbox.toggled.connect(self._on_local_decision_toggled)
         self.local_decision_mode.currentIndexChanged.connect(
             lambda _index: self.local_decision_checkbox.setChecked(
@@ -131,7 +131,7 @@ class _AgentSettingsPage(QWidget):
 
     def _on_local_decision_toggled(self, checked: bool) -> None:
         current = self.local_decision_mode.currentData()
-        # Unchecking only leaves fast; a diagnostic shadow choice made in the list stays.
+        # 체크를 풀면 fast만 해제한다. 목록에서 진단용으로 고른 shadow는 유지한다.
         if checked and current != "fast":
             target = "fast"
         elif not checked and current == "fast":
@@ -162,8 +162,8 @@ class _AgentSettingsPage(QWidget):
 
     def get_values(self) -> dict:
         mode = self.local_decision_mode.currentData() or "off"
-        # The checkbox is the source of truth: a stored fast + direct=false pair must
-        # not turn into direct execution just because another setting was saved.
+        # 기준은 체크박스다. 저장된 fast + direct=false 조합이 다른 설정을 저장했다는
+        # 이유만으로 직접 실행으로 바뀌면 안 된다.
         direct = mode == "fast" and self.local_decision_checkbox.isChecked()
         return {
             "agent_timeout_seconds": int(self.timeout_slider.value()),

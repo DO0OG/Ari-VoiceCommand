@@ -1,4 +1,4 @@
-"""Deterministic multilingual family generation for the expanded dataset."""
+"""확장 자료용 다국어 family를 결정적으로 생성한다."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Iterable, Mapping
 
 try:
     from .seed_data import LanguageText
-except ImportError:  # Direct module execution.
+except ImportError:  # 모듈을 직접 실행할 때.
     from seed_data import LanguageText
 
 
@@ -582,7 +582,7 @@ def _render_template(texts: LanguageText, bucket: str) -> Iterable[dict[str, str
 
 
 def expanded_families() -> list[FamilyRecord]:
-    """Return deterministic multilingual templates with slot siblings grouped."""
+    """슬롯만 다른 문장을 한 묶음으로 둔 결정적 다국어 템플릿을 반환한다."""
 
     families: list[FamilyRecord] = []
     for label in FAST_LABELS:

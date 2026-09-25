@@ -26,7 +26,7 @@ UNKNOWN = "unknown_or_complex"
 
 
 def candidate_names() -> tuple[str, ...]:
-    """Return the registered candidate names with the abstain label last."""
+    """후보 이름을 등록 순서대로 반환하고 판단 보류 라벨은 맨 뒤에 둔다."""
     return registry_candidate_names()
 
 
@@ -136,8 +136,8 @@ class LinearScorer:
 
 
 _MODES = frozenset({"off", "shadow", "fast", "adaptive"})
-# Local, text-free counters. They reset with the process or reset_diagnostics()
-# and are never fed back into training.
+# 원문 없이 세는 로컬 카운터다. 프로세스가 다시 시작되거나 reset_diagnostics()를 부르면
+# 초기화되고, 학습 자료로 다시 쓰이지 않는다.
 _COUNTERS = (
     "decision_total",
     "fast_selected",
@@ -149,7 +149,7 @@ _COUNTERS = (
     "llm_calls_saved",
     "possible_correction",
 )
-# ponytail: only volume has an opposite direction to detect; add other tools when they get one.
+# ponytail: 반대 방향을 따질 수 있는 도구는 음량뿐이다. 다른 도구에 방향이 생기면 추가한다.
 _CORRECTION_WINDOW_S = 20.0
 _OPPOSITE_DIRECTION = {"up": "down", "down": "up"}
 
@@ -162,7 +162,7 @@ def _configured_mode() -> str:
 
 
 def _disabled_reason() -> str:
-    """Explain without user text why a local choice would not run directly."""
+    """로컬 판단 결과를 바로 실행하지 않는 이유를 사용자 원문 없이 설명한다."""
     from core.config_manager import ConfigManager
 
     mode = _configured_mode()
@@ -191,7 +191,7 @@ class LocalDecisionEngine:
         self._last_volume: tuple[str, float] | None = None
 
     def record(self, name: str) -> None:
-        """Increment one diagnostic counter."""
+        """진단 카운터 하나를 1 올린다."""
         with self._lock:
             self._counters[name] += 1
 
@@ -200,7 +200,7 @@ class LocalDecisionEngine:
             return dict(self._counters)
 
     def health(self) -> dict[str, str]:
-        """Load state, last error code and the reason direct execution is off."""
+        """적재 상태, 마지막 오류 코드, 직접 실행이 꺼진 이유를 반환한다."""
         with self._lock:
             scorer = self._scorer
             attempted = self._load_attempted
@@ -223,7 +223,7 @@ class LocalDecisionEngine:
         }
 
     def reload(self) -> None:
-        """Retry loading on the next request. Failed loads are never retried on their own."""
+        """다음 요청에서 다시 적재한다. 적재 실패는 스스로 재시도하지 않는다."""
         with self._lock:
             self._load_attempted = False
             self._scorer = None
@@ -236,7 +236,7 @@ class LocalDecisionEngine:
             self._last_volume = None
 
     def note_executed(self, result: FastPathResult) -> None:
-        """Count a completed direct run and remember a volume change for correction hints."""
+        """완료된 직접 실행을 세고, 되돌림 안내를 위해 음량 변경을 기억한다."""
         with self._lock:
             self._counters["fast_executed"] += 1
             self._counters["llm_calls_saved"] += 1

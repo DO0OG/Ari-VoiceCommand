@@ -50,7 +50,7 @@ if sys.stderr is not None:
 
 # torch(sentence-transformers 경유)를 Qt(PySide6)보다 먼저 임포트한다.
 # Qt를 먼저 임포트한 뒤 torch를 로드하면 Windows에서 DLL 초기화 경합이 발생해
-# access violation으로 프로세스가 손상되고, 그 여파로 PyAudio/PortAudio까지
+# 액세스 위반으로 프로세스가 손상되고, 그 여파로 PyAudio/PortAudio까지
 # 깨지는 문제가 있었다(재현 확인됨: PySide6 임포트 → torch 임포트 순서에서
 # c10.dll 로드가 WinError 1114로 실패). Qt 임포트 전에 미리 로드해 회피한다.
 try:
@@ -468,8 +468,8 @@ def main():
         logging.info("=== 앱 종료 완료 ===")
 
 if __name__ == "__main__":
-    # The release workflow runs the packaged executable with this flag to confirm
-    # the bundled decision model loads; the app is windowed, so it writes a file.
+    # 릴리스 워크플로는 묶음 결정 모델의 로드를 확인하려고 패키징된 실행 파일을 이 플래그와 함께 실행한다.
+    # 콘솔이 없는 실행 파일이므로 결과는 파일에 기록한다.
     if len(sys.argv) == 3 and sys.argv[1] == "--decision-self-test":
         from agent.decision.self_test import run_self_test
 

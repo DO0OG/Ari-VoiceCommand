@@ -417,7 +417,7 @@ class RunningAppsResponseTests(unittest.TestCase):
         self.assertTrue(reply.startswith("실행 중인 앱이 54개 있어요: app0.exe, "))
         self.assertIn("app9.exe …", reply)
         self.assertNotIn("app10.exe", reply)
-        # Plain text from a replaced handler keeps the existing list reply.
+        # 대체된 처리기가 일반 텍스트를 반환하면 기존 목록 응답을 유지한다.
         self.assertEqual(FastPathMixin()._fast_response("get_running_apps", "sample.exe"),
                          "실행 중인 앱 목록입니다.\nsample.exe")
 

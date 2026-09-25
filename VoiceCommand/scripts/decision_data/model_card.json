@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1233470,
-    "additional_steady_rss_bytes": 17682432,
-    "warm_p95_ms": 0.08021000039661884,
+    "additional_steady_rss_bytes": 17788928,
+    "warm_p95_ms": 0.13410500059762853,
     "gpu_used": false
   },
   "review": {
@@ -113,11 +113,11 @@
     "model_config_sha256": "3307b13a8c4ad074fb3089b96870e1c44cd3531274cc808f9ad3bf0fc4bebaec",
     "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
     "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
-    "parser_sha256": "e5facc319470b48424405069ed9958e81e2e8e5aacc2e10195752acf3954799f",
-    "engine_sha256": "874ee9e926653c7730f9cf0b9a794f68579e3d833b376867cdab938e9829dead",
+    "parser_sha256": "23a5432b4d89ad17ab32590cb5f05a7ff79818cb30a7cb2a08e02ca6664f0da2",
+    "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
-    "settings_schema_sha256": "e989713538613e010f1a4acba562a58207e38f6f4b14d987383a790b47194877",
+    "settings_schema_sha256": "7b3b1c5e0e986a7fd792d65db518c6b392622155c487b8b59ec4170ea9f847b0",
     "split_manifest_sha256": "3cd060b4f6ee6f1e95dd7b089c22866701e395c98bad73344c73f2e4544697ab",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",

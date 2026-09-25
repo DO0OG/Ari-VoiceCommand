@@ -1,9 +1,8 @@
-"""Small, hand-written multilingual seed families for the Phase 0 benchmark.
+"""Phase 0 기준선용으로 직접 작성한 작은 다국어 seed family.
 
-Each tuple is ``(Korean, English, Japanese)``.  A family is the unit of
-splitting; translations and generated STT-noise variants stay together so a
-test example cannot be a paraphrase of a training example under another
-language.
+각 튜플은 ``(한국어, 영어, 일본어)``다. 분할 단위는 family이며, 번역문과 생성된
+받아쓰기 잡음 변형은 같은 분할에 둔다. 그래야 시험 예시가 다른 언어로 된 학습
+예시의 바꿔 쓴 문장이 되지 않는다.
 """
 
 from __future__ import annotations
@@ -42,11 +41,11 @@ SLOT_FAMILY_GROUPS: dict[str, dict[int, str]] = {
 }
 
 
-# At least four distinct paraphrase families per built-in candidate.  The
-# examples are deliberately short and concrete because this is a routing seed,
-# not a claim of production language coverage.  Candidates that are reached
-# most often by voice carry extra families covering dropped particles, casual
-# endings and swapped app names.
+# 기본 후보마다 서로 다른 바꿔 쓰기 family를 네 개 이상 둔다. 이 자료는
+# 라우팅용 seed이지 실제 서비스 언어 범위를 보장하는 것이 아니므로 예시를 일부러
+# 짧고 구체적으로 썼다. 음성으로 자주 부르는 후보에는 조사 생략, 반말 어미,
+# 앱 이름 교체를 다루는
+# family를 더 둔다.
 TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
     "get_weather": (
         ("오늘 날씨 알려줘", "Tell me today's weather", "今日の天気を教えて"),
@@ -393,16 +392,16 @@ def _family(label: str, index: int, texts: LanguageText, bucket: str = "single_a
 
 
 def seed_families() -> list[dict]:
-    """Return all hand-written family records in stable order."""
+    """직접 작성한 family 기록을 모두 안정된 순서로 반환한다."""
 
     families: list[dict] = []
     for label in sorted(TOOL_FAMILY_TEXTS):
         for index, texts in enumerate(TOOL_FAMILY_TEXTS[label], start=1):
             family = _family(label, index, texts)
-            # App names are slots in one request template, and dropping the
-            # object particle does not change the template either.  Keep those
-            # variants together so a slot swap cannot leak between train and
-            # test -- and so the spoken short form trains next to its parent.
+            # 앱 이름은 한 요청 템플릿 안의 슬롯이고, 목적격 조사를 빼도 템플릿은
+            # 바뀌지 않는다. 슬롯만 바뀐 문장이 학습과 시험으로 나뉘지 않도록
+            # 이런 변형을 한데 묶는다. 짧게 말한 형태도 원래 문장 옆에서
+            # 학습된다.
             grouped_family = SLOT_FAMILY_GROUPS.get(label, {}).get(index)
             if grouped_family is not None:
                 family["family_id"] = grouped_family

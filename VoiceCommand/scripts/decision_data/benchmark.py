@@ -1,4 +1,4 @@
-"""Measure cold load, warm latency and RSS in a fresh CPU-only process."""
+"""새 CPU 전용 프로세스에서 cold 적재, warm 지연, RSS를 측정한다."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,7 @@ from .provenance import artifact_fingerprints
 
 
 def benchmark(model_dir: Path, iterations: int = 1000) -> dict:
-    """Include runtime import overhead in additional RSS; never poll in background."""
+    """추가 RSS에 런타임 import 비용을 포함하고, 백그라운드에서 폴링하지 않는다."""
     process = psutil.Process()
     baseline_rss = process.memory_info().rss
     started = time.perf_counter()

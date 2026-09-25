@@ -1,8 +1,8 @@
-"""Curated multilingual contexts for pending decision-corpus review."""
+"""검수 대기 판단 코퍼스용으로 고른 다국어 문맥이다."""
 
 LANGUAGES = ("ko", "en", "ja")
 
-# One independently authored utterance family per entry; translations are siblings.
+# 항목마다 독립적으로 작성한 발화 family 하나이고, 번역문은 같은 family에 속한다.
 DIRECT_FAMILIES = {
     "get_current_time": (
         ("time_now", {"ko": "지금 몇 시야?", "en": "What time is it right now?", "ja": "ただいまの時刻は何時ですか？"}, {"timezone": "local"}),
@@ -217,7 +217,7 @@ DIRECT_FAMILIES = {
     ),
 }
 
-# Tier B examples stay fallback-only until their parsers are released.
+# Tier B 예시는 해당 해석기가 배포되기 전까지 대화 경로 전용으로 둔다.
 TIER_B = (
     ("get_weather", "seoul_today", {"ko": "오늘 서울 날씨 알려줘.", "en": "What's the weather in Seoul today?", "ja": "今日のソウルの天気を教えて。"}, {"location": "Seoul"}),
     ("get_weather", "busan_tomorrow", {"ko": "내일 부산에 비 올지 확인해 줘.", "en": "Check whether it will rain in Busan tomorrow.", "ja": "明日の釜山は雨が降るか確認して。"}, {"location": "Busan", "date": "tomorrow"}),
@@ -296,8 +296,8 @@ COLLOQUIAL_STT = (
     ("adjust_volume", "volume_output", {"ko": "오디오 출력 좀만 낮춰", "en": "Ease the audio output down a notch.", "ja": "音声出力を少しだけ下げて。"}, {"direction": "down", "amount_percent": 10}, "colloquial"),
 )
 
-# Safety labels are UNKNOWN/fallback; candidate_tool records only the nearest
-# Tier A confusion target and never authorizes that tool to execute.
+# 안전 라벨은 UNKNOWN/fallback이다. candidate_tool은 가장 가까운 Tier A 혼동 대상만
+# 기록하며 그 도구의 실행을 허용하지 않는다.
 HARD_NEGATIVES = (
     ("volume_reason_01", "adjust_volume", "volume_meaning", {"ko": "소리가 너무 큰데 왜 그런지 설명해 줘.", "en": "The sound is too loud; explain why that might be.", "ja": "音が大きすぎるのはなぜか説明して。"}),
     ("volume_reason_02", "adjust_volume", "volume_meaning", {"ko": "알림음이 음악보다 크게 들리는 이유가 뭘까?", "en": "Why do notifications sound louder than the music?", "ja": "通知音が音楽より大きく聞こえるのはなぜ？"}),

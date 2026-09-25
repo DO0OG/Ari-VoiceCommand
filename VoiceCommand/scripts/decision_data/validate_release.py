@@ -1,9 +1,8 @@
-"""Release checks for the committed local decision model.
+"""커밋된 로컬 판단 모델의 배포 검사.
 
-Evaluates only the files that ship in ``resources/decision``; nothing is
-trained here.  Every check reports a reason and the command exits non-zero
-when any of them fails, so CI blocks a release that drifted from its data,
-its candidate registry or its recorded measurements.
+``resources/decision``에 포함되어 배포되는 파일만 평가하며 여기서는 학습하지
+않는다. 모든 검사는 이유를 보고하고 하나라도 실패하면 0이 아닌 코드로 끝나므로,
+자료·후보 등록부·기록된 측정값과 어긋난 배포는 CI에서 막힌다.
 """
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ from .train import training_sha256
 
 DATA_DIR = Path(__file__).resolve().parent
 MODEL_DIR = DATA_DIR.parents[1] / "resources" / "decision"
-# Retained as the legacy overall threshold name for callers importing it.
+# 이 이름을 가져다 쓰는 호출자를 위해 예전 전체 기준값 이름을 남긴다.
 MIN_SELECTIVE_ACCURACY = MIN_OVERALL_DIRECT_PRECISION
 ARTIFACTS = ("evaluation.json", "benchmark_results.json", "model_card.json")
 
@@ -49,7 +48,7 @@ def _load_json(path: Path) -> dict:
 
 
 def check_model(model_dir: Path, rows: list[dict], snapshot_path: Path) -> list[str]:
-    """The weights, labels and training hash must match what the config claims."""
+    """가중치, 라벨, 학습 해시가 설정에 적힌 값과 일치해야 한다."""
     failures = []
     config = _load_json(model_dir / "config.json")
     weights_sha = hashlib.sha256((model_dir / "weights.npz").read_bytes()).hexdigest()
@@ -67,7 +66,7 @@ def check_model(model_dir: Path, rows: list[dict], snapshot_path: Path) -> list[
 
 
 def check_data(rows: list[dict], gold_rows: list[dict]) -> list[str]:
-    """Recorded splits must hold and the reserved set must stay out of training."""
+    """기록된 분할이 유지되고 예비 자료가 학습에 섞이지 않아야 한다."""
     failures = []
     drift = manifest_drift(rows)
     for kind in ("moved", "unrecorded", "stale"):
@@ -96,12 +95,11 @@ def check_metrics(
     *,
     strict_release: bool = False,
 ) -> list[str]:
-    """Check point-precision regressions and minimum parser-confirmed sample sizes.
+    """정밀도 회귀와 의미 해석기가 확인한 최소 표본 수를 검사한다.
 
-    Development floors prevent vacuous checks. Strict-release floors are a
-    stronger sample-volume guard for release-readiness checks, but neither set
-    of floors is evidence that the true precision is at least 99%; the Wilson
-    interval is published separately for that uncertainty context.
+    개발 하한은 빈 검사를 막는다. 배포 하한은 배포 준비 검사를 위한 더 강한 표본
+    수 기준이지만, 어느 쪽도 실제 정밀도가 99% 이상이라는 근거는 아니다. 그
+    불확실성은 Wilson 구간으로 따로 공개한다.
     """
     failures = []
     gated = result["with_direct_policy_gate"]
@@ -165,7 +163,7 @@ def check_metrics(
 
 
 def check_artifacts(result: dict, data_dir: Path, model_dir: Path = MODEL_DIR) -> list[str]:
-    """Committed measurements must match the model, data, policy, and parser inputs."""
+    """커밋된 측정값은 모델, 자료, 정책, 해석기 입력과 일치해야 한다."""
     failures = []
     fingerprints = result["provenance"]
     for name in ARTIFACTS:
@@ -224,14 +222,14 @@ def check_artifacts(result: dict, data_dir: Path, model_dir: Path = MODEL_DIR) -
     return failures
 
 
-# Approval floors keep a release from passing on a handful of accepted rows with the
-# rest rejected: each floor is about 80% of what the corpora were generated with.
+# 승인 하한은 몇 행만 승인하고 나머지를 거절한 상태로 배포 검사를 통과하지 못하게
+# 한다. 각 하한은 코퍼스를 만들 때의 행 수의 약 80%다.
 MIN_APPROVED_PER_LANGUAGE = {"release_gold": 220, "safety_gold": 80}
 MIN_DIRECT_APPROVED_PER_TOOL_LANGUAGE = 45
 
 
 def check_review_corpora(strict_release: bool = False, loader=load_review_corpora) -> list[str]:
-    """Validate the human-review corpora; a release build also needs them reviewed in bulk."""
+    """사람 검수 코퍼스를 검증한다. 배포 빌드는 대부분의 행이 검수됐는지도 확인한다."""
     try:
         release_rows, safety_rows = loader()
     except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -251,8 +249,8 @@ def check_review_corpora(strict_release: bool = False, loader=load_review_corpor
                     f"{name}: {language} has {count} approved rows, "
                     f"below the minimum of {MIN_APPROVED_PER_LANGUAGE[name]}"
                 )
-    # Counted on the reviewed label, so an edit that moves a row away from a tool
-    # or marks it fallback-only does not count toward that tool.
+    # 검수된 라벨 기준으로 세므로, 행을 다른 도구로 옮기거나 대화 경로 전용으로
+    # 표시한 수정은 원래 도구의 수에 들어가지 않는다.
     direct = [
         row for row in release_rows
         if row["review_status"] == "human_approved" and row["label"] in DIRECT_ALLOWLIST

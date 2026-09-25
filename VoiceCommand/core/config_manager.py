@@ -85,11 +85,11 @@ class ConfigManager:
                         logging.warning("Credential migration deferred; original settings preserved; use environment variables if encryption is unavailable")
                 stored = merged
             cls._cached_settings = {**cls.DEFAULT_SETTINGS, **public, **stored}
-            # Old files are recognised by their own version, not the merged default.
+            # 예전 파일은 병합된 기본값이 아니라 파일 자체의 버전으로 구분한다.
             cls._cached_settings["local_decision_settings_version"] = public.get("local_decision_settings_version")
-            # Leave the file alone while credentials are still in it or the encrypted store
-            # is unreadable; the public copy could drop them. The change then applies to this
-            # run only.
+            # 인증값이 아직 파일에 남아 있거나 암호화 저장소를 읽을 수 없으면 파일을 그대로 둔다.
+            # 공개 사본에서 인증값이 빠질 수 있기 때문이다. 이때 변경은 이번 실행에만
+            # 적용된다.
             if (
                 migrate_local_decision_settings(cls._cached_settings)
                 and original

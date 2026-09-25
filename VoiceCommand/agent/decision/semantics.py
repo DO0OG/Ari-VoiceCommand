@@ -10,8 +10,8 @@ from agent.decision.candidates import DIRECT_ALLOWLIST
 
 
 DIRECT_CANDIDATES = DIRECT_ALLOWLIST
-# Parsed so their meaning can be checked and measured, but never run directly:
-# they stay out of the direct allowlist until they pass the release gate.
+# 의미를 확인하고 측정하려고 해석은 하지만 직접 실행하지는 않는다.
+# 배포 검사를 통과하기 전까지 직접 실행 허용 목록에 넣지 않는다.
 TIER_B_CANDIDATES = frozenset({"get_weather", "set_timer", "cancel_timer", "launch_app"})
 PARSED_CANDIDATES = frozenset(DIRECT_CANDIDATES) | TIER_B_CANDIDATES
 
@@ -41,7 +41,7 @@ _JAPANESE_MARKERS = (
     "音量", "撮って", "撮る", "開いて", "閉じて", "教えて", "見せて",
 )
 
-# Korean and Japanese grammars match against text with all spaces removed.
+# 한국어와 일본어 문법은 공백을 모두 지운 문장에 맞춰 본다.
 _KO_REQ = (
     r"(?:줘|줘요|주라|줄래|줄래요|주세요|주실래요|주시겠어요|주겠니|줄수있어|줄수있어요|"
     r"봐|봐줘|봐요)?"
@@ -197,7 +197,7 @@ _GRAMMARS: dict[str, dict[str, tuple[str, ...]]] = {
         "en": (r"(?:cancel|stop|clear|turn\s+off)\s+(?:the\s+|my\s+)?timer",),
         "ja": (r"タイマー(?:を)?(?:キャンセルし|止め|停止し|解除し|消し)" + _JA_REQ,),
     },
-    # Only the current weather: the handler takes a place, not a day or a comparison.
+    # 현재 날씨만 다룬다. 처리기는 장소만 받고 날짜나 비교는 받지 않는다.
     "get_weather": {
         "ko": (
             r"(?!.*(?:내일|어제|모레|주말|다음주|비교|아침|오전|오후|저녁|밤|나중))(?:지금|오늘)?"
@@ -437,7 +437,7 @@ def action_anchor_count(text: str, language: str | None = None) -> int:
 
 
 def _strip_fillers(value: str, language: str) -> str:
-    """Remove hesitation and politeness words that never add an action."""
+    """동작을 더하지 않는 망설임·공손 표현을 지운다."""
     previous = None
     while previous != value:
         previous = value
@@ -448,10 +448,10 @@ def _strip_fillers(value: str, language: str) -> str:
 
 
 def is_multi_intent(text: str) -> bool:
-    """Flag requests that clearly chain several actions before any scoring.
+    """점수를 매기기 전에 여러 동작을 분명히 잇는 요청을 표시한다.
 
-    This replaces the general conversation router as the pre-check, so word
-    collisions such as an app named "Code" no longer skip local scoring.
+    일반 대화 라우터 대신 쓰는 사전 검사이므로, "Code"라는 앱 이름처럼 낱말이
+    겹쳐도 로컬 점수 계산을 건너뛰지 않는다.
     """
     if not isinstance(text, str) or not text.strip() or len(text) > 4096:
         return False
@@ -579,7 +579,7 @@ def _volume_arguments(match: re.Match[str] | None, candidate: str) -> tuple[dict
     if direction == "mute":
         return {"direction": "mute", "amount": 100}, True, False
     raw_amount = values.get("amount")
-    # Without an amount the existing handler applies its default step.
+    # 양이 없으면 기존 처리기가 기본 단계를 적용한다.
     if raw_amount is None:
         return {"direction": direction}, True, False
     raw_amount = re.sub(r"[\s-]+", "-", raw_amount.casefold())
@@ -592,7 +592,7 @@ def _volume_arguments(match: re.Match[str] | None, candidate: str) -> tuple[dict
 
 
 def _known_app(name: str) -> str:
-    """Return the alias the launch handler already knows, or "" when unresolved."""
+    """앱 실행 처리기가 이미 아는 별칭을 반환하고, 찾지 못하면 ""를 반환한다."""
     from agent.automation_helpers import _APP_ALIAS_CANDIDATES
 
     key = re.sub(r"\s+", "", name.casefold())
@@ -630,9 +630,9 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
     if not value:
         return SemanticParse(candidate, language)
     match, matched_view = _candidate_grammar_match_with_view(value, candidate, language)
-    # Count residual actions on the exact core whose surrounding context was
-    # fully validated against the harmless-context allowlist. Negation checks
-    # below still use the original text.
+    # 주변 문맥이 무해한 문맥 허용 목록으로 모두 확인된 핵심 구절에서만
+    # 남은 동작 수를 센다. 아래의 부정 표현 검사는 여전히
+    # 원래 문장을 쓴다.
     anchors = action_anchor_count(matched_view, language)
     connectors = connector_count(matched_view, language)
     target_match = bool(match)
@@ -644,8 +644,8 @@ def parse_candidate(text: str, candidate: str) -> SemanticParse:
         contradiction = True
     if target and _has_any(value, _ACTION_ANCHORS["close"][language] + _ACTION_ANCHORS["open"][language]):
         contradiction = contradiction or not target_match
-    # A full grammar match consumes the whole sentence as one action, so extra
-    # anchors inside it ("open" in "list the open apps") belong to that action.
+    # 문법 전체가 맞으면 문장 전체를 동작 하나로 보므로, 그 안의 다른
+    # 기준어("list the open apps"의 "open")는 그 동작에 속한다.
     residual = bool(connectors and anchors > 1)
     if target and not target_match:
         residual = True

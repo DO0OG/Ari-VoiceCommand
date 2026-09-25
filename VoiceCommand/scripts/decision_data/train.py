@@ -1,4 +1,4 @@
-"""Offline NumPy softmax training; calibration never uses the test partition."""
+"""NumPy softmax 오프라인 학습. 보정에는 시험 분할을 쓰지 않는다."""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +16,7 @@ from .split_dataset import validate_family_splits
 
 
 def fit_temperature(logits: np.ndarray, targets: np.ndarray) -> float:
-    """Choose a positive scalar by calibration negative log likelihood."""
+    """보정 자료의 음의 로그 가능도로 양수 스칼라를 고른다."""
     if not len(targets):
         raise ValueError("Calibration partition must not be empty")
     temperatures = np.unique(np.append(np.geomspace(0.05, 20.0, 241), 1.0))
@@ -32,7 +32,7 @@ def fit_linear(
     augment: bool = False,
     sample_weights: np.ndarray | None = None,
 ):
-    """Fit on clean train rows plus optional train-only generated variants."""
+    """깨끗한 학습 행과, 선택적으로 학습 분할 전용 생성 변형으로 학습한다."""
     validate_no_gold_rows(rows)
     validate_family_splits(rows)
     labels = candidate_names()
@@ -96,7 +96,7 @@ def fit_linear(
 
 
 def training_rows(rows: list[dict], augment: bool) -> list[dict]:
-    """Rows whose hash is recorded as ``training_sha256`` in the model config."""
+    """모델 설정의 ``training_sha256``에 해시가 기록되는 행."""
     return [
         row for row in rows
         if row["split"] == "train" and (augment or not row.get("augmentation", False))

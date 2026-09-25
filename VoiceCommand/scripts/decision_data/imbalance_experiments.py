@@ -1,4 +1,4 @@
-"""Compare family/class balancing and per-family variant caps on calibration data."""
+"""보정 자료에서 family/클래스 균형과 family별 변형 상한을 비교한다."""
 from __future__ import annotations
 
 import argparse
@@ -47,7 +47,7 @@ PROFILES = (
 
 
 def cap_training_variants(rows: list[dict], limit: int | None) -> list[dict]:
-    """Keep every clean train row and at most ``limit`` noise variants per family."""
+    """깨끗한 학습 행은 모두 두고 family마다 잡음 변형은 최대 ``limit``개만 남긴다."""
     if limit is None:
         return list(rows)
     if limit < 0:
@@ -85,7 +85,7 @@ def cap_training_variants(rows: list[dict], limit: int | None) -> list[dict]:
 
 
 def sample_weights(rows: list[dict], scheme: str) -> np.ndarray:
-    """Return mean-one row weights for family or class-within-family balance."""
+    """family 균형 또는 family 안 클래스 균형용으로 평균이 1인 행 가중치를 반환한다."""
     if scheme not in {"family", "class_family"}:
         raise ValueError(f"unknown weighting scheme: {scheme}")
     family_counts = Counter(str(row.get("family_id") or "") for row in rows)
@@ -127,7 +127,7 @@ def _folds(rows: list[dict], count: int = 5, seed: int = 131) -> np.ndarray:
 def out_of_fold_probabilities(
     rows: list[dict], logits: np.ndarray, labels: tuple[str, ...], *, folds: int = 5
 ) -> tuple[np.ndarray, dict[str, float]]:
-    """Fit temperature on other calibration families, then score each held-out fold."""
+    """다른 보정 family로 temperature를 맞춘 뒤 격리한 fold마다 점수를 낸다."""
     targets = np.asarray([labels.index(row["label"]) for row in rows], dtype=np.intp)
     assignments = _folds(rows, folds)
     probabilities = np.empty_like(logits, dtype=np.float64)
@@ -205,7 +205,7 @@ def _class_proposals(rows, probabilities, targets, labels, eligibility) -> dict:
 
 
 def _calibration_diagnostics(rows, probabilities, labels, simple_gate, eligibility=None) -> dict:
-    """Report calibration-only direct selection by fixed threshold and margin pairs."""
+    """고정한 임계값·margin 조합별로 보정 자료만의 직접 처리 선택을 보고한다."""
     probabilities = np.asarray(probabilities, dtype=np.float64)
     targets = np.asarray([labels.index(row["label"]) for row in rows], dtype=np.intp)
     predictions = probabilities.argmax(axis=1)
