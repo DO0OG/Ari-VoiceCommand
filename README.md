@@ -59,6 +59,12 @@
 
 ### Installation & Run
 
+Download `Ari-Setup-<version>.exe` from [Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases) and run it.
+It installs to `Program Files\Ari` by default, and you can choose another folder.
+Settings and history are stored in `%AppData%\Ari`, so they remain after uninstalling.
+
+To run from source instead:
+
 ```bat
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd Ari-VoiceCommand

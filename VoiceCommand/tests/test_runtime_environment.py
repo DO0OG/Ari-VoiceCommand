@@ -32,6 +32,25 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             if original_env is not None:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_nuitka_build_keeps_user_data_out_of_the_install_folder(self):
+        # Nuitka 배포판은 sys.frozen 없이 __compiled__만 둔다. Program Files에 설치돼도
+        # 설정과 기록은 사용자 AppData에 써야 한다.
+        import core.resource_manager as resource_manager
+
+        original_env = os.environ.pop("ARI_APP_DATA_DIR", None)
+        try:
+            with tempfile.TemporaryDirectory() as appdata, tempfile.TemporaryDirectory() as install_dir:
+                with patch.dict(resource_manager.__dict__, {"__compiled__": object()}), \
+                        patch.dict(os.environ, {"APPDATA": appdata}), \
+                        patch.object(ResourceManager, "_project_root", return_value=install_dir):
+                    ResourceManager.reset_cache()
+                    runtime_dir = ResourceManager.get_app_data_dir()
+                self.assertEqual(runtime_dir, os.path.join(appdata, "Ari"))
+                self.assertFalse(os.path.exists(os.path.join(install_dir, ".ari_runtime")))
+        finally:
+            if original_env is not None:
+                os.environ["ARI_APP_DATA_DIR"] = original_env
+
     def test_legacy_settings_and_scheduler_state_migrate_into_runtime_dir(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")
         try:

@@ -95,38 +95,69 @@ jobs:
           if (Test-Path $report) { Get-Content $report -Encoding utf8 }
           if ($proc.ExitCode -ne 0) { throw "판단 모델 자체 검사 실패 (exit $($proc.ExitCode))" }
 
-      - name: Zip Artifact
+      # 릴리스에는 빌드 폴더 압축본 대신 설치 파일 하나만 올린다.
+      - name: Build installer
         working-directory: VoiceCommand
         shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          $preferred = Join-Path $PWD "dist\Ari"
-          $fallback = Join-Path $PWD "dist\Main.dist"
-          $sourceDir = $null
-
-          if (Test-Path $preferred) {
-            $sourceDir = $preferred
-          }
-          elseif (Test-Path $fallback) {
-            $sourceDir = $fallback
-          }
-          else {
+          $sourceDir = @("dist\Ari", "dist\Main.dist") | Where-Object { Test-Path "$_\Ari.exe" } | Select-Object -First 1
+          if (-not $sourceDir) {
             Write-Host "dist 디렉터리 내용:"
             Get-ChildItem -Path (Join-Path $PWD "dist") -Recurse -Force -ErrorAction SilentlyContinue
-            throw "압축할 빌드 산출물 폴더를 찾지 못했습니다."
+            throw "설치 파일에 넣을 빌드 산출물 폴더를 찾지 못했습니다."
           }
 
-          $zipPath = Join-Path (Split-Path $PWD -Parent) "Ari-windows.zip"
-          if (Test-Path $zipPath) {
-            Remove-Item $zipPath -Force
+          $version = "0.0.0-dev"
+          if ($env:REF_TYPE -eq "tag") {
+            $candidate = ($env:REF_NAME -replace '^v', '') -replace '[^0-9A-Za-z.\-]', ''
+            if ($candidate) { $version = $candidate }
           }
 
-          Compress-Archive -Path $sourceDir -DestinationPath $zipPath -Force
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup 설치에 실패했습니다." }
+          }
+          & $iscc "/DAppVersion=$version" "/DBuildDir=$(Resolve-Path $sourceDir)" installer\Ari.iss
+          if ($LASTEXITCODE -ne 0) { throw "설치 파일 빌드에 실패했습니다 (exit $LASTEXITCODE)." }
+
+          $setup = "dist\installer\Ari-Setup-$version.exe"
+          if (-not (Test-Path $setup)) { throw "설치 파일이 만들어지지 않았습니다: $setup" }
+          Copy-Item $setup (Split-Path $PWD -Parent) -Force
+
+      - name: Smoke test installer (install, self-test, uninstall)
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $setup = Get-ChildItem "Ari-Setup-*.exe" | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP "AriInstall"
+          $proc = Start-Process $setup.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "설치에 실패했습니다 (exit $($proc.ExitCode))." }
+          if (-not (Test-Path "$dir\Ari.exe")) { throw "설치 폴더에 Ari.exe가 없습니다." }
+
+          $report = Join-Path $env:RUNNER_TEMP "installed-decision-self-test.json"
+          $test = Start-Process "$dir\Ari.exe" -ArgumentList @("--decision-self-test", $report) -PassThru
+          $null = $test.Handle
+          if (-not $test.WaitForExit(180000)) {
+            Stop-Process -Id $test.Id -Force
+            throw "설치본 자체 검사가 시간 안에 끝나지 않았습니다."
+          }
+          if (Test-Path $report) { Get-Content $report -Encoding utf8 }
+          if ($test.ExitCode -ne 0) { throw "설치본 자체 검사 실패 (exit $($test.ExitCode))" }
+          # Program Files에는 쓸 수 없으므로 사용자 데이터가 설치 폴더에 생기면 안 된다.
+          if (Test-Path "$dir\.ari_runtime") { throw "설치 폴더에 사용자 데이터 폴더가 생겼습니다." }
+
+          $uninstall = Start-Process "$dir\unins000.exe" -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "제거에 실패했습니다 (exit $($uninstall.ExitCode))." }
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v5
         with:
-          name: Ari-windows-binary
-          path: Ari-windows.zip
+          name: Ari-windows-installer
+          path: Ari-Setup-*.exe
           retention-days: 5
 
   release:
@@ -142,12 +173,12 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v5
         with:
-          name: Ari-windows-binary
+          name: Ari-windows-installer
 
       - name: Create Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
-          files: Ari-windows.zip
+          files: Ari-Setup-*.exe
           generate_release_notes: true
           draft: false
           prerelease: false

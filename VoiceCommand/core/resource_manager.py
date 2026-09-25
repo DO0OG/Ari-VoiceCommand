@@ -34,6 +34,11 @@ _LEGACY_RUNTIME_MAPPINGS = (
 )
 
 
+def _is_bundled() -> bool:
+    """배포 실행 파일이면 True. Nuitka는 sys.frozen 대신 모듈마다 __compiled__를 둔다."""
+    return bool(getattr(sys, "frozen", False)) or "__compiled__" in globals()
+
+
 class ResourceManager:
     _app_data_dir = None
 
@@ -128,7 +133,7 @@ class ResourceManager:
         env_override = os.environ.get("ARI_APP_DATA_DIR", "").strip()
         if env_override:
             base = os.path.abspath(os.path.expanduser(env_override))
-        elif getattr(sys, 'frozen', False):
+        elif _is_bundled():
             base = os.path.join(
                 os.environ.get('APPDATA', os.path.expanduser('~')),
                 APP_NAME
@@ -137,7 +142,7 @@ class ResourceManager:
             base = ResourceManager._dev_runtime_dir()
 
         os.makedirs(base, exist_ok=True)
-        if not getattr(sys, 'frozen', False):
+        if not _is_bundled():
             ResourceManager._migrate_dev_runtime_state(base)
             ResourceManager._cleanup_legacy_runtime_state(base)
         ResourceManager._app_data_dir = base
@@ -146,7 +151,7 @@ class ResourceManager:
     @staticmethod
     def get_bundle_path(relative_path: str) -> str:
         """번들(읽기전용) 리소스 경로 반환"""
-        if getattr(sys, 'frozen', False):
+        if _is_bundled():
             if hasattr(sys, '_MEIPASS'):
                 # PyInstaller: 임시 압축 해제 폴더
                 base = sys._MEIPASS
@@ -172,7 +177,7 @@ class ResourceManager:
     @staticmethod
     def extract_resources():
         """첫 실행 시 번들 리소스를 appdata로 추출"""
-        if not getattr(sys, 'frozen', False):
+        if not _is_bundled():
             return  # 개발 모드에서는 불필요
 
         resources = [
