@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 
 from audio.simple_wake import SimpleWakeWord
+from core._whisper_worker import bundled_executable_path
 from core.stt_provider import WhisperSTTProvider, create_stt_provider
 
 
@@ -196,7 +197,7 @@ class STTProviderTests(unittest.TestCase):
         self.assertEqual(
             popen.call_args.args[0],
             [
-                sys.executable,
+                bundled_executable_path(),
                 "--ari-whisper-worker",
                 "small",
                 "cpu",
@@ -217,7 +218,7 @@ class STTProviderTests(unittest.TestCase):
         self.assertEqual(
             popen.call_args.args[0],
             [
-                sys.executable,
+                bundled_executable_path(),
                 "--ari-whisper-worker",
                 "small",
                 "cpu",
@@ -363,8 +364,21 @@ class STTProviderTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(
             popen.call_args.args[0],
-            [sys.executable, "--ari-whisper-worker", "--self-test", "en"],
+            [worker.bundled_executable_path(), "--ari-whisper-worker", "--self-test", "en"],
         )
+
+    def test_bundled_worker_command_does_not_use_missing_python_exe(self):
+        import core._whisper_worker as worker
+
+        missing = str(Path(tempfile.gettempdir()) / "ari-dist" / "python.exe")
+        with patch.dict(worker.__dict__, {"__compiled__": object()}):
+            with patch.object(sys, "executable", missing):
+                command = worker._worker_process_command(["--self-test", "ko"])
+
+        # Nuitka 배포판의 sys.executable은 배포 폴더에 없는 python.exe를 가리킨다.
+        self.assertNotEqual(command[0], missing)
+        self.assertTrue(Path(command[0]).is_file())
+        self.assertEqual(command[1:], ["--ari-whisper-worker", "--self-test", "ko"])
 
     def test_main_worker_self_test_uses_early_dispatch_in_process(self):
         import core._whisper_worker as worker

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -202,6 +203,13 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertTrue(any("minimum of 100" in item for item in failures))
         for language in ("ko", "en", "ja"):
             self.assertTrue(any(language in item and "minimum of 30" in item for item in failures))
+
+    def test_release_build_bundles_decision_runtime(self):
+        # build_exe.py는 import하면 바로 빌드하므로 소스 텍스트로 확인한다.
+        source = (VOICECOMMAND_ROOT / "build_exe.py").read_text(encoding="utf-8")
+        self.assertFalse('"--nofollow-import-to=numpy"' in source, "numpy must ship with the EXE")
+        for data_dir in re.findall(r'"--include-data-dir=([^=]+)=', source):
+            self.assertTrue((VOICECOMMAND_ROOT / data_dir).is_dir(), data_dir)
 
 
 if __name__ == "__main__":

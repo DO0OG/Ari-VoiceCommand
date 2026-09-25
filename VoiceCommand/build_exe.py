@@ -6,8 +6,10 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 권장: py -3.11 validate_repo.py       # 빌드 전 검증
 
 Nuitka import 제외 정책:
-  numpy, torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
-  API 클라이언트는 --nofollow-import-to 옵션으로 제외한다. 실행 시 site-packages에서 직접 불러온다.
+  torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
+  API 클라이언트는 --nofollow-import-to 옵션으로 제외한다. 배포 폴더에는 들어가지 않으므로
+  이 패키지를 쓰는 선택 기능은 배포판에서 동작하지 않는다.
+  numpy는 로컬 판단 엔진과 Whisper 워커가 필요로 하므로 제외하지 않는다.
 
 출력: dist/Ari/
 
@@ -251,7 +253,6 @@ nuitka_args = [
     "--include-data-dir=images=images",
     "--include-data-dir=theme=theme",
     "--include-data-dir=i18n/locales=i18n/locales",
-    "--include-data-dir=plugins=plugins",
     "--include-data-dir=resources/decision=resources/decision",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
@@ -373,8 +374,7 @@ nuitka_args = [
     # Nuitka가 C로 컴파일하지 않도록 제외. 런타임에는 site-packages의
     # 사전 컴파일된 .pyd/.dll 또는 순수 Python 파일로 동작.
 
-    # ML / 수치 연산
-    "--nofollow-import-to=numpy",
+    # ML / 수치 연산 (numpy는 로컬 판단 엔진이 쓰므로 포함한다)
     "--nofollow-import-to=torch",
     "--nofollow-import-to=torchvision",
     "--nofollow-import-to=torchaudio",

@@ -34,9 +34,24 @@ def _is_bundled_executable() -> bool:
     return bool(getattr(sys, "frozen", False)) or "__compiled__" in globals()
 
 
+def bundled_executable_path() -> str:
+    """배포판의 실제 실행 파일 경로를 반환한다.
+
+    Nuitka standalone의 sys.executable은 배포 폴더의 python.exe를 가리키지만 그 파일은
+    배포 폴더에 없다. 그래서 현재 프로세스의 실행 파일 경로를 직접 읽는다.
+    """
+    if sys.platform == "win32":
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer)):
+            return buffer.value
+    return os.path.abspath(sys.argv[0])
+
+
 def _worker_process_command(worker_args: list[str]) -> list[str]:
     if _is_bundled_executable():
-        return [sys.executable, WORKER_ARGUMENT, *worker_args]
+        return [bundled_executable_path(), WORKER_ARGUMENT, *worker_args]
     return [sys.executable, os.path.abspath(__file__), *worker_args]
 
 

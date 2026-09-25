@@ -12,7 +12,7 @@ import threading
 import wave
 from typing import Optional
 
-from core._whisper_worker import WORKER_ARGUMENT, normalize_language
+from core._whisper_worker import WORKER_ARGUMENT, bundled_executable_path, normalize_language
 
 
 class STTProvider:
@@ -118,7 +118,7 @@ class WhisperSTTProvider(STTProvider):
         env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
         if getattr(sys, "frozen", False) or "__compiled__" in globals():
             worker_command = [
-                sys.executable,
+                bundled_executable_path(),
                 WORKER_ARGUMENT,
                 self._model_size,
                 actual_device,
