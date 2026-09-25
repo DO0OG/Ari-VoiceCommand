@@ -67,6 +67,8 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("시간 좀 알려줘", "Give me the time", "時間を教えて"),
         ("지금 시각 알려줘", "Tell me the time right now", "今の時刻を教えて"),
         ("몇 시인지 말해줄래", "Could you tell me what time it is", "何時か言ってくれる"),
+        ("여기 현지 시간이 지금 몇 시인지 알려줘", "Tell me the local time here right now", "ここでの現地時刻を今教えて"),
+        ("내 지역의 현재 시각을 확인해 줘", "Check the current local time in my area", "この地域の現在時刻を確認して"),
     ),
     "adjust_volume": (
         ("볼륨을 높여줘", "Turn up the volume", "音量を上げて"),
@@ -187,6 +189,8 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("지금 켜진 프로그램을 보여줘", "Show the programs that are open", "今開いているプログラムを見せて"),
         ("실행 중인 프로세스를 확인해", "Check the running processes", "実行中のプロセスを確認して"),
         ("어떤 앱이 실행 중인지 알려줘", "Tell me which apps are running", "どのアプリが起動中か教えて"),
+        ("활성 상태인 앱을 빠짐없이 목록으로 보여줘", "List every app that is currently active", "現在アクティブなアプリを一覧で全部見せて"),
+        ("지금 실행 중인 프로그램을 목록으로 알려줘", "Show the running programs as a list", "実行中のプログラムを一覧で見せて"),
     ),
     "focus_window": (
         ("크롬 창으로 포커스해줘", "Focus the Chrome window", "Chromeのウィンドウにフォーカスして"),
@@ -213,6 +217,8 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("스크린샷 찍어줘", "Take a screenshot", "スクリーンショット撮って"),
         ("지금 화면 좀 찍어", "Snap the screen now", "今の画面を撮って"),
         ("화면 그대로 저장해줘", "Save the screen as is", "画面をそのまま保存して"),
+        ("회의 내용을 적어두려고 화면 이미지를 저장해줘", "Save a snapshot of the display for my notes", "メモ用にディスプレイのスナップショットを保存して"),
+        ("오류 상황을 기록하려고 현재 화면을 이미지로 캡처해줘", "Capture the current screen as an image to document this issue", "問題の記録用に今の画面を画像でキャプチャして"),
     ),
     "get_clipboard": (
         ("클립보드 내용을 보여줘", "Show the clipboard contents", "クリップボードの内容を見せて"),

@@ -1,7 +1,7 @@
 {
   "model_name": "local_command_classifier",
   "model_version": 1,
-  "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
+  "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
   "task": "classify short Korean, English, and Japanese command requests",
   "supported_languages": [
     "en",
@@ -22,34 +22,34 @@
   },
   "training": {
     "dataset_version": "decision-dataset-v2",
-    "training_sha256": "f403fa1d38a0d24594df91f551a22e68d9228554d5ce012e2f306e6f7d8b3d5d",
+    "training_sha256": "7a73072ae4386101fa4a36a4ae6023d2365b424d590430cf0045b1f430f0c9e2",
     "augmentation_enabled": true
   },
   "evaluation": {
     "partition": "held_out_test",
-    "row_count": 7217,
-    "top1_accuracy": 0.8182070112235,
-    "parser_confirmed_selected_count": 308,
+    "row_count": 7293,
+    "top1_accuracy": 0.8180447003976415,
+    "parser_confirmed_selected_count": 362,
     "parser_confirmed_precision": 1.0,
-    "parser_confirmed_precision_wilson95_lower": 0.9876813723382979,
+    "parser_confirmed_precision_wilson95_lower": 0.9894996624136662,
     "false_direct_count": 0,
     "by_language": {
       "ko": {
-        "selected_count": 99,
+        "selected_count": 124,
         "selective_accuracy": 1.0,
-        "selective_accuracy_wilson95_lower": 0.9626467879321727,
+        "selective_accuracy_wilson95_lower": 0.9699513846593222,
         "false_direct_count": 0
       },
       "en": {
-        "selected_count": 84,
+        "selected_count": 108,
         "selective_accuracy": 1.0,
-        "selective_accuracy_wilson95_lower": 0.95626827158534,
+        "selective_accuracy_wilson95_lower": 0.9656526402534428,
         "false_direct_count": 0
       },
       "ja": {
-        "selected_count": 125,
+        "selected_count": 130,
         "selective_accuracy": 1.0,
-        "selective_accuracy_wilson95_lower": 0.9701846062916736,
+        "selective_accuracy_wilson95_lower": 0.9712984388055687,
         "false_direct_count": 0
       }
     },
@@ -65,19 +65,19 @@
         }
       },
       "observed_parser_confirmed_selection_counts": {
-        "overall": 308,
+        "overall": 362,
         "by_language": {
-          "ko": 99,
-          "en": 84,
-          "ja": 125
+          "ko": 124,
+          "en": 108,
+          "ja": 130
         }
       },
       "wilson95_lower_bounds": {
-        "overall": 0.9876813723382979,
+        "overall": 0.9894996624136662,
         "by_language": {
-          "ko": 0.9626467879321727,
-          "en": 0.95626827158534,
-          "ja": 0.9701846062916736
+          "ko": 0.9699513846593222,
+          "en": 0.9656526402534428,
+          "ja": 0.9712984388055687
         }
       },
       "interpretation": "Sample floors guard against vacuous regression results; they do not establish 99% precision. With zero errors, at least 381 samples are needed for a two-sided 95% Wilson lower bound of 0.99."
@@ -85,9 +85,9 @@
     "commands_dispatched": 0
   },
   "resource_usage": {
-    "model_resource_bytes": 1233389,
-    "additional_steady_rss_bytes": 17281024,
-    "warm_p95_ms": 0.07890000415500253,
+    "model_resource_bytes": 1233470,
+    "additional_steady_rss_bytes": 17682432,
+    "warm_p95_ms": 0.08021000039661884,
     "gpu_used": false
   },
   "review": {
@@ -109,8 +109,8 @@
     "The evaluator checks parser confirmation but does not dispatch commands."
   ],
   "provenance": {
-    "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a",
-    "model_config_sha256": "ec970c6c09022659552f9a26bbb9c4581b542f3698d1271edf526d1229cc7dab",
+    "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
+    "model_config_sha256": "3307b13a8c4ad074fb3089b96870e1c44cd3531274cc808f9ad3bf0fc4bebaec",
     "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
     "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
     "parser_sha256": "e5facc319470b48424405069ed9958e81e2e8e5aacc2e10195752acf3954799f",
@@ -118,7 +118,7 @@
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
     "settings_schema_sha256": "e989713538613e010f1a4acba562a58207e38f6f4b14d987383a790b47194877",
-    "split_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_manifest_sha256": "3cd060b4f6ee6f1e95dd7b089c22866701e395c98bad73344c73f2e4544697ab",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
     "gold_dataset_version": "decision-gold-v1",

@@ -228,6 +228,10 @@ FAST_TEXTS: dict[str, dict[str, tuple[LanguageText, ...]]] = {
             ("볼륨을 {level}로 맞춰 줘", "Set volume to {level}", "音量を{level}にして"),
             ("소리좀 낮춰줘", "Lower the volume", "音量下げてね"),
         ),
+        "verbose": (
+            ("시스템 출력 음량을 지금 12퍼센트 낮춰줘", "Lower the system output volume by 12 percent now", "システム出力音量を今12パーセント下げて"),
+            ("영상 소리가 커서 스피커 재생 음량을 8퍼센트 줄여줘", "Reduce the speaker playback volume by 8 percent because the video is loud", "動画の音が大きいのでスピーカーの再生音量を8パーセント下げて"),
+        ),
     },
     "set_timer": {
         "normal": (

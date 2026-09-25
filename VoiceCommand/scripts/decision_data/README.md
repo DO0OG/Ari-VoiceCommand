@@ -44,7 +44,10 @@ PR CI는 직접 처리 선택 수의 개발 하한(전체 50, 언어별 10)을 �
 family별 분할은 `split_manifest.json`에 기록하고 그 값을 그대로 따른다. 한 번
 배정한 family는 문장을 고쳐도 분할이 바뀌지 않으며, 기록에 없는 새 family만
 해당 라벨에서 가장 부족한 분할에 배정한다. 기록이 비어 있을 때의 배정 규칙은
-이전의 train 두 칸 순환과 같은 결과를 낸다.
+이전의 train 두 칸 순환과 같은 결과를 낸다. 이 재현을 지키려면 새 family의
+이름이 해당 라벨의 기존 family보다 이름순으로 뒤에 와야 한다. 예를 들어 seed의
+`get_current_time.single_action.NN`은 `expanded.get_current_time.*`보다 뒤지만
+`adjust_volume.single_action.NN`은 `expanded.adjust_volume.*`보다 앞이다.
 
 이 장치가 없을 때는 family가 하나만 늘어도 뒤쪽 배정이 통째로 밀렸고, 같은
 자료에서 시험 분할의 `false_direct_count`가 0에서 111과 118까지 움직였다.
