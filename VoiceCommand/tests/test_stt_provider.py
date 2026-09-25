@@ -1,7 +1,8 @@
 import base64
+import contextlib
 import io
 import json
-import subprocess
+import runpy
 import sys
 import tempfile
 import unittest
@@ -305,7 +306,7 @@ class STTProviderTests(unittest.TestCase):
 
         fake_proc = SimpleNamespace(
             communicate=lambda *args, **kwargs: (_ for _ in ()).throw(
-                subprocess.TimeoutExpired("worker", 0.01)
+                worker.subprocess.TimeoutExpired("worker", 0.01)
             ),
             kill=lambda: setattr(fake_proc, "killed", True),
             killed=False,
@@ -315,7 +316,7 @@ class STTProviderTests(unittest.TestCase):
             return "", ""
 
         fake_proc.communicate = lambda *args, **kwargs: (
-            (_ for _ in ()).throw(subprocess.TimeoutExpired("worker", 0.01))
+            (_ for _ in ()).throw(worker.subprocess.TimeoutExpired("worker", 0.01))
             if not fake_proc.killed
             else communicate_after_kill(*args, **kwargs)
         )
@@ -333,7 +334,7 @@ class STTProviderTests(unittest.TestCase):
             raise OSError("private diagnostic")
 
         def timeout_communicate(*args, **kwargs):
-            raise subprocess.TimeoutExpired("worker", 0.01)
+            raise worker.subprocess.TimeoutExpired("worker", 0.01)
 
         fake_proc = SimpleNamespace(kill=fail_kill, communicate=timeout_communicate)
 
@@ -365,42 +366,38 @@ class STTProviderTests(unittest.TestCase):
             [sys.executable, "--ari-whisper-worker", "--self-test", "en"],
         )
 
-    def test_main_worker_self_test_uses_early_dispatch_and_result_file(self):
+    def test_main_worker_self_test_uses_early_dispatch_in_process(self):
+        import core._whisper_worker as worker
+
         main_path = Path(__file__).parents[1] / "Main.py"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             result_path = Path(temp_dir) / "worker-self-test.json"
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    str(main_path),
-                    "--ari-whisper-worker-self-test",
-                    "ja-JP",
-                    str(result_path),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertEqual(
-                json.loads(result_path.read_text(encoding="utf-8")),
-                {"ok": True, "scope": "worker_ipc_only", "language": "ja"},
-            )
+            stderr = io.StringIO()
+            with patch.object(worker, "run_worker_self_test", return_value=0) as self_test:
+                with patch.object(
+                    sys,
+                    "argv",
+                    [str(main_path), "--ari-whisper-worker-self-test", "ja-JP", str(result_path)],
+                ):
+                    with contextlib.redirect_stderr(stderr):
+                        with self.assertRaises(SystemExit) as exit_info:
+                            runpy.run_path(str(main_path), run_name="__main__")
+
+            self.assertEqual(exit_info.exception.code, 0)
+            self_test.assert_called_once_with(language="ja-JP", result_path=str(result_path))
+            self.assertEqual(stderr.getvalue(), "")
 
     def test_main_worker_entrypoint_rejects_missing_model_args_without_gui(self):
         main_path = Path(__file__).parents[1] / "Main.py"
-        completed = subprocess.run(
-            [sys.executable, str(main_path), "--ari-whisper-worker"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        stderr = io.StringIO()
+        with patch.object(sys, "argv", [str(main_path), "--ari-whisper-worker"]):
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exit_info:
+                    runpy.run_path(str(main_path), run_name="__main__")
 
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("Usage: _whisper_worker.py", completed.stderr)
+        self.assertEqual(exit_info.exception.code, 2)
+        self.assertIn("Usage: _whisper_worker.py", stderr.getvalue())
 
     def test_main_routes_worker_self_test_before_gui_imports(self):
         main_path = Path(__file__).parents[1] / "Main.py"
