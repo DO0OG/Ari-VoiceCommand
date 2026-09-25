@@ -153,6 +153,8 @@ Phase 1은 정책과 호출 배선 기준으로 완료로 판정한다. 허용 �
 
 ## 검증
 
+빌드 워크플로는 빌드한 `Ari.exe --ari-whisper-worker-self-test ko <결과 파일>`로 Whisper 워커의 자체 실행과 stdin/stdout IPC만 확인한다. 결과의 `scope=worker_ipc_only`는 모델 로드, 실제 전사 또는 마이크 입력을 시험하지 않았다는 뜻이다. 이 확인은 사람의 판정 자료 검토와 배포 PC 음성 확인을 대체하지 않는다.
+
 다음 명령을 Python 3.11 실행 파일로 수행했다.
 
 ```text

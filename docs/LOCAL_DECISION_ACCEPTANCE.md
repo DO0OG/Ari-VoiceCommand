@@ -58,6 +58,8 @@ py -m scripts.decision_data.acceptance --output acceptance.json
 배포 워크플로가 빌드 직후 `Ari.exe --decision-self-test <결과 파일>`을 실행한다. 실패하면
 압축 전에 멈춘다. 손으로 확인할 때도 같은 명령을 쓰고 결과 파일의 `ok`와 `sha256`을 본다.
 
+빌드 워크플로는 추가로 `Ari.exe --ari-whisper-worker-self-test ko <결과 파일>`을 실행한다. `scope=worker_ipc_only`는 배포 EXE의 Whisper 워커 자체 실행과 stdin/stdout 통신만 확인하며, 모델 적재, 실제 음성 전사 또는 마이크 입력은 포함하지 않는다. 따라서 1단계 사람 검토와 4단계 음성 확인은 별도 절차로 유지한다.
+
 ## 4. 음성 확인
 
 배포 실행 파일을 새로 설치한 PC에서 한국어·영어·일본어 각각 진행한다. 설정의 에이전트 탭에서

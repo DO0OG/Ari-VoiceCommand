@@ -55,6 +55,29 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe build_exe.py --clean
 
+      - name: Smoke test bundled Whisper worker IPC (no model or audio device)
+        working-directory: VoiceCommand
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $exe = @("dist\Ari\Ari.exe", "dist\Main.dist\Ari.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { throw "EXE not found in build output." }
+          $report = Join-Path $env:RUNNER_TEMP "whisper-worker-self-test.json"
+          if (Test-Path $report) { Remove-Item -LiteralPath $report -Force }
+          $quotedReport = '"' + $report + '"'
+          $proc = Start-Process -FilePath (Resolve-Path $exe) -ArgumentList @("--ari-whisper-worker-self-test", "ko", $quotedReport) -WindowStyle Hidden -PassThru
+          $null = $proc.Handle
+          if (-not $proc.WaitForExit(45000)) {
+            taskkill /PID $proc.Id /T /F | Out-Null
+            throw "Whisper worker IPC self-test timed out."
+          }
+          if (-not (Test-Path $report)) { throw "Whisper worker IPC self-test did not write its report." }
+          $result = Get-Content -Raw -Encoding utf8 $report | ConvertFrom-Json
+          if ($proc.ExitCode -ne 0 -or -not $result.ok -or $result.scope -ne "worker_ipc_only" -or $result.language -ne "ko") {
+            throw "Bundled Whisper worker IPC self-test failed or returned an invalid scope report."
+          }
+          Write-Output "Whisper worker IPC self-test passed: scope=$($result.scope), language=$($result.language). No model transcription was tested."
+
       - name: Smoke test bundled decision model and translations
         working-directory: VoiceCommand
         shell: pwsh

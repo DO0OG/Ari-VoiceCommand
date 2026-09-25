@@ -305,6 +305,7 @@ nuitka_args = [
     "--include-module=commands.memory_command",
     "--include-module=core.plugin_loader",
     "--include-module=core.plugin_sandbox",
+    "--include-module=core._whisper_worker",
     "--include-module=core.resource_manager",
     "--include-module=services.web_tools",
     "--include-module=services.google_calendar",
