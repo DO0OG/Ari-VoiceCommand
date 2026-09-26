@@ -1,6 +1,7 @@
 """CosyVoice3 설치 유틸."""
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -20,6 +21,27 @@ MODEL_REPO_ID = "FunAudioLLM/Fun-CosyVoice3-0.5B"
 MODEL_REVISION = "29e01c4e8d000f4bcd70751be16fa94bf3d85a18"
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TTS_VENV_DIR = os.path.join(APP_ROOT, ".venv-tts")
+
+
+def is_valid_cosyvoice_dir(path: str) -> bool:
+    """모델 폴더(pretrained_models)가 있는 CosyVoice 설치 경로인지 확인한다."""
+    return bool(path) and os.path.isdir(os.path.join(path, "pretrained_models"))
+
+
+def find_cosyvoice_dir(configured: str = "") -> str:
+    """현재 설정, 자동 탐색 경로, 설치기 기본 경로 순으로 유효한 설치 경로를 찾는다. 없으면 빈 문자열."""
+    candidates = [configured]
+    try:
+        from tts.cosyvoice_tts import _get_cosyvoice_dir
+
+        candidates.append(_get_cosyvoice_dir())
+    except Exception as exc:
+        logging.debug("CosyVoice 자동 탐색 경로 조회 실패: %s", exc)
+    candidates.append(DEFAULT_COSYVOICE_DIR)
+    for candidate in candidates:
+        if is_valid_cosyvoice_dir(candidate):
+            return os.path.abspath(candidate)
+    return ""
 
 
 def check_command(cmd: str) -> bool:
