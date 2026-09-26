@@ -6,6 +6,10 @@ import sys
 from core._whisper_worker import dispatch_worker_command
 
 _worker_exit_code = dispatch_worker_command(sys.argv)
+if _worker_exit_code is None:
+    from core.script_worker import dispatch_script_command
+
+    _worker_exit_code = dispatch_script_command(sys.argv)
 if _worker_exit_code is not None:
     raise SystemExit(_worker_exit_code)
 

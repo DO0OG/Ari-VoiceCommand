@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
+from core.script_worker import python_script_command
 from i18n.translator import _
 
 from agent.child_environment import _SENSITIVE_ENV_PREFIXES, _SENSITIVE_ENV_SUBSTRINGS, _is_sensitive_env_var, _build_child_env
@@ -432,7 +433,7 @@ class AutonomousExecutor:
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(
-                [sys.executable, runner_path],
+                python_script_command(runner_path),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
