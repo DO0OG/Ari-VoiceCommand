@@ -13,7 +13,7 @@ jobs:
   build:
     name: Build Ari EXE
     runs-on: windows-latest
-    timeout-minutes: 50
+    timeout-minutes: 90
     
     steps:
       - name: Checkout repository
@@ -77,6 +77,26 @@ jobs:
             throw "Bundled Whisper worker IPC self-test failed or returned an invalid scope report."
           }
           Write-Output "Whisper worker IPC self-test passed: scope=$($result.scope), language=$($result.language). No model transcription was tested."
+
+      - name: Smoke test bundled dependency imports
+        working-directory: VoiceCommand
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $exe = @("dist\Ari\Ari.exe", "dist\Main.dist\Ari.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $exe) { throw "EXE not found in build output." }
+          $report = Join-Path $env:RUNNER_TEMP "bundle-import-self-test.json"
+          $quotedReport = '"' + $report + '"'
+          $proc = Start-Process -FilePath (Resolve-Path $exe) -ArgumentList @("--bundle-import-self-test", $quotedReport) -WindowStyle Hidden -PassThru
+          $null = $proc.Handle
+          if (-not $proc.WaitForExit(180000)) {
+            Stop-Process -Id $proc.Id -Force
+            throw "Bundled dependency import self-test timed out."
+          }
+          if (-not (Test-Path $report)) { throw "Bundled dependency import self-test did not write its report." }
+          $result = Get-Content -Raw -Encoding utf8 $report | ConvertFrom-Json
+          if ($proc.ExitCode -ne 0 -or -not $result.ok) { throw "Bundled dependency import self-test failed: $($result | ConvertTo-Json -Depth 8)" }
+          Write-Output "Bundled dependency import self-test passed."
 
       - name: Smoke test bundled decision model and translations
         working-directory: VoiceCommand
@@ -147,6 +167,18 @@ jobs:
           }
           if (Test-Path $report) { Get-Content $report -Encoding utf8 }
           if ($test.ExitCode -ne 0) { throw "설치본 자체 검사 실패 (exit $($test.ExitCode))" }
+
+          $bundleReport = Join-Path $env:RUNNER_TEMP "installed-bundle-import-self-test.json"
+          $quotedBundleReport = '"' + $bundleReport + '"'
+          $bundleTest = Start-Process "$dir\Ari.exe" -ArgumentList @("--bundle-import-self-test", $quotedBundleReport) -WindowStyle Hidden -PassThru
+          $null = $bundleTest.Handle
+          if (-not $bundleTest.WaitForExit(180000)) {
+            Stop-Process -Id $bundleTest.Id -Force
+            throw "Installed dependency import self-test timed out."
+          }
+          if (-not (Test-Path $bundleReport)) { throw "Installed dependency import self-test did not write its report." }
+          $bundleResult = Get-Content -Raw -Encoding utf8 $bundleReport | ConvertFrom-Json
+          if ($bundleTest.ExitCode -ne 0 -or -not $bundleResult.ok) { throw "Installed dependency import self-test failed: $($bundleResult | ConvertTo-Json -Depth 8)" }
 
           # 자율 실행 파이썬 코드는 설치된 실행 파일의 숨은 워커 모드로 돈다.
           $script = Join-Path $env:RUNNER_TEMP "ari-script-smoke.py"

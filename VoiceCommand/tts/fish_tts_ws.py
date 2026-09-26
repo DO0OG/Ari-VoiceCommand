@@ -1,5 +1,5 @@
 """
-Fish Audio WebSocket TTS
+Fish Audio HTTP TTS
 WAV 전체 수신 후 wave 모듈로 파싱하여 재생한다.
 """
 import io
@@ -9,7 +9,8 @@ import threading
 import time
 import wave
 
-from fish_audio_sdk import Session, TTSRequest
+import ormsgpack
+import requests
 from PySide6.QtCore import QObject, Signal
 
 
@@ -29,10 +30,7 @@ class FishTTSWebSocket(QObject):
     def __init__(self, api_key="", reference_id="", model=""):
         super().__init__()
         from audio.audio_manager import GlobalAudio
-        try:
-            self.session = Session(api_key)
-        except Exception as exc:
-            raise RuntimeError(f"Fish Audio 세션 초기화 실패: {exc}") from exc
+        self.api_key = api_key
         self.reference_id = reference_id
         self.model = model or self._DEFAULT_MODEL
         self.pa = GlobalAudio.get_instance()
@@ -40,6 +38,54 @@ class FishTTSWebSocket(QObject):
         self.play_thread = None
         self.stop_event = threading.Event()
         logging.info("🌊 Fish Audio Streaming TTS Initialized")
+
+    def _stream_tts(self, text):
+        payload = {
+            "text": text,
+            "chunk_length": 200,
+            "format": "wav",
+            "sample_rate": None,
+            "mp3_bitrate": 128,
+            "opus_bitrate": 32,
+            "references": [],
+            "reference_id": self.reference_id or None,
+            "normalize": True,
+            "latency": "balanced",
+            "prosody": None,
+            "top_p": 0.7,
+            "temperature": 0.7,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/msgpack",
+            "model": self.model,
+        }
+
+        with requests.post(
+            "https://api.fish.audio/v1/tts",
+            headers=headers,
+            data=ormsgpack.packb(payload),
+            stream=True,
+            timeout=(10, 60),
+        ) as response:
+            if not 200 <= response.status_code < 300:
+                try:
+                    error_body = response.json()
+                except ValueError:
+                    error_body = None
+                if isinstance(error_body, dict):
+                    message = error_body.get("detail") or error_body.get("message")
+                else:
+                    message = None
+                if not message:
+                    message = response.text.strip() or "No error detail returned"
+                raise RuntimeError(
+                    f"Fish Audio API request failed ({response.status_code}): {message}"
+                )
+
+            for chunk in response.iter_content(chunk_size=None):
+                if chunk:
+                    yield chunk
 
     def speak(self, text, emotion: str = "평온"):
         """텍스트를 음성으로 변환하여 재생"""
@@ -49,14 +95,7 @@ class FishTTSWebSocket(QObject):
         try:
             logging.info(f"TTS 요청: {text[:30]}...")
 
-            req = TTSRequest(
-                text=text,
-                reference_id=self.reference_id or None,
-                latency="balanced",
-                format="wav",
-            )
-
-            audio_stream = self.session.tts(req, backend=self.model)
+            audio_stream = self._stream_tts(text)
 
             audio_queue = queue.Queue(maxsize=self._QUEUE_MAX_CHUNKS)
             self.stop_event.clear()
@@ -155,18 +194,23 @@ class FishTTSWebSocket(QObject):
 
             # 다운로드 (메인 스레드)
             chunk_count = 0
-            for chunk in audio_stream:
-                if stop_event.is_set():
-                    break
-                while not stop_event.is_set():
-                    try:
-                        audio_queue.put(chunk, timeout=0.2)
+            try:
+                for chunk in audio_stream:
+                    if stop_event.is_set():
                         break
-                    except queue.Full:
-                        continue
-                chunk_count += 1
-                if chunk_count == 1:
-                    logging.info("[TTS] 첫 청크 수신")
+                    while not stop_event.is_set():
+                        try:
+                            audio_queue.put(chunk, timeout=0.2)
+                            break
+                        except queue.Full:
+                            continue
+                    chunk_count += 1
+                    if chunk_count == 1:
+                        logging.info("[TTS] 첫 청크 수신")
+            finally:
+                close_stream = getattr(audio_stream, "close", None)
+                if close_stream:
+                    close_stream()
 
             download_done.set()
             audio_queue.put(None)

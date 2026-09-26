@@ -23,7 +23,7 @@
 #   2026-04-29: AgentTaskQueue(비동기 작업 큐), ResponseCache.from_config(설정 외부화),
 #              다국어 LLMRouter/WeatherCommand 키워드, safety_checker curl 세분화,
 #              i18n 24개 신규 키(ai_command/SimpleAIAssistant 결과 문자열)
-#   선택 의존성: easyocr, pytesseract, sentence-transformers, edge-tts, elevenlabs, ollama
+#   선택 의존성: easyocr, pytesseract, sentence-transformers, elevenlabs, ollama
 #   런타임 상태(로그/스케줄/메모리/플러그인 캐시)는 소스 실행 시 VoiceCommand/.ari_runtime,
 #   빌드된 exe 실행 시 %AppData%/Ari 에 저장
 # 개발 검증: validate_repo.py (compile + unittest + smoke)
@@ -33,6 +33,7 @@
 SpeechRecognition==3.10.1
 pyaudio==0.2.14
 faster-whisper>=1.0.0
+scipy>=1.11.0
 
 # ── GUI ────────────────────────────────────────────────────────────────────────
 PySide6==6.6.1
@@ -49,11 +50,11 @@ anthropic>=0.25.0
 sentence-transformers>=2.6.0
 
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
-fish-audio-sdk>=0.1.0
+ormsgpack>=1.5.0
 numpy>=1.26.0,<2  # NumPy 2.x는 shiboken6(PySide6), easyocr 등 C 확장과 충돌
 pydub==0.25.1
 websockets==12.0
-# edge-tts>=6.1.9
+edge-tts>=6.1.9,<7
 # elevenlabs>=1.0.0
 # torch>=2.0.0
 # torchaudio

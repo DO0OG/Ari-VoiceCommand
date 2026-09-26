@@ -4,7 +4,6 @@ edge-tts 패키지 사용: pip install edge-tts
 Fish Audio / CosyVoice3와 동일한 인터페이스: speak() / playback_finished / cleanup()
 """
 import asyncio
-import io
 import logging
 import time
 
@@ -62,11 +61,9 @@ class EdgeTTS(QObject):
 
             logging.info("[TTS] Edge TTS 수신: %.2fs, %s bytes", time.time() - t0, f"{len(audio_data):,}")
 
-            # MP3 → PCM 변환
-            from pydub import AudioSegment
-            audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
-            audio = audio.set_channels(1).set_sample_width(2).set_frame_rate(_SAMPLE_RATE)
-            pcm = audio.raw_data
+            # Decode MP3 to PCM with bundled PyAV codecs.
+            from audio.mp3_decoder import decode_mp3_to_pcm
+            pcm = decode_mp3_to_pcm(audio_data, _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
             stream = self.pa.open(

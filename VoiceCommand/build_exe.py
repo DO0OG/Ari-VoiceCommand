@@ -6,10 +6,11 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 권장: py -3.11 validate_repo.py       # 빌드 전 검증
 
 Nuitka import 제외 정책:
-  torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
-  API 클라이언트는 --nofollow-import-to 옵션으로 제외한다. 배포 폴더에는 들어가지 않으므로
-  이 패키지를 쓰는 선택 기능은 배포판에서 동작하지 않는다.
-  numpy는 로컬 판단 엔진과 Whisper 워커가 필요로 하므로 제외하지 않는다.
+  --nofollow-import-to로 제외한 모듈은 배포 폴더에 들어가지 않는다. 대체 경로가 있는
+  무거운 선택 기능(torch, sentence_transformers, easyocr 등)과 앱이 쓰지 않는
+  groq/mistralai 클라이언트만 제외한다. 기본 기능이 쓰는 패키지(openai/anthropic,
+  httpx/pydantic, Whisper, 웹 검색, 화면 분석)와 그 의존성은 제외하지 않는다.
+  numpy와 scipy는 로컬 판단 엔진과 Whisper 워커가 필요로 한다.
 
 출력: dist/Ari/
 
@@ -330,12 +331,13 @@ nuitka_args = [
     "--include-package=services",
     "--include-package-data=agent",
     "--include-package-data=memory",
+    "--include-package-data=faster_whisper",
     *_optional_include_packages(
         "pycaw",
         "comtypes",
         "groq",
         "anthropic",
-        "fish_audio_sdk",
+        "ormsgpack",
         "speech_recognition",
         "pyaudio",
         "certifi",
@@ -344,6 +346,14 @@ nuitka_args = [
         "watchdog",
         "requests",
         "httpx",
+        "openai",
+        "faster_whisper",
+        "huggingface_hub",
+        "cv2",
+        "lxml",
+        "pydantic",
+        "pydantic_core",
+        "edge_tts",
         "fastapi",
         "uvicorn",
         "psutil",
@@ -370,40 +380,31 @@ nuitka_args = [
         "win32api",
     ),
 
-    # ── 가져오기 제외 대상: C 확장 / 컴파일 불가 패키지 ─────────────────────────
-    # Nuitka가 C로 컴파일하지 않도록 제외. 런타임에는 site-packages의
-    # 사전 컴파일된 .pyd/.dll 또는 순수 Python 파일로 동작.
+    # ── 가져오기 제외 대상: 대체 경로가 있는 무거운 선택 기능 ───────────────────
+    # 제외한 모듈은 배포 폴더에 들어가지 않으므로 import하면 실패한다.
+    # 기본 기능이 쓰는 패키지와 그 의존성은 여기에 넣지 않는다.
 
     # ML / 수치 연산 (numpy는 로컬 판단 엔진이 쓰므로 포함한다)
     "--nofollow-import-to=torch",
     "--nofollow-import-to=torchvision",
     "--nofollow-import-to=torchaudio",
     "--nofollow-import-to=sentence_transformers",
+    "--nofollow-import-to=transformers",
     "--nofollow-import-to=easyocr",
-    "--nofollow-import-to=cv2",
     "--nofollow-import-to=matplotlib",
     "--nofollow-import-to=tensorflow",
     "--nofollow-import-to=pandas",
     "--nofollow-import-to=sklearn",
-    "--nofollow-import-to=scipy",
 
-    # LLM / API 클라이언트 (pydantic v2 Rust 확장 포함, clcache 전처리기 실패)
+    # 앱이 쓰지 않는 LLM 클라이언트
     "--nofollow-import-to=groq",
-    "--nofollow-import-to=openai",
-    "--nofollow-import-to=anthropic",
     "--nofollow-import-to=mistralai",
-    "--nofollow-import-to=httpx",
-    "--nofollow-import-to=pydantic",
-    "--nofollow-import-to=pydantic_core",
-    "--nofollow-import-to=huggingface_hub",
 
     # 기타
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
-    "--nofollow-import-to=PIL",
     "--nofollow-import-to=pygments",
     "--nofollow-import-to=reportlab",
-    "--nofollow-import-to=lxml",
     "--nofollow-import-to=mouseinfo",
     "--nofollow-import-to=comtypes.test",
     "--nofollow-import-to=wmi",
