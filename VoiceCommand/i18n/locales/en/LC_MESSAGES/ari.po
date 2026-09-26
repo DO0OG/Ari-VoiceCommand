@@ -3046,3 +3046,18 @@ msgstr "Reload model"
 
 msgid "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. 이 패키지 없이 할 수 있는 방법으로 다시 시도합니다."
 msgstr "The installed Ari cannot install the '{package}' package automatically. It will try again without that package."
+
+msgid "이전 버전 데이터 가져오기"
+msgstr "Import data from previous version"
+
+msgid "이전 버전의 .ari_runtime 폴더 선택"
+msgstr "Select the .ari_runtime folder of the previous version"
+
+msgid "선택한 폴더에서 아리 데이터를 찾지 못했습니다.\n.ari_runtime 폴더나 그 폴더가 들어 있는 폴더를 선택하세요."
+msgstr "No Ari data was found in the selected folder.\nSelect the .ari_runtime folder or the folder that contains it."
+
+msgid "데이터를 가져오지 못했습니다: {error}"
+msgstr "Could not import the data: {error}"
+
+msgid "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
+msgstr "Imported {count} file(s). Existing files were left unchanged.\nRestart Ari to use the imported data."

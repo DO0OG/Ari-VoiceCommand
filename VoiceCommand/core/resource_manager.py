@@ -60,21 +60,40 @@ class ResourceManager:
         return os.path.join(ResourceManager._project_root(), _DEV_RUNTIME_DIR)
 
     @staticmethod
-    def _merge_path_if_missing(source: str, destination: str) -> None:
+    def _merge_path_if_missing(source: str, destination: str) -> int:
+        """대상에 없는 파일만 복사하고 복사한 파일 수를 반환한다. 기존 파일은 덮어쓰지 않는다."""
         if not os.path.exists(source):
-            return
+            return 0
         if os.path.isdir(source):
             os.makedirs(destination, exist_ok=True)
-            for name in os.listdir(source):
+            return sum(
                 ResourceManager._merge_path_if_missing(
                     os.path.join(source, name),
                     os.path.join(destination, name),
                 )
-            return
+                for name in os.listdir(source)
+            )
         if os.path.exists(destination):
-            return
+            return 0
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copy2(source, destination)
+        return 1
+
+    @staticmethod
+    def import_legacy_runtime_data(selected_dir: str) -> int:
+        """이전 zip 배포판의 .ari_runtime 폴더에서 현재 데이터 폴더에 없는 파일만 가져온다.
+
+        .ari_runtime 폴더나 그 폴더를 담은 폴더를 받는다. Ari 데이터로 보이지 않으면
+        ValueError를 낸다. 기존 파일은 덮어쓰거나 지우지 않는다.
+        """
+        source = os.path.abspath(selected_dir)
+        nested = os.path.join(source, _DEV_RUNTIME_DIR)
+        if os.path.isdir(nested):
+            source = nested
+        known_names = {destination for _source, destination in _LEGACY_RUNTIME_MAPPINGS}
+        if not os.path.isdir(source) or not known_names.intersection(os.listdir(source)):
+            raise ValueError(source)
+        return ResourceManager._merge_path_if_missing(source, ResourceManager.get_app_data_dir())
 
     @staticmethod
     def _migrate_dev_runtime_state(

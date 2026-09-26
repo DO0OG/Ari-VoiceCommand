@@ -292,6 +292,11 @@ class SettingsDialog(QDialog):
         log_btn.clicked.connect(self._open_log_folder)
         vbox.addWidget(log_btn)
 
+        import_btn = QPushButton(_("이전 버전 데이터 가져오기"))
+        import_btn.setStyleSheet(secondary_btn_style())
+        import_btn.clicked.connect(self._import_legacy_data)
+        vbox.addWidget(import_btn)
+
         vbox.addStretch()
         return widget
 
@@ -411,6 +416,34 @@ class SettingsDialog(QDialog):
         log_dir = ResourceManager.get_writable_path("logs")
         os.makedirs(log_dir, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
+
+    def _import_legacy_data(self):
+        """zip으로 배포되던 이전 버전의 .ari_runtime 데이터를 덮어쓰지 않고 가져온다."""
+        from PySide6.QtWidgets import QFileDialog
+        from core.resource_manager import ResourceManager
+        path = QFileDialog.getExistingDirectory(
+            self, _("이전 버전의 .ari_runtime 폴더 선택"), "",
+        )
+        if not path:
+            return
+        title = _("이전 버전 데이터 가져오기")
+        try:
+            copied = ResourceManager.import_legacy_runtime_data(path)
+        except ValueError:
+            QMessageBox.warning(self, title, _(
+                "선택한 폴더에서 아리 데이터를 찾지 못했습니다.\n"
+                ".ari_runtime 폴더나 그 폴더가 들어 있는 폴더를 선택하세요."
+            ))
+            return
+        except OSError as exc:
+            logging.warning("이전 버전 데이터 가져오기 실패: %s", exc)
+            QMessageBox.warning(self, title, _("데이터를 가져오지 못했습니다: {error}", error=exc))
+            return
+        QMessageBox.information(self, title, _(
+            "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n"
+            "가져온 데이터를 적용하려면 아리를 다시 시작하세요.",
+            count=copied,
+        ))
 
     def _open_stt_settings(self):
         from ui.stt_settings_dialog import STTSettingsDialog
