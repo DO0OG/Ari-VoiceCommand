@@ -23,6 +23,11 @@
 기존 `SENSITIVE_SETTINGS_KEYS`의 13개 항목을 사용한다. API 인증값 외에 기존에
 민감값으로 분류한 `fish_reference_id`도 포함한다.
 
+설정의 LLM 페이지에서 추가한 OpenAI 호환 제공자의 키는 `custom_<id>_api_key`
+이름으로 같은 암호화 저장소에 들어간다. 환경변수로 넣으려면
+`ARI_CUSTOM_<ID>_API_KEY`(id는 `ari_settings.json`의 `custom_llm_providers` 키)를
+쓴다. 제공자를 삭제하면 그 키도 저장소에서 지운다.
+
 PowerShell에서 현재 터미널로 실행하는 앱에만 키를 전달하려면 다음과 같이 설정한다.
 
 ```powershell

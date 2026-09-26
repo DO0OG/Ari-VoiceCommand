@@ -9,10 +9,15 @@ import sys
 import tempfile
 
 from core.settings_schema import SENSITIVE_SETTINGS_KEYS
+from core.custom_llm_providers import is_custom_secret_key
 
 
 class SecretStoreError(RuntimeError):
     """비밀값을 포함하지 않는 저장소 오류."""
+
+
+def _is_secret_key(key: object) -> bool:
+    return key in SENSITIVE_SETTINGS_KEYS or is_custom_secret_key(key)
 
 
 def _protect(data: bytes) -> bytes:
@@ -74,7 +79,7 @@ class SecretStore:
             if payload["version"] != 1 or not isinstance(payload["secrets"], dict):
                 raise ValueError()
             values = payload["secrets"]
-            if any(key not in SENSITIVE_SETTINGS_KEYS or not isinstance(value, str)
+            if any(not _is_secret_key(key) or not isinstance(value, str)
                    for key, value in values.items()):
                 raise ValueError()
             return values
@@ -82,7 +87,7 @@ class SecretStore:
             raise SecretStoreError("Credential store cannot be decrypted") from None
 
     def write(self, values: dict[str, str]) -> None:
-        if any(key not in SENSITIVE_SETTINGS_KEYS or not isinstance(value, str)
+        if any(not _is_secret_key(key) or not isinstance(value, str)
                for key, value in values.items()):
             raise SecretStoreError("Invalid credential fields")
         payload = json.dumps({"version": 1, "secrets": values}, ensure_ascii=False).encode("utf-8")
