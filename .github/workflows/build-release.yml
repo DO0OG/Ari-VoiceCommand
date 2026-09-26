@@ -51,8 +51,19 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe scripts\compile_po.py
 
+      # Nuitka 컴파일 결과를 보존해 다음 빌드에서는 바뀐 모듈만 다시 컴파일한다.
+      - name: Restore Nuitka compile cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\.nuitka-cache
+          key: nuitka-${{ runner.os }}-${{ hashFiles('VoiceCommand/requirements.txt', 'VoiceCommand/build_exe.py') }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-
+
       - name: Build EXE (Standalone Folder)
         working-directory: VoiceCommand
+        env:
+          NUITKA_CACHE_DIR: ${{ github.workspace }}\.nuitka-cache
         run: .venv\Scripts\python.exe build_exe.py --clean
 
       - name: Smoke test bundled Whisper worker IPC (no model or audio device)

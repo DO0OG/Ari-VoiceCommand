@@ -161,6 +161,7 @@ import sys
 import multiprocessing
 import importlib.util
 import json
+import re
 from datetime import datetime
 
 from core.settings_schema import SENSITIVE_SETTINGS_KEYS, SETTINGS_TEMPLATE_FILE
@@ -174,9 +175,9 @@ if sys.stdout.encoding != 'utf-8':
 
 clean_build = "--clean" in sys.argv
 one_file = "--onefile" in sys.argv
-# GitHub Actions 등 CI 환경은 메모리 제한이 있어 병렬 작업 수를 절반으로 제한
+# GitHub Actions 러너(4코어, 16GB)도 모든 코어를 쓴다. 메모리 부족이 나면 절반으로 되돌린다.
 _cpu = multiprocessing.cpu_count()
-jobs = max(1, _cpu // 2) if os.environ.get("CI") else _cpu
+jobs = _cpu
 
 print("=" * 60)
 print("   Ari EXE 최적화 빌드 시스템 (Nuitka)")
@@ -225,6 +226,62 @@ def _optional_include_packages(*module_names: str) -> list[str]:
             args.append(f"--include-package={module_name}")
         else:
             print(f"• 선택 패키지 생략: {module_name}")
+    return args
+
+
+def _raw_packages(*module_names: str) -> list[str]:
+    """순수 Python 패키지를 C로 컴파일하지 않고 .py 파일 그대로 배포 폴더에 복사한다."""
+    args: list[str] = []
+    for module_name in module_names:
+        spec = importlib.util.find_spec(module_name)
+        if spec is None or not spec.submodule_search_locations:
+            print(f"• 원본 복사 패키지 생략: {module_name}")
+            continue
+        package_dir = list(spec.submodule_search_locations)[0]
+        args.append(f"--nofollow-import-to={module_name}")
+        args.append(f"--include-raw-dir={package_dir}={module_name}")
+        args.extend(_raw_package_imports(package_dir, module_name))
+    return args
+
+
+_RAW_IMPORT_SKIP = {"tkinter", "turtle", "idlelib", "test", "lib2to3", "ensurepip", "venv"}
+
+
+def _raw_package_imports(package_dir: str, module_name: str) -> list[str]:
+    """원본 복사 패키지는 Nuitka가 따라가지 않으므로, 그 안에서 import하는 모듈을 직접 포함시킨다."""
+    import ast
+
+    names: set[str] = set()
+    for root, _dirs, files in os.walk(package_dir):
+        for file_name in files:
+            if not file_name.endswith(".py"):
+                continue
+            try:
+                with open(os.path.join(root, file_name), encoding="utf-8") as handle:
+                    tree = ast.parse(handle.read())
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    names.add(node.module.split(".")[0])
+    # 표준 라이브러리와 패키지가 필수로 선언한 의존성만 포함한다(선택 연동 패키지는 제외).
+    import importlib.metadata
+
+    required = {
+        re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0].strip().lower().replace("-", "_")
+        for requirement in importlib.metadata.requires(module_name) or []
+        if "extra ==" not in requirement
+    }
+    allowed = {name for name in names if name in sys.stdlib_module_names or name.lower() in required}
+    args: list[str] = []
+    for name in sorted(allowed - {module_name} - _RAW_IMPORT_SKIP):
+        spec = importlib.util.find_spec(name)
+        if spec is None:
+            continue
+        option = "--include-package" if spec.submodule_search_locations else "--include-module"
+        args.append(f"{option}={name}")
     return args
 
 # 클린 빌드 처리
@@ -336,7 +393,6 @@ nuitka_args = [
         "pycaw",
         "comtypes",
         "groq",
-        "anthropic",
         "ormsgpack",
         "speech_recognition",
         "pyaudio",
@@ -346,7 +402,6 @@ nuitka_args = [
         "watchdog",
         "requests",
         "httpx",
-        "openai",
         "faster_whisper",
         "huggingface_hub",
         "cv2",
@@ -395,6 +450,11 @@ nuitka_args = [
     "--nofollow-import-to=tensorflow",
     "--nofollow-import-to=pandas",
     "--nofollow-import-to=sklearn",
+
+    # LLM SDK는 모듈 수가 많아(openai 약 1,000개, anthropic 약 750개) 컴파일하지 않고 원본을 복사한다.
+    # 복사한 패키지를 import할 수 있도록 제외 모듈 import 차단만 끈다.
+    *_raw_packages("openai", "anthropic"),
+    "--no-deployment-flag=excluded-module-usage",
 
     # 앱이 쓰지 않는 LLM 클라이언트
     "--nofollow-import-to=groq",
