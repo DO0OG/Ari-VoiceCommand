@@ -3061,3 +3061,51 @@ msgstr "データを取り込めませんでした: {error}"
 
 msgid "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
 msgstr "{count} 個のファイルを取り込みました。既存のファイルはそのまま残しています。\n取り込んだデータを反映するには、アリを再起動してください。"
+
+msgid "다시 찾기"
+msgstr "再検出"
+
+msgid "위치 지정"
+msgstr "場所を指定"
+
+msgid "확인 중..."
+msgstr "確認中..."
+
+msgid "모델 받기"
+msgstr "モデルを取得"
+
+msgid "설치됨: {path}"
+msgstr "インストール済み: {path}"
+
+msgid "설치되지 않음"
+msgstr "未インストール"
+
+msgid "Ollama 서버가 응답하지 않아 설치된 모델을 확인하지 못했습니다."
+msgstr "Ollama サーバーが応答しないため、インストール済みのモデルを確認できませんでした。"
+
+msgid "설치된 모델이 없습니다."
+msgstr "インストール済みのモデルはありません。"
+
+msgid "설치된 모델: {models}"
+msgstr "インストール済みモデル: {models}"
+
+msgid "Ollama 모델 받기"
+msgstr "Ollama モデルを取得"
+
+msgid "Ollama가 이미 설치되어 있습니다. 받을 모델을 선택하세요."
+msgstr "Ollama はすでにインストールされています。取得するモデルを選択してください。"
+
+msgid "선택한 모델이 없습니다."
+msgstr "モデルが選択されていません。"
+
+msgid "Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Ollama モデルを取得しています。\nモデルのダウンロードはコンソールなしでバックグラウンドで続きます。"
+
+msgid "ollama.exe 위치 선택"
+msgstr "ollama.exe の場所を選択"
+
+msgid "ollama.exe 파일을 선택하세요."
+msgstr "ollama.exe ファイルを選択してください。"
+
+msgid "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"
+msgstr "CosyVoice3 はすでにインストールされています。\n\n{path}\n\n再インストールしますか？"

@@ -3061,3 +3061,51 @@ msgstr "Could not import the data: {error}"
 
 msgid "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
 msgstr "Imported {count} file(s). Existing files were left unchanged.\nRestart Ari to use the imported data."
+
+msgid "다시 찾기"
+msgstr "Detect again"
+
+msgid "위치 지정"
+msgstr "Set location"
+
+msgid "확인 중..."
+msgstr "Checking..."
+
+msgid "모델 받기"
+msgstr "Download models"
+
+msgid "설치됨: {path}"
+msgstr "Installed: {path}"
+
+msgid "설치되지 않음"
+msgstr "Not installed"
+
+msgid "Ollama 서버가 응답하지 않아 설치된 모델을 확인하지 못했습니다."
+msgstr "The Ollama server did not respond, so installed models could not be checked."
+
+msgid "설치된 모델이 없습니다."
+msgstr "No models are installed."
+
+msgid "설치된 모델: {models}"
+msgstr "Installed models: {models}"
+
+msgid "Ollama 모델 받기"
+msgstr "Download Ollama models"
+
+msgid "Ollama가 이미 설치되어 있습니다. 받을 모델을 선택하세요."
+msgstr "Ollama is already installed. Select the models to download."
+
+msgid "선택한 모델이 없습니다."
+msgstr "No models were selected."
+
+msgid "Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Downloading Ollama models.\nThe download continues in the background without a console."
+
+msgid "ollama.exe 위치 선택"
+msgstr "Select ollama.exe"
+
+msgid "ollama.exe 파일을 선택하세요."
+msgstr "Please select the ollama.exe file."
+
+msgid "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"
+msgstr "CosyVoice3 is already installed.\n\n{path}\n\nDo you want to reinstall it?"
