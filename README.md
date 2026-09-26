@@ -122,6 +122,10 @@ Ari is a **Windows AI voice assistant** and **autonomous desktop agent**. It lis
 
 ### Recent Updates
 
+- **Windows installer:** each release now ships a single `Ari-Setup-<version>.exe`. It installs to Program Files by default (you can pick another folder), and settings and history are kept in `%AppData%\Ari`.
+- **Fast local handling for simple commands:** short requests such as the current time, running apps, a screenshot, or a volume change can be handled on the device without calling the LLM. Requests that are uncertain, negated, or made of several actions still go through the regular conversation path. It is off by default; turn it on under Settings → Agent → "Fast local handling". A release is only built after a person has reviewed the evaluation sentences.
+- **Custom OpenAI-compatible providers:** under Settings → AI Settings, register a name and base URL, then set the default model and an optional API key. Any OpenAI-compatible server (LM Studio, vLLM, an internal gateway, and so on) can then be used as a provider. Keys are kept only in the encrypted store.
+- **Safer power commands:** Ari shuts the computer down only when you explicitly ask it to, and negated requests such as "don't shut down" never trigger it. The model's reasoning text is no longer read aloud either (reasoning mode is turned off for NVIDIA Nemotron).
 - **Telegram remote command bridge:** allow-listed chat authorization, long-polling, streaming via message edits, forwarding of screenshots and images produced by that request, and chunked delivery of replies longer than 4096 characters (`telegram_enabled`, disabled by default).
 - **Restricted generated image downloads:** the image generation tool now only downloads images from HTTPS URLs.
 - **Advanced autonomous agent features:** local MCP server (including file read/write tools), streaming/vision/file/app tools, interrupt & resume, audit logging, and an agent dashboard.

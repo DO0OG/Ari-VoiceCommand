@@ -13,7 +13,9 @@
 ## 1. 후보 문장 검수
 
 `release_gold.jsonl`(배포 판정 후보)과 `safety_gold.jsonl`(반드시 기존 대화로 넘겨야 하는
-문장)은 모두 `pending_human_review` 상태로 만들어져 있다. 검수 기록은 사람이 직접 남긴다.
+문장)은 `pending_human_review` 상태로 만들어진다. 검수 기록은 사람이 직접 남긴다.
+2026-09-26 검수에서 1,125행 가운데 1,115행을 승인하고 4행을 고쳐 승인했으며, 6행을 거절했다.
+승인 행은 release_gold 언어별 273행, safety_gold 언어별 100행으로 배포 하한을 넘는다.
 
 ```powershell
 cd VoiceCommand
