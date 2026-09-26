@@ -1083,54 +1083,54 @@ class CharacterWidget(QWidget):
         menu = QMenu(self)
         menu.setStyleSheet(theme_module.MENU_STYLE)
 
-        chat_action = QAction("💬 텍스트 대화", self)
+        chat_action = QAction(_("💬 텍스트 대화"), self)
         chat_action.triggered.connect(self.open_text_interface)
         menu.addAction(chat_action)
 
         menu.addSeparator()
 
-        settings_action = QAction("설정", self)
+        settings_action = QAction(_("설정"), self)
         settings_action.triggered.connect(self.open_settings)
         menu.addAction(settings_action)
 
         menu.addSeparator()
 
-        game_action = QAction("🎮 게임 모드 (GPU 절약)", self)
+        game_action = QAction(_("🎮 게임 모드 (GPU 절약)"), self)
         game_action.setCheckable(True)
         game_action.setChecked(is_game_mode())
         def toggle_game_mode(checked):
             if checked:
                 enable_game_mode()
-                self.say("게임 모드 ON. GPU 메모리 해제했습니다.", duration=3000)
+                self.say(_("게임 모드 ON. GPU 메모리 해제했습니다."), duration=3000)
             else:
                 disable_game_mode()
-                self.say("게임 모드 OFF. TTS 복원 중...", duration=3000)
+                self.say(_("게임 모드 OFF. TTS 복원 중..."), duration=3000)
         game_action.triggered.connect(toggle_game_mode)
         menu.addAction(game_action)
 
-        smart_action = QAction("스마트 어시스턴트 모드", self)
+        smart_action = QAction(_("스마트 어시스턴트 모드"), self)
         smart_action.setCheckable(True)
         smart_action.setChecked(learning_mode['enabled'])
         def toggle_smart_mode(checked):
             learning_mode['enabled'] = checked
-            msg = "활성화" if checked else "비활성화"
-            self.say(f"스마트 어시스턴트 모드가 {msg}되었습니다.", duration=3000)
+            status = _("활성화") if checked else _("비활성화")
+            self.say(_("스마트 어시스턴트 모드가 {status}되었습니다.").format(status=status), duration=3000)
         smart_action.triggered.connect(toggle_smart_mode)
         menu.addAction(smart_action)
 
-        mouse_action = QAction("마우스 반응", self)
+        mouse_action = QAction(_("마우스 반응"), self)
         mouse_action.setCheckable(True)
         mouse_action.setChecked(self.mouse_tracking_enabled)
         mouse_action.triggered.connect(self.toggle_mouse_tracking)
         menu.addAction(mouse_action)
 
-        hide_action = QAction("숨기기", self)
+        hide_action = QAction(_("캐릭터 숨기기"), self)
         hide_action.triggered.connect(self.hide)
         menu.addAction(hide_action)
 
         menu.addSeparator()
 
-        exit_action = QAction("종료", self)
+        exit_action = QAction(_("종료"), self)
         exit_action.triggered.connect(self.exit_program)
         menu.addAction(exit_action)
 

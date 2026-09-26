@@ -156,14 +156,14 @@ class _ValidatorThread(QThread):
                     }
                 client = openai_module.OpenAI(**kwargs)
                 self._validate_openai_client(client, model)
-            message = _("✓ {model} 연결 성공").format(model=model) if self.custom else f"✓ {model} 연결 성공"
+            message = _("✓ {model} 연결 성공").format(model=model)
             self.done.emit(True, message)
         except Exception as e:
             if self.custom:
                 self.done.emit(False, _("연결에 실패했습니다. URL, 모델, API 키를 확인해 주세요."))
                 return
             if self.provider == "ollama":
-                self.done.emit(False, "✗ Ollama 서버에 연결할 수 없어요. Ollama 실행 여부를 확인하세요.")
+                self.done.emit(False, _("✗ Ollama 서버에 연결할 수 없어요. Ollama 실행 여부를 확인하세요."))
                 return
             msg = str(e)
             status_code = getattr(e, "status_code", None)
@@ -171,11 +171,11 @@ class _ValidatorThread(QThread):
                 label = cfg.get("label", self.provider)
                 self.done.emit(
                     False,
-                    f"✗ 모델 '{model}'을(를) {label}에서 찾을 수 없습니다. 모델명을 확인해 주세요.",
+                    _("✗ 모델 '{model}'을(를) {label}에서 찾을 수 없습니다. 모델명을 확인해 주세요.").format(model=model, label=label),
                 )
                 return
             if status_code == 401 or "401" in msg or "Unauthorized" in msg:
-                self.done.emit(False, "✗ API Key가 유효하지 않습니다. 키를 확인해 주세요.")
+                self.done.emit(False, _("✗ API Key가 유효하지 않습니다. 키를 확인해 주세요."))
                 return
             for marker in ("Error code:", "status code", "error_code"):
                 if marker in msg:

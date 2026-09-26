@@ -417,6 +417,9 @@ class LLMProvider:
         reasoning_format=hidden 이면 최종 답변만 content에 담겨 온다."""
         if provider == "groq":
             return {"reasoning_format": "hidden"}
+        if provider == "nvidia_nim":
+            # Nemotron 3 계열은 추론이 기본으로 켜져 있고 태그 없이 content에 섞인다(모델 카드 기준).
+            return {"chat_template_kwargs": {"enable_thinking": False}}
         return {}
 
     def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:

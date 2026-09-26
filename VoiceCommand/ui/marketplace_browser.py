@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QThread, Signal
 
+from i18n.translator import _
+
 
 class MarketplaceFetchThread(QThread):
     done = Signal(bool, object, str)
@@ -35,8 +37,8 @@ class MarketplaceInstallThread(QThread):
 
             ok = install_plugin(self.plugin_id)
             if ok:
-                self.done.emit(True, "플러그인 설치가 완료되었습니다.")
+                self.done.emit(True, _("플러그인 설치가 완료되었습니다."))
             else:
-                self.done.emit(False, "플러그인 설치에 실패했습니다.")
+                self.done.emit(False, _("플러그인 설치에 실패했습니다."))
         except Exception as exc:
             self.done.emit(False, str(exc))

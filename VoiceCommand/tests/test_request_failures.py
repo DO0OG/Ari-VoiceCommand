@@ -87,6 +87,7 @@ class RequestFailureMessageTests(unittest.TestCase):
                 second = secondary.chat.completions.create.call_args.kwargs
                 self.assertEqual(first["messages"], second["messages"])
                 self.assertEqual(second["model"], "secondary")
+                self.assertEqual(first["extra_body"], {"chat_template_kwargs": {"enable_thinking": False}})
                 self.assertEqual(second["extra_body"], {"reasoning_format": "hidden"})
                 if with_tools:
                     self.assertEqual(first["tools"], second["tools"])

@@ -3163,3 +3163,24 @@ msgstr "Delete provider"
 
 msgid "'{name}' 제공자를 삭제할까요?"
 msgstr "Delete the '{name}' provider?"
+
+msgid "스마트 어시스턴트 모드가 비활성화되었습니다."
+msgstr "Smart assistant mode has been disabled."
+
+msgid "스마트 어시스턴트 모드가 활성화되었습니다. 이제 제가 명령어를 자동으로 실행하고 주인님의 패턴을 학습하겠습니다."
+msgstr "Smart assistant mode has been enabled. I'll now run commands automatically and learn your patterns."
+
+msgid "플러그인 설치가 완료되었습니다."
+msgstr "The plugin has been installed."
+
+msgid "플러그인 설치에 실패했습니다."
+msgstr "Failed to install the plugin."
+
+msgid "✗ Ollama 서버에 연결할 수 없어요. Ollama 실행 여부를 확인하세요."
+msgstr "✗ Can't connect to the Ollama server. Check that Ollama is running."
+
+msgid "✗ 모델 '{model}'을(를) {label}에서 찾을 수 없습니다. 모델명을 확인해 주세요."
+msgstr "✗ Model '{model}' was not found on {label}. Please check the model name."
+
+msgid "✗ API Key가 유효하지 않습니다. 키를 확인해 주세요."
+msgstr "✗ The API key is invalid. Please check the key."
