@@ -524,8 +524,11 @@ def adjust_volume(change, *, amount=None, announce=True):
             raise ValueError("volume change out of range")
 
         devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
+        # 새 pycaw의 GetSpeakers()는 Activate 대신 EndpointVolume 속성을 가진 장치 객체를 돌려준다.
+        volume = getattr(devices, "EndpointVolume", None)
+        if volume is None:
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
         if mute:
             volume.SetMute(1, None)
             if announce:
@@ -543,7 +546,7 @@ def adjust_volume(change, *, amount=None, announce=True):
             tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
         return True
     except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        logging.debug("시스템 볼륨 조절 실패: %s", exc)
+        logging.warning("시스템 볼륨 조절 실패: %s", exc)
         if announce:
             tts_wrapper(_("볼륨 조절 실패"))
         return False

@@ -419,7 +419,7 @@ class RealVerifier:
                         if provider == "anthropic":
                             resp = client.messages.create(
                                 model=target_model,
-                                max_tokens=800,
+                                max_tokens=4096,
                                 system=system_prompt,
                                 messages=[{"role": "user", "content": active_prompt}],
                             )
@@ -436,7 +436,7 @@ class RealVerifier:
                                     {"role": "user", "content": active_prompt},
                                 ],
                                 temperature=0.1,
-                                max_tokens=800,
+                                max_tokens=4096,
                             )
                             choice = resp.choices[0]
                             text = choice.message.content or ""

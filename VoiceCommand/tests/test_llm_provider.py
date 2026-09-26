@@ -302,6 +302,21 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(memory["intent"], "memory")
         self.assertFalse(memory["force_tool"])
 
+    def test_analyze_request_prefers_direct_tool_only_for_single_parsed_request(self):
+        provider = LLMProvider()
+
+        capture = provider._analyze_request("화면 캡처해 줘")
+        apps = provider._analyze_request("실행 중인 앱 알려 줘")
+        compound = provider._analyze_request("볼륨 올리고 캡처해줘")
+        tools, tool_choice = provider._select_tools_for_request(provider._analyze_request("캡처해줘"))
+
+        self.assertEqual(capture["preferred_tool"], "take_screenshot")
+        self.assertTrue(capture["force_tool"])
+        self.assertEqual(apps["preferred_tool"], "get_running_apps")
+        self.assertIsNone(compound["preferred_tool"])
+        self.assertEqual(tool_choice, "auto")
+        self.assertIn("take_screenshot", {tool["function"]["name"] for tool in tools})
+
     def test_select_tools_for_request_excludes_execution_tools_for_memory_intent(self):
         provider = LLMProvider()
 

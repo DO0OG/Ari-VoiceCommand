@@ -1,5 +1,15 @@
 """볼륨 제어 명령"""
+import re
+
+from agent.decision.semantics import parse_candidate
 from commands.base_command import BaseCommand
+
+# 해석기가 받지 않는 기존 고정 표현은 문장 전체가 일치할 때만 처리한다.
+_LEGACY_PHRASES = {
+    "볼륨키우기": "up",
+    "볼륨줄이기": "down",
+    "볼륨음소거해제": "unmute",
+}
 
 
 class VolumeCommand(BaseCommand):
@@ -10,14 +20,19 @@ class VolumeCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        return "볼륨" in text
+        return "볼륨" in text and self._request(text) is not None
 
     def execute(self, text: str) -> None:
-        if "키우기" in text or "올려" in text:
-            self.adjust_volume(0.1)
-        elif "줄이기" in text or "내려" in text:
-            self.adjust_volume(-0.1)
-        elif "음소거 해제" in text:
-            self.adjust_volume(0)
-        elif "음소거" in text:
-            self.adjust_volume(-1)
+        request = self._request(text)
+        if request is not None:
+            direction, amount = request
+            self.adjust_volume(direction, amount=amount)
+
+    @staticmethod
+    def _request(text: str) -> tuple[str, object] | None:
+        # "볼륨 올리고 캡처해줘"처럼 다른 동작이 붙거나 부정한 문장은 대화 처리로 넘긴다.
+        parsed = parse_candidate(text, "adjust_volume")
+        if parsed.parse_success:
+            return parsed.arguments["direction"], parsed.arguments.get("amount")
+        direction = _LEGACY_PHRASES.get(re.sub(r"[\s.!?]", "", text))
+        return (direction, None) if direction else None

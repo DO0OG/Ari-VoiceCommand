@@ -73,6 +73,18 @@ class FastPathVolumeTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(endpoint.mute_calls, [(1, None)])
 
+    def test_new_pycaw_device_uses_endpoint_volume_without_activate(self):
+        endpoint = _Endpoint(current=0.5)
+        result, endpoint = self._call_volume(
+            "up",
+            amount=10,
+            endpoint=endpoint,
+            get_speakers=lambda: SimpleNamespace(EndpointVolume=endpoint),
+        )
+
+        self.assertTrue(result)
+        self.assertAlmostEqual(endpoint.scalar_calls[0][0], 0.6)
+
     def test_invalid_amount_and_system_failure_report_failure(self):
         result, endpoint = self._call_volume("up", amount=-10)
         self.assertFalse(result)

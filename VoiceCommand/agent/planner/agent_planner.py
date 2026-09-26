@@ -552,7 +552,7 @@ class AgentPlanner(TemplatePlansMixin):
                         if provider == "anthropic":
                             resp = client.messages.create(
                                 model=target_model,
-                                max_tokens=1000,
+                                max_tokens=4096,
                                 system=_SYS_JSON_ONLY,
                                 messages=[{"role": "user", "content": active_prompt}],
                             )
@@ -569,7 +569,7 @@ class AgentPlanner(TemplatePlansMixin):
                                     {"role": "user", "content": active_prompt},
                                 ],
                                 temperature=0.1,
-                                max_tokens=1000,
+                                max_tokens=4096,
                                 **extra_kwargs,
                             )
                             choice = resp.choices[0]

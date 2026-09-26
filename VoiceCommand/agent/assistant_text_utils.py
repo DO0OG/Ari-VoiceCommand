@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from agent.decision.semantics import DIRECT_CANDIDATES, parse_candidate
+
 _GENERIC_AGENT_PHRASES = (
     "복합 작업으로 판단되어 단계별 실행으로 전환할게요",
     "복합 작업을 실행할게요",
@@ -88,6 +90,15 @@ def analyze_tool_request(user_message: str) -> dict:
     ):
         intent = "automation"
         force_tool = True
+
+    # 문장 전체가 바로 처리 도구 하나로 해석되면("화면 캡처해 줘") 그 도구를 쓰게 한다.
+    direct_tool = next(
+        (name for name in sorted(DIRECT_CANDIDATES) if parse_candidate(text, name).parse_success),
+        None,
+    )
+    if direct_tool:
+        force_tool = True
+        preferred = direct_tool
 
     if multi_step:
         intent = "automation"
