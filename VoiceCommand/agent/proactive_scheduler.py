@@ -57,7 +57,7 @@ class ScheduledTask:
     task_id: str
     goal: str
     schedule_expr: str        # 자연어 스케줄 표현 (구: schedule_desc)
-    next_run: str             # ISO format
+    next_run: str             # ISO 형식
     name: str = ""            # 작업 이름 (선택, SchedulerPanel UI용)
     task_type: str = "agent"  # "agent" | "alarm" | "suggestion"
     repeat: bool = False
@@ -394,7 +394,7 @@ class ProactiveScheduler:
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
-        logging.info("[Scheduler] 작업 실행: %s", task.goal)
+        logging.info("[Scheduler] 작업 실행: %s", task.task_id)
         if self.tts:
             self.tts(_("(진지) 예약된 작업을 시작할게요: {goal}", goal=task.goal))
         
@@ -419,7 +419,7 @@ class ProactiveScheduler:
     def check_missed_tasks_on_startup(self):
         """앱 시작 시 놓친 반복 작업을 보충 실행."""
         for task, run_meta in self._claim_due_tasks(datetime.now()):
-            logging.info("[Scheduler] 놓친 작업 보충 실행: %s", task.goal)
+            logging.info("[Scheduler] 놓친 작업 보충 실행: %s", task.task_id)
             threading.Thread(
                 target=self._execute_task,
                 args=(task, run_meta),

@@ -1,0 +1,225 @@
+{
+    "protocol":  {
+                     "dataset_version":  "decision-dataset-v2",
+                     "training_partition":  "train",
+                     "training_rows":  18544,
+                     "training_families":  186,
+                     "training_sha256":  "f403fa1d38a0d24594df91f551a22e68d9228554d5ce012e2f306e6f7d8b3d5d",
+                     "baseline_training_sha256_matches":  true,
+                     "calibration_partition":  "five deterministic family-held-out folds",
+                     "calibration_rows":  1619,
+                     "calibration_families":  80,
+                     "calibration_rows_sha256":  "d67853bc1c1292e5c5a0086c009f1a2cdff80c2503d2c699e4c5c09080ef49c6",
+                     "split_manifest_sha256":  "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+                     "gold_used_for_selection":  false,
+                     "test_used_for_selection":  false,
+                     "review_corpora_used":  false,
+                     "commands_dispatched":  0,
+                     "threshold":  0.92,
+                     "margin":  0.3,
+                     "selection_rule":  "No regression in row accuracy, family top-1, label-macro, language-macro, ECE, or NLL; zero direct and family false-directs; no reduction in direct selections; and strict improvement in family top-1, label-macro, or direct selections.",
+                     "source_sha256":  {
+                                           "train_py":  "7b746dc5cb42724f4d1cd45f76672f697ca808ecee01d62d2d4a3365f8332bc0",
+                                           "imbalance_experiments_py":  "7d4f050043bf1060627273e745a786e97995d0253c7f3fbbf2868a7207f35d0e",
+                                           "candidates_py":  "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
+                                           "engine_py":  "01878103bf1f114afb04f1cde6bd8c10dbaaa652fa49431b8280709750caa0e0",
+                                           "semantics_py":  "acf7d2f75a43cd0a1dbb3d0ad4efab7e7184facb93d3301ebfdd7899be89a53f",
+                                           "llm_router_py":  "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054"
+                                       },
+                     "reports":  [
+                                     {
+                                         "path":  "_task139/commit3_imbalance_experiments.json",
+                                         "epochs":  40,
+                                         "sha256":  "6f964e8cbd389432ec26e75ed223d7c9ffe721e9e5c6d7455b7924791b2c4ec7",
+                                         "purpose":  "screening_only"
+                                     },
+                                     {
+                                         "path":  "_task139/commit3_imbalance_finalist_160.json",
+                                         "epochs":  160,
+                                         "sha256":  "c3f29d78f2a2ff3a7af8894f3fae4d2c5ff85311255ebc0ecfeb98a864c0de08",
+                                         "purpose":  "historical_finalist_pre_nonempty_fold_fix"
+                                     }
+                                 ]
+                 },
+    "screening_40_epochs":  {
+                                "selected_candidate":  "class_family_weighted",
+                                "eligible_candidates":  [
+                                                            "family_weighted",
+                                                            "class_family_weighted"
+                                                        ],
+                                "trials":  [
+                                               {
+                                                   "profile":  "baseline",
+                                                   "rows":  18544,
+                                                   "accuracy":  0.79617,
+                                                   "ece":  0.049917,
+                                                   "nll":  0.813293,
+                                                   "direct_selected":  9,
+                                                   "direct_false":  0,
+                                                   "wilson95_lower":  0.700855,
+                                                   "family_top1":  0.590368,
+                                                   "family_coverage":  0.0875,
+                                                   "macro_label":  0.46562,
+                                                   "macro_language":  0.798391
+                                               },
+                                               {
+                                                   "profile":  "family_weighted",
+                                                   "rows":  18544,
+                                                   "accuracy":  0.811612,
+                                                   "ece":  0.027633,
+                                                   "nll":  0.736992,
+                                                   "direct_selected":  11,
+                                                   "direct_false":  0,
+                                                   "wilson95_lower":  0.741167,
+                                                   "family_top1":  0.606051,
+                                                   "family_coverage":  0.0875,
+                                                   "macro_label":  0.479117,
+                                                   "macro_language":  0.81358
+                                               },
+                                               {
+                                                   "profile":  "class_family_weighted",
+                                                   "rows":  18544,
+                                                   "accuracy":  0.810377,
+                                                   "ece":  0.026628,
+                                                   "nll":  0.745613,
+                                                   "direct_selected":  11,
+                                                   "direct_false":  0,
+                                                   "wilson95_lower":  0.741167,
+                                                   "family_top1":  0.615806,
+                                                   "family_coverage":  0.0875,
+                                                   "macro_label":  0.50777,
+                                                   "macro_language":  0.812749
+                                               },
+                                               {
+                                                   "profile":  "augmentation_cap_4",
+                                                   "rows":  2202,
+                                                   "accuracy":  0.772699,
+                                                   "ece":  0.031287,
+                                                   "nll":  0.8738,
+                                                   "direct_selected":  9,
+                                                   "direct_false":  0,
+                                                   "wilson95_lower":  0.700855,
+                                                   "family_top1":  0.571276,
+                                                   "family_coverage":  0.0875,
+                                                   "macro_label":  0.431946,
+                                                   "macro_language":  0.776139
+                                               },
+                                               {
+                                                   "profile":  "augmentation_cap_8",
+                                                   "rows":  2946,
+                                                   "accuracy":  0.773935,
+                                                   "ece":  0.031447,
+                                                   "nll":  0.857029,
+                                                   "direct_selected":  8,
+                                                   "direct_false":  0,
+                                                   "wilson95_lower":  0.675592,
+                                                   "family_top1":  0.577692,
+                                                   "family_coverage":  0.0875,
+                                                   "macro_label":  0.44144,
+                                                   "macro_language":  0.777375
+                                               }
+                                           ],
+                                "confidence_drop":  {
+                                                        "baseline_parser_eligible":  14,
+                                                        "baseline_parser_rejected":  190,
+                                                        "baseline_below_confidence_at_0_92_while_margin_passed":  3,
+                                                        "baseline_threshold_pairs":  [
+                                                                                         {
+                                                                                             "threshold":  0.92,
+                                                                                             "margin":  0.3,
+                                                                                             "selected":  9,
+                                                                                             "false":  0
+                                                                                         },
+                                                                                         {
+                                                                                             "threshold":  0.85,
+                                                                                             "margin":  0.25,
+                                                                                             "selected":  10,
+                                                                                             "false":  0
+                                                                                         },
+                                                                                         {
+                                                                                             "threshold":  0.8,
+                                                                                             "margin":  0.2,
+                                                                                             "selected":  10,
+                                                                                             "false":  0
+                                                                                         },
+                                                                                         {
+                                                                                             "threshold":  0.7,
+                                                                                             "margin":  0.2,
+                                                                                             "selected":  11,
+                                                                                             "false":  0
+                                                                                         },
+                                                                                         {
+                                                                                             "threshold":  0.6,
+                                                                                             "margin":  0.15,
+                                                                                             "selected":  11,
+                                                                                             "false":  0
+                                                                                         }
+                                                                                     ]
+                                                    },
+                                "per_class_at_global_threshold":  {
+                                                                      "adjust_volume":  {
+                                                                                            "selected_rows":  0,
+                                                                                            "selected_families":  0,
+                                                                                            "false":  0,
+                                                                                            "proposal":  "disabled"
+                                                                                        },
+                                                                      "get_current_time":  {
+                                                                                               "selected_rows":  4,
+                                                                                               "selected_families":  3,
+                                                                                               "false":  0,
+                                                                                               "proposal":  "disabled_pending_more_calibration_families"
+                                                                                           },
+                                                                      "get_running_apps":  {
+                                                                                               "selected_rows":  6,
+                                                                                               "selected_families":  3,
+                                                                                               "false":  0,
+                                                                                               "proposal":  "disabled_pending_more_calibration_families"
+                                                                                           },
+                                                                      "take_screenshot":  {
+                                                                                              "selected_rows":  1,
+                                                                                              "selected_families":  1,
+                                                                                              "false":  0,
+                                                                                              "proposal":  "disabled_pending_more_calibration_families"
+                                                                                          }
+                                                                  }
+                            },
+    "historical_160_epoch_finalist":  {
+                                          "selected_candidate":  "family_weighted",
+                                          "fold_assignment":  "legacy SHA-256 modulo five; differs from refreshed balanced deterministic folds",
+                                          "trials":  [
+                                                         {
+                                                             "profile":  "baseline",
+                                                             "accuracy":  0.796788,
+                                                             "ece":  0.04567,
+                                                             "nll":  0.816842,
+                                                             "direct_selected":  8,
+                                                             "direct_false":  0,
+                                                             "wilson95_lower":  0.675592,
+                                                             "family_top1":  0.59234,
+                                                             "macro_label":  0.472902,
+                                                             "macro_language":  0.799143
+                                                         },
+                                                         {
+                                                             "profile":  "family_weighted",
+                                                             "accuracy":  0.813465,
+                                                             "ece":  0.039235,
+                                                             "nll":  0.744942,
+                                                             "direct_selected":  11,
+                                                             "direct_false":  0,
+                                                             "wilson95_lower":  0.741167,
+                                                             "family_top1":  0.612444,
+                                                             "macro_label":  0.49124,
+                                                             "macro_language":  0.815486
+                                                         }
+                                                     ],
+                                          "interpretation":  "Historical evidence only; not comparable to refreshed 40-epoch screen and not an adoption decision."
+                                      },
+    "decision":  {
+                     "training_candidate_adopted":  null,
+                     "deployed_weights_changed":  false,
+                     "deployed_threshold_or_policy_changed":  false,
+                     "per_class_thresholds":  "Retain global values; no class reaches the minimum of five selected calibration families.",
+                     "augmentation_caps":  "Neither cap qualifies under the calibration selection rule.",
+                     "revalidation":  "Re-run calibration diagnostics after the parser-policy merge; confirm any finalist at configured epochs and retain frozen human-reviewed release checks."
+                 }
+}

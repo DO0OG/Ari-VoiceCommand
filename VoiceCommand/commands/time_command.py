@@ -1,4 +1,5 @@
 """시간 안내 명령"""
+from agent.decision.semantics import parse_candidate
 from commands.base_command import BaseCommand
 from datetime import datetime
 import logging
@@ -12,7 +13,8 @@ class TimeCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        return _("몇 시야") in text
+        # "파리는 지금 몇 시야"처럼 다른 대상이나 동작이 붙은 문장은 대화 처리로 넘긴다.
+        return _("몇 시야") in text and parse_candidate(text, "get_current_time").parse_success
 
     def execute(self, text: str) -> None:
         time_str = self.get_current_time()

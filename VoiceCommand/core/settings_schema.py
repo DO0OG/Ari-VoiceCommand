@@ -43,8 +43,9 @@ DEFAULT_SETTINGS = {
     "local_decision_engine_enabled": True,
     "local_decision_backend": "linear",
     "local_decision_threshold": 0.92,
-    "local_decision_mode": "shadow",
+    "local_decision_mode": "off",
     "local_decision_direct_execution": False,
+    "local_decision_settings_version": 2,
     "vision_enabled": True,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ DEFAULT_SETTINGS = {
     "affinity_total_clicks": 0,
     "affinity_total_pets": 0,
     "affinity_total_chats": 0,
-    "affinity_last_login": "",      # YYYY-MM-DD
+    "affinity_last_login": "",      # YYYY-MM-DD 형식
     "focus_app_reaction_enabled": True,
     "system_monitor_enabled": True,
     "user_birthday": "",            # MM-DD
@@ -125,6 +126,52 @@ DEFAULT_SETTINGS = {
     "image_generation_enabled": False,
     "image_gen_provider": "openai",
 }
+
+LOCAL_DECISION_SETTINGS_VERSION = 2
+LOCAL_DECISION_MODES = ("off", "shadow", "fast")
+
+
+def normalize_local_decision_settings(settings: dict) -> bool:
+    """서로 모순되는 로컬 판단 설정을 제자리에서 정리하고, 바뀐 것이 있으면 True를 반환한다.
+
+    ``adaptive``는 내부 정책 이름으로 남지만 더는 선택지로 제공하지 않는다. 저장된 값은
+    직접 실행이 켜져 있었으면(같은 게이트) ``fast``, 아니면 ``off``가 된다.
+    직접 실행은 ``fast`` 모드에서만 의미가 있다.
+    """
+    changed = False
+    mode = settings.get("local_decision_mode")
+    direct = settings.get("local_decision_direct_execution") is True
+    if mode == "adaptive":
+        mode = "fast" if direct else "off"
+    elif mode is not None and mode not in LOCAL_DECISION_MODES:
+        mode = "off"
+    if mode is not None and mode != settings.get("local_decision_mode"):
+        settings["local_decision_mode"] = mode
+        changed = True
+    if mode in ("off", "shadow") and settings.get("local_decision_direct_execution") is True:
+        settings["local_decision_direct_execution"] = False
+        changed = True
+    return changed
+
+
+def migrate_local_decision_settings(settings: dict) -> bool:
+    """저장된 설정을 배포 기본값으로 한 번 옮기고, 바뀐 것이 있으면 True를 반환한다.
+
+    예전 빌드는 직접 실행이 꺼진 ``shadow``를 기본값으로 저장했다. 배포 검사를 아직
+    통과하지 않았으므로 정확히 그 조합만 ``off``로 바꾼다. 이 버전이 기록된 뒤
+    사용자가 일부러 고른 값은 건드리지 않는다.
+    """
+    changed = False
+    if settings.get("local_decision_settings_version") != LOCAL_DECISION_SETTINGS_VERSION:
+        if (
+            settings.get("local_decision_mode") == "shadow"
+            and settings.get("local_decision_direct_execution") is not True
+        ):
+            settings["local_decision_mode"] = "off"
+        settings["local_decision_settings_version"] = LOCAL_DECISION_SETTINGS_VERSION
+        changed = True
+    return normalize_local_decision_settings(settings) or changed
+
 
 _TTS_VOICE_BY_LANG = {
     "ko": "ko-KR-SunHiNeural",

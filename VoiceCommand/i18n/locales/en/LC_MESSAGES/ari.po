@@ -32,6 +32,9 @@ msgstr "Unmuted."
 msgid "실행 중인 앱 목록입니다.\n{apps}"
 msgstr "Here is the list of running apps.\n{apps}"
 
+msgid "실행 중인 앱이 {count}개 있어요: {apps}"
+msgstr "{count} apps are running: {apps}"
+
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "Screenshot saved: {path}"
 
@@ -3007,3 +3010,102 @@ msgstr "(Worried) You have exceeded the request limit. Please try again later."
 
 msgid "(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
 msgstr "(Worried) I couldn't process the request. Please try again later."
+
+msgid "요청한 작업을 완료하지 못했어요."
+msgstr "I couldn't finish that request."
+
+msgid "빠른 로컬 처리"
+msgstr "Fast local handling"
+
+msgid "간단한 명령을 로컬에서 바로 처리"
+msgstr "Handle simple commands locally"
+
+msgid "사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."
+msgstr "Off by default until human review and real-use testing are complete."
+
+msgid "고급: 동작 모드"
+msgstr "Advanced: mode"
+
+msgid "기록만 (진단용)"
+msgstr "Record only (diagnostics)"
+
+msgid "빠른 처리"
+msgstr "Fast"
+
+msgid "로컬 판단 모델: 준비됨"
+msgstr "Local decision model: ready"
+
+msgid "로컬 판단 모델: 오류 ({code})"
+msgstr "Local decision model: error ({code})"
+
+msgid "로컬 판단 모델: 아직 불러오지 않음"
+msgstr "Local decision model: not loaded yet"
+
+msgid "모델 다시 불러오기"
+msgstr "Reload model"
+
+msgid "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. 이 패키지 없이 할 수 있는 방법으로 다시 시도합니다."
+msgstr "The installed Ari cannot install the '{package}' package automatically. It will try again without that package."
+
+msgid "이전 버전 데이터 가져오기"
+msgstr "Import data from previous version"
+
+msgid "이전 버전의 .ari_runtime 폴더 선택"
+msgstr "Select the .ari_runtime folder of the previous version"
+
+msgid "선택한 폴더에서 아리 데이터를 찾지 못했습니다.\n.ari_runtime 폴더나 그 폴더가 들어 있는 폴더를 선택하세요."
+msgstr "No Ari data was found in the selected folder.\nSelect the .ari_runtime folder or the folder that contains it."
+
+msgid "데이터를 가져오지 못했습니다: {error}"
+msgstr "Could not import the data: {error}"
+
+msgid "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
+msgstr "Imported {count} file(s). Existing files were left unchanged.\nRestart Ari to use the imported data."
+
+msgid "다시 찾기"
+msgstr "Detect again"
+
+msgid "위치 지정"
+msgstr "Set location"
+
+msgid "확인 중..."
+msgstr "Checking..."
+
+msgid "모델 받기"
+msgstr "Download models"
+
+msgid "설치됨: {path}"
+msgstr "Installed: {path}"
+
+msgid "설치되지 않음"
+msgstr "Not installed"
+
+msgid "Ollama 서버가 응답하지 않아 설치된 모델을 확인하지 못했습니다."
+msgstr "The Ollama server did not respond, so installed models could not be checked."
+
+msgid "설치된 모델이 없습니다."
+msgstr "No models are installed."
+
+msgid "설치된 모델: {models}"
+msgstr "Installed models: {models}"
+
+msgid "Ollama 모델 받기"
+msgstr "Download Ollama models"
+
+msgid "Ollama가 이미 설치되어 있습니다. 받을 모델을 선택하세요."
+msgstr "Ollama is already installed. Select the models to download."
+
+msgid "선택한 모델이 없습니다."
+msgstr "No models were selected."
+
+msgid "Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Downloading Ollama models.\nThe download continues in the background without a console."
+
+msgid "ollama.exe 위치 선택"
+msgstr "Select ollama.exe"
+
+msgid "ollama.exe 파일을 선택하세요."
+msgstr "Please select the ollama.exe file."
+
+msgid "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"
+msgstr "CosyVoice3 is already installed.\n\n{path}\n\nDo you want to reinstall it?"

@@ -13,6 +13,12 @@ from i18n.translator import _
 # Windows shutdown /s /t 최대값
 _WIN_MAX_SHUTDOWN_DELAY = 315360000
 
+# 명령에 붙어도 뜻을 바꾸지 않는 말. 이것까지 지운 뒤에도 남는 말이 있으면 명령으로 보지 않는다.
+_FILLERS = (
+    "좀", "지금", "바로", "당장", "빨리", "을", "를", "해", "요",
+    "please", "the", "my", "now", "を", "今すぐ", "すぐ",
+)
+
 
 class SystemCommand(BaseCommand):
     """컴퓨터 종료 및 재시작 명령"""
@@ -22,9 +28,9 @@ class SystemCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        normalized = re.sub(r"\s+", " ", text or "").strip().lower()
+        normalized = re.sub(r"[\s.,!?~]+", " ", text or "").strip().lower()
         # 트리거 키워드 (번역 적용)
-        direct_keywords = (
+        direct_keywords = [keyword.lower() for keyword in (
             _("컴퓨터 꺼줘"),
             _("컴퓨터 꺼 줘"),
             _("컴퓨터 종료"),
@@ -37,14 +43,34 @@ class SystemCommand(BaseCommand):
             "restart",
             _("종료 취소"),
             _("종료 안 해"),
-        )
-        if any(keyword in normalized for keyword in direct_keywords):
-            return True
+        )]
+        targets = [token.lower() for token in (_("컴퓨터"), "pc", _("시스템"), _("전원"))]
+        actions = [token.lower() for token in (_("종료"), _("꺼"), _("끄"), _("재시작"), _("재부팅"), "restart")]
+        requests = [token.lower() for token in (_("줘"), _("주세요"), _("해줘"), _("해달라"))]
+        has_generic = all(any(token in normalized for token in group) for group in (targets, actions, requests))
+        if not has_generic and not any(keyword in normalized for keyword in direct_keywords):
+            return False
 
-        has_target = any(token in normalized for token in (_("컴퓨터"), "pc", _("시스템"), _("전원")))
-        has_system_action = any(token in normalized for token in (_("종료"), _("꺼"), _("끄"), _("재시작"), _("재부팅"), "restart"))
-        has_request = any(token in normalized for token in (_("줘"), _("주세요"), _("해줘"), _("해달라")))
-        return has_target and has_system_action and has_request
+        # "재부팅하지 마", "컴퓨터 종료 방법 알려줘", "모니터 전원 꺼줘"처럼 명령 외의 말이 남으면
+        # 실제 종료로 이어지지 않도록 대화 처리로 넘긴다.
+        cancels = [token.lower() for token in (_("취소"), "cancel", _("안 해"))]
+        remainder = self._strip_schedule(normalized)
+        for token in sorted({*direct_keywords, *targets, *actions, *requests, *cancels, *_FILLERS}, key=len, reverse=True):
+            remainder = remainder.replace(token, " ")
+        return not remainder.strip()
+
+    @staticmethod
+    def _strip_schedule(text: str) -> str:
+        """예약 시간 표현("10분 뒤에", "오후 11시에")을 지운다."""
+        def alt(*words):
+            return "(?:" + "|".join(re.escape(_(word).lower()) for word in words) + ")"
+
+        text = re.sub(r"\d+\s*" + alt("시간", "분", "초") + r"\s*" + alt("후", "뒤") + r"(?:\s*" + alt("에") + ")?", " ", text)
+        return re.sub(
+            alt("오전", "오후") + r"?\s*\d{1,2}\s*" + alt("시") + r"(?:\s*\d{1,2}\s*" + alt("분") + r")?(?:\s*" + alt("에") + ")?",
+            " ",
+            text,
+        )
 
     def _parse_scheduled_time(self, text: str) -> Tuple[Optional[int], str]:
         """
@@ -92,10 +118,10 @@ class SystemCommand(BaseCommand):
     def execute(self, text: str) -> None:
         normalized = (text or "").lower()
 
-        if any(k in normalized for k in (_("취소"), "cancel", _("안 해"))):
-            if any(k in normalized for k in (_("종료"), "shutdown", _("꺼"))):
-                self._cancel_shutdown()
-                return
+        # 매칭에서 명령 외의 말이 없음을 확인했으므로, 취소어가 있으면 종료와 재시작 예약을 함께 취소한다.
+        if any(k.lower() in normalized for k in (_("취소"), "cancel", _("안 해"))):
+            self._cancel_shutdown()
+            return
 
         if any(k in normalized for k in (_("재시작"), _("재부팅"), "restart")):
             delay_seconds, time_str = self._parse_scheduled_time(text)

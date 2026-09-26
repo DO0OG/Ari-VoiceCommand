@@ -32,6 +32,9 @@ msgstr "음소거를 해제했습니다."
 msgid "실행 중인 앱 목록입니다.\n{apps}"
 msgstr "실행 중인 앱 목록입니다.\n{apps}"
 
+msgid "실행 중인 앱이 {count}개 있어요: {apps}"
+msgstr "실행 중인 앱이 {count}개 있어요: {apps}"
+
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "스크린샷을 저장했습니다: {path}"
 
@@ -3007,3 +3010,102 @@ msgstr "(걱정) 요청 한도를 초과했어요. 잠시 후 다시 시도해�
 
 msgid "(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
 msgstr "(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요."
+
+msgid "요청한 작업을 완료하지 못했어요."
+msgstr "요청한 작업을 완료하지 못했어요."
+
+msgid "빠른 로컬 처리"
+msgstr "빠른 로컬 처리"
+
+msgid "간단한 명령을 로컬에서 바로 처리"
+msgstr "간단한 명령을 로컬에서 바로 처리"
+
+msgid "사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."
+msgstr "사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."
+
+msgid "고급: 동작 모드"
+msgstr "고급: 동작 모드"
+
+msgid "기록만 (진단용)"
+msgstr "기록만 (진단용)"
+
+msgid "빠른 처리"
+msgstr "빠른 처리"
+
+msgid "로컬 판단 모델: 준비됨"
+msgstr "로컬 판단 모델: 준비됨"
+
+msgid "로컬 판단 모델: 오류 ({code})"
+msgstr "로컬 판단 모델: 오류 ({code})"
+
+msgid "로컬 판단 모델: 아직 불러오지 않음"
+msgstr "로컬 판단 모델: 아직 불러오지 않음"
+
+msgid "모델 다시 불러오기"
+msgstr "모델 다시 불러오기"
+
+msgid "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. 이 패키지 없이 할 수 있는 방법으로 다시 시도합니다."
+msgstr "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. 이 패키지 없이 할 수 있는 방법으로 다시 시도합니다."
+
+msgid "이전 버전 데이터 가져오기"
+msgstr "이전 버전 데이터 가져오기"
+
+msgid "이전 버전의 .ari_runtime 폴더 선택"
+msgstr "이전 버전의 .ari_runtime 폴더 선택"
+
+msgid "선택한 폴더에서 아리 데이터를 찾지 못했습니다.\n.ari_runtime 폴더나 그 폴더가 들어 있는 폴더를 선택하세요."
+msgstr "선택한 폴더에서 아리 데이터를 찾지 못했습니다.\n.ari_runtime 폴더나 그 폴더가 들어 있는 폴더를 선택하세요."
+
+msgid "데이터를 가져오지 못했습니다: {error}"
+msgstr "데이터를 가져오지 못했습니다: {error}"
+
+msgid "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
+msgstr "파일 {count}개를 가져왔습니다. 이미 있던 파일은 그대로 두었습니다.\n가져온 데이터를 적용하려면 아리를 다시 시작하세요."
+
+msgid "다시 찾기"
+msgstr "다시 찾기"
+
+msgid "위치 지정"
+msgstr "위치 지정"
+
+msgid "확인 중..."
+msgstr "확인 중..."
+
+msgid "모델 받기"
+msgstr "모델 받기"
+
+msgid "설치됨: {path}"
+msgstr "설치됨: {path}"
+
+msgid "설치되지 않음"
+msgstr "설치되지 않음"
+
+msgid "Ollama 서버가 응답하지 않아 설치된 모델을 확인하지 못했습니다."
+msgstr "Ollama 서버가 응답하지 않아 설치된 모델을 확인하지 못했습니다."
+
+msgid "설치된 모델이 없습니다."
+msgstr "설치된 모델이 없습니다."
+
+msgid "설치된 모델: {models}"
+msgstr "설치된 모델: {models}"
+
+msgid "Ollama 모델 받기"
+msgstr "Ollama 모델 받기"
+
+msgid "Ollama가 이미 설치되어 있습니다. 받을 모델을 선택하세요."
+msgstr "Ollama가 이미 설치되어 있습니다. 받을 모델을 선택하세요."
+
+msgid "선택한 모델이 없습니다."
+msgstr "선택한 모델이 없습니다."
+
+msgid "Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+msgstr "Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."
+
+msgid "ollama.exe 위치 선택"
+msgstr "ollama.exe 위치 선택"
+
+msgid "ollama.exe 파일을 선택하세요."
+msgstr "ollama.exe 파일을 선택하세요."
+
+msgid "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"
+msgstr "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"

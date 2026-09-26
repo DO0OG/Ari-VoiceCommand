@@ -1,6 +1,7 @@
 """
 TTS 설정 페이지 위젯
 """
+import logging
 import os
 
 from PySide6.QtWidgets import (
@@ -58,9 +59,14 @@ class _TTSSettingsPage(QWidget):
         vbox.setSpacing(15)
 
         # 로컬 설치 섹션
-        self.local_install_section = LocalInstallSection(self)
+        self._ollama_executable_path = str(self._settings.get("ollama_executable_path", "") or "")
+        self.local_install_section = LocalInstallSection(
+            self, cosyvoice_dir_provider=lambda: self.cosyvoice_dir_input.text()
+        )
         self.local_install_section.ollama_install_requested.connect(self._open_ollama_installer)
         self.local_install_section.cosyvoice_install_requested.connect(self._install_cosyvoice)
+        self.local_install_section.ollama_locate_requested.connect(self._locate_ollama)
+        self.local_install_section.detection_finished.connect(self._on_local_install_detected)
         vbox.addWidget(self.local_install_section)
 
         # TTS 설정 그룹
@@ -209,11 +215,15 @@ class _TTSSettingsPage(QWidget):
 
     def _open_ollama_installer(self):
         from PySide6.QtWidgets import QDialog
-        dialog = OllamaInstallDialog(self)
+        installed = bool(self.local_install_section.ollama_path)
+        dialog = OllamaInstallDialog(self, installed=installed)
         if dialog.exec() != QDialog.Accepted:
             return
 
         selected_models = dialog.selected_models()
+        if not selected_models and installed:
+            QMessageBox.information(self, _("Ollama 모델 받기"), _("선택한 모델이 없습니다."))
+            return
         if not selected_models:
             confirm = QMessageBox.question(
                 self,
@@ -232,10 +242,11 @@ class _TTSSettingsPage(QWidget):
         )
         self._ollama_install_thread.done.connect(self._on_ollama_install_done)
         self._ollama_progress_dialog = QProgressDialog(
+            _("Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다.") if installed else
             _("Ollama 설치를 준비 중입니다.\n설치 창이 뜨면 진행하고, 모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다."),
             None, 0, 0, self,
         )
-        self._ollama_progress_dialog.setWindowTitle(_("Ollama 설치"))
+        self._ollama_progress_dialog.setWindowTitle(_("Ollama 모델 받기") if installed else _("Ollama 설치"))
         self._ollama_progress_dialog.setWindowModality(Qt.ApplicationModal)
         self._ollama_progress_dialog.setCancelButton(None)
         self._ollama_progress_dialog.setMinimumDuration(0)
@@ -253,6 +264,33 @@ class _TTSSettingsPage(QWidget):
             QMessageBox.warning(self, _("Ollama 설치"), message)
 
         self._ollama_install_thread = None
+        self.local_install_section.start_detection()
+
+    def _locate_ollama(self):
+        """사용자가 ollama.exe를 직접 고르면 설정에 저장하고 상태를 다시 확인한다."""
+        path, _filter = QFileDialog.getOpenFileName(
+            self, _("ollama.exe 위치 선택"),
+            os.path.dirname(self._ollama_executable_path) or "C:/",
+            "ollama.exe (ollama.exe)",
+        )
+        if not path:
+            return
+        if os.path.basename(path).lower() not in {"ollama.exe", "ollama"}:
+            QMessageBox.warning(self, _("위치 지정"), _("ollama.exe 파일을 선택하세요."))
+            return
+        self._ollama_executable_path = os.path.abspath(path)
+        # 설치 작업이 저장 전에도 이 경로를 쓰도록 바로 기록한다. 설정창 저장 때도 get_values로 함께 저장된다.
+        from core.config_manager import ConfigManager
+        from core.ollama_installer import OLLAMA_EXECUTABLE_SETTING
+        if not ConfigManager.set_value(OLLAMA_EXECUTABLE_SETTING, self._ollama_executable_path):
+            logging.warning("ollama.exe 경로를 바로 저장하지 못했습니다. 설정창 저장 때 다시 저장합니다.")
+        self.local_install_section.start_detection()
+
+    def _on_local_install_detected(self, result: dict):
+        path = result.get("cosyvoice_dir") or ""
+        if path:
+            self.cosyvoice_dir_input.setText(path)
+            self._check_cosyvoice_dir(path)
 
     def _install_cosyvoice(self):
         target_dir = self.cosyvoice_dir_input.text().strip()
@@ -260,13 +298,24 @@ class _TTSSettingsPage(QWidget):
             target_dir = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "CosyVoice")
             self.cosyvoice_dir_input.setText(target_dir)
 
-        confirm = QMessageBox.question(
-            self,
-            _("CosyVoice 설치"),
-            _("아래 경로에 CosyVoice3를 설치할까요?\n\n{path}").format(path=target_dir),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
-        )
+        installed_dir = self.local_install_section.cosyvoice_dir
+        if installed_dir:
+            # 이미 설치돼 있으면 다시 설치할지 먼저 묻고, 기본 선택은 '아니요'로 둔다.
+            confirm = QMessageBox.question(
+                self,
+                _("CosyVoice 설치"),
+                _("CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?", path=installed_dir),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+        else:
+            confirm = QMessageBox.question(
+                self,
+                _("CosyVoice 설치"),
+                _("아래 경로에 CosyVoice3를 설치할까요?\n\n{path}").format(path=target_dir),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
         if confirm != QMessageBox.Yes:
             return
 
@@ -326,8 +375,8 @@ class _TTSSettingsPage(QWidget):
             self.cosyvoice_dir_status.setStyleSheet("color: #e74c3c;")
 
     def _check_cosyvoice_dir(self, path: str):
-        marker = os.path.join(path, "pretrained_models")
-        if os.path.isdir(marker):
+        from core.cosyvoice_installer import is_valid_cosyvoice_dir
+        if is_valid_cosyvoice_dir(path):
             self.cosyvoice_dir_status.setText(_("✓ 유효한 CosyVoice 경로"))
             self.cosyvoice_dir_status.setStyleSheet("color: #27ae60;")
         else:
@@ -372,10 +421,12 @@ class _TTSSettingsPage(QWidget):
             "elevenlabs_voice_id": self.elevenlabs_voice_id_input.text().strip(),
             "edge_tts_voice": self.edge_voice_combo.currentData(),
             "edge_tts_rate": self.edge_rate_input.text().strip() or "+0%",
+            "ollama_executable_path": self._ollama_executable_path,
         }
 
     def cleanup_threads(self):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
+        self.local_install_section.stop_detection()
         for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
             if thread and thread.isRunning():
                 thread.quit()

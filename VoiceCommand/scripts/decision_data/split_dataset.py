@@ -1,4 +1,4 @@
-"""Assign dataset rows to disjoint template-family splits."""
+"""자료 행을 서로 겹치지 않는 템플릿 family 분할에 배정한다."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ MANIFEST_PATH = Path(__file__).with_name("split_manifest.json")
 
 
 def load_manifest(path: Path | None = None) -> dict[str, str]:
-    """Return the recorded ``family_id -> split`` map, or an empty map."""
+    """기록된 ``family_id -> split`` 매핑을 반환하고, 없으면 빈 매핑을 반환한다."""
 
     location = Path(path) if path is not None else MANIFEST_PATH
     if not location.is_file():
@@ -43,7 +43,7 @@ def load_manifest(path: Path | None = None) -> dict[str, str]:
 
 
 def dump_manifest(assignment: dict[str, str], path: Path | None = None) -> Path:
-    """Write the assignment so later runs keep the same placement."""
+    """이후 실행이 같은 배정을 유지하도록 배정 결과를 기록한다."""
 
     location = Path(path) if path is not None else MANIFEST_PATH
     payload = {
@@ -59,7 +59,7 @@ def dump_manifest(assignment: dict[str, str], path: Path | None = None) -> Path:
 
 
 def _least_filled(counts: Counter) -> str:
-    """Pick the split that is furthest below its intended share."""
+    """목표 비율에 가장 못 미치는 분할을 고른다."""
 
     return min(
         SPLITS,
@@ -91,7 +91,7 @@ def merge_overlapping_families(rows: list[dict]) -> list[dict]:
 
 
 def families_by_label(rows: Iterable[dict]) -> dict[str, list[str]]:
-    """Return the deterministically ordered family list of every label."""
+    """라벨마다 결정적으로 정렬한 family 목록을 반환한다."""
 
     grouped: dict[str, set[str]] = defaultdict(set)
     for row in rows:
@@ -102,14 +102,13 @@ def families_by_label(rows: Iterable[dict]) -> dict[str, list[str]]:
 def assign_family_splits(
     rows: Iterable[dict], *, manifest: dict[str, str] | None = None
 ) -> dict[str, str]:
-    """Return ``family_id -> split``, keeping recorded placements untouched.
+    """기록된 배정은 그대로 두고 ``family_id -> split``을 반환한다.
 
-    Translations, paraphrases, and noise variants sharing a family always stay
-    in one split.  A family the manifest already records keeps that split even
-    when its texts change, so editing existing data cannot reshuffle the
-    partitions.  Only families the manifest has never seen are placed, and each
-    one goes to whichever split of its label sits furthest below its share.  An
-    empty manifest reproduces the earlier two-train rotation exactly.
+    한 family에 속한 번역문, 바꿔 쓴 문장, 잡음 변형은 항상 같은 분할에 둔다.
+    기록에 있는 family는 문장이 바뀌어도 분할을 유지하므로 기존 자료를 고쳐도
+    분할이 섞이지 않는다. 기록에 없는 family만 배정하며, 각 family는 해당 라벨에서
+    목표 비율에 가장 못 미치는 분할로 간다. 기록이 비어 있으면 이전의 train 두 칸
+    순환과 정확히 같은 결과를 낸다.
     """
 
     recorded = load_manifest() if manifest is None else dict(manifest)
@@ -134,7 +133,7 @@ def assign_family_splits(
 def manifest_drift(
     rows: Iterable[dict], manifest: dict[str, str] | None = None
 ) -> dict[str, list[str]]:
-    """Report unrecorded families, unused entries, and recorded families that moved."""
+    """기록에 없는 family, 쓰이지 않는 항목, 분할이 바뀐 기록 family를 보고한다."""
 
     rows = [dict(row) for row in rows]
     recorded = load_manifest() if manifest is None else dict(manifest)
@@ -155,10 +154,31 @@ def manifest_drift(
     }
 
 
+def baseline_manifest_drift(
+    current: dict[str, str] | None = None,
+    baseline: dict[str, str] | None = None,
+) -> dict[str, list[str]]:
+    """현재 배정을 고정된 과거 family 매핑과 비교한다."""
+
+    current = load_manifest() if current is None else dict(current)
+    baseline = (
+        load_manifest(Path(__file__).with_name("split_manifest_baseline.json"))
+        if baseline is None else dict(baseline)
+    )
+    return {
+        "moved": sorted(
+            family for family in baseline.keys() & current.keys()
+            if baseline[family] != current[family]
+        ),
+        "removed": sorted(baseline.keys() - current.keys()),
+        "added": sorted(current.keys() - baseline.keys()),
+    }
+
+
 def validate_manifest(
     rows: Iterable[dict], manifest: dict[str, str] | None = None
 ) -> None:
-    """Raise if a recorded family moved or a new family was never recorded."""
+    """기록된 family가 옮겨졌거나 새 family가 기록되지 않았으면 예외를 낸다."""
 
     drift = manifest_drift(rows, manifest)
     if drift["moved"]:
@@ -179,7 +199,7 @@ def apply_family_splits(
 
 
 def validate_family_splits(rows: Iterable[dict]) -> None:
-    """Raise ``ValueError`` if a family leaks or a label lacks a split."""
+    """family가 분할 사이로 새거나 라벨에 분할이 빠졌으면 ``ValueError``를 낸다."""
 
     rows = [dict(row) for row in rows]
     validate_no_gold_rows(rows)

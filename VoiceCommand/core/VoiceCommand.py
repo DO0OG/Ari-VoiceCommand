@@ -3,15 +3,16 @@
 import logging
 import os
 import re
-import sys
 import time
 import threading
 from collections import deque
 from typing import Tuple, TypedDict
 import speech_recognition as sr
 
-# SSL 인증서 경로 설정 (PyInstaller 환경)
-if getattr(sys, 'frozen', False):
+from core.resource_manager import is_bundled
+
+# SSL 인증서 경로 설정 (PyInstaller/Nuitka 배포 환경)
+if is_bundled():
     import certifi
     os.environ['SSL_CERT_FILE'] = certifi.where()
 
@@ -454,14 +455,14 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
             return
         text = text.strip()
         if len(text) < 2:
-            logging.debug("[STT] 너무 짧은 인식 결과 무시: %r", text)
+            logging.debug("[STT] 너무 짧은 인식 결과 무시 (%d자)", len(text))
             return
         history = previous_texts if previous_texts is not None else deque(maxlen=3)
         if history.count(text) >= 2:
-            logging.debug("[STT] 반복 오인식 무시: %r", text)
+            logging.debug("[STT] 반복 오인식 무시 (%d자)", len(text))
             return
         history.append(text)
-        logging.info("인식된 텍스트: %s", text)
+        logging.info("인식된 텍스트 수신 (%d자)", len(text))
         signal.emit(text)
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")
@@ -523,8 +524,11 @@ def adjust_volume(change, *, amount=None, announce=True):
             raise ValueError("volume change out of range")
 
         devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
+        # 새 pycaw의 GetSpeakers()는 Activate 대신 EndpointVolume 속성을 가진 장치 객체를 돌려준다.
+        volume = getattr(devices, "EndpointVolume", None)
+        if volume is None:
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
         if mute:
             volume.SetMute(1, None)
             if announce:
@@ -542,7 +546,7 @@ def adjust_volume(change, *, amount=None, announce=True):
             tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
         return True
     except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-        logging.debug("시스템 볼륨 조절 실패: %s", exc)
+        logging.warning("시스템 볼륨 조절 실패: %s", exc)
         if announce:
             tts_wrapper(_("볼륨 조절 실패"))
         return False

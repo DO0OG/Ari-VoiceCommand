@@ -15,6 +15,7 @@ from agent.execution_analysis import (
     is_read_only_step_content,
 )
 from agent.ocr_helper import ocr_screen
+from agent.safety_checker import DangerLevel, get_safety_checker
 from i18n.translator import _
 
 _VERIFY_CODE_PROMPT = """\
@@ -419,7 +420,7 @@ class RealVerifier:
                         if provider == "anthropic":
                             resp = client.messages.create(
                                 model=target_model,
-                                max_tokens=800,
+                                max_tokens=4096,
                                 system=system_prompt,
                                 messages=[{"role": "user", "content": active_prompt}],
                             )
@@ -436,7 +437,7 @@ class RealVerifier:
                                     {"role": "user", "content": active_prompt},
                                 ],
                                 temperature=0.1,
-                                max_tokens=800,
+                                max_tokens=4096,
                             )
                             choice = resp.choices[0]
                             text = choice.message.content or ""
@@ -466,7 +467,8 @@ class RealVerifier:
                             failed = True
                             break
                         logging.error(f"[RealVerifier] LLM 호출 오류 ({target_model}): {e}")
-                        return "".join(collected_parts).strip()
+                        # 이어받기 중에 실패하면 잘린 코드를 돌려주지 않는다.
+                        return ""
                 if failed:
                     break
 
@@ -476,6 +478,10 @@ class RealVerifier:
                     return combined
 
                 continuation_budget -= 1
+                # 잘린 마지막 줄은 버리고 그 줄부터 다시 받는다. 줄 중간에서 이어 붙이면 "andbool"처럼 코드가 깨진다.
+                # 완성된 줄이 없으면 처음부터 다시 받는다.
+                combined = combined[:combined.rfind("\n") + 1]
+                collected_parts = [combined]
                 active_prompt = (
                     "이전 파이썬 코드 응답이 길이 제한으로 잘렸습니다. 이미 출력한 줄은 반복하지 말고, "
                     "바로 다음 줄부터 이어서 출력하세요.\n\n"
@@ -484,7 +490,8 @@ class RealVerifier:
                 )
                 logging.info("[RealVerifier] LLM 응답이 잘려 이어받기를 시도합니다.")
                 time.sleep(0.5)
-        return "".join(collected_parts).strip()
+        # 모든 모델이 실패해 여기까지 왔다면 남은 조각은 완성된 코드가 아니다.
+        return ""
 
     def _get_planner_llm_candidates(self) -> List[tuple]:
         if not self.llm:
@@ -540,7 +547,11 @@ class RealVerifier:
     def _run_verification(self, code: str) -> Optional[VerificationResult]:
         """검증 코드를 실행하고 결과 해석."""
         try:
-            if not is_read_only_step_content(code, "verification code") or "subprocess.run" in (code or "").lower():
+            # 검증 코드는 아래에서 안전 확인 없이 실행되므로 읽기 전용이면서 안전 검사도 통과해야 한다.
+            if (
+                not is_read_only_step_content(code, "verification code")
+                or get_safety_checker().check_python(code).level is not DangerLevel.SAFE
+            ):
                 logging.warning("[RealVerifier] 읽기 전용이 아닌 검증 코드는 실행하지 않습니다.")
                 return None
             # 검증 코드는 safety check 없이 실행 (읽기 전용으로 유도됨)

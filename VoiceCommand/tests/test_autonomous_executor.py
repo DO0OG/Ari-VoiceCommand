@@ -261,6 +261,18 @@ class AutonomousExecutorTests(unittest.TestCase):
 
         self.assertEqual(normalized, "if ready: step_one(); step_two()")
 
+    def test_process_kill_stops_child_processes_on_windows(self):
+        process = MagicMock(pid=4321)
+
+        with (
+            patch("agent.autonomous_executor.sys.platform", "win32"),
+            patch("agent.autonomous_executor.subprocess.run") as run_mock,
+        ):
+            autonomous_executor_module._kill_process_tree(process)
+
+        self.assertEqual(run_mock.call_args.args[0], ["taskkill", "/F", "/T", "/PID", "4321"])
+        process.kill.assert_called_once()
+
     def test_do_run_shell_uses_filtered_child_environment(self):
         executor = AutonomousExecutor()
         fake_process = MagicMock()

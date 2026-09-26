@@ -103,7 +103,7 @@ class StrategyMemory:
         self._records.append(rec)
         self._prune()
         self._schedule_save()
-        logging.info(f"[StrategyMemory] 저장됨: {'성공' if success else '실패'} / {goal[:30]}")
+        logging.info("[StrategyMemory] 저장됨: %s", '성공' if success else '실패')
 
     def get_relevant_context(self, goal: str) -> str:
         """현재 목표와 유사한 과거 사례를 분석하여 교훈과 함께 가이드 제공."""

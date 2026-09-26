@@ -12,6 +12,8 @@ import threading
 import wave
 from typing import Optional
 
+from core._whisper_worker import WORKER_ARGUMENT, bundled_executable_path, normalize_language
+
 
 class STTProvider:
     """STT 백엔드 공통 인터페이스."""
@@ -56,10 +58,17 @@ class WhisperSTTProvider(STTProvider):
     _STARTUP_TIMEOUT_SECONDS = 30.0
     _TRANSCRIBE_TIMEOUT_SECONDS = 20.0
 
-    def __init__(self, model_size: str = "small", device: str = "auto", compute_type: str = "int8"):
+    def __init__(
+        self,
+        model_size: str = "small",
+        device: str = "auto",
+        compute_type: str = "int8",
+        language: str = "ko",
+    ):
         self._model_size = model_size
         self._device = device
         self._compute_type = compute_type
+        self._language = normalize_language(language)
         self._lock = threading.Lock()
         self._proc: Optional[subprocess.Popen] = None
         self._start_worker()
@@ -107,8 +116,26 @@ class WhisperSTTProvider(STTProvider):
         actual_device = _resolve_device(self._device)
         logging.info("[WhisperSTT] 워커 시작: %s / %s / %s", self._model_size, actual_device, self._compute_type)
         env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
+        if getattr(sys, "frozen", False) or "__compiled__" in globals():
+            worker_command = [
+                bundled_executable_path(),
+                WORKER_ARGUMENT,
+                self._model_size,
+                actual_device,
+                self._compute_type,
+                self._language,
+            ]
+        else:
+            worker_command = [
+                sys.executable,
+                self._WORKER,
+                self._model_size,
+                actual_device,
+                self._compute_type,
+                self._language,
+            ]
         self._proc = subprocess.Popen(  # nosemgrep
-            [sys.executable, self._WORKER, self._model_size, actual_device, self._compute_type],  # nosemgrep
+            worker_command,  # nosemgrep
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -116,8 +143,9 @@ class WhisperSTTProvider(STTProvider):
         )
         ready_line = self._read_process_line(self._proc.stdout, self._STARTUP_TIMEOUT_SECONDS) if self._proc.stdout else None
         if ready_line != "READY":
-            stderr_out = self._read_stderr_snapshot()
+            failed_proc = self._proc
             self._terminate_worker_locked()
+            stderr_out = self._read_stderr_snapshot(failed_proc)
             reason = stderr_out or "Did not receive READY signal."
             raise RuntimeError(f"[WhisperSTT] worker initialization failed:\n{reason}")
         logging.info("[WhisperSTT] 워커 준비 완료")
@@ -157,14 +185,18 @@ class WhisperSTTProvider(STTProvider):
                 logging.debug("[STT] terminate 실패, kill 시도: %s", terminate_exc)
                 try:
                     proc.kill()
+                    proc.wait(timeout=3)
                 except Exception as kill_exc:
                     logging.debug("[STT] kill도 실패: %s", kill_exc)
 
-    def _read_stderr_snapshot(self) -> str:
+    def _read_stderr_snapshot(self, proc=None) -> str:
         try:
-            if self._proc is None or self._proc.stderr is None:
+            proc = proc or self._proc
+            if proc is None or proc.stderr is None:
                 return ""
-            return self._proc.stderr.read().decode("utf-8", errors="replace").strip()
+            if proc.poll() is None:
+                return ""
+            return proc.stderr.read().decode("utf-8", errors="replace").strip()
         except Exception:
             return ""
 
@@ -237,5 +269,6 @@ def create_stt_provider(settings: dict) -> STTProvider:
             model_size=settings.get("whisper_model", "small"),
             device=settings.get("whisper_device", "auto"),
             compute_type=settings.get("whisper_compute_type", "int8"),
+            language=settings.get("speech_language", "ko-KR"),
         )
     return GoogleSTTProvider(language=settings.get("speech_language", "ko-KR"))

@@ -51,16 +51,16 @@
     ],
     "unsupported_schema_tools": [],
     "stale_mapping_tools": [],
-    "seed_family_count": 1002,
-    "family_count": 343,
-    "row_count": 35591,
+    "seed_family_count": 1010,
+    "family_count": 351,
+    "row_count": 35901,
     "split_counts": {
-      "calibration": 9830,
-      "test": 7217,
-      "train": 18544
+      "calibration": 9947,
+      "test": 7293,
+      "train": 18661
     },
     "label_counts": {
-      "adjust_volume": 1742,
+      "adjust_volume": 1822,
       "analyze_image_file": 153,
       "analyze_screenshot": 193,
       "api_call": 152,
@@ -77,8 +77,8 @@
       "generate_image": 154,
       "get_calendar_events": 194,
       "get_clipboard": 193,
-      "get_current_time": 1091,
-      "get_running_apps": 755,
+      "get_current_time": 1167,
+      "get_running_apps": 832,
       "get_screen_status": 154,
       "get_weather": 3836,
       "launch_app": 4430,
@@ -96,7 +96,7 @@
       "set_clipboard": 230,
       "set_timer": 3848,
       "shutdown_computer": 152,
-      "take_screenshot": 920,
+      "take_screenshot": 997,
       "unknown_or_complex": 1541,
       "web_fetch": 157,
       "web_search": 421,
@@ -105,25 +105,26 @@
     "bucket_counts": {
       "alias": 282,
       "conversation": 27,
-      "conversational": 23240,
+      "conversational": 23449,
       "entity_replacement": 309,
       "hard_negative": 111,
       "knowledge_question": 21,
       "multi_intent": 28,
-      "normal": 837,
+      "normal": 855,
       "polite": 267,
       "short": 245,
       "slang": 258,
-      "spacing_noise": 5144,
-      "stt_noise": 6788,
-      "unknown_complex": 27
+      "spacing_noise": 5188,
+      "stt_noise": 6838,
+      "unknown_complex": 27,
+      "verbose": 6
     },
     "noise_enabled": true,
     "generator_seed": 131,
     "language_counts": {
-      "en": 10449,
-      "ja": 12334,
-      "ko": 12808
+      "en": 10547,
+      "ja": 12442,
+      "ko": 12912
     },
     "excluded_reserved_families": [
       "expanded.adjust_volume.polite.02"
@@ -136,85 +137,86 @@
   "threshold": 0.92,
   "margin": 0.3,
   "overall": {
-    "count": 7217,
-    "accuracy": 0.8182070112235,
-    "selected_count": 3780,
-    "coverage": 0.5237633365664404,
+    "count": 7293,
+    "accuracy": 0.8180447003976415,
+    "selected_count": 3863,
+    "coverage": 0.5296860002742355,
     "selective_accuracy": 1.0,
+    "selective_accuracy_wilson95_lower": 0.9990065641786446,
     "false_direct_count": 0,
     "unknown_false_accept_count": 0,
-    "ece": 0.052435419454851175,
-    "brier": 0.24377057070185207,
+    "ece": 0.05051273436046625,
+    "brier": 0.24218870856979238,
     "reliability_bins": [
       {
         "lower": 0.0,
         "upper": 0.1,
-        "count": 21,
-        "accuracy": 0.47619047619047616,
-        "confidence": 0.08906721869369219
+        "count": 26,
+        "accuracy": 0.46153846153846156,
+        "confidence": 0.09061987893684051
       },
       {
         "lower": 0.1,
         "upper": 0.2,
-        "count": 347,
-        "accuracy": 0.2334293948126801,
-        "confidence": 0.16151510586560372
+        "count": 350,
+        "accuracy": 0.22285714285714286,
+        "confidence": 0.16234404061440602
       },
       {
         "lower": 0.2,
         "upper": 0.3,
-        "count": 488,
-        "accuracy": 0.2540983606557377,
-        "confidence": 0.24888154207380214
+        "count": 484,
+        "accuracy": 0.25206611570247933,
+        "confidence": 0.24970405313070332
       },
       {
         "lower": 0.3,
         "upper": 0.4,
-        "count": 383,
-        "accuracy": 0.4412532637075718,
-        "confidence": 0.34874798382658373
+        "count": 393,
+        "accuracy": 0.43765903307888043,
+        "confidence": 0.34949008033313095
       },
       {
         "lower": 0.4,
         "upper": 0.5,
-        "count": 378,
-        "accuracy": 0.5529100529100529,
-        "confidence": 0.45155724220969173
+        "count": 369,
+        "accuracy": 0.5447154471544715,
+        "confidence": 0.4534895688577293
       },
       {
         "lower": 0.5,
         "upper": 0.6,
-        "count": 354,
-        "accuracy": 0.6242937853107344,
-        "confidence": 0.5480920218981681
+        "count": 361,
+        "accuracy": 0.631578947368421,
+        "confidence": 0.5476412149432054
       },
       {
         "lower": 0.6,
         "upper": 0.7,
-        "count": 387,
-        "accuracy": 0.8036175710594315,
-        "confidence": 0.6494798332110541
+        "count": 381,
+        "accuracy": 0.7926509186351706,
+        "confidence": 0.6499961641200842
       },
       {
         "lower": 0.7,
         "upper": 0.8,
-        "count": 402,
-        "accuracy": 0.8706467661691543,
-        "confidence": 0.748753082360192
+        "count": 400,
+        "accuracy": 0.8725,
+        "confidence": 0.7491664905829952
       },
       {
         "lower": 0.8,
         "upper": 0.9,
-        "count": 519,
-        "accuracy": 0.9653179190751445,
-        "confidence": 0.8550361420536243
+        "count": 503,
+        "accuracy": 0.9602385685884692,
+        "confidence": 0.8554156408290975
       },
       {
         "lower": 0.9,
         "upper": 1.0,
-        "count": 3938,
-        "accuracy": 0.9977145759268664,
-        "confidence": 0.9783667721011399
+        "count": 4026,
+        "accuracy": 0.99826130153999,
+        "confidence": 0.9780433190145438
       }
     ],
     "confusion_matrix": {
@@ -224,10 +226,10 @@
       },
       "analyze_image_file": {
         "focus_window": 13,
-        "get_weather": 6,
+        "get_weather": 5,
         "launch_app": 3,
         "read_emails": 5,
-        "read_file": 10,
+        "read_file": 11,
         "take_screenshot": 2,
         "unknown_or_complex": 1
       },
@@ -235,8 +237,8 @@
         "analyze_screenshot": 1,
         "focus_window": 10,
         "get_screen_status": 1,
-        "take_screenshot": 24,
-        "unknown_or_complex": 3
+        "take_screenshot": 26,
+        "unknown_or_complex": 1
       },
       "api_call": {
         "adjust_volume": 12,
@@ -273,7 +275,8 @@
         "unknown_or_complex": 23
       },
       "delete_file": {
-        "delete_file": 16,
+        "adjust_volume": 1,
+        "delete_file": 15,
         "launch_app": 4,
         "list_directory": 9,
         "read_file": 6,
@@ -295,8 +298,8 @@
         "unknown_or_complex": 3
       },
       "focus_window": {
-        "focus_window": 838,
-        "launch_app": 118
+        "focus_window": 831,
+        "launch_app": 125
       },
       "generate_image": {
         "generate_image": 22,
@@ -314,33 +317,32 @@
         "get_current_time": 1
       },
       "get_current_time": {
-        "get_current_time": 175,
-        "launch_app": 6,
-        "unknown_or_complex": 5
+        "get_current_time": 212,
+        "launch_app": 7,
+        "unknown_or_complex": 4
       },
       "get_running_apps": {
         "get_current_time": 2,
-        "get_running_apps": 168,
-        "get_weather": 7,
-        "launch_app": 4,
-        "unknown_or_complex": 6
+        "get_running_apps": 169,
+        "get_weather": 6,
+        "launch_app": 5,
+        "unknown_or_complex": 5
       },
       "get_screen_status": {
         "adjust_volume": 1,
         "focus_window": 10,
-        "get_weather": 3,
+        "get_weather": 2,
         "launch_app": 13,
         "play_youtube": 1,
-        "take_screenshot": 10,
+        "take_screenshot": 11,
         "unknown_or_complex": 1
       },
       "get_weather": {
         "get_calendar_events": 1,
-        "get_running_apps": 1,
         "get_weather": 870,
-        "launch_app": 3,
-        "take_screenshot": 5,
-        "unknown_or_complex": 6
+        "launch_app": 4,
+        "take_screenshot": 6,
+        "unknown_or_complex": 5
       },
       "launch_app": {
         "launch_app": 310
@@ -364,27 +366,27 @@
       },
       "mcp_call": {
         "get_weather": 1,
-        "launch_app": 4,
+        "launch_app": 6,
         "mcp_call": 23,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "move_file": {
-        "move_file": 28,
+        "move_file": 29,
         "search_in_files": 7,
         "take_screenshot": 1,
-        "unknown_or_complex": 3
+        "unknown_or_complex": 2
       },
       "play_youtube": {
         "play_youtube": 670
       },
       "read_emails": {
-        "adjust_volume": 1,
+        "adjust_volume": 3,
         "focus_window": 1,
-        "get_running_apps": 9,
-        "get_weather": 5,
-        "launch_app": 6,
+        "get_running_apps": 13,
+        "get_weather": 4,
+        "launch_app": 3,
         "read_emails": 5,
-        "send_email": 10,
+        "send_email": 8,
         "unknown_or_complex": 2
       },
       "read_file": {
@@ -393,10 +395,10 @@
         "unknown_or_complex": 26
       },
       "run_agent_task": {
-        "adjust_volume": 9,
+        "adjust_volume": 10,
         "get_current_time": 1,
         "get_weather": 3,
-        "launch_app": 3,
+        "launch_app": 2,
         "run_agent_task": 13,
         "unknown_or_complex": 11
       },
@@ -410,24 +412,24 @@
       "search_in_files": {
         "list_directory": 9,
         "search_in_files": 1,
-        "web_search": 7,
-        "unknown_or_complex": 21
+        "web_search": 8,
+        "unknown_or_complex": 20
       },
       "send_email": {
         "launch_app": 1,
-        "send_email": 22,
-        "unknown_or_complex": 15
+        "send_email": 23,
+        "unknown_or_complex": 14
       },
       "set_clipboard": {
         "get_clipboard": 39
       },
       "set_timer": {
         "cancel_timer": 1,
-        "get_current_time": 16,
-        "get_weather": 11,
-        "launch_app": 79,
+        "get_current_time": 14,
+        "get_weather": 10,
+        "launch_app": 84,
         "set_timer": 794,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "shutdown_computer": {
         "adjust_volume": 2,
@@ -435,7 +437,7 @@
         "shutdown_computer": 36
       },
       "take_screenshot": {
-        "take_screenshot": 190
+        "take_screenshot": 229
       },
       "web_fetch": {
         "get_clipboard": 1,
@@ -458,103 +460,104 @@
         "unknown_or_complex": 2
       },
       "unknown_or_complex": {
-        "adjust_volume": 1,
         "focus_window": 13,
-        "get_calendar_events": 20,
-        "get_current_time": 22,
-        "get_running_apps": 7,
+        "get_calendar_events": 22,
+        "get_current_time": 23,
+        "get_running_apps": 8,
         "get_weather": 30,
-        "launch_app": 60,
+        "launch_app": 66,
+        "play_youtube": 1,
         "search_in_files": 9,
         "send_email": 27,
         "take_screenshot": 14,
         "write_file": 13,
-        "unknown_or_complex": 170
+        "unknown_or_complex": 160
       }
     }
   },
-  "evaluation_rows_sha256": "06817b37af08507e8bbfac086f35a90708a9f97e05c693b4eaa750f673dce5a1",
+  "evaluation_rows_sha256": "f0c6a1d11be0d2cdce913493ee77c3d79553d10c51decd6c15ff968e4a23337f",
   "by_language": {
     "ko": {
-      "count": 2607,
-      "accuracy": 0.7786728039892596,
-      "selected_count": 1031,
-      "coverage": 0.3954737245876486,
+      "count": 2633,
+      "accuracy": 0.7785795670338017,
+      "selected_count": 1057,
+      "coverage": 0.40144322066084315,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9963788568133786,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.062178053997146265,
-      "brier": 0.29203456940229927,
+      "ece": 0.06042081358268958,
+      "brier": 0.2912137199323143,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 8,
-          "accuracy": 0.375,
-          "confidence": 0.08848038539793858
+          "count": 9,
+          "accuracy": 0.3333333333333333,
+          "confidence": 0.09141389974792308
         },
         {
           "lower": 0.1,
           "upper": 0.2,
           "count": 115,
-          "accuracy": 0.20869565217391303,
-          "confidence": 0.16284941605528894
+          "accuracy": 0.2,
+          "confidence": 0.16329578756546545
         },
         {
           "lower": 0.2,
           "upper": 0.3,
           "count": 215,
-          "accuracy": 0.2744186046511628,
-          "confidence": 0.2496658316582624
+          "accuracy": 0.3023255813953488,
+          "confidence": 0.25083107437621566
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 172,
-          "accuracy": 0.4418604651162791,
-          "confidence": 0.34871337275798947
+          "count": 176,
+          "accuracy": 0.4147727272727273,
+          "confidence": 0.34957570323088505
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 160,
-          "accuracy": 0.50625,
-          "confidence": 0.4540031448278611
+          "count": 159,
+          "accuracy": 0.49056603773584906,
+          "confidence": 0.45498699255481767
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 187,
-          "accuracy": 0.5989304812834224,
-          "confidence": 0.5479694802191931
+          "count": 195,
+          "accuracy": 0.6205128205128205,
+          "confidence": 0.5481586639617889
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 207,
-          "accuracy": 0.8019323671497585,
-          "confidence": 0.6495299361807587
+          "count": 201,
+          "accuracy": 0.7761194029850746,
+          "confidence": 0.6508352181109771
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 205,
-          "accuracy": 0.8634146341463415,
-          "confidence": 0.7490201327011311
+          "count": 203,
+          "accuracy": 0.8669950738916257,
+          "confidence": 0.7488724033880733
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 233,
-          "accuracy": 0.9785407725321889,
-          "confidence": 0.8543848827174773
+          "count": 228,
+          "accuracy": 0.9824561403508771,
+          "confidence": 0.8548680356371134
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 1105,
-          "accuracy": 0.9990950226244344,
-          "confidence": 0.9707014803069949
+          "count": 1132,
+          "accuracy": 0.9991166077738516,
+          "confidence": 0.9707363005895622
         }
       ],
       "confusion_matrix": {
@@ -598,7 +601,8 @@
           "unknown_or_complex": 12
         },
         "delete_file": {
-          "delete_file": 2,
+          "adjust_volume": 1,
+          "delete_file": 1,
           "launch_app": 4,
           "read_file": 6,
           "take_screenshot": 1
@@ -614,8 +618,8 @@
           "launch_app": 13
         },
         "focus_window": {
-          "focus_window": 216,
-          "launch_app": 118
+          "focus_window": 209,
+          "launch_app": 125
         },
         "generate_image": {
           "generate_image": 10,
@@ -630,16 +634,16 @@
           "get_current_time": 1
         },
         "get_current_time": {
-          "get_current_time": 69,
-          "launch_app": 4,
-          "unknown_or_complex": 5
+          "get_current_time": 82,
+          "launch_app": 5,
+          "unknown_or_complex": 4
         },
         "get_running_apps": {
           "get_current_time": 2,
-          "get_running_apps": 50,
-          "get_weather": 7,
-          "launch_app": 4,
-          "unknown_or_complex": 2
+          "get_running_apps": 51,
+          "get_weather": 6,
+          "launch_app": 5,
+          "unknown_or_complex": 1
         },
         "get_screen_status": {
           "launch_app": 3,
@@ -662,23 +666,23 @@
           "unknown_or_complex": 1
         },
         "mcp_call": {
-          "launch_app": 4,
+          "launch_app": 6,
           "mcp_call": 2,
-          "unknown_or_complex": 7
+          "unknown_or_complex": 5
         },
         "move_file": {
-          "move_file": 2,
+          "move_file": 3,
           "search_in_files": 7,
           "take_screenshot": 1,
-          "unknown_or_complex": 3
+          "unknown_or_complex": 2
         },
         "play_youtube": {
           "play_youtube": 221
         },
         "read_emails": {
           "focus_window": 1,
-          "get_running_apps": 8,
-          "launch_app": 2,
+          "get_running_apps": 9,
+          "launch_app": 1,
           "unknown_or_complex": 2
         },
         "read_file": {
@@ -697,22 +701,21 @@
         },
         "search_in_files": {
           "search_in_files": 1,
-          "web_search": 3,
-          "unknown_or_complex": 9
+          "web_search": 4,
+          "unknown_or_complex": 8
         },
         "send_email": {
           "launch_app": 1,
-          "send_email": 3,
-          "unknown_or_complex": 9
+          "send_email": 4,
+          "unknown_or_complex": 8
         },
         "set_clipboard": {
           "get_clipboard": 13
         },
         "set_timer": {
-          "get_current_time": 16,
-          "launch_app": 15,
-          "set_timer": 293,
-          "unknown_or_complex": 1
+          "get_current_time": 14,
+          "launch_app": 18,
+          "set_timer": 293
         },
         "shutdown_computer": {
           "adjust_volume": 2,
@@ -720,7 +723,7 @@
           "shutdown_computer": 10
         },
         "take_screenshot": {
-          "take_screenshot": 65
+          "take_screenshot": 78
         },
         "web_fetch": {
           "get_clipboard": 1,
@@ -744,91 +747,92 @@
           "get_calendar_events": 11,
           "get_current_time": 11,
           "get_weather": 4,
-          "launch_app": 26,
+          "launch_app": 27,
           "send_email": 13,
-          "unknown_or_complex": 65
+          "unknown_or_complex": 64
         }
       },
-      "with_direct_policy_gate": {
-        "count": 2607,
-        "accuracy": 0.7786728039892596,
-        "selected_count": 985,
-        "coverage": 0.3778289221327196,
+      "with_candidate_policy_gate": {
+        "count": 2633,
+        "accuracy": 0.7785795670338017,
+        "selected_count": 154,
+        "coverage": 0.05848841625522218,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9756625486776705,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
-        "ece": 0.062178053997146265,
-        "brier": 0.29203456940229927,
+        "ece": 0.06042081358268958,
+        "brier": 0.2912137199323143,
         "reliability_bins": [
           {
             "lower": 0.0,
             "upper": 0.1,
-            "count": 8,
-            "accuracy": 0.375,
-            "confidence": 0.08848038539793858
+            "count": 9,
+            "accuracy": 0.3333333333333333,
+            "confidence": 0.09141389974792308
           },
           {
             "lower": 0.1,
             "upper": 0.2,
             "count": 115,
-            "accuracy": 0.20869565217391303,
-            "confidence": 0.16284941605528894
+            "accuracy": 0.2,
+            "confidence": 0.16329578756546545
           },
           {
             "lower": 0.2,
             "upper": 0.3,
             "count": 215,
-            "accuracy": 0.2744186046511628,
-            "confidence": 0.2496658316582624
+            "accuracy": 0.3023255813953488,
+            "confidence": 0.25083107437621566
           },
           {
             "lower": 0.3,
             "upper": 0.4,
-            "count": 172,
-            "accuracy": 0.4418604651162791,
-            "confidence": 0.34871337275798947
+            "count": 176,
+            "accuracy": 0.4147727272727273,
+            "confidence": 0.34957570323088505
           },
           {
             "lower": 0.4,
             "upper": 0.5,
-            "count": 160,
-            "accuracy": 0.50625,
-            "confidence": 0.4540031448278611
+            "count": 159,
+            "accuracy": 0.49056603773584906,
+            "confidence": 0.45498699255481767
           },
           {
             "lower": 0.5,
             "upper": 0.6,
-            "count": 187,
-            "accuracy": 0.5989304812834224,
-            "confidence": 0.5479694802191931
+            "count": 195,
+            "accuracy": 0.6205128205128205,
+            "confidence": 0.5481586639617889
           },
           {
             "lower": 0.6,
             "upper": 0.7,
-            "count": 207,
-            "accuracy": 0.8019323671497585,
-            "confidence": 0.6495299361807587
+            "count": 201,
+            "accuracy": 0.7761194029850746,
+            "confidence": 0.6508352181109771
           },
           {
             "lower": 0.7,
             "upper": 0.8,
-            "count": 205,
-            "accuracy": 0.8634146341463415,
-            "confidence": 0.7490201327011311
+            "count": 203,
+            "accuracy": 0.8669950738916257,
+            "confidence": 0.7488724033880733
           },
           {
             "lower": 0.8,
             "upper": 0.9,
-            "count": 233,
-            "accuracy": 0.9785407725321889,
-            "confidence": 0.8543848827174773
+            "count": 228,
+            "accuracy": 0.9824561403508771,
+            "confidence": 0.8548680356371134
           },
           {
             "lower": 0.9,
             "upper": 1.0,
-            "count": 1105,
-            "accuracy": 0.9990950226244344,
-            "confidence": 0.9707014803069949
+            "count": 1132,
+            "accuracy": 0.9991166077738516,
+            "confidence": 0.9707363005895622
           }
         ],
         "confusion_matrix": {
@@ -872,7 +876,8 @@
             "unknown_or_complex": 12
           },
           "delete_file": {
-            "delete_file": 2,
+            "adjust_volume": 1,
+            "delete_file": 1,
             "launch_app": 4,
             "read_file": 6,
             "take_screenshot": 1
@@ -888,8 +893,8 @@
             "launch_app": 13
           },
           "focus_window": {
-            "focus_window": 216,
-            "launch_app": 118
+            "focus_window": 209,
+            "launch_app": 125
           },
           "generate_image": {
             "generate_image": 10,
@@ -904,16 +909,16 @@
             "get_current_time": 1
           },
           "get_current_time": {
-            "get_current_time": 69,
-            "launch_app": 4,
-            "unknown_or_complex": 5
+            "get_current_time": 82,
+            "launch_app": 5,
+            "unknown_or_complex": 4
           },
           "get_running_apps": {
             "get_current_time": 2,
-            "get_running_apps": 50,
-            "get_weather": 7,
-            "launch_app": 4,
-            "unknown_or_complex": 2
+            "get_running_apps": 51,
+            "get_weather": 6,
+            "launch_app": 5,
+            "unknown_or_complex": 1
           },
           "get_screen_status": {
             "launch_app": 3,
@@ -936,23 +941,23 @@
             "unknown_or_complex": 1
           },
           "mcp_call": {
-            "launch_app": 4,
+            "launch_app": 6,
             "mcp_call": 2,
-            "unknown_or_complex": 7
+            "unknown_or_complex": 5
           },
           "move_file": {
-            "move_file": 2,
+            "move_file": 3,
             "search_in_files": 7,
             "take_screenshot": 1,
-            "unknown_or_complex": 3
+            "unknown_or_complex": 2
           },
           "play_youtube": {
             "play_youtube": 221
           },
           "read_emails": {
             "focus_window": 1,
-            "get_running_apps": 8,
-            "launch_app": 2,
+            "get_running_apps": 9,
+            "launch_app": 1,
             "unknown_or_complex": 2
           },
           "read_file": {
@@ -971,22 +976,21 @@
           },
           "search_in_files": {
             "search_in_files": 1,
-            "web_search": 3,
-            "unknown_or_complex": 9
+            "web_search": 4,
+            "unknown_or_complex": 8
           },
           "send_email": {
             "launch_app": 1,
-            "send_email": 3,
-            "unknown_or_complex": 9
+            "send_email": 4,
+            "unknown_or_complex": 8
           },
           "set_clipboard": {
             "get_clipboard": 13
           },
           "set_timer": {
-            "get_current_time": 16,
-            "launch_app": 15,
-            "set_timer": 293,
-            "unknown_or_complex": 1
+            "get_current_time": 14,
+            "launch_app": 18,
+            "set_timer": 293
           },
           "shutdown_computer": {
             "adjust_volume": 2,
@@ -994,7 +998,7 @@
             "shutdown_computer": 10
           },
           "take_screenshot": {
-            "take_screenshot": 65
+            "take_screenshot": 78
           },
           "web_fetch": {
             "get_clipboard": 1,
@@ -1018,23 +1022,300 @@
             "get_calendar_events": 11,
             "get_current_time": 11,
             "get_weather": 4,
-            "launch_app": 26,
+            "launch_app": 27,
             "send_email": 13,
-            "unknown_or_complex": 65
+            "unknown_or_complex": 64
+          }
+        }
+      },
+      "with_direct_policy_gate": {
+        "count": 2633,
+        "accuracy": 0.7785795670338017,
+        "selected_count": 124,
+        "coverage": 0.047094568932776304,
+        "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9699513846593222,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.06042081358268958,
+        "brier": 0.2912137199323143,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 9,
+            "accuracy": 0.3333333333333333,
+            "confidence": 0.09141389974792308
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 115,
+            "accuracy": 0.2,
+            "confidence": 0.16329578756546545
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 215,
+            "accuracy": 0.3023255813953488,
+            "confidence": 0.25083107437621566
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 176,
+            "accuracy": 0.4147727272727273,
+            "confidence": 0.34957570323088505
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 159,
+            "accuracy": 0.49056603773584906,
+            "confidence": 0.45498699255481767
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 195,
+            "accuracy": 0.6205128205128205,
+            "confidence": 0.5481586639617889
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 201,
+            "accuracy": 0.7761194029850746,
+            "confidence": 0.6508352181109771
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 203,
+            "accuracy": 0.8669950738916257,
+            "confidence": 0.7488724033880733
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 228,
+            "accuracy": 0.9824561403508771,
+            "confidence": 0.8548680356371134
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1132,
+            "accuracy": 0.9991166077738516,
+            "confidence": 0.9707363005895622
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 90,
+            "launch_app": 1
+          },
+          "analyze_image_file": {
+            "focus_window": 10,
+            "take_screenshot": 2,
+            "unknown_or_complex": 1
+          },
+          "analyze_screenshot": {
+            "analyze_screenshot": 1,
+            "take_screenshot": 12
+          },
+          "api_call": {
+            "api_call": 11,
+            "launch_app": 2
+          },
+          "cancel_scheduled_task": {
+            "cancel_scheduled_task": 2,
+            "schedule_task": 11
+          },
+          "cancel_timer": {
+            "cancel_timer": 435,
+            "get_weather": 1,
+            "launch_app": 1,
+            "set_timer": 1,
+            "unknown_or_complex": 10
+          },
+          "close_app": {
+            "close_app": 14
+          },
+          "create_calendar_event": {
+            "launch_app": 2,
+            "unknown_or_complex": 11
+          },
+          "delegate_to_subagent": {
+            "launch_app": 1,
+            "unknown_or_complex": 12
+          },
+          "delete_file": {
+            "adjust_volume": 1,
+            "delete_file": 1,
+            "launch_app": 4,
+            "read_file": 6,
+            "take_screenshot": 1
+          },
+          "edit_file": {
+            "launch_app": 2,
+            "search_in_files": 11
+          },
+          "execute_python_code": {
+            "unknown_or_complex": 13
+          },
+          "execute_shell_command": {
+            "launch_app": 13
+          },
+          "focus_window": {
+            "focus_window": 209,
+            "launch_app": 125
+          },
+          "generate_image": {
+            "generate_image": 10,
+            "take_screenshot": 3
+          },
+          "get_calendar_events": {
+            "create_calendar_event": 10,
+            "launch_app": 3
+          },
+          "get_clipboard": {
+            "get_clipboard": 12,
+            "get_current_time": 1
+          },
+          "get_current_time": {
+            "get_current_time": 82,
+            "launch_app": 5,
+            "unknown_or_complex": 4
+          },
+          "get_running_apps": {
+            "get_current_time": 2,
+            "get_running_apps": 51,
+            "get_weather": 6,
+            "launch_app": 5,
+            "unknown_or_complex": 1
+          },
+          "get_screen_status": {
+            "launch_app": 3,
+            "take_screenshot": 10
+          },
+          "get_weather": {
+            "get_weather": 336,
+            "launch_app": 2
+          },
+          "launch_app": {
+            "launch_app": 107
+          },
+          "list_directory": {
+            "get_weather": 2,
+            "read_file": 9,
+            "unknown_or_complex": 2
+          },
+          "list_scheduled_tasks": {
+            "get_running_apps": 12,
+            "unknown_or_complex": 1
+          },
+          "mcp_call": {
+            "launch_app": 6,
+            "mcp_call": 2,
+            "unknown_or_complex": 5
+          },
+          "move_file": {
+            "move_file": 3,
+            "search_in_files": 7,
+            "take_screenshot": 1,
+            "unknown_or_complex": 2
+          },
+          "play_youtube": {
+            "play_youtube": 221
+          },
+          "read_emails": {
+            "focus_window": 1,
+            "get_running_apps": 9,
+            "launch_app": 1,
+            "unknown_or_complex": 2
+          },
+          "read_file": {
+            "unknown_or_complex": 13
+          },
+          "run_agent_task": {
+            "launch_app": 2,
+            "unknown_or_complex": 11
+          },
+          "schedule_task": {
+            "get_weather": 1,
+            "launch_app": 1,
+            "schedule_task": 8,
+            "take_screenshot": 2,
+            "unknown_or_complex": 1
+          },
+          "search_in_files": {
+            "search_in_files": 1,
+            "web_search": 4,
+            "unknown_or_complex": 8
+          },
+          "send_email": {
+            "launch_app": 1,
+            "send_email": 4,
+            "unknown_or_complex": 8
+          },
+          "set_clipboard": {
+            "get_clipboard": 13
+          },
+          "set_timer": {
+            "get_current_time": 14,
+            "launch_app": 18,
+            "set_timer": 293
+          },
+          "shutdown_computer": {
+            "adjust_volume": 2,
+            "launch_app": 1,
+            "shutdown_computer": 10
+          },
+          "take_screenshot": {
+            "take_screenshot": 78
+          },
+          "web_fetch": {
+            "get_clipboard": 1,
+            "get_current_time": 1,
+            "get_weather": 3,
+            "read_file": 8
+          },
+          "web_search": {
+            "get_weather": 2,
+            "search_in_files": 8,
+            "web_search": 5,
+            "unknown_or_complex": 11
+          },
+          "write_file": {
+            "read_file": 1,
+            "take_screenshot": 10,
+            "unknown_or_complex": 2
+          },
+          "unknown_or_complex": {
+            "focus_window": 1,
+            "get_calendar_events": 11,
+            "get_current_time": 11,
+            "get_weather": 4,
+            "launch_app": 27,
+            "send_email": 13,
+            "unknown_or_complex": 64
           }
         }
       }
     },
     "en": {
-      "count": 2095,
-      "accuracy": 0.8620525059665871,
-      "selected_count": 1329,
-      "coverage": 0.6343675417661098,
+      "count": 2119,
+      "accuracy": 0.8607833883907503,
+      "selected_count": 1369,
+      "coverage": 0.6460594620103822,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9972018190476313,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.05083477696156045,
-      "brier": 0.18368842856492623,
+      "ece": 0.05064609638637077,
+      "brier": 0.18236027028862775,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -1046,65 +1327,65 @@
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 53,
-          "accuracy": 0.3018867924528302,
-          "confidence": 0.16440212534065782
+          "count": 58,
+          "accuracy": 0.29310344827586204,
+          "confidence": 0.16639538179731322
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 110,
-          "accuracy": 0.11818181818181818,
-          "confidence": 0.24701230365286173
+          "count": 109,
+          "accuracy": 0.09174311926605505,
+          "confidence": 0.2507183990842809
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 91,
-          "accuracy": 0.37362637362637363,
-          "confidence": 0.349044679551325
+          "count": 92,
+          "accuracy": 0.3804347826086957,
+          "confidence": 0.35073468008797526
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 101,
-          "accuracy": 0.6138613861386139,
-          "confidence": 0.4516899131133048
+          "count": 95,
+          "accuracy": 0.6105263157894737,
+          "confidence": 0.45284334329939796
         },
         {
           "lower": 0.5,
           "upper": 0.6,
           "count": 75,
-          "accuracy": 0.64,
-          "confidence": 0.5475285830386635
+          "accuracy": 0.6133333333333333,
+          "confidence": 0.5451298257069314
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 79,
-          "accuracy": 0.810126582278481,
-          "confidence": 0.6499704114499117
+          "count": 83,
+          "accuracy": 0.8192771084337349,
+          "confidence": 0.6485066157734536
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 75,
-          "accuracy": 0.9466666666666667,
-          "confidence": 0.7535220763307362
+          "count": 72,
+          "accuracy": 0.9444444444444444,
+          "confidence": 0.7534486653089623
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 134,
-          "accuracy": 0.9626865671641791,
-          "confidence": 0.8570107798957044
+          "count": 120,
+          "accuracy": 0.9416666666666667,
+          "confidence": 0.8561988446543797
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 1377,
-          "accuracy": 0.9941902687000727,
-          "confidence": 0.9809800504701555
+          "count": 1415,
+          "accuracy": 0.9957597173144876,
+          "confidence": 0.9804718273029674
         }
       ],
       "confusion_matrix": {
@@ -1112,8 +1393,8 @@
           "adjust_volume": 74
         },
         "analyze_image_file": {
-          "get_weather": 6,
-          "read_file": 7
+          "get_weather": 5,
+          "read_file": 8
         },
         "analyze_screenshot": {
           "focus_window": 10,
@@ -1170,11 +1451,11 @@
           "get_clipboard": 12
         },
         "get_current_time": {
-          "get_current_time": 47
+          "get_current_time": 58
         },
         "get_running_apps": {
-          "get_running_apps": 59,
-          "unknown_or_complex": 1
+          "get_running_apps": 58,
+          "unknown_or_complex": 2
         },
         "get_screen_status": {
           "focus_window": 10,
@@ -1207,9 +1488,9 @@
           "play_youtube": 212
         },
         "read_emails": {
-          "adjust_volume": 1,
+          "adjust_volume": 3,
           "read_emails": 1,
-          "send_email": 10
+          "send_email": 8
         },
         "read_file": {
           "search_in_files": 1,
@@ -1239,7 +1520,7 @@
           "shutdown_computer": 13
         },
         "take_screenshot": {
-          "take_screenshot": 59
+          "take_screenshot": 72
         },
         "web_fetch": {
           "write_file": 13
@@ -1253,27 +1534,29 @@
           "write_file": 10
         },
         "unknown_or_complex": {
-          "focus_window": 12,
-          "get_calendar_events": 8,
-          "get_current_time": 1,
-          "get_running_apps": 7,
+          "focus_window": 11,
+          "get_calendar_events": 9,
+          "get_current_time": 2,
+          "get_running_apps": 8,
           "get_weather": 18,
-          "launch_app": 2,
+          "launch_app": 4,
+          "play_youtube": 1,
           "search_in_files": 9,
           "write_file": 13,
-          "unknown_or_complex": 52
+          "unknown_or_complex": 47
         }
       },
-      "with_direct_policy_gate": {
-        "count": 2095,
-        "accuracy": 0.8620525059665871,
-        "selected_count": 1236,
-        "coverage": 0.5899761336515513,
+      "with_candidate_policy_gate": {
+        "count": 2119,
+        "accuracy": 0.8607833883907503,
+        "selected_count": 222,
+        "coverage": 0.10476639924492685,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9829904622439406,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
-        "ece": 0.05083477696156045,
-        "brier": 0.18368842856492623,
+        "ece": 0.05064609638637077,
+        "brier": 0.18236027028862775,
         "reliability_bins": [
           {
             "lower": 0.0,
@@ -1285,65 +1568,65 @@
           {
             "lower": 0.1,
             "upper": 0.2,
-            "count": 53,
-            "accuracy": 0.3018867924528302,
-            "confidence": 0.16440212534065782
+            "count": 58,
+            "accuracy": 0.29310344827586204,
+            "confidence": 0.16639538179731322
           },
           {
             "lower": 0.2,
             "upper": 0.3,
-            "count": 110,
-            "accuracy": 0.11818181818181818,
-            "confidence": 0.24701230365286173
+            "count": 109,
+            "accuracy": 0.09174311926605505,
+            "confidence": 0.2507183990842809
           },
           {
             "lower": 0.3,
             "upper": 0.4,
-            "count": 91,
-            "accuracy": 0.37362637362637363,
-            "confidence": 0.349044679551325
+            "count": 92,
+            "accuracy": 0.3804347826086957,
+            "confidence": 0.35073468008797526
           },
           {
             "lower": 0.4,
             "upper": 0.5,
-            "count": 101,
-            "accuracy": 0.6138613861386139,
-            "confidence": 0.4516899131133048
+            "count": 95,
+            "accuracy": 0.6105263157894737,
+            "confidence": 0.45284334329939796
           },
           {
             "lower": 0.5,
             "upper": 0.6,
             "count": 75,
-            "accuracy": 0.64,
-            "confidence": 0.5475285830386635
+            "accuracy": 0.6133333333333333,
+            "confidence": 0.5451298257069314
           },
           {
             "lower": 0.6,
             "upper": 0.7,
-            "count": 79,
-            "accuracy": 0.810126582278481,
-            "confidence": 0.6499704114499117
+            "count": 83,
+            "accuracy": 0.8192771084337349,
+            "confidence": 0.6485066157734536
           },
           {
             "lower": 0.7,
             "upper": 0.8,
-            "count": 75,
-            "accuracy": 0.9466666666666667,
-            "confidence": 0.7535220763307362
+            "count": 72,
+            "accuracy": 0.9444444444444444,
+            "confidence": 0.7534486653089623
           },
           {
             "lower": 0.8,
             "upper": 0.9,
-            "count": 134,
-            "accuracy": 0.9626865671641791,
-            "confidence": 0.8570107798957044
+            "count": 120,
+            "accuracy": 0.9416666666666667,
+            "confidence": 0.8561988446543797
           },
           {
             "lower": 0.9,
             "upper": 1.0,
-            "count": 1377,
-            "accuracy": 0.9941902687000727,
-            "confidence": 0.9809800504701555
+            "count": 1415,
+            "accuracy": 0.9957597173144876,
+            "confidence": 0.9804718273029674
           }
         ],
         "confusion_matrix": {
@@ -1351,8 +1634,8 @@
             "adjust_volume": 74
           },
           "analyze_image_file": {
-            "get_weather": 6,
-            "read_file": 7
+            "get_weather": 5,
+            "read_file": 8
           },
           "analyze_screenshot": {
             "focus_window": 10,
@@ -1409,11 +1692,11 @@
             "get_clipboard": 12
           },
           "get_current_time": {
-            "get_current_time": 47
+            "get_current_time": 58
           },
           "get_running_apps": {
-            "get_running_apps": 59,
-            "unknown_or_complex": 1
+            "get_running_apps": 58,
+            "unknown_or_complex": 2
           },
           "get_screen_status": {
             "focus_window": 10,
@@ -1446,9 +1729,9 @@
             "play_youtube": 212
           },
           "read_emails": {
-            "adjust_volume": 1,
+            "adjust_volume": 3,
             "read_emails": 1,
-            "send_email": 10
+            "send_email": 8
           },
           "read_file": {
             "search_in_files": 1,
@@ -1478,7 +1761,7 @@
             "shutdown_computer": 13
           },
           "take_screenshot": {
-            "take_screenshot": 59
+            "take_screenshot": 72
           },
           "web_fetch": {
             "write_file": 13
@@ -1492,99 +1775,343 @@
             "write_file": 10
           },
           "unknown_or_complex": {
-            "focus_window": 12,
-            "get_calendar_events": 8,
-            "get_current_time": 1,
-            "get_running_apps": 7,
+            "focus_window": 11,
+            "get_calendar_events": 9,
+            "get_current_time": 2,
+            "get_running_apps": 8,
             "get_weather": 18,
-            "launch_app": 2,
+            "launch_app": 4,
+            "play_youtube": 1,
             "search_in_files": 9,
             "write_file": 13,
-            "unknown_or_complex": 52
+            "unknown_or_complex": 47
+          }
+        }
+      },
+      "with_direct_policy_gate": {
+        "count": 2119,
+        "accuracy": 0.8607833883907503,
+        "selected_count": 108,
+        "coverage": 0.05096743747050495,
+        "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9656526402534428,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.05064609638637077,
+        "brier": 0.18236027028862775,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 0,
+            "accuracy": null,
+            "confidence": null
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 58,
+            "accuracy": 0.29310344827586204,
+            "confidence": 0.16639538179731322
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 109,
+            "accuracy": 0.09174311926605505,
+            "confidence": 0.2507183990842809
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 92,
+            "accuracy": 0.3804347826086957,
+            "confidence": 0.35073468008797526
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 95,
+            "accuracy": 0.6105263157894737,
+            "confidence": 0.45284334329939796
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 75,
+            "accuracy": 0.6133333333333333,
+            "confidence": 0.5451298257069314
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 83,
+            "accuracy": 0.8192771084337349,
+            "confidence": 0.6485066157734536
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 72,
+            "accuracy": 0.9444444444444444,
+            "confidence": 0.7534486653089623
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 120,
+            "accuracy": 0.9416666666666667,
+            "confidence": 0.8561988446543797
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1415,
+            "accuracy": 0.9957597173144876,
+            "confidence": 0.9804718273029674
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 74
+          },
+          "analyze_image_file": {
+            "get_weather": 5,
+            "read_file": 8
+          },
+          "analyze_screenshot": {
+            "focus_window": 10,
+            "take_screenshot": 3
+          },
+          "api_call": {
+            "adjust_volume": 12
+          },
+          "cancel_scheduled_task": {
+            "cancel_timer": 10,
+            "launch_app": 1,
+            "schedule_task": 1
+          },
+          "cancel_timer": {
+            "cancel_timer": 257,
+            "get_current_time": 1,
+            "launch_app": 2
+          },
+          "close_app": {
+            "close_app": 11
+          },
+          "create_calendar_event": {
+            "get_calendar_events": 11
+          },
+          "delegate_to_subagent": {
+            "unknown_or_complex": 11
+          },
+          "delete_file": {
+            "delete_file": 5,
+            "list_directory": 5,
+            "search_in_files": 3
+          },
+          "edit_file": {
+            "read_file": 13
+          },
+          "execute_python_code": {
+            "execute_python_code": 11
+          },
+          "execute_shell_command": {
+            "execute_shell_command": 9,
+            "launch_app": 1,
+            "unknown_or_complex": 3
+          },
+          "focus_window": {
+            "focus_window": 298
+          },
+          "generate_image": {
+            "generate_image": 12
+          },
+          "get_calendar_events": {
+            "create_calendar_event": 13
+          },
+          "get_clipboard": {
+            "get_clipboard": 12
+          },
+          "get_current_time": {
+            "get_current_time": 58
+          },
+          "get_running_apps": {
+            "get_running_apps": 58,
+            "unknown_or_complex": 2
+          },
+          "get_screen_status": {
+            "focus_window": 10,
+            "launch_app": 3
+          },
+          "get_weather": {
+            "get_calendar_events": 1,
+            "get_weather": 233
+          },
+          "launch_app": {
+            "launch_app": 99
+          },
+          "list_directory": {
+            "get_clipboard": 9,
+            "unknown_or_complex": 2
+          },
+          "list_scheduled_tasks": {
+            "cancel_scheduled_task": 4,
+            "list_scheduled_tasks": 3,
+            "schedule_task": 1,
+            "take_screenshot": 5
+          },
+          "mcp_call": {
+            "mcp_call": 11
+          },
+          "move_file": {
+            "move_file": 13
+          },
+          "play_youtube": {
+            "play_youtube": 212
+          },
+          "read_emails": {
+            "adjust_volume": 3,
+            "read_emails": 1,
+            "send_email": 8
+          },
+          "read_file": {
+            "search_in_files": 1,
+            "unknown_or_complex": 11
+          },
+          "run_agent_task": {
+            "run_agent_task": 13
+          },
+          "schedule_task": {
+            "schedule_task": 11
+          },
+          "search_in_files": {
+            "list_directory": 8,
+            "web_search": 4
+          },
+          "send_email": {
+            "send_email": 6,
+            "unknown_or_complex": 6
+          },
+          "set_clipboard": {
+            "get_clipboard": 12
+          },
+          "set_timer": {
+            "set_timer": 253
+          },
+          "shutdown_computer": {
+            "shutdown_computer": 13
+          },
+          "take_screenshot": {
+            "take_screenshot": 72
+          },
+          "web_fetch": {
+            "write_file": 13
+          },
+          "web_search": {
+            "get_weather": 2,
+            "web_search": 22
+          },
+          "write_file": {
+            "read_file": 2,
+            "write_file": 10
+          },
+          "unknown_or_complex": {
+            "focus_window": 11,
+            "get_calendar_events": 9,
+            "get_current_time": 2,
+            "get_running_apps": 8,
+            "get_weather": 18,
+            "launch_app": 4,
+            "play_youtube": 1,
+            "search_in_files": 9,
+            "write_file": 13,
+            "unknown_or_complex": 47
           }
         }
       }
     },
     "ja": {
-      "count": 2515,
-      "accuracy": 0.8226640159045726,
-      "selected_count": 1420,
-      "coverage": 0.5646123260437376,
+      "count": 2541,
+      "accuracy": 0.8232979142070052,
+      "selected_count": 1437,
+      "coverage": 0.5655253837072018,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9973338782020902,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.054939198610044246,
-      "brier": 0.24378959382900667,
+      "ece": 0.05377367268213793,
+      "brier": 0.24128103670842574,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 13,
-          "accuracy": 0.5384615384615384,
-          "confidence": 0.0894283468756944
+          "count": 17,
+          "accuracy": 0.5294117647058824,
+          "confidence": 0.09019951497803208
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 179,
-          "accuracy": 0.22905027932960895,
-          "confidence": 0.15980305165335973
+          "count": 177,
+          "accuracy": 0.21468926553672316,
+          "confidence": 0.16039811582355598
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 163,
-          "accuracy": 0.31901840490797545,
-          "confidence": 0.24910849891824674
+          "count": 160,
+          "accuracy": 0.29375,
+          "confidence": 0.2474985951511714
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 120,
-          "accuracy": 0.49166666666666664,
-          "confidence": 0.34857259876697333
+          "count": 125,
+          "accuracy": 0.512,
+          "confidence": 0.34845349787352786
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 117,
-          "accuracy": 0.5641025641025641,
-          "confidence": 0.4480978902424098
+          "count": 115,
+          "accuracy": 0.5652173913043478,
+          "confidence": 0.45195305633776767
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 92,
-          "accuracy": 0.6630434782608695,
-          "confidence": 0.5488004263376368
+          "count": 91,
+          "accuracy": 0.6703296703296703,
+          "confidence": 0.5486022219113019
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 101,
-          "accuracy": 0.801980198019802,
-          "confidence": 0.6489934273140378
+          "count": 97,
+          "accuracy": 0.8041237113402062,
+          "confidence": 0.6495320678376185
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 122,
-          "accuracy": 0.8360655737704918,
-          "confidence": 0.7453725916414758
+          "count": 125,
+          "accuracy": 0.84,
+          "confidence": 0.7471775555453917
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 152,
-          "accuracy": 0.9473684210526315,
-          "confidence": 0.8542936549120682
+          "count": 155,
+          "accuracy": 0.9419354838709677,
+          "confidence": 0.8556147990532171
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 1456,
+          "count": 1479,
           "accuracy": 1.0,
-          "confidence": 0.9817126945725656
+          "confidence": 0.9813125587907165
         }
       ],
       "confusion_matrix": {
@@ -1600,8 +2127,8 @@
         },
         "analyze_screenshot": {
           "get_screen_status": 1,
-          "take_screenshot": 9,
-          "unknown_or_complex": 3
+          "take_screenshot": 11,
+          "unknown_or_complex": 1
         },
         "api_call": {
           "unknown_or_complex": 13
@@ -1653,26 +2180,26 @@
           "get_clipboard": 13
         },
         "get_current_time": {
-          "get_current_time": 59,
+          "get_current_time": 72,
           "launch_app": 2
         },
         "get_running_apps": {
-          "get_running_apps": 59,
-          "unknown_or_complex": 3
+          "get_running_apps": 60,
+          "unknown_or_complex": 2
         },
         "get_screen_status": {
           "adjust_volume": 1,
-          "get_weather": 3,
+          "get_weather": 2,
           "launch_app": 7,
           "play_youtube": 1,
+          "take_screenshot": 1,
           "unknown_or_complex": 1
         },
         "get_weather": {
-          "get_running_apps": 1,
           "get_weather": 301,
-          "launch_app": 1,
-          "take_screenshot": 5,
-          "unknown_or_complex": 6
+          "launch_app": 2,
+          "take_screenshot": 6,
+          "unknown_or_complex": 5
         },
         "launch_app": {
           "launch_app": 104
@@ -1698,9 +2225,9 @@
           "play_youtube": 237
         },
         "read_emails": {
-          "get_running_apps": 1,
-          "get_weather": 5,
-          "launch_app": 4,
+          "get_running_apps": 4,
+          "get_weather": 4,
+          "launch_app": 2,
           "read_emails": 4
         },
         "read_file": {
@@ -1708,10 +2235,9 @@
           "unknown_or_complex": 2
         },
         "run_agent_task": {
-          "adjust_volume": 9,
+          "adjust_volume": 10,
           "get_current_time": 1,
-          "get_weather": 3,
-          "launch_app": 1
+          "get_weather": 3
         },
         "schedule_task": {
           "schedule_task": 13
@@ -1728,16 +2254,16 @@
         },
         "set_timer": {
           "cancel_timer": 1,
-          "get_weather": 11,
-          "launch_app": 64,
+          "get_weather": 10,
+          "launch_app": 66,
           "set_timer": 248,
-          "unknown_or_complex": 9
+          "unknown_or_complex": 8
         },
         "shutdown_computer": {
           "shutdown_computer": 13
         },
         "take_screenshot": {
-          "take_screenshot": 66
+          "take_screenshot": 79
         },
         "web_fetch": {
           "get_current_time": 1,
@@ -1751,96 +2277,97 @@
           "read_file": 13
         },
         "unknown_or_complex": {
-          "adjust_volume": 1,
-          "get_calendar_events": 1,
+          "focus_window": 1,
+          "get_calendar_events": 2,
           "get_current_time": 10,
           "get_weather": 8,
-          "launch_app": 32,
+          "launch_app": 35,
           "send_email": 14,
           "take_screenshot": 14,
-          "unknown_or_complex": 53
+          "unknown_or_complex": 49
         }
       },
-      "with_direct_policy_gate": {
-        "count": 2515,
-        "accuracy": 0.8226640159045726,
-        "selected_count": 1335,
-        "coverage": 0.5308151093439364,
+      "with_candidate_policy_gate": {
+        "count": 2541,
+        "accuracy": 0.8232979142070052,
+        "selected_count": 180,
+        "coverage": 0.07083825265643448,
         "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9791045020783868,
         "false_direct_count": 0,
         "unknown_false_accept_count": 0,
-        "ece": 0.054939198610044246,
-        "brier": 0.24378959382900667,
+        "ece": 0.05377367268213793,
+        "brier": 0.24128103670842574,
         "reliability_bins": [
           {
             "lower": 0.0,
             "upper": 0.1,
-            "count": 13,
-            "accuracy": 0.5384615384615384,
-            "confidence": 0.0894283468756944
+            "count": 17,
+            "accuracy": 0.5294117647058824,
+            "confidence": 0.09019951497803208
           },
           {
             "lower": 0.1,
             "upper": 0.2,
-            "count": 179,
-            "accuracy": 0.22905027932960895,
-            "confidence": 0.15980305165335973
+            "count": 177,
+            "accuracy": 0.21468926553672316,
+            "confidence": 0.16039811582355598
           },
           {
             "lower": 0.2,
             "upper": 0.3,
-            "count": 163,
-            "accuracy": 0.31901840490797545,
-            "confidence": 0.24910849891824674
+            "count": 160,
+            "accuracy": 0.29375,
+            "confidence": 0.2474985951511714
           },
           {
             "lower": 0.3,
             "upper": 0.4,
-            "count": 120,
-            "accuracy": 0.49166666666666664,
-            "confidence": 0.34857259876697333
+            "count": 125,
+            "accuracy": 0.512,
+            "confidence": 0.34845349787352786
           },
           {
             "lower": 0.4,
             "upper": 0.5,
-            "count": 117,
-            "accuracy": 0.5641025641025641,
-            "confidence": 0.4480978902424098
+            "count": 115,
+            "accuracy": 0.5652173913043478,
+            "confidence": 0.45195305633776767
           },
           {
             "lower": 0.5,
             "upper": 0.6,
-            "count": 92,
-            "accuracy": 0.6630434782608695,
-            "confidence": 0.5488004263376368
+            "count": 91,
+            "accuracy": 0.6703296703296703,
+            "confidence": 0.5486022219113019
           },
           {
             "lower": 0.6,
             "upper": 0.7,
-            "count": 101,
-            "accuracy": 0.801980198019802,
-            "confidence": 0.6489934273140378
+            "count": 97,
+            "accuracy": 0.8041237113402062,
+            "confidence": 0.6495320678376185
           },
           {
             "lower": 0.7,
             "upper": 0.8,
-            "count": 122,
-            "accuracy": 0.8360655737704918,
-            "confidence": 0.7453725916414758
+            "count": 125,
+            "accuracy": 0.84,
+            "confidence": 0.7471775555453917
           },
           {
             "lower": 0.8,
             "upper": 0.9,
-            "count": 152,
-            "accuracy": 0.9473684210526315,
-            "confidence": 0.8542936549120682
+            "count": 155,
+            "accuracy": 0.9419354838709677,
+            "confidence": 0.8556147990532171
           },
           {
             "lower": 0.9,
             "upper": 1.0,
-            "count": 1456,
+            "count": 1479,
             "accuracy": 1.0,
-            "confidence": 0.9817126945725656
+            "confidence": 0.9813125587907165
           }
         ],
         "confusion_matrix": {
@@ -1856,8 +2383,8 @@
           },
           "analyze_screenshot": {
             "get_screen_status": 1,
-            "take_screenshot": 9,
-            "unknown_or_complex": 3
+            "take_screenshot": 11,
+            "unknown_or_complex": 1
           },
           "api_call": {
             "unknown_or_complex": 13
@@ -1909,26 +2436,26 @@
             "get_clipboard": 13
           },
           "get_current_time": {
-            "get_current_time": 59,
+            "get_current_time": 72,
             "launch_app": 2
           },
           "get_running_apps": {
-            "get_running_apps": 59,
-            "unknown_or_complex": 3
+            "get_running_apps": 60,
+            "unknown_or_complex": 2
           },
           "get_screen_status": {
             "adjust_volume": 1,
-            "get_weather": 3,
+            "get_weather": 2,
             "launch_app": 7,
             "play_youtube": 1,
+            "take_screenshot": 1,
             "unknown_or_complex": 1
           },
           "get_weather": {
-            "get_running_apps": 1,
             "get_weather": 301,
-            "launch_app": 1,
-            "take_screenshot": 5,
-            "unknown_or_complex": 6
+            "launch_app": 2,
+            "take_screenshot": 6,
+            "unknown_or_complex": 5
           },
           "launch_app": {
             "launch_app": 104
@@ -1954,9 +2481,9 @@
             "play_youtube": 237
           },
           "read_emails": {
-            "get_running_apps": 1,
-            "get_weather": 5,
-            "launch_app": 4,
+            "get_running_apps": 4,
+            "get_weather": 4,
+            "launch_app": 2,
             "read_emails": 4
           },
           "read_file": {
@@ -1964,10 +2491,9 @@
             "unknown_or_complex": 2
           },
           "run_agent_task": {
-            "adjust_volume": 9,
+            "adjust_volume": 10,
             "get_current_time": 1,
-            "get_weather": 3,
-            "launch_app": 1
+            "get_weather": 3
           },
           "schedule_task": {
             "schedule_task": 13
@@ -1984,16 +2510,16 @@
           },
           "set_timer": {
             "cancel_timer": 1,
-            "get_weather": 11,
-            "launch_app": 64,
+            "get_weather": 10,
+            "launch_app": 66,
             "set_timer": 248,
-            "unknown_or_complex": 9
+            "unknown_or_complex": 8
           },
           "shutdown_computer": {
             "shutdown_computer": 13
           },
           "take_screenshot": {
-            "take_screenshot": 66
+            "take_screenshot": 79
           },
           "web_fetch": {
             "get_current_time": 1,
@@ -2007,14 +2533,271 @@
             "read_file": 13
           },
           "unknown_or_complex": {
-            "adjust_volume": 1,
-            "get_calendar_events": 1,
+            "focus_window": 1,
+            "get_calendar_events": 2,
             "get_current_time": 10,
             "get_weather": 8,
-            "launch_app": 32,
+            "launch_app": 35,
             "send_email": 14,
             "take_screenshot": 14,
-            "unknown_or_complex": 53
+            "unknown_or_complex": 49
+          }
+        }
+      },
+      "with_direct_policy_gate": {
+        "count": 2541,
+        "accuracy": 0.8232979142070052,
+        "selected_count": 130,
+        "coverage": 0.05116096025186934,
+        "selective_accuracy": 1.0,
+        "selective_accuracy_wilson95_lower": 0.9712984388055687,
+        "false_direct_count": 0,
+        "unknown_false_accept_count": 0,
+        "ece": 0.05377367268213793,
+        "brier": 0.24128103670842574,
+        "reliability_bins": [
+          {
+            "lower": 0.0,
+            "upper": 0.1,
+            "count": 17,
+            "accuracy": 0.5294117647058824,
+            "confidence": 0.09019951497803208
+          },
+          {
+            "lower": 0.1,
+            "upper": 0.2,
+            "count": 177,
+            "accuracy": 0.21468926553672316,
+            "confidence": 0.16039811582355598
+          },
+          {
+            "lower": 0.2,
+            "upper": 0.3,
+            "count": 160,
+            "accuracy": 0.29375,
+            "confidence": 0.2474985951511714
+          },
+          {
+            "lower": 0.3,
+            "upper": 0.4,
+            "count": 125,
+            "accuracy": 0.512,
+            "confidence": 0.34845349787352786
+          },
+          {
+            "lower": 0.4,
+            "upper": 0.5,
+            "count": 115,
+            "accuracy": 0.5652173913043478,
+            "confidence": 0.45195305633776767
+          },
+          {
+            "lower": 0.5,
+            "upper": 0.6,
+            "count": 91,
+            "accuracy": 0.6703296703296703,
+            "confidence": 0.5486022219113019
+          },
+          {
+            "lower": 0.6,
+            "upper": 0.7,
+            "count": 97,
+            "accuracy": 0.8041237113402062,
+            "confidence": 0.6495320678376185
+          },
+          {
+            "lower": 0.7,
+            "upper": 0.8,
+            "count": 125,
+            "accuracy": 0.84,
+            "confidence": 0.7471775555453917
+          },
+          {
+            "lower": 0.8,
+            "upper": 0.9,
+            "count": 155,
+            "accuracy": 0.9419354838709677,
+            "confidence": 0.8556147990532171
+          },
+          {
+            "lower": 0.9,
+            "upper": 1.0,
+            "count": 1479,
+            "accuracy": 1.0,
+            "confidence": 0.9813125587907165
+          }
+        ],
+        "confusion_matrix": {
+          "adjust_volume": {
+            "adjust_volume": 71,
+            "launch_app": 9
+          },
+          "analyze_image_file": {
+            "focus_window": 3,
+            "launch_app": 3,
+            "read_emails": 5,
+            "read_file": 3
+          },
+          "analyze_screenshot": {
+            "get_screen_status": 1,
+            "take_screenshot": 11,
+            "unknown_or_complex": 1
+          },
+          "api_call": {
+            "unknown_or_complex": 13
+          },
+          "cancel_scheduled_task": {
+            "cancel_scheduled_task": 13
+          },
+          "cancel_timer": {
+            "cancel_timer": 379,
+            "get_weather": 1,
+            "launch_app": 9,
+            "set_timer": 3
+          },
+          "close_app": {
+            "close_app": 12,
+            "launch_app": 1
+          },
+          "create_calendar_event": {
+            "get_calendar_events": 13
+          },
+          "delegate_to_subagent": {
+            "delegate_to_subagent": 13
+          },
+          "delete_file": {
+            "delete_file": 9,
+            "list_directory": 4
+          },
+          "edit_file": {
+            "read_file": 13
+          },
+          "execute_python_code": {
+            "unknown_or_complex": 13
+          },
+          "execute_shell_command": {
+            "execute_shell_command": 13
+          },
+          "focus_window": {
+            "focus_window": 324
+          },
+          "generate_image": {
+            "launch_app": 1,
+            "take_screenshot": 9,
+            "unknown_or_complex": 4
+          },
+          "get_calendar_events": {
+            "get_calendar_events": 13
+          },
+          "get_clipboard": {
+            "get_clipboard": 13
+          },
+          "get_current_time": {
+            "get_current_time": 72,
+            "launch_app": 2
+          },
+          "get_running_apps": {
+            "get_running_apps": 60,
+            "unknown_or_complex": 2
+          },
+          "get_screen_status": {
+            "adjust_volume": 1,
+            "get_weather": 2,
+            "launch_app": 7,
+            "play_youtube": 1,
+            "take_screenshot": 1,
+            "unknown_or_complex": 1
+          },
+          "get_weather": {
+            "get_weather": 301,
+            "launch_app": 2,
+            "take_screenshot": 6,
+            "unknown_or_complex": 5
+          },
+          "launch_app": {
+            "launch_app": 104
+          },
+          "list_directory": {
+            "list_directory": 3,
+            "unknown_or_complex": 10
+          },
+          "list_scheduled_tasks": {
+            "launch_app": 2,
+            "list_directory": 1,
+            "unknown_or_complex": 10
+          },
+          "mcp_call": {
+            "get_weather": 1,
+            "mcp_call": 10,
+            "unknown_or_complex": 3
+          },
+          "move_file": {
+            "move_file": 13
+          },
+          "play_youtube": {
+            "play_youtube": 237
+          },
+          "read_emails": {
+            "get_running_apps": 4,
+            "get_weather": 4,
+            "launch_app": 2,
+            "read_emails": 4
+          },
+          "read_file": {
+            "launch_app": 11,
+            "unknown_or_complex": 2
+          },
+          "run_agent_task": {
+            "adjust_volume": 10,
+            "get_current_time": 1,
+            "get_weather": 3
+          },
+          "schedule_task": {
+            "schedule_task": 13
+          },
+          "search_in_files": {
+            "list_directory": 1,
+            "unknown_or_complex": 12
+          },
+          "send_email": {
+            "send_email": 13
+          },
+          "set_clipboard": {
+            "get_clipboard": 14
+          },
+          "set_timer": {
+            "cancel_timer": 1,
+            "get_weather": 10,
+            "launch_app": 66,
+            "set_timer": 248,
+            "unknown_or_complex": 8
+          },
+          "shutdown_computer": {
+            "shutdown_computer": 13
+          },
+          "take_screenshot": {
+            "take_screenshot": 79
+          },
+          "web_fetch": {
+            "get_current_time": 1,
+            "unknown_or_complex": 12
+          },
+          "web_search": {
+            "web_search": 13,
+            "unknown_or_complex": 13
+          },
+          "write_file": {
+            "read_file": 13
+          },
+          "unknown_or_complex": {
+            "focus_window": 1,
+            "get_calendar_events": 2,
+            "get_current_time": 10,
+            "get_weather": 8,
+            "launch_app": 35,
+            "send_email": 14,
+            "take_screenshot": 14,
+            "unknown_or_complex": 49
           }
         }
       }
@@ -2027,10 +2810,11 @@
       "selected_count": 0,
       "coverage": 0.0,
       "selective_accuracy": null,
+      "selective_accuracy_wilson95_lower": null,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.38437869285283377,
-      "brier": 0.726572080375135,
+      "ece": 0.3957640307413901,
+      "brier": 0.7308706729111681,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -2044,21 +2828,21 @@
           "upper": 0.2,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.1495802182019327
+          "confidence": 0.14698228047175588
         },
         {
           "lower": 0.2,
           "upper": 0.3,
           "count": 3,
           "accuracy": 0.3333333333333333,
-          "confidence": 0.26391926103012076
+          "confidence": 0.2496424143835864
         },
         {
           "lower": 0.3,
           "upper": 0.4,
           "count": 2,
           "accuracy": 1.0,
-          "confidence": 0.3761949207953513
+          "confidence": 0.36475314596457215
         },
         {
           "lower": 0.4,
@@ -2145,92 +2929,93 @@
         "web_search": {},
         "write_file": {},
         "unknown_or_complex": {
-          "get_running_apps": 1,
+          "get_weather": 1,
           "launch_app": 1,
           "unknown_or_complex": 4
         }
       }
     },
     "conversational": {
-      "count": 4783,
-      "accuracy": 0.813924315283295,
-      "selected_count": 2484,
-      "coverage": 0.5193393267823542,
+      "count": 4833,
+      "accuracy": 0.8144009931719429,
+      "selected_count": 2539,
+      "coverage": 0.5253465756259053,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.998489304629131,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.04876940771801179,
-      "brier": 0.2474021487797095,
+      "ece": 0.047645375934263365,
+      "brier": 0.2456536828914626,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 11,
-          "accuracy": 0.45454545454545453,
-          "confidence": 0.08713056612105478
+          "count": 16,
+          "accuracy": 0.4375,
+          "confidence": 0.09073537021149553
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 232,
-          "accuracy": 0.25,
-          "confidence": 0.160767291007866
+          "count": 234,
+          "accuracy": 0.24358974358974358,
+          "confidence": 0.16212276841990395
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 336,
-          "accuracy": 0.26785714285714285,
-          "confidence": 0.25024569742549285
+          "count": 330,
+          "accuracy": 0.26666666666666666,
+          "confidence": 0.2507402457858573
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 235,
-          "accuracy": 0.4127659574468085,
-          "confidence": 0.3486551174372196
+          "count": 247,
+          "accuracy": 0.4089068825910931,
+          "confidence": 0.34915302245123275
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 242,
-          "accuracy": 0.5165289256198347,
-          "confidence": 0.45102676635739014
+          "count": 239,
+          "accuracy": 0.5104602510460251,
+          "confidence": 0.45526066271728666
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 260,
-          "accuracy": 0.6115384615384616,
-          "confidence": 0.5457142788362073
+          "count": 255,
+          "accuracy": 0.6196078431372549,
+          "confidence": 0.5457385447071403
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 253,
-          "accuracy": 0.7865612648221344,
-          "confidence": 0.648820578663881
+          "count": 256,
+          "accuracy": 0.78515625,
+          "confidence": 0.6490746200031309
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 264,
-          "accuracy": 0.8787878787878788,
-          "confidence": 0.7490674149146094
+          "count": 256,
+          "accuracy": 0.87109375,
+          "confidence": 0.7492193233831483
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 352,
-          "accuracy": 0.9573863636363636,
-          "confidence": 0.856265279007561
+          "count": 342,
+          "accuracy": 0.9532163742690059,
+          "confidence": 0.8565954382098936
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 2598,
-          "accuracy": 0.9973056197074672,
-          "confidence": 0.9781054642436098
+          "count": 2658,
+          "accuracy": 0.9981188863807374,
+          "confidence": 0.9776022611199597
         }
       ],
       "confusion_matrix": {
@@ -2240,17 +3025,16 @@
         },
         "analyze_image_file": {
           "focus_window": 12,
-          "get_weather": 6,
+          "get_weather": 5,
           "launch_app": 2,
           "read_emails": 2,
-          "read_file": 9
+          "read_file": 10
         },
         "analyze_screenshot": {
           "analyze_screenshot": 1,
           "focus_window": 7,
           "get_screen_status": 1,
-          "take_screenshot": 15,
-          "unknown_or_complex": 1
+          "take_screenshot": 16
         },
         "api_call": {
           "adjust_volume": 9,
@@ -2282,7 +3066,8 @@
           "unknown_or_complex": 17
         },
         "delete_file": {
-          "delete_file": 14,
+          "adjust_volume": 1,
+          "delete_file": 13,
           "launch_app": 1,
           "list_directory": 6,
           "read_file": 5,
@@ -2303,8 +3088,8 @@
           "unknown_or_complex": 3
         },
         "focus_window": {
-          "focus_window": 530,
-          "launch_app": 77
+          "focus_window": 528,
+          "launch_app": 79
         },
         "generate_image": {
           "generate_image": 17,
@@ -2320,31 +3105,31 @@
           "get_current_time": 1
         },
         "get_current_time": {
-          "get_current_time": 121,
+          "get_current_time": 147,
           "launch_app": 2,
-          "unknown_or_complex": 5
+          "unknown_or_complex": 4
         },
         "get_running_apps": {
           "get_current_time": 2,
-          "get_running_apps": 127,
-          "get_weather": 6,
-          "launch_app": 1,
-          "unknown_or_complex": 4
+          "get_running_apps": 128,
+          "get_weather": 5,
+          "launch_app": 2,
+          "unknown_or_complex": 3
         },
         "get_screen_status": {
           "adjust_volume": 1,
           "focus_window": 8,
-          "get_weather": 2,
+          "get_weather": 1,
           "launch_app": 6,
-          "take_screenshot": 7,
+          "take_screenshot": 8,
           "unknown_or_complex": 1
         },
         "get_weather": {
           "get_calendar_events": 1,
           "get_weather": 613,
-          "launch_app": 1,
+          "launch_app": 2,
           "take_screenshot": 2,
-          "unknown_or_complex": 4
+          "unknown_or_complex": 3
         },
         "launch_app": {
           "launch_app": 194
@@ -2368,9 +3153,9 @@
         },
         "mcp_call": {
           "get_weather": 1,
-          "launch_app": 2,
+          "launch_app": 3,
           "mcp_call": 15,
-          "unknown_or_complex": 8
+          "unknown_or_complex": 7
         },
         "move_file": {
           "move_file": 21,
@@ -2381,12 +3166,12 @@
           "play_youtube": 402
         },
         "read_emails": {
-          "adjust_volume": 1,
-          "get_running_apps": 8,
-          "get_weather": 5,
-          "launch_app": 3,
+          "adjust_volume": 3,
+          "get_running_apps": 10,
+          "get_weather": 4,
+          "launch_app": 2,
           "read_emails": 1,
-          "send_email": 8,
+          "send_email": 6,
           "unknown_or_complex": 2
         },
         "read_file": {
@@ -2395,10 +3180,9 @@
           "unknown_or_complex": 20
         },
         "run_agent_task": {
-          "adjust_volume": 6,
+          "adjust_volume": 7,
           "get_current_time": 1,
           "get_weather": 2,
-          "launch_app": 1,
           "run_agent_task": 10,
           "unknown_or_complex": 9
         },
@@ -2409,20 +3193,20 @@
         },
         "search_in_files": {
           "list_directory": 7,
-          "web_search": 7,
-          "unknown_or_complex": 15
+          "web_search": 8,
+          "unknown_or_complex": 14
         },
         "send_email": {
-          "send_email": 15,
-          "unknown_or_complex": 14
+          "send_email": 16,
+          "unknown_or_complex": 13
         },
         "set_clipboard": {
           "get_clipboard": 28
         },
         "set_timer": {
           "get_current_time": 7,
-          "get_weather": 11,
-          "launch_app": 34,
+          "get_weather": 10,
+          "launch_app": 35,
           "set_timer": 440,
           "unknown_or_complex": 6
         },
@@ -2430,7 +3214,7 @@
           "shutdown_computer": 30
         },
         "take_screenshot": {
-          "take_screenshot": 118
+          "take_screenshot": 143
         },
         "web_fetch": {
           "get_current_time": 1,
@@ -2452,30 +3236,32 @@
           "unknown_or_complex": 1
         },
         "unknown_or_complex": {
-          "focus_window": 8,
-          "get_calendar_events": 15,
-          "get_current_time": 14,
-          "get_running_apps": 4,
-          "get_weather": 21,
-          "launch_app": 36,
+          "focus_window": 7,
+          "get_calendar_events": 17,
+          "get_current_time": 15,
+          "get_running_apps": 5,
+          "get_weather": 19,
+          "launch_app": 41,
+          "play_youtube": 1,
           "search_in_files": 5,
           "send_email": 19,
           "take_screenshot": 8,
           "write_file": 11,
-          "unknown_or_complex": 129
+          "unknown_or_complex": 122
         }
       }
     },
     "entity_replacement": {
       "count": 44,
       "accuracy": 1.0,
-      "selected_count": 36,
-      "coverage": 0.8181818181818182,
+      "selected_count": 40,
+      "coverage": 0.9090909090909091,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9123783988027134,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.040949968347682435,
-      "brier": 0.0035465071762349936,
+      "ece": 0.037103258536587816,
+      "brier": 0.0029829747015995196,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -2536,16 +3322,16 @@
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 4,
+          "count": 3,
           "accuracy": 1.0,
-          "confidence": 0.8813719310962004
+          "confidence": 0.8804852953932502
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 40,
+          "count": 41,
           "accuracy": 1.0,
-          "confidence": 0.9668178417079293
+          "confidence": 0.968926847273424
         }
       ],
       "confusion_matrix": {
@@ -2604,10 +3390,11 @@
       "selected_count": 8,
       "coverage": 0.5333333333333333,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.6755924351161198,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.1649008609353742,
-      "brier": 0.2469603373861234,
+      "ece": 0.16823263781483364,
+      "brier": 0.2537615275890458,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -2628,28 +3415,28 @@
           "upper": 0.3,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.29774966273848635
+          "confidence": 0.28970781510582605
         },
         {
           "lower": 0.3,
           "upper": 0.4,
           "count": 2,
           "accuracy": 0.0,
-          "confidence": 0.3767313299731645
+          "confidence": 0.3842897583772593
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 2,
-          "accuracy": 0.5,
-          "confidence": 0.43803772025025134
+          "count": 3,
+          "accuracy": 0.6666666666666666,
+          "confidence": 0.45042229940538503
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 1,
-          "accuracy": 1.0,
-          "confidence": 0.5013677594376643
+          "count": 0,
+          "accuracy": null,
+          "confidence": null
         },
         {
           "lower": 0.6,
@@ -2663,7 +3450,7 @@
           "upper": 0.8,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.7857778178453431
+          "confidence": 0.7833758061723683
         },
         {
           "lower": 0.8,
@@ -2677,7 +3464,7 @@
           "upper": 1.0,
           "count": 8,
           "accuracy": 1.0,
-          "confidence": 0.9773723831742149
+          "confidence": 0.977592428754708
         }
       ],
       "confusion_matrix": {
@@ -2740,10 +3527,11 @@
       "selected_count": 0,
       "coverage": 0.0,
       "selective_accuracy": null,
+      "selective_accuracy_wilson95_lower": null,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.2852981398304122,
-      "brier": 0.9343374924735306,
+      "ece": 0.2853825174761073,
+      "brier": 0.9394529682842473,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -2757,21 +3545,21 @@
           "upper": 0.2,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.16383816290368153
+          "confidence": 0.15765527666405885
         },
         {
           "lower": 0.2,
           "upper": 0.3,
           "count": 3,
           "accuracy": 0.3333333333333333,
-          "confidence": 0.24867988008714523
+          "confidence": 0.24758353527194474
         },
         {
           "lower": 0.3,
           "upper": 0.4,
           "count": 2,
           "accuracy": 0.0,
-          "confidence": 0.31083332107379524
+          "confidence": 0.3063504936682686
         },
         {
           "lower": 0.4,
@@ -2871,10 +3659,11 @@
       "selected_count": 0,
       "coverage": 0.0,
       "selective_accuracy": null,
+      "selective_accuracy_wilson95_lower": null,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.22022536499948778,
-      "brier": 0.7546937812668316,
+      "ece": 0.2563617257668356,
+      "brier": 0.768631738012122,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -2900,30 +3689,30 @@
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 1,
-          "accuracy": 0.0,
-          "confidence": 0.3782937020559496
+          "count": 2,
+          "accuracy": 0.5,
+          "confidence": 0.38874486044185885
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 2,
-          "accuracy": 0.5,
-          "confidence": 0.44354214162768935
+          "count": 1,
+          "accuracy": 0.0,
+          "confidence": 0.48713842613699965
         },
         {
           "lower": 0.5,
           "upper": 0.6,
           "count": 1,
           "accuracy": 0.0,
-          "confidence": 0.5879243500746296
+          "confidence": 0.5924468704287843
         },
         {
           "lower": 0.6,
           "upper": 0.7,
           "count": 2,
           "accuracy": 0.5,
-          "confidence": 0.6211092105608631
+          "confidence": 0.6180373894594736
         },
         {
           "lower": 0.7,
@@ -2997,85 +3786,86 @@
       }
     },
     "normal": {
-      "count": 177,
-      "accuracy": 0.6836158192090396,
-      "selected_count": 81,
-      "coverage": 0.4576271186440678,
+      "count": 183,
+      "accuracy": 0.6939890710382514,
+      "selected_count": 87,
+      "coverage": 0.47540983606557374,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9577124930558795,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.05652853482952869,
-      "brier": 0.39428785214547857,
+      "ece": 0.059317920540909515,
+      "brier": 0.3808436819708837,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 1,
-          "accuracy": 0.0,
-          "confidence": 0.09958480230208762
+          "count": 0,
+          "accuracy": null,
+          "confidence": null
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 9,
-          "accuracy": 0.3333333333333333,
-          "confidence": 0.1582471320076574
+          "count": 11,
+          "accuracy": 0.2727272727272727,
+          "confidence": 0.15469060917139876
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 18,
-          "accuracy": 0.1111111111111111,
-          "confidence": 0.24247453927168586
+          "count": 17,
+          "accuracy": 0.11764705882352941,
+          "confidence": 0.24430881106785396
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 8,
-          "accuracy": 0.25,
-          "confidence": 0.3669520692375532
+          "count": 7,
+          "accuracy": 0.2857142857142857,
+          "confidence": 0.36833730397412073
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 18,
-          "accuracy": 0.3888888888888889,
-          "confidence": 0.45259027183971046
+          "count": 19,
+          "accuracy": 0.3684210526315789,
+          "confidence": 0.44967838602729043
         },
         {
           "lower": 0.5,
           "upper": 0.6,
           "count": 10,
           "accuracy": 0.3,
-          "confidence": 0.5619440877607815
+          "confidence": 0.5625271192372787
         },
         {
           "lower": 0.6,
           "upper": 0.7,
           "count": 11,
-          "accuracy": 0.6363636363636364,
-          "confidence": 0.6445549447151575
+          "accuracy": 0.5454545454545454,
+          "confidence": 0.64248914766704
         },
         {
           "lower": 0.7,
           "upper": 0.8,
           "count": 15,
-          "accuracy": 0.7333333333333333,
-          "confidence": 0.7569312203889561
+          "accuracy": 0.8,
+          "confidence": 0.7588139219632395
         },
         {
           "lower": 0.8,
           "upper": 0.9,
           "count": 6,
           "accuracy": 0.8333333333333334,
-          "confidence": 0.8507683048829059
+          "confidence": 0.8497621442858937
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 81,
+          "count": 87,
           "accuracy": 1.0,
-          "confidence": 0.9911693396039318
+          "confidence": 0.9899740223401845
         }
       ],
       "confusion_matrix": {
@@ -3143,7 +3933,7 @@
           "get_clipboard": 3
         },
         "get_current_time": {
-          "get_current_time": 9
+          "get_current_time": 12
         },
         "get_running_apps": {
           "get_running_apps": 6
@@ -3168,8 +3958,8 @@
           "unknown_or_complex": 1
         },
         "mcp_call": {
-          "mcp_call": 2,
-          "unknown_or_complex": 1
+          "launch_app": 1,
+          "mcp_call": 2
         },
         "move_file": {
           "move_file": 2,
@@ -3213,7 +4003,7 @@
           "shutdown_computer": 3
         },
         "take_screenshot": {
-          "take_screenshot": 6
+          "take_screenshot": 9
         },
         "web_fetch": {
           "read_file": 1,
@@ -3239,10 +4029,11 @@
       "selected_count": 49,
       "coverage": 0.7777777777777778,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9273021807795035,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.07933483964334984,
-      "brier": 0.08226831219114565,
+      "ece": 0.08081095463648587,
+      "brier": 0.08438879140135772,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -3270,49 +4061,49 @@
           "upper": 0.4,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.39709618215610537
+          "confidence": 0.3838238319837637
         },
         {
           "lower": 0.4,
           "upper": 0.5,
           "count": 3,
           "accuracy": 0.6666666666666666,
-          "confidence": 0.47095992242938856
+          "confidence": 0.4581983599366149
         },
         {
           "lower": 0.5,
           "upper": 0.6,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.5202267023464157
+          "confidence": 0.508447737574161
         },
         {
           "lower": 0.6,
           "upper": 0.7,
           "count": 3,
           "accuracy": 0.0,
-          "confidence": 0.6452420420935449
+          "confidence": 0.6526486643209181
         },
         {
           "lower": 0.7,
           "upper": 0.8,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.7925593936302946
+          "confidence": 0.7913120917649515
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 3,
+          "count": 4,
           "accuracy": 1.0,
-          "confidence": 0.8690993646091035
+          "confidence": 0.8739024098568083
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 51,
+          "count": 50,
           "accuracy": 1.0,
-          "confidence": 0.9844621782255157
+          "confidence": 0.9862613494060838
         }
       ],
       "confusion_matrix": {
@@ -3369,13 +4160,14 @@
     "short": {
       "count": 77,
       "accuracy": 1.0,
-      "selected_count": 63,
-      "coverage": 0.8181818181818182,
+      "selected_count": 62,
+      "coverage": 0.8051948051948052,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9416559278986275,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.04786069174263248,
-      "brier": 0.014802574091480253,
+      "ece": 0.04927462459945963,
+      "brier": 0.01590465099639665,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -3417,35 +4209,35 @@
           "upper": 0.6,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.5851720105866973
+          "confidence": 0.5745347147464338
         },
         {
           "lower": 0.6,
           "upper": 0.7,
           "count": 2,
           "accuracy": 1.0,
-          "confidence": 0.6643950324581979
+          "confidence": 0.6469001240990173
         },
         {
           "lower": 0.7,
           "upper": 0.8,
           "count": 2,
           "accuracy": 1.0,
-          "confidence": 0.7530536594439445
+          "confidence": 0.7439806261334185
         },
         {
           "lower": 0.8,
           "upper": 0.9,
           "count": 9,
           "accuracy": 1.0,
-          "confidence": 0.8526347143892642
+          "confidence": 0.8480259325093153
         },
         {
           "lower": 0.9,
           "upper": 1.0,
           "count": 63,
           "accuracy": 1.0,
-          "confidence": 0.987634046220999
+          "confidence": 0.9875765761594677
         }
       ],
       "confusion_matrix": {
@@ -3512,10 +4304,11 @@
       "selected_count": 4,
       "coverage": 0.14285714285714285,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.5101091635454027,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.14974862160155644,
-      "brier": 0.28239720643987837,
+      "ece": 0.14087228160205595,
+      "brier": 0.2840188583572429,
       "reliability_bins": [
         {
           "lower": 0.0,
@@ -3529,7 +4322,7 @@
           "upper": 0.2,
           "count": 4,
           "accuracy": 0.25,
-          "confidence": 0.14748324986330963
+          "confidence": 0.14821506089448477
         },
         {
           "lower": 0.2,
@@ -3543,49 +4336,49 @@
           "upper": 0.4,
           "count": 3,
           "accuracy": 0.6666666666666666,
-          "confidence": 0.36574538371561155
+          "confidence": 0.36727338944448124
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 0,
-          "accuracy": null,
-          "confidence": null
+          "count": 1,
+          "accuracy": 1.0,
+          "confidence": 0.4930580164561297
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 1,
-          "accuracy": 1.0,
-          "confidence": 0.5000620460484043
+          "count": 0,
+          "accuracy": null,
+          "confidence": null
         },
         {
           "lower": 0.6,
           "upper": 0.7,
           "count": 3,
           "accuracy": 1.0,
-          "confidence": 0.6876060255748805
+          "confidence": 0.6828039540344756
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 4,
-          "accuracy": 0.75,
-          "confidence": 0.7790282338120765
+          "count": 3,
+          "accuracy": 1.0,
+          "confidence": 0.770119891492656
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 8,
-          "accuracy": 1.0,
-          "confidence": 0.8654359161026233
+          "count": 9,
+          "accuracy": 0.8888888888888888,
+          "confidence": 0.8614853836781764
         },
         {
           "lower": 0.9,
           "upper": 1.0,
           "count": 5,
           "accuracy": 1.0,
-          "confidence": 0.9499229856421241
+          "confidence": 0.9511395394179875
         }
       ],
       "confusion_matrix": {
@@ -3616,9 +4409,8 @@
         "get_running_apps": {},
         "get_screen_status": {},
         "get_weather": {
-          "get_running_apps": 1,
           "get_weather": 10,
-          "take_screenshot": 1
+          "take_screenshot": 2
         },
         "launch_app": {},
         "list_directory": {},
@@ -3643,85 +4435,86 @@
       }
     },
     "spacing_noise": {
-      "count": 881,
-      "accuracy": 0.7559591373439274,
-      "selected_count": 386,
-      "coverage": 0.43813847900113506,
+      "count": 889,
+      "accuracy": 0.7514060742407199,
+      "selected_count": 390,
+      "coverage": 0.43869516310461193,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9902461796881495,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.058913207412889634,
-      "brier": 0.3156020402477681,
+      "ece": 0.056873826696759215,
+      "brier": 0.3151116856658412,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 6,
-          "accuracy": 0.5,
-          "confidence": 0.08675053964532559
+          "count": 7,
+          "accuracy": 0.42857142857142855,
+          "confidence": 0.08848724346314654
         },
         {
           "lower": 0.1,
           "upper": 0.2,
           "count": 62,
-          "accuracy": 0.12903225806451613,
-          "confidence": 0.15869065134269983
+          "accuracy": 0.0967741935483871,
+          "confidence": 0.1605669968393651
         },
         {
           "lower": 0.2,
           "upper": 0.3,
           "count": 69,
-          "accuracy": 0.2608695652173913,
-          "confidence": 0.24689013084468145
+          "accuracy": 0.2753623188405797,
+          "confidence": 0.2480411608683684
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 80,
-          "accuracy": 0.425,
-          "confidence": 0.34494896482757076
+          "count": 78,
+          "accuracy": 0.41025641025641024,
+          "confidence": 0.34715312249537317
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 65,
-          "accuracy": 0.5846153846153846,
-          "confidence": 0.44936320304530897
+          "count": 62,
+          "accuracy": 0.5645161290322581,
+          "confidence": 0.44492854431822226
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 33,
-          "accuracy": 0.6060606060606061,
-          "confidence": 0.5479789861928014
+          "count": 40,
+          "accuracy": 0.6,
+          "confidence": 0.5453803924840702
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 51,
-          "accuracy": 0.8431372549019608,
-          "confidence": 0.6498559440207805
+          "count": 46,
+          "accuracy": 0.8260869565217391,
+          "confidence": 0.6511531211913342
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 55,
-          "accuracy": 0.7818181818181819,
-          "confidence": 0.7394989490432702
+          "count": 60,
+          "accuracy": 0.7833333333333333,
+          "confidence": 0.7423711038978247
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 57,
-          "accuracy": 0.9824561403508771,
-          "confidence": 0.8497279698471344
+          "count": 55,
+          "accuracy": 0.9818181818181818,
+          "confidence": 0.8510879742157466
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 403,
+          "count": 410,
           "accuracy": 1.0,
-          "confidence": 0.9757889350722013
+          "confidence": 0.9753077894492528
         }
       ],
       "confusion_matrix": {
@@ -3781,8 +4574,8 @@
           "launch_app": 2
         },
         "focus_window": {
-          "focus_window": 89,
-          "launch_app": 33
+          "focus_window": 84,
+          "launch_app": 38
         },
         "generate_image": {
           "generate_image": 2,
@@ -3798,8 +4591,8 @@
           "get_clipboard": 3
         },
         "get_current_time": {
-          "get_current_time": 22,
-          "launch_app": 4
+          "get_current_time": 26,
+          "launch_app": 5
         },
         "get_running_apps": {
           "get_running_apps": 23,
@@ -3831,16 +4624,16 @@
           "mcp_call": 3
         },
         "move_file": {
-          "move_file": 4,
-          "take_screenshot": 1,
-          "unknown_or_complex": 1
+          "move_file": 5,
+          "take_screenshot": 1
         },
         "play_youtube": {
           "play_youtube": 141
         },
         "read_emails": {
           "focus_window": 1,
-          "launch_app": 3,
+          "get_running_apps": 2,
+          "launch_app": 1,
           "read_emails": 2
         },
         "read_file": {
@@ -3868,8 +4661,8 @@
           "get_clipboard": 7
         },
         "set_timer": {
-          "get_current_time": 2,
-          "launch_app": 10,
+          "get_current_time": 1,
+          "launch_app": 11,
           "set_timer": 48
         },
         "shutdown_computer": {
@@ -3878,7 +4671,7 @@
           "shutdown_computer": 1
         },
         "take_screenshot": {
-          "take_screenshot": 20
+          "take_screenshot": 23
         },
         "web_fetch": {
           "get_clipboard": 1,
@@ -3897,97 +4690,98 @@
           "unknown_or_complex": 1
         },
         "unknown_or_complex": {
-          "focus_window": 1,
+          "focus_window": 2,
           "get_calendar_events": 2,
           "get_current_time": 5,
           "get_weather": 5,
           "launch_app": 17,
           "send_email": 6,
           "take_screenshot": 2,
-          "unknown_or_complex": 9
+          "unknown_or_complex": 8
         }
       }
     },
     "stt_noise": {
-      "count": 1125,
-      "accuracy": 0.888,
-      "selected_count": 669,
-      "coverage": 0.5946666666666667,
+      "count": 1137,
+      "accuracy": 0.8874230430958663,
+      "selected_count": 684,
+      "coverage": 0.6015831134564644,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9944151973228245,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.08312284450449664,
-      "brier": 0.16998295219293622,
+      "ece": 0.08380974748546322,
+      "brier": 0.16860912278569132,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
           "count": 2,
           "accuracy": 0.5,
-          "confidence": 0.09597141134446618
+          "confidence": 0.09434750305494005
         },
         {
           "lower": 0.1,
           "upper": 0.2,
           "count": 37,
           "accuracy": 0.24324324324324326,
-          "confidence": 0.172648972237679
+          "confidence": 0.17106589457148125
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 57,
-          "accuracy": 0.19298245614035087,
-          "confidence": 0.24355072305619427
+          "count": 59,
+          "accuracy": 0.1694915254237288,
+          "confidence": 0.24777212435792276
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 47,
-          "accuracy": 0.6382978723404256,
-          "confidence": 0.3498741367918306
+          "count": 46,
+          "accuracy": 0.6304347826086957,
+          "confidence": 0.3480597579055955
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 45,
-          "accuracy": 0.7555555555555555,
-          "confidence": 0.45797500618962833
+          "count": 41,
+          "accuracy": 0.7804878048780488,
+          "confidence": 0.4559715857610529
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 46,
-          "accuracy": 0.7608695652173914,
-          "confidence": 0.5595948470450758
+          "count": 53,
+          "accuracy": 0.7735849056603774,
+          "confidence": 0.5550798769753094
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 62,
-          "accuracy": 0.9032258064516129,
-          "confidence": 0.6515286907217113
+          "count": 58,
+          "accuracy": 0.8793103448275862,
+          "confidence": 0.6539444608211827
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 60,
-          "accuracy": 0.95,
-          "confidence": 0.7502995600419037
+          "count": 62,
+          "accuracy": 0.967741935483871,
+          "confidence": 0.7511123477276118
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 80,
-          "accuracy": 0.9875,
-          "confidence": 0.8511161228506114
+          "count": 75,
+          "accuracy": 0.9866666666666667,
+          "confidence": 0.8518313153383548
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 689,
-          "accuracy": 0.9970972423802612,
-          "confidence": 0.9789446609927855
+          "count": 704,
+          "accuracy": 0.9971590909090909,
+          "confidence": 0.9791176548923608
         }
       ],
       "confusion_matrix": {
@@ -3998,8 +4792,8 @@
         "analyze_image_file": {},
         "analyze_screenshot": {
           "focus_window": 2,
-          "take_screenshot": 2,
-          "unknown_or_complex": 2
+          "take_screenshot": 3,
+          "unknown_or_complex": 1
         },
         "api_call": {
           "adjust_volume": 2,
@@ -4054,7 +4848,7 @@
           "get_clipboard": 4
         },
         "get_current_time": {
-          "get_current_time": 22
+          "get_current_time": 26
         },
         "get_running_apps": {
           "get_running_apps": 9,
@@ -4118,16 +4912,16 @@
         },
         "set_timer": {
           "cancel_timer": 1,
-          "get_current_time": 7,
-          "launch_app": 35,
+          "get_current_time": 6,
+          "launch_app": 38,
           "set_timer": 266,
-          "unknown_or_complex": 4
+          "unknown_or_complex": 2
         },
         "shutdown_computer": {
           "shutdown_computer": 2
         },
         "take_screenshot": {
-          "take_screenshot": 43
+          "take_screenshot": 51
         },
         "web_fetch": {
           "write_file": 1,
@@ -4144,17 +4938,16 @@
           "write_file": 2
         },
         "unknown_or_complex": {
-          "adjust_volume": 1,
           "focus_window": 3,
           "get_calendar_events": 1,
           "get_current_time": 1,
-          "get_running_apps": 1,
-          "get_weather": 3,
-          "launch_app": 4,
+          "get_running_apps": 2,
+          "get_weather": 4,
+          "launch_app": 5,
           "search_in_files": 3,
           "take_screenshot": 3,
           "write_file": 1,
-          "unknown_or_complex": 18
+          "unknown_or_complex": 16
         }
       }
     },
@@ -4164,45 +4957,46 @@
       "selected_count": 0,
       "coverage": 0.0,
       "selective_accuracy": null,
+      "selective_accuracy_wilson95_lower": null,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.38105714341220376,
-      "brier": 0.7197779136978487,
+      "ece": 0.3800622559858624,
+      "brier": 0.7392768541931726,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
           "count": 1,
           "accuracy": 1.0,
-          "confidence": 0.09994450237295988
+          "confidence": 0.09624521862201867
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 1,
-          "accuracy": 0.0,
-          "confidence": 0.1933222968702924
+          "count": 0,
+          "accuracy": null,
+          "confidence": null
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 1,
+          "count": 2,
           "accuracy": 0.0,
-          "confidence": 0.25373916158311977
+          "confidence": 0.22222485833335381
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 2,
-          "accuracy": 0.5,
-          "confidence": 0.3303809297346578
+          "count": 3,
+          "accuracy": 0.6666666666666666,
+          "confidence": 0.35594365404317146
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 1,
-          "accuracy": 1.0,
-          "confidence": 0.40001223613791387
+          "count": 0,
+          "accuracy": null,
+          "confidence": null
         },
         {
           "lower": 0.5,
@@ -4290,85 +5084,86 @@
       }
     },
     "clean": {
-      "count": 569,
-      "accuracy": 0.843585237258348,
-      "selected_count": 341,
-      "coverage": 0.5992970123022847,
+      "count": 575,
+      "accuracy": 0.8452173913043478,
+      "selected_count": 350,
+      "coverage": 0.6086956521739131,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.989143559283592,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.03681807941374533,
-      "brier": 0.21164446515450228,
+      "ece": 0.03826033367252901,
+      "brier": 0.21004837520262615,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 2,
-          "accuracy": 0.5,
-          "confidence": 0.09976465233752374
+          "count": 1,
+          "accuracy": 1.0,
+          "confidence": 0.09624521862201867
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 18,
-          "accuracy": 0.3333333333333333,
-          "confidence": 0.1594747376422199
+          "count": 20,
+          "accuracy": 0.3,
+          "confidence": 0.15668758386115042
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 34,
-          "accuracy": 0.23529411764705882,
-          "confidence": 0.250116394315709
+          "count": 33,
+          "accuracy": 0.24242424242424243,
+          "confidence": 0.2494251356690574
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 22,
-          "accuracy": 0.4090909090909091,
-          "confidence": 0.3596450522423034
+          "count": 23,
+          "accuracy": 0.4782608695652174,
+          "confidence": 0.3624225511681082
         },
         {
           "lower": 0.4,
           "upper": 0.5,
           "count": 29,
-          "accuracy": 0.5172413793103449,
-          "confidence": 0.4507201460005534
+          "accuracy": 0.4827586206896552,
+          "confidence": 0.4536789592578081
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 19,
-          "accuracy": 0.5263157894736842,
-          "confidence": 0.5514211236903833
+          "count": 18,
+          "accuracy": 0.5,
+          "confidence": 0.5538146230980994
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 24,
-          "accuracy": 0.6666666666666666,
-          "confidence": 0.6489772733628543
+          "count": 25,
+          "accuracy": 0.64,
+          "confidence": 0.6470782299958304
         },
         {
           "lower": 0.7,
           "upper": 0.8,
-          "count": 32,
-          "accuracy": 0.84375,
-          "confidence": 0.7614146853821924
+          "count": 30,
+          "accuracy": 0.9,
+          "confidence": 0.7600320067420928
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 39,
-          "accuracy": 0.9743589743589743,
-          "confidence": 0.8598653318256749
+          "count": 40,
+          "accuracy": 0.95,
+          "confidence": 0.8585892743826458
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 350,
+          "count": 356,
           "accuracy": 1.0,
-          "confidence": 0.9842938547734531
+          "confidence": 0.9845787078996621
         }
       ],
       "confusion_matrix": {
@@ -4443,7 +5238,7 @@
           "get_clipboard": 3
         },
         "get_current_time": {
-          "get_current_time": 15
+          "get_current_time": 18
         },
         "get_running_apps": {
           "get_running_apps": 14,
@@ -4455,9 +5250,8 @@
           "take_screenshot": 1
         },
         "get_weather": {
-          "get_running_apps": 1,
           "get_weather": 70,
-          "take_screenshot": 1
+          "take_screenshot": 2
         },
         "launch_app": {
           "launch_app": 24
@@ -4473,8 +5267,8 @@
           "unknown_or_complex": 1
         },
         "mcp_call": {
-          "mcp_call": 2,
-          "unknown_or_complex": 1
+          "launch_app": 1,
+          "mcp_call": 2
         },
         "move_file": {
           "move_file": 2,
@@ -4521,7 +5315,7 @@
           "shutdown_computer": 3
         },
         "take_screenshot": {
-          "take_screenshot": 15
+          "take_screenshot": 18
         },
         "web_fetch": {
           "read_file": 1,
@@ -4542,8 +5336,8 @@
           "focus_window": 1,
           "get_calendar_events": 2,
           "get_current_time": 2,
-          "get_running_apps": 2,
-          "get_weather": 1,
+          "get_running_apps": 1,
+          "get_weather": 2,
           "launch_app": 3,
           "search_in_files": 1,
           "send_email": 2,
@@ -4554,85 +5348,86 @@
       }
     },
     "noise": {
-      "count": 6648,
-      "accuracy": 0.816034897713598,
-      "selected_count": 3439,
-      "coverage": 0.5172984356197352,
+      "count": 6718,
+      "accuracy": 0.8157189639773742,
+      "selected_count": 3513,
+      "coverage": 0.5229234891336707,
       "selective_accuracy": 1.0,
+      "selective_accuracy_wilson95_lower": 0.9989076963332938,
       "false_direct_count": 0,
       "unknown_false_accept_count": 0,
-      "ece": 0.054067216084979275,
-      "brier": 0.24652023286437344,
+      "ece": 0.051971267745557825,
+      "brier": 0.244939630225958,
       "reliability_bins": [
         {
           "lower": 0.0,
           "upper": 0.1,
-          "count": 19,
-          "accuracy": 0.47368421052631576,
-          "confidence": 0.08794117304697306
+          "count": 25,
+          "accuracy": 0.44,
+          "confidence": 0.09039486534943338
         },
         {
           "lower": 0.1,
           "upper": 0.2,
-          "count": 329,
-          "accuracy": 0.22796352583586627,
-          "confidence": 0.16162673695381316
+          "count": 330,
+          "accuracy": 0.21818181818181817,
+          "confidence": 0.16268685617520937
         },
         {
           "lower": 0.2,
           "upper": 0.3,
-          "count": 454,
-          "accuracy": 0.2555066079295154,
-          "confidence": 0.24878906415260205
+          "count": 451,
+          "accuracy": 0.25277161862527714,
+          "confidence": 0.24972446172545787
         },
         {
           "lower": 0.3,
           "upper": 0.4,
-          "count": 361,
-          "accuracy": 0.44321329639889195,
-          "confidence": 0.34808389655471156
+          "count": 370,
+          "accuracy": 0.43513513513513513,
+          "confidence": 0.34868616998392976
         },
         {
           "lower": 0.4,
           "upper": 0.5,
-          "count": 349,
-          "accuracy": 0.5558739255014327,
-          "confidence": 0.45162680034741387
+          "count": 340,
+          "accuracy": 0.55,
+          "confidence": 0.45347341497066374
         },
         {
           "lower": 0.5,
           "upper": 0.6,
-          "count": 335,
-          "accuracy": 0.6298507462686567,
-          "confidence": 0.5479032071696542
+          "count": 343,
+          "accuracy": 0.6384839650145773,
+          "confidence": 0.5473172460021323
         },
         {
           "lower": 0.6,
           "upper": 0.7,
-          "count": 363,
-          "accuracy": 0.8126721763085399,
-          "confidence": 0.6495130603084557
+          "count": 356,
+          "accuracy": 0.8033707865168539,
+          "confidence": 0.6502010752243155
         },
         {
           "lower": 0.7,
           "upper": 0.8,
           "count": 370,
-          "accuracy": 0.8729729729729729,
-          "confidence": 0.7476580248015324
+          "accuracy": 0.8702702702702703,
+          "confidence": 0.7482855027863117
         },
         {
           "lower": 0.8,
           "upper": 0.9,
-          "count": 480,
-          "accuracy": 0.9645833333333333,
-          "confidence": 0.854643770384645
+          "count": 463,
+          "accuracy": 0.9611231101511879,
+          "confidence": 0.8551414608244713
         },
         {
           "lower": 0.9,
           "upper": 1.0,
-          "count": 3588,
-          "accuracy": 0.9974916387959866,
-          "confidence": 0.9777886007144874
+          "count": 3670,
+          "accuracy": 0.9980926430517711,
+          "confidence": 0.9774093684850881
         }
       ],
       "confusion_matrix": {
@@ -4642,10 +5437,10 @@
         },
         "analyze_image_file": {
           "focus_window": 12,
-          "get_weather": 6,
+          "get_weather": 5,
           "launch_app": 3,
           "read_emails": 4,
-          "read_file": 9,
+          "read_file": 10,
           "take_screenshot": 2,
           "unknown_or_complex": 1
         },
@@ -4653,8 +5448,8 @@
           "analyze_screenshot": 1,
           "focus_window": 9,
           "get_screen_status": 1,
-          "take_screenshot": 22,
-          "unknown_or_complex": 3
+          "take_screenshot": 24,
+          "unknown_or_complex": 1
         },
         "api_call": {
           "adjust_volume": 11,
@@ -4691,7 +5486,8 @@
           "unknown_or_complex": 21
         },
         "delete_file": {
-          "delete_file": 15,
+          "adjust_volume": 1,
+          "delete_file": 14,
           "launch_app": 4,
           "list_directory": 9,
           "read_file": 5,
@@ -4713,8 +5509,8 @@
           "unknown_or_complex": 3
         },
         "focus_window": {
-          "focus_window": 767,
-          "launch_app": 114
+          "focus_window": 760,
+          "launch_app": 121
         },
         "generate_image": {
           "generate_image": 20,
@@ -4732,31 +5528,31 @@
           "get_current_time": 1
         },
         "get_current_time": {
-          "get_current_time": 160,
-          "launch_app": 6,
-          "unknown_or_complex": 5
+          "get_current_time": 194,
+          "launch_app": 7,
+          "unknown_or_complex": 4
         },
         "get_running_apps": {
           "get_current_time": 2,
-          "get_running_apps": 154,
-          "get_weather": 6,
-          "launch_app": 4,
-          "unknown_or_complex": 6
+          "get_running_apps": 155,
+          "get_weather": 5,
+          "launch_app": 5,
+          "unknown_or_complex": 5
         },
         "get_screen_status": {
           "adjust_volume": 1,
           "focus_window": 9,
-          "get_weather": 3,
+          "get_weather": 2,
           "launch_app": 13,
-          "take_screenshot": 9,
+          "take_screenshot": 10,
           "unknown_or_complex": 1
         },
         "get_weather": {
           "get_calendar_events": 1,
           "get_weather": 800,
-          "launch_app": 3,
+          "launch_app": 4,
           "take_screenshot": 4,
-          "unknown_or_complex": 6
+          "unknown_or_complex": 5
         },
         "launch_app": {
           "launch_app": 286
@@ -4780,27 +5576,27 @@
         },
         "mcp_call": {
           "get_weather": 1,
-          "launch_app": 4,
+          "launch_app": 5,
           "mcp_call": 21,
-          "unknown_or_complex": 9
+          "unknown_or_complex": 8
         },
         "move_file": {
-          "move_file": 26,
+          "move_file": 27,
           "search_in_files": 6,
           "take_screenshot": 1,
-          "unknown_or_complex": 3
+          "unknown_or_complex": 2
         },
         "play_youtube": {
           "play_youtube": 619
         },
         "read_emails": {
-          "adjust_volume": 1,
+          "adjust_volume": 3,
           "focus_window": 1,
-          "get_running_apps": 8,
-          "get_weather": 5,
-          "launch_app": 6,
+          "get_running_apps": 12,
+          "get_weather": 4,
+          "launch_app": 3,
           "read_emails": 4,
-          "send_email": 9,
+          "send_email": 7,
           "unknown_or_complex": 2
         },
         "read_file": {
@@ -4809,10 +5605,10 @@
           "unknown_or_complex": 24
         },
         "run_agent_task": {
-          "adjust_volume": 8,
+          "adjust_volume": 9,
           "get_current_time": 1,
           "get_weather": 3,
-          "launch_app": 3,
+          "launch_app": 2,
           "run_agent_task": 12,
           "unknown_or_complex": 10
         },
@@ -4825,24 +5621,24 @@
         },
         "search_in_files": {
           "list_directory": 8,
-          "web_search": 7,
-          "unknown_or_complex": 20
+          "web_search": 8,
+          "unknown_or_complex": 19
         },
         "send_email": {
           "launch_app": 1,
-          "send_email": 19,
-          "unknown_or_complex": 15
+          "send_email": 20,
+          "unknown_or_complex": 14
         },
         "set_clipboard": {
           "get_clipboard": 36
         },
         "set_timer": {
           "cancel_timer": 1,
-          "get_current_time": 15,
-          "get_weather": 11,
-          "launch_app": 74,
+          "get_current_time": 13,
+          "get_weather": 10,
+          "launch_app": 79,
           "set_timer": 731,
-          "unknown_or_complex": 9
+          "unknown_or_complex": 7
         },
         "shutdown_computer": {
           "adjust_volume": 2,
@@ -4850,7 +5646,7 @@
           "shutdown_computer": 33
         },
         "take_screenshot": {
-          "take_screenshot": 175
+          "take_screenshot": 211
         },
         "web_fetch": {
           "get_clipboard": 1,
@@ -4873,102 +5669,103 @@
           "unknown_or_complex": 2
         },
         "unknown_or_complex": {
-          "adjust_volume": 1,
           "focus_window": 12,
-          "get_calendar_events": 18,
-          "get_current_time": 20,
-          "get_running_apps": 5,
-          "get_weather": 29,
-          "launch_app": 57,
+          "get_calendar_events": 20,
+          "get_current_time": 21,
+          "get_running_apps": 7,
+          "get_weather": 28,
+          "launch_app": 63,
+          "play_youtube": 1,
           "search_in_files": 8,
           "send_email": 25,
           "take_screenshot": 13,
           "write_file": 12,
-          "unknown_or_complex": 156
+          "unknown_or_complex": 146
         }
       }
     }
   },
   "with_existing_rule_gate": {
-    "count": 7217,
-    "accuracy": 0.8182070112235,
-    "selected_count": 3559,
-    "coverage": 0.49314119440210613,
+    "count": 7293,
+    "accuracy": 0.8180447003976415,
+    "selected_count": 3863,
+    "coverage": 0.5296860002742355,
     "selective_accuracy": 1.0,
+    "selective_accuracy_wilson95_lower": 0.9990065641786446,
     "false_direct_count": 0,
     "unknown_false_accept_count": 0,
-    "ece": 0.052435419454851175,
-    "brier": 0.24377057070185207,
+    "ece": 0.05051273436046625,
+    "brier": 0.24218870856979238,
     "reliability_bins": [
       {
         "lower": 0.0,
         "upper": 0.1,
-        "count": 21,
-        "accuracy": 0.47619047619047616,
-        "confidence": 0.08906721869369219
+        "count": 26,
+        "accuracy": 0.46153846153846156,
+        "confidence": 0.09061987893684051
       },
       {
         "lower": 0.1,
         "upper": 0.2,
-        "count": 347,
-        "accuracy": 0.2334293948126801,
-        "confidence": 0.16151510586560372
+        "count": 350,
+        "accuracy": 0.22285714285714286,
+        "confidence": 0.16234404061440602
       },
       {
         "lower": 0.2,
         "upper": 0.3,
-        "count": 488,
-        "accuracy": 0.2540983606557377,
-        "confidence": 0.24888154207380214
+        "count": 484,
+        "accuracy": 0.25206611570247933,
+        "confidence": 0.24970405313070332
       },
       {
         "lower": 0.3,
         "upper": 0.4,
-        "count": 383,
-        "accuracy": 0.4412532637075718,
-        "confidence": 0.34874798382658373
+        "count": 393,
+        "accuracy": 0.43765903307888043,
+        "confidence": 0.34949008033313095
       },
       {
         "lower": 0.4,
         "upper": 0.5,
-        "count": 378,
-        "accuracy": 0.5529100529100529,
-        "confidence": 0.45155724220969173
+        "count": 369,
+        "accuracy": 0.5447154471544715,
+        "confidence": 0.4534895688577293
       },
       {
         "lower": 0.5,
         "upper": 0.6,
-        "count": 354,
-        "accuracy": 0.6242937853107344,
-        "confidence": 0.5480920218981681
+        "count": 361,
+        "accuracy": 0.631578947368421,
+        "confidence": 0.5476412149432054
       },
       {
         "lower": 0.6,
         "upper": 0.7,
-        "count": 387,
-        "accuracy": 0.8036175710594315,
-        "confidence": 0.6494798332110541
+        "count": 381,
+        "accuracy": 0.7926509186351706,
+        "confidence": 0.6499961641200842
       },
       {
         "lower": 0.7,
         "upper": 0.8,
-        "count": 402,
-        "accuracy": 0.8706467661691543,
-        "confidence": 0.748753082360192
+        "count": 400,
+        "accuracy": 0.8725,
+        "confidence": 0.7491664905829952
       },
       {
         "lower": 0.8,
         "upper": 0.9,
-        "count": 519,
-        "accuracy": 0.9653179190751445,
-        "confidence": 0.8550361420536243
+        "count": 503,
+        "accuracy": 0.9602385685884692,
+        "confidence": 0.8554156408290975
       },
       {
         "lower": 0.9,
         "upper": 1.0,
-        "count": 3938,
-        "accuracy": 0.9977145759268664,
-        "confidence": 0.9783667721011399
+        "count": 4026,
+        "accuracy": 0.99826130153999,
+        "confidence": 0.9780433190145438
       }
     ],
     "confusion_matrix": {
@@ -4978,10 +5775,10 @@
       },
       "analyze_image_file": {
         "focus_window": 13,
-        "get_weather": 6,
+        "get_weather": 5,
         "launch_app": 3,
         "read_emails": 5,
-        "read_file": 10,
+        "read_file": 11,
         "take_screenshot": 2,
         "unknown_or_complex": 1
       },
@@ -4989,8 +5786,8 @@
         "analyze_screenshot": 1,
         "focus_window": 10,
         "get_screen_status": 1,
-        "take_screenshot": 24,
-        "unknown_or_complex": 3
+        "take_screenshot": 26,
+        "unknown_or_complex": 1
       },
       "api_call": {
         "adjust_volume": 12,
@@ -5027,7 +5824,8 @@
         "unknown_or_complex": 23
       },
       "delete_file": {
-        "delete_file": 16,
+        "adjust_volume": 1,
+        "delete_file": 15,
         "launch_app": 4,
         "list_directory": 9,
         "read_file": 6,
@@ -5049,8 +5847,8 @@
         "unknown_or_complex": 3
       },
       "focus_window": {
-        "focus_window": 838,
-        "launch_app": 118
+        "focus_window": 831,
+        "launch_app": 125
       },
       "generate_image": {
         "generate_image": 22,
@@ -5068,33 +5866,32 @@
         "get_current_time": 1
       },
       "get_current_time": {
-        "get_current_time": 175,
-        "launch_app": 6,
-        "unknown_or_complex": 5
+        "get_current_time": 212,
+        "launch_app": 7,
+        "unknown_or_complex": 4
       },
       "get_running_apps": {
         "get_current_time": 2,
-        "get_running_apps": 168,
-        "get_weather": 7,
-        "launch_app": 4,
-        "unknown_or_complex": 6
+        "get_running_apps": 169,
+        "get_weather": 6,
+        "launch_app": 5,
+        "unknown_or_complex": 5
       },
       "get_screen_status": {
         "adjust_volume": 1,
         "focus_window": 10,
-        "get_weather": 3,
+        "get_weather": 2,
         "launch_app": 13,
         "play_youtube": 1,
-        "take_screenshot": 10,
+        "take_screenshot": 11,
         "unknown_or_complex": 1
       },
       "get_weather": {
         "get_calendar_events": 1,
-        "get_running_apps": 1,
         "get_weather": 870,
-        "launch_app": 3,
-        "take_screenshot": 5,
-        "unknown_or_complex": 6
+        "launch_app": 4,
+        "take_screenshot": 6,
+        "unknown_or_complex": 5
       },
       "launch_app": {
         "launch_app": 310
@@ -5118,27 +5915,27 @@
       },
       "mcp_call": {
         "get_weather": 1,
-        "launch_app": 4,
+        "launch_app": 6,
         "mcp_call": 23,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "move_file": {
-        "move_file": 28,
+        "move_file": 29,
         "search_in_files": 7,
         "take_screenshot": 1,
-        "unknown_or_complex": 3
+        "unknown_or_complex": 2
       },
       "play_youtube": {
         "play_youtube": 670
       },
       "read_emails": {
-        "adjust_volume": 1,
+        "adjust_volume": 3,
         "focus_window": 1,
-        "get_running_apps": 9,
-        "get_weather": 5,
-        "launch_app": 6,
+        "get_running_apps": 13,
+        "get_weather": 4,
+        "launch_app": 3,
         "read_emails": 5,
-        "send_email": 10,
+        "send_email": 8,
         "unknown_or_complex": 2
       },
       "read_file": {
@@ -5147,10 +5944,10 @@
         "unknown_or_complex": 26
       },
       "run_agent_task": {
-        "adjust_volume": 9,
+        "adjust_volume": 10,
         "get_current_time": 1,
         "get_weather": 3,
-        "launch_app": 3,
+        "launch_app": 2,
         "run_agent_task": 13,
         "unknown_or_complex": 11
       },
@@ -5164,24 +5961,24 @@
       "search_in_files": {
         "list_directory": 9,
         "search_in_files": 1,
-        "web_search": 7,
-        "unknown_or_complex": 21
+        "web_search": 8,
+        "unknown_or_complex": 20
       },
       "send_email": {
         "launch_app": 1,
-        "send_email": 22,
-        "unknown_or_complex": 15
+        "send_email": 23,
+        "unknown_or_complex": 14
       },
       "set_clipboard": {
         "get_clipboard": 39
       },
       "set_timer": {
         "cancel_timer": 1,
-        "get_current_time": 16,
-        "get_weather": 11,
-        "launch_app": 79,
+        "get_current_time": 14,
+        "get_weather": 10,
+        "launch_app": 84,
         "set_timer": 794,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "shutdown_computer": {
         "adjust_volume": 2,
@@ -5189,7 +5986,7 @@
         "shutdown_computer": 36
       },
       "take_screenshot": {
-        "take_screenshot": 190
+        "take_screenshot": 229
       },
       "web_fetch": {
         "get_clipboard": 1,
@@ -5212,101 +6009,442 @@
         "unknown_or_complex": 2
       },
       "unknown_or_complex": {
-        "adjust_volume": 1,
         "focus_window": 13,
-        "get_calendar_events": 20,
-        "get_current_time": 22,
-        "get_running_apps": 7,
+        "get_calendar_events": 22,
+        "get_current_time": 23,
+        "get_running_apps": 8,
         "get_weather": 30,
-        "launch_app": 60,
+        "launch_app": 66,
+        "play_youtube": 1,
         "search_in_files": 9,
         "send_email": 27,
         "take_screenshot": 14,
         "write_file": 13,
-        "unknown_or_complex": 170
+        "unknown_or_complex": 160
+      }
+    }
+  },
+  "parser_rejected_count": 194,
+  "with_candidate_policy_gate": {
+    "count": 7293,
+    "accuracy": 0.8180447003976415,
+    "selected_count": 556,
+    "coverage": 0.07623748800219389,
+    "selective_accuracy": 1.0,
+    "selective_accuracy_wilson95_lower": 0.9931383094978602,
+    "false_direct_count": 0,
+    "unknown_false_accept_count": 0,
+    "ece": 0.05051273436046625,
+    "brier": 0.24218870856979238,
+    "reliability_bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.1,
+        "count": 26,
+        "accuracy": 0.46153846153846156,
+        "confidence": 0.09061987893684051
+      },
+      {
+        "lower": 0.1,
+        "upper": 0.2,
+        "count": 350,
+        "accuracy": 0.22285714285714286,
+        "confidence": 0.16234404061440602
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.3,
+        "count": 484,
+        "accuracy": 0.25206611570247933,
+        "confidence": 0.24970405313070332
+      },
+      {
+        "lower": 0.3,
+        "upper": 0.4,
+        "count": 393,
+        "accuracy": 0.43765903307888043,
+        "confidence": 0.34949008033313095
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.5,
+        "count": 369,
+        "accuracy": 0.5447154471544715,
+        "confidence": 0.4534895688577293
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.6,
+        "count": 361,
+        "accuracy": 0.631578947368421,
+        "confidence": 0.5476412149432054
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.7,
+        "count": 381,
+        "accuracy": 0.7926509186351706,
+        "confidence": 0.6499961641200842
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.8,
+        "count": 400,
+        "accuracy": 0.8725,
+        "confidence": 0.7491664905829952
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.9,
+        "count": 503,
+        "accuracy": 0.9602385685884692,
+        "confidence": 0.8554156408290975
+      },
+      {
+        "lower": 0.9,
+        "upper": 1.0,
+        "count": 4026,
+        "accuracy": 0.99826130153999,
+        "confidence": 0.9780433190145438
+      }
+    ],
+    "confusion_matrix": {
+      "adjust_volume": {
+        "adjust_volume": 235,
+        "launch_app": 10
+      },
+      "analyze_image_file": {
+        "focus_window": 13,
+        "get_weather": 5,
+        "launch_app": 3,
+        "read_emails": 5,
+        "read_file": 11,
+        "take_screenshot": 2,
+        "unknown_or_complex": 1
+      },
+      "analyze_screenshot": {
+        "analyze_screenshot": 1,
+        "focus_window": 10,
+        "get_screen_status": 1,
+        "take_screenshot": 26,
+        "unknown_or_complex": 1
+      },
+      "api_call": {
+        "adjust_volume": 12,
+        "api_call": 11,
+        "launch_app": 2,
+        "unknown_or_complex": 13
+      },
+      "cancel_scheduled_task": {
+        "cancel_scheduled_task": 15,
+        "cancel_timer": 10,
+        "launch_app": 1,
+        "schedule_task": 12
+      },
+      "cancel_timer": {
+        "cancel_timer": 1071,
+        "get_current_time": 1,
+        "get_weather": 2,
+        "launch_app": 12,
+        "set_timer": 4,
+        "unknown_or_complex": 10
+      },
+      "close_app": {
+        "close_app": 37,
+        "launch_app": 1
+      },
+      "create_calendar_event": {
+        "get_calendar_events": 24,
+        "launch_app": 2,
+        "unknown_or_complex": 11
+      },
+      "delegate_to_subagent": {
+        "delegate_to_subagent": 13,
+        "launch_app": 1,
+        "unknown_or_complex": 23
+      },
+      "delete_file": {
+        "adjust_volume": 1,
+        "delete_file": 15,
+        "launch_app": 4,
+        "list_directory": 9,
+        "read_file": 6,
+        "search_in_files": 3,
+        "take_screenshot": 1
+      },
+      "edit_file": {
+        "launch_app": 2,
+        "read_file": 26,
+        "search_in_files": 11
+      },
+      "execute_python_code": {
+        "execute_python_code": 11,
+        "unknown_or_complex": 26
+      },
+      "execute_shell_command": {
+        "execute_shell_command": 22,
+        "launch_app": 14,
+        "unknown_or_complex": 3
+      },
+      "focus_window": {
+        "focus_window": 831,
+        "launch_app": 125
+      },
+      "generate_image": {
+        "generate_image": 22,
+        "launch_app": 1,
+        "take_screenshot": 12,
+        "unknown_or_complex": 4
+      },
+      "get_calendar_events": {
+        "create_calendar_event": 23,
+        "get_calendar_events": 13,
+        "launch_app": 3
+      },
+      "get_clipboard": {
+        "get_clipboard": 37,
+        "get_current_time": 1
+      },
+      "get_current_time": {
+        "get_current_time": 212,
+        "launch_app": 7,
+        "unknown_or_complex": 4
+      },
+      "get_running_apps": {
+        "get_current_time": 2,
+        "get_running_apps": 169,
+        "get_weather": 6,
+        "launch_app": 5,
+        "unknown_or_complex": 5
+      },
+      "get_screen_status": {
+        "adjust_volume": 1,
+        "focus_window": 10,
+        "get_weather": 2,
+        "launch_app": 13,
+        "play_youtube": 1,
+        "take_screenshot": 11,
+        "unknown_or_complex": 1
+      },
+      "get_weather": {
+        "get_calendar_events": 1,
+        "get_weather": 870,
+        "launch_app": 4,
+        "take_screenshot": 6,
+        "unknown_or_complex": 5
+      },
+      "launch_app": {
+        "launch_app": 310
+      },
+      "list_directory": {
+        "get_clipboard": 9,
+        "get_weather": 2,
+        "list_directory": 3,
+        "read_file": 9,
+        "unknown_or_complex": 14
+      },
+      "list_scheduled_tasks": {
+        "cancel_scheduled_task": 4,
+        "get_running_apps": 12,
+        "launch_app": 2,
+        "list_directory": 1,
+        "list_scheduled_tasks": 3,
+        "schedule_task": 1,
+        "take_screenshot": 5,
+        "unknown_or_complex": 11
+      },
+      "mcp_call": {
+        "get_weather": 1,
+        "launch_app": 6,
+        "mcp_call": 23,
+        "unknown_or_complex": 8
+      },
+      "move_file": {
+        "move_file": 29,
+        "search_in_files": 7,
+        "take_screenshot": 1,
+        "unknown_or_complex": 2
+      },
+      "play_youtube": {
+        "play_youtube": 670
+      },
+      "read_emails": {
+        "adjust_volume": 3,
+        "focus_window": 1,
+        "get_running_apps": 13,
+        "get_weather": 4,
+        "launch_app": 3,
+        "read_emails": 5,
+        "send_email": 8,
+        "unknown_or_complex": 2
+      },
+      "read_file": {
+        "launch_app": 11,
+        "search_in_files": 1,
+        "unknown_or_complex": 26
+      },
+      "run_agent_task": {
+        "adjust_volume": 10,
+        "get_current_time": 1,
+        "get_weather": 3,
+        "launch_app": 2,
+        "run_agent_task": 13,
+        "unknown_or_complex": 11
+      },
+      "schedule_task": {
+        "get_weather": 1,
+        "launch_app": 1,
+        "schedule_task": 32,
+        "take_screenshot": 2,
+        "unknown_or_complex": 1
+      },
+      "search_in_files": {
+        "list_directory": 9,
+        "search_in_files": 1,
+        "web_search": 8,
+        "unknown_or_complex": 20
+      },
+      "send_email": {
+        "launch_app": 1,
+        "send_email": 23,
+        "unknown_or_complex": 14
+      },
+      "set_clipboard": {
+        "get_clipboard": 39
+      },
+      "set_timer": {
+        "cancel_timer": 1,
+        "get_current_time": 14,
+        "get_weather": 10,
+        "launch_app": 84,
+        "set_timer": 794,
+        "unknown_or_complex": 8
+      },
+      "shutdown_computer": {
+        "adjust_volume": 2,
+        "launch_app": 1,
+        "shutdown_computer": 36
+      },
+      "take_screenshot": {
+        "take_screenshot": 229
+      },
+      "web_fetch": {
+        "get_clipboard": 1,
+        "get_current_time": 2,
+        "get_weather": 3,
+        "read_file": 8,
+        "write_file": 13,
+        "unknown_or_complex": 12
+      },
+      "web_search": {
+        "get_weather": 4,
+        "search_in_files": 8,
+        "web_search": 40,
+        "unknown_or_complex": 24
+      },
+      "write_file": {
+        "read_file": 16,
+        "take_screenshot": 10,
+        "write_file": 10,
+        "unknown_or_complex": 2
+      },
+      "unknown_or_complex": {
+        "focus_window": 13,
+        "get_calendar_events": 22,
+        "get_current_time": 23,
+        "get_running_apps": 8,
+        "get_weather": 30,
+        "launch_app": 66,
+        "play_youtube": 1,
+        "search_in_files": 9,
+        "send_email": 27,
+        "take_screenshot": 14,
+        "write_file": 13,
+        "unknown_or_complex": 160
       }
     }
   },
   "with_direct_policy_gate": {
-    "count": 7217,
-    "accuracy": 0.8182070112235,
-    "selected_count": 3556,
-    "coverage": 0.492725509214355,
+    "count": 7293,
+    "accuracy": 0.8180447003976415,
+    "selected_count": 362,
+    "coverage": 0.04963663787193199,
     "selective_accuracy": 1.0,
+    "selective_accuracy_wilson95_lower": 0.9894996624136662,
     "false_direct_count": 0,
     "unknown_false_accept_count": 0,
-    "ece": 0.052435419454851175,
-    "brier": 0.24377057070185207,
+    "ece": 0.05051273436046625,
+    "brier": 0.24218870856979238,
     "reliability_bins": [
       {
         "lower": 0.0,
         "upper": 0.1,
-        "count": 21,
-        "accuracy": 0.47619047619047616,
-        "confidence": 0.08906721869369219
+        "count": 26,
+        "accuracy": 0.46153846153846156,
+        "confidence": 0.09061987893684051
       },
       {
         "lower": 0.1,
         "upper": 0.2,
-        "count": 347,
-        "accuracy": 0.2334293948126801,
-        "confidence": 0.16151510586560372
+        "count": 350,
+        "accuracy": 0.22285714285714286,
+        "confidence": 0.16234404061440602
       },
       {
         "lower": 0.2,
         "upper": 0.3,
-        "count": 488,
-        "accuracy": 0.2540983606557377,
-        "confidence": 0.24888154207380214
+        "count": 484,
+        "accuracy": 0.25206611570247933,
+        "confidence": 0.24970405313070332
       },
       {
         "lower": 0.3,
         "upper": 0.4,
-        "count": 383,
-        "accuracy": 0.4412532637075718,
-        "confidence": 0.34874798382658373
+        "count": 393,
+        "accuracy": 0.43765903307888043,
+        "confidence": 0.34949008033313095
       },
       {
         "lower": 0.4,
         "upper": 0.5,
-        "count": 378,
-        "accuracy": 0.5529100529100529,
-        "confidence": 0.45155724220969173
+        "count": 369,
+        "accuracy": 0.5447154471544715,
+        "confidence": 0.4534895688577293
       },
       {
         "lower": 0.5,
         "upper": 0.6,
-        "count": 354,
-        "accuracy": 0.6242937853107344,
-        "confidence": 0.5480920218981681
+        "count": 361,
+        "accuracy": 0.631578947368421,
+        "confidence": 0.5476412149432054
       },
       {
         "lower": 0.6,
         "upper": 0.7,
-        "count": 387,
-        "accuracy": 0.8036175710594315,
-        "confidence": 0.6494798332110541
+        "count": 381,
+        "accuracy": 0.7926509186351706,
+        "confidence": 0.6499961641200842
       },
       {
         "lower": 0.7,
         "upper": 0.8,
-        "count": 402,
-        "accuracy": 0.8706467661691543,
-        "confidence": 0.748753082360192
+        "count": 400,
+        "accuracy": 0.8725,
+        "confidence": 0.7491664905829952
       },
       {
         "lower": 0.8,
         "upper": 0.9,
-        "count": 519,
-        "accuracy": 0.9653179190751445,
-        "confidence": 0.8550361420536243
+        "count": 503,
+        "accuracy": 0.9602385685884692,
+        "confidence": 0.8554156408290975
       },
       {
         "lower": 0.9,
         "upper": 1.0,
-        "count": 3938,
-        "accuracy": 0.9977145759268664,
-        "confidence": 0.9783667721011399
+        "count": 4026,
+        "accuracy": 0.99826130153999,
+        "confidence": 0.9780433190145438
       }
     ],
     "confusion_matrix": {
@@ -5316,10 +6454,10 @@
       },
       "analyze_image_file": {
         "focus_window": 13,
-        "get_weather": 6,
+        "get_weather": 5,
         "launch_app": 3,
         "read_emails": 5,
-        "read_file": 10,
+        "read_file": 11,
         "take_screenshot": 2,
         "unknown_or_complex": 1
       },
@@ -5327,8 +6465,8 @@
         "analyze_screenshot": 1,
         "focus_window": 10,
         "get_screen_status": 1,
-        "take_screenshot": 24,
-        "unknown_or_complex": 3
+        "take_screenshot": 26,
+        "unknown_or_complex": 1
       },
       "api_call": {
         "adjust_volume": 12,
@@ -5365,7 +6503,8 @@
         "unknown_or_complex": 23
       },
       "delete_file": {
-        "delete_file": 16,
+        "adjust_volume": 1,
+        "delete_file": 15,
         "launch_app": 4,
         "list_directory": 9,
         "read_file": 6,
@@ -5387,8 +6526,8 @@
         "unknown_or_complex": 3
       },
       "focus_window": {
-        "focus_window": 838,
-        "launch_app": 118
+        "focus_window": 831,
+        "launch_app": 125
       },
       "generate_image": {
         "generate_image": 22,
@@ -5406,33 +6545,32 @@
         "get_current_time": 1
       },
       "get_current_time": {
-        "get_current_time": 175,
-        "launch_app": 6,
-        "unknown_or_complex": 5
+        "get_current_time": 212,
+        "launch_app": 7,
+        "unknown_or_complex": 4
       },
       "get_running_apps": {
         "get_current_time": 2,
-        "get_running_apps": 168,
-        "get_weather": 7,
-        "launch_app": 4,
-        "unknown_or_complex": 6
+        "get_running_apps": 169,
+        "get_weather": 6,
+        "launch_app": 5,
+        "unknown_or_complex": 5
       },
       "get_screen_status": {
         "adjust_volume": 1,
         "focus_window": 10,
-        "get_weather": 3,
+        "get_weather": 2,
         "launch_app": 13,
         "play_youtube": 1,
-        "take_screenshot": 10,
+        "take_screenshot": 11,
         "unknown_or_complex": 1
       },
       "get_weather": {
         "get_calendar_events": 1,
-        "get_running_apps": 1,
         "get_weather": 870,
-        "launch_app": 3,
-        "take_screenshot": 5,
-        "unknown_or_complex": 6
+        "launch_app": 4,
+        "take_screenshot": 6,
+        "unknown_or_complex": 5
       },
       "launch_app": {
         "launch_app": 310
@@ -5456,27 +6594,27 @@
       },
       "mcp_call": {
         "get_weather": 1,
-        "launch_app": 4,
+        "launch_app": 6,
         "mcp_call": 23,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "move_file": {
-        "move_file": 28,
+        "move_file": 29,
         "search_in_files": 7,
         "take_screenshot": 1,
-        "unknown_or_complex": 3
+        "unknown_or_complex": 2
       },
       "play_youtube": {
         "play_youtube": 670
       },
       "read_emails": {
-        "adjust_volume": 1,
+        "adjust_volume": 3,
         "focus_window": 1,
-        "get_running_apps": 9,
-        "get_weather": 5,
-        "launch_app": 6,
+        "get_running_apps": 13,
+        "get_weather": 4,
+        "launch_app": 3,
         "read_emails": 5,
-        "send_email": 10,
+        "send_email": 8,
         "unknown_or_complex": 2
       },
       "read_file": {
@@ -5485,10 +6623,10 @@
         "unknown_or_complex": 26
       },
       "run_agent_task": {
-        "adjust_volume": 9,
+        "adjust_volume": 10,
         "get_current_time": 1,
         "get_weather": 3,
-        "launch_app": 3,
+        "launch_app": 2,
         "run_agent_task": 13,
         "unknown_or_complex": 11
       },
@@ -5502,24 +6640,24 @@
       "search_in_files": {
         "list_directory": 9,
         "search_in_files": 1,
-        "web_search": 7,
-        "unknown_or_complex": 21
+        "web_search": 8,
+        "unknown_or_complex": 20
       },
       "send_email": {
         "launch_app": 1,
-        "send_email": 22,
-        "unknown_or_complex": 15
+        "send_email": 23,
+        "unknown_or_complex": 14
       },
       "set_clipboard": {
         "get_clipboard": 39
       },
       "set_timer": {
         "cancel_timer": 1,
-        "get_current_time": 16,
-        "get_weather": 11,
-        "launch_app": 79,
+        "get_current_time": 14,
+        "get_weather": 10,
+        "launch_app": 84,
         "set_timer": 794,
-        "unknown_or_complex": 10
+        "unknown_or_complex": 8
       },
       "shutdown_computer": {
         "adjust_volume": 2,
@@ -5527,7 +6665,7 @@
         "shutdown_computer": 36
       },
       "take_screenshot": {
-        "take_screenshot": 190
+        "take_screenshot": 229
       },
       "web_fetch": {
         "get_clipboard": 1,
@@ -5550,45 +6688,130 @@
         "unknown_or_complex": 2
       },
       "unknown_or_complex": {
-        "adjust_volume": 1,
         "focus_window": 13,
-        "get_calendar_events": 20,
-        "get_current_time": 22,
-        "get_running_apps": 7,
+        "get_calendar_events": 22,
+        "get_current_time": 23,
+        "get_running_apps": 8,
         "get_weather": 30,
-        "launch_app": 60,
+        "launch_app": 66,
+        "play_youtube": 1,
         "search_in_files": 9,
         "send_email": 27,
         "take_screenshot": 14,
         "write_file": 13,
-        "unknown_or_complex": 170
+        "unknown_or_complex": 160
       }
     }
   },
   "family": {
-    "family_count": 77,
-    "family_top1_accuracy": 0.6307555932279577,
-    "family_coverage": 0.45454545454545453,
+    "family_count": 79,
+    "family_top1_accuracy": 0.6373766397093287,
+    "family_coverage": 0.46835443037974683,
     "family_selective_accuracy": 1.0,
     "family_false_direct": 0
   },
   "family_with_direct_policy_gate": {
-    "family_count": 77,
-    "family_top1_accuracy": 0.6307555932279577,
-    "family_coverage": 0.44155844155844154,
+    "family_count": 79,
+    "family_top1_accuracy": 0.6373766397093287,
+    "family_coverage": 0.16455696202531644,
+    "family_selective_accuracy": 1.0,
+    "family_false_direct": 0
+  },
+  "family_with_candidate_policy_gate": {
+    "family_count": 79,
+    "family_top1_accuracy": 0.6373766397093287,
+    "family_coverage": 0.22784810126582278,
     "family_selective_accuracy": 1.0,
     "family_false_direct": 0
   },
   "macro": {
-    "accuracy_by_label": 0.493593507754727,
-    "accuracy_by_language": 0.8211297752868064,
+    "accuracy_by_label": 0.4937946517122685,
+    "accuracy_by_language": 0.8208869565438524,
     "direct_precision": 1.0
   },
   "macro_with_direct_policy_gate": {
-    "accuracy_by_label": 0.493593507754727,
-    "accuracy_by_language": 0.8211297752868064,
+    "accuracy_by_label": 0.4937946517122685,
+    "accuracy_by_language": 0.8208869565438524,
+    "direct_precision": 1.0
+  },
+  "macro_with_candidate_policy_gate": {
+    "accuracy_by_label": 0.4937946517122685,
+    "accuracy_by_language": 0.8208869565438524,
     "direct_precision": 1.0
   },
   "direct_executions": 0,
-  "model_sha256": "dbd0ad6adc6e71aa089dc11fbec3a0f484b5265031a197cb42668d27069a6f9a"
+  "provenance": {
+    "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
+    "model_config_sha256": "3307b13a8c4ad074fb3089b96870e1c44cd3531274cc808f9ad3bf0fc4bebaec",
+    "candidate_snapshot_sha256": "9d093383462a80856093d68cb03c2259d8e882fd0fbae8024d6032005776e0ef",
+    "candidate_policy_sha256": "864b8515de8755a42e73eefc30ca61075a8d645488c1e443eb4e5f3ef3db73d1",
+    "parser_sha256": "23a5432b4d89ad17ab32590cb5f05a7ff79818cb30a7cb2a08e02ca6664f0da2",
+    "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
+    "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
+    "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
+    "settings_schema_sha256": "7b3b1c5e0e986a7fd792d65db518c6b392622155c487b8b59ec4170ea9f847b0",
+    "split_manifest_sha256": "3cd060b4f6ee6f1e95dd7b089c22866701e395c98bad73344c73f2e4544697ab",
+    "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
+    "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
+    "gold_dataset_version": "decision-gold-v1",
+    "gold_dataset_sha256": "7b405930ac925557e8b85e15c90807b4db29e7e8b7da6efa93a7e4183457239b"
+  },
+  "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
+  "confusion_comparison": {
+    "scope": "classifier_top1",
+    "previous_artifact_sha256": "c5de8c2e91665a05191eb13b244d3e8ddf98f24cd0e14cd4d791c6a4ed3c5070",
+    "major_pairs": [
+      {
+        "actual": "focus_window",
+        "predicted": "launch_app",
+        "count": 125
+      },
+      {
+        "actual": "set_timer",
+        "predicted": "launch_app",
+        "count": 84
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "launch_app",
+        "count": 66
+      },
+      {
+        "actual": "set_clipboard",
+        "predicted": "get_clipboard",
+        "count": 39
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "get_weather",
+        "count": 30
+      },
+      {
+        "actual": "unknown_or_complex",
+        "predicted": "send_email",
+        "count": 27
+      },
+      {
+        "actual": "analyze_screenshot",
+        "predicted": "take_screenshot",
+        "count": 26
+      },
+      {
+        "actual": "edit_file",
+        "predicted": "read_file",
+        "count": 26
+      },
+      {
+        "actual": "execute_python_code",
+        "predicted": "unknown_or_complex",
+        "count": 26
+      },
+      {
+        "actual": "read_file",
+        "predicted": "unknown_or_complex",
+        "count": 26
+      }
+    ],
+    "top_10_worsened_pairs": []
+  }
 }

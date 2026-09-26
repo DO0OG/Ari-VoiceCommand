@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Callable, Optional, cast
 
 from core.settings_schema import (
+    migrate_local_decision_settings,
+    normalize_local_decision_settings,
     DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
     SETTINGS_FILE as SETTINGS_FILENAME,
     SETTINGS_TEMPLATE_FILE as SETTINGS_TEMPLATE_FILENAME,
@@ -62,10 +64,12 @@ class ConfigManager:
             legacy = cls._secret_values(settings)
             public = cls._public_settings(settings)
             store = SecretStore(path)
+            store_readable = True
             try:
                 stored = store.read()
             except SecretStoreError:
                 logging.warning("Encrypted credentials unavailable; environment credentials remain usable")
+                store_readable = False
                 stored = {}
                 legacy = {}
             else:
@@ -81,6 +85,22 @@ class ConfigManager:
                         logging.warning("Credential migration deferred; original settings preserved; use environment variables if encryption is unavailable")
                 stored = merged
             cls._cached_settings = {**cls.DEFAULT_SETTINGS, **public, **stored}
+            # 예전 파일은 병합된 기본값이 아니라 파일 자체의 버전으로 구분한다.
+            cls._cached_settings["local_decision_settings_version"] = public.get("local_decision_settings_version")
+            # 인증값이 아직 파일에 남아 있거나 암호화 저장소를 읽을 수 없으면 파일을 그대로 둔다.
+            # 공개 사본에서 인증값이 빠질 수 있기 때문이다. 이때 변경은 이번 실행에만
+            # 적용된다.
+            if (
+                migrate_local_decision_settings(cls._cached_settings)
+                and original
+                and store_readable
+                and not any(key in settings for key in SENSITIVE_SETTINGS_KEYS)
+            ):
+                try:
+                    cls._write_public_settings(path, cls._cached_settings)
+                    logging.info("로컬 판단 설정을 현재 기본 규칙으로 옮겼습니다.")
+                except Exception:
+                    logging.warning("로컬 판단 설정 이전을 저장하지 못해 이번 실행에만 적용합니다.")
             return cls._effective_settings()
 
     @staticmethod
@@ -195,6 +215,7 @@ class ConfigManager:
     @classmethod
     def _normalize_settings(cls, settings: SettingsDict) -> SettingsDict:
         normalized = dict(settings)
+        normalize_local_decision_settings(normalized)
         for key, expected in cls.DEFAULT_SETTINGS.items():
             if key not in normalized or expected is None:
                 continue

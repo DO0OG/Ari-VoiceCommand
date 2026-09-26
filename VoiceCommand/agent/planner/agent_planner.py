@@ -49,6 +49,8 @@ _DISALLOWED_DEVELOPER_PATTERNS = (
     (re.compile(r"os\.path\.expanduser\(\s*['\"]~['\"]\s*\)"), "home path inference"),
     (re.compile(r"desktop_path"), "desktop path use in developer task"),
     (re.compile(r"[A-Za-z]:\\\\"), "hardcoded absolute path"),
+    # 경로 추출은 앞의 "../"를 떼어 내므로 원문에서 먼저 막는다.
+    (re.compile(r"(?:^|[^\w.])\.\.[\\/]"), "parent directory path"),
 )
 _DEVELOPER_PATH_LITERAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])((?:VoiceCommand|docs|tests|market|supabase|\.github|\.claude|\.idea)[/\\][A-Za-z0-9_./\\-]+)",
@@ -168,7 +170,7 @@ class AgentPlanner(TemplatePlansMixin):
 
         templated = self._build_template_plan(goal)
         if templated:
-            logging.info("[Planner] 템플릿 계획 사용: %s", goal)
+            logging.info("[Planner] 템플릿 계획 사용 (%d자)", len(goal))
             self._last_learning_signals = signals
             return _annotate(templated)
 
@@ -552,7 +554,7 @@ class AgentPlanner(TemplatePlansMixin):
                         if provider == "anthropic":
                             resp = client.messages.create(
                                 model=target_model,
-                                max_tokens=1000,
+                                max_tokens=4096,
                                 system=_SYS_JSON_ONLY,
                                 messages=[{"role": "user", "content": active_prompt}],
                             )
@@ -569,7 +571,7 @@ class AgentPlanner(TemplatePlansMixin):
                                     {"role": "user", "content": active_prompt},
                                 ],
                                 temperature=0.1,
-                                max_tokens=1000,
+                                max_tokens=4096,
                                 **extra_kwargs,
                             )
                             choice = resp.choices[0]
@@ -610,7 +612,8 @@ class AgentPlanner(TemplatePlansMixin):
                             failed = True
                             break
                         logging.error("[Planner] LLM 호출 오류 (%s): %s", target_model, e)
-                        return "".join(collected_parts).strip()
+                        # 이어받기 중에 실패하면 잘린 JSON을 돌려주지 않는다.
+                        return ""
                 if failed:
                     break
 
@@ -628,7 +631,8 @@ class AgentPlanner(TemplatePlansMixin):
                 )
                 logging.info("[Planner] LLM 응답이 잘려 이어받기를 시도합니다.")
                 time.sleep(0.5)
-        return "".join(collected_parts).strip()
+        # 모든 모델이 실패해 여기까지 왔다면 남은 조각은 완성된 응답이 아니다.
+        return ""
 
     @staticmethod
     def _supports_json_response_format(provider: str) -> bool:
@@ -771,6 +775,9 @@ class AgentPlanner(TemplatePlansMixin):
         normalized = self._normalize_developer_path(path)
         if not normalized:
             return True
+        # "VoiceCommand/agent/../../core/..."처럼 접두사는 같아도 허용 범위 밖을 가리키는 경로는 막는다.
+        if ".." in re.split(r"[\\/]", str(path).strip().strip("\"'")):
+            return False
         allowed_prefixes = self.get_developer_allowed_prefixes(goal=goal, context=context)
         for prefix in allowed_prefixes:
             if normalized == prefix or normalized.startswith(prefix + "/"):

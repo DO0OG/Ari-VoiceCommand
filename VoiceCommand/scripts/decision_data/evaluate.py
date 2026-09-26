@@ -1,25 +1,68 @@
-"""Held-out classification, calibration, and selective routing measurements."""
+"""격리 분할에서의 분류, 보정, 선택적 라우팅 측정."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 
 from agent.decision.engine import LinearScorer, UNKNOWN
-from agent.decision.candidates import is_direct_allowed
-from agent.llm_router import get_llm_router
+from agent.decision.candidates import DIRECT_ALLOWLIST, is_direct_allowed
+from agent.decision.semantics import is_multi_intent, parse_candidate
+from core.settings_schema import DEFAULT_SETTINGS
 from .build_dataset import build_examples
+from .gold_data import build_gold_examples
+from .provenance import (
+    BASELINE_COMMIT,
+    BASELINE_MANIFEST_SHA256,
+    BASELINE_REF,
+    artifact_fingerprints,
+    sha256_file,
+)
+
+
+# 이 표본 하한은 회귀와 빈 검사를 막기 위한 것이다. 보고하는
+# Wilson 하한은 불확실성을 따로 나타내며, 하한을 넘었다고 정밀도 99%가
+# 입증되지는 않는다.
+MIN_DEV_OVERALL_DIRECT_SELECTIONS = 50
+MIN_DEV_LANGUAGE_DIRECT_SELECTIONS = 10
+MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS = 100
+MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS = 30
+MIN_OVERALL_DIRECT_PRECISION = 0.995
+MIN_LANGUAGE_DIRECT_PRECISION = 0.99
+WILSON_95_Z = 1.959963984540054
+
+
+def wilson_lower_bound_95(successes: int, trials: int) -> float | None:
+    """양측 95% Wilson 하한을 반환하고, 시행이 없으면 None을 반환한다."""
+    if trials < 0 or successes < 0 or successes > trials:
+        raise ValueError("successes and trials must satisfy 0 <= successes <= trials")
+    if trials == 0:
+        return None
+    z_squared = WILSON_95_Z**2
+    proportion = successes / trials
+    denominator = 1 + z_squared / trials
+    center = proportion + z_squared / (2 * trials)
+    margin = WILSON_95_Z * math.sqrt(
+        proportion * (1 - proportion) / trials
+        + z_squared / (4 * trials**2)
+    )
+    return max(0.0, min(1.0, (center - margin) / denominator))
 
 
 def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Compute multiclass Brier/ECE and selection with unknown abstention."""
+    """다중 클래스 Brier/ECE와 unknown 보류를 포함한 선택 결과를 계산한다."""
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
     if not len(targets):
-        return {"count": 0, "accuracy": None, "coverage": 0.0, "selective_accuracy": None}
+        return {
+            "count": 0, "accuracy": None, "selected_count": 0, "coverage": 0.0,
+            "selective_accuracy": None, "selective_accuracy_wilson95_lower": None,
+            "false_direct_count": 0, "unknown_false_accept_count": 0,
+        }
     predicted = probabilities.argmax(axis=1)
     confidence = probabilities.max(axis=1)
     correct = predicted == targets
@@ -44,10 +87,15 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
     one_hot = np.eye(len(labels))[targets]
     confusion = np.zeros((len(labels), len(labels)), dtype=int)
     np.add.at(confusion, (targets, predicted), 1)
+    selected_count = int(selected.sum())
+    selected_correct = int(correct[selected].sum())
     return {
         "count": len(targets), "accuracy": float(correct.mean()),
-        "selected_count": int(selected.sum()), "coverage": float(selected.mean()),
-        "selective_accuracy": float(correct[selected].mean()) if selected.any() else None,
+        "selected_count": selected_count, "coverage": float(selected.mean()),
+        "selective_accuracy": selected_correct / selected_count if selected_count else None,
+        "selective_accuracy_wilson95_lower": wilson_lower_bound_95(
+            selected_correct, selected_count
+        ),
         "false_direct_count": int((selected & ~correct).sum()),
         "unknown_false_accept_count": int((selected & (targets == labels.index(UNKNOWN))).sum()),
         "ece": float(ece), "brier": float(np.square(probabilities - one_hot).sum(axis=1).mean()),
@@ -58,7 +106,7 @@ def metrics(probabilities, targets, labels, threshold=0.92, eligible=None) -> di
 
 
 def _selection(probabilities, targets, labels, threshold, eligible=None):
-    """Return the per-row correct and selected masks the gates agree on."""
+    """게이트들이 공유하는 행별 정답·선택 마스크를 반환한다."""
     predicted = probabilities.argmax(axis=1)
     confidence = probabilities.max(axis=1)
     sorted_probs = np.sort(probabilities, axis=1)
@@ -70,14 +118,22 @@ def _selection(probabilities, targets, labels, threshold, eligible=None):
     return predicted == targets, selected
 
 
-def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Score each template family once so large variant groups cannot dominate.
+def parser_confirmed_eligibility(rows, predictions, eligible):
+    """정책상 가능한 예측마다 의미 해석기의 확인을 요구한다."""
 
-    A family expands into dozens or hundreds of rows through spacing, noise and
-    number variants.  Averaging over rows therefore reports how well the model
-    handles the families that happened to generate the most variants, not how
-    well it generalizes to a phrasing it has never seen.  Every family gets one
-    vote here regardless of how many rows it produced.
+    return [
+        allowed and parse_candidate(row["text"], prediction.choice).parse_success
+        for row, prediction, allowed in zip(rows, predictions, eligible)
+    ]
+
+
+def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
+    """변형이 많은 묶음이 결과를 좌우하지 않도록 템플릿 family마다 한 번씩 점수를 매긴다.
+
+    family 하나는 띄어쓰기·잡음·숫자 변형으로 수십에서 수백 행으로 늘어난다.
+    그래서 행 평균은 처음 보는 표현에 얼마나 일반화하는지가 아니라, 변형을 가장
+    많이 만든 family를 얼마나 잘 처리하는지를 보여 준다. 여기서는 행 수와 관계없이
+    family마다 한 표씩 준다.
     """
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
@@ -107,7 +163,7 @@ def family_metrics(rows, probabilities, targets, labels, threshold=0.92, eligibl
 
 
 def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible=None) -> dict:
-    """Average per label and per language so rare classes keep their weight."""
+    """드문 클래스도 비중을 잃지 않도록 라벨별·언어별로 평균한다."""
     probabilities = np.asarray(probabilities, dtype=float)
     targets = np.asarray(targets, dtype=int)
     if not len(targets):
@@ -131,6 +187,186 @@ def macro_metrics(rows, probabilities, targets, labels, threshold=0.92, eligible
         "direct_precision": grouped_mean(
             [labels[index] for index in probabilities.argmax(axis=1)], selected
         ),
+    }
+
+
+def confusion_comparison(current: dict, previous: dict | None, previous_sha256: str | None) -> dict:
+    """주요 분류 오류와 이전 산출물 대비 증가분을 요약한다."""
+
+    def pairs(matrix):
+        result = {}
+        if not isinstance(matrix, dict):
+            return result
+        for actual, predicted_counts in matrix.items():
+            if not isinstance(predicted_counts, dict):
+                continue
+            for predicted, count in predicted_counts.items():
+                if actual != predicted and isinstance(count, int) and count > 0:
+                    result[(str(actual), str(predicted))] = count
+        return result
+
+    current_pairs = pairs(current)
+    prior_overall = previous.get("overall", {}) if isinstance(previous, dict) else {}
+    previous_pairs = pairs(prior_overall.get("confusion_matrix", {}))
+    major = sorted(current_pairs.items(), key=lambda item: (-item[1], item[0]))[:10]
+    worsened = []
+    for pair, current_count in current_pairs.items():
+        previous_count = previous_pairs.get(pair, 0)
+        if current_count > previous_count:
+            worsened.append({
+                "actual": pair[0], "predicted": pair[1],
+                "current_count": current_count, "previous_count": previous_count,
+                "increase": current_count - previous_count,
+            })
+    worsened.sort(key=lambda row: (-row["increase"], -row["current_count"], row["actual"], row["predicted"]))
+    return {
+        "scope": "classifier_top1",
+        "previous_artifact_sha256": previous_sha256,
+        "major_pairs": [
+            {"actual": pair[0], "predicted": pair[1], "count": count}
+            for pair, count in major
+        ],
+        "top_10_worsened_pairs": worsened[:10],
+    }
+
+
+def review_corpus_summary(data_dir: Path) -> dict:
+    """산출물과 함께 배포되는 사람 검수 코퍼스의 검수 상태를 센다."""
+    summary = {}
+    for name in ("release_gold", "safety_gold"):
+        path = Path(data_dir) / f"{name}.jsonl"
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+        statuses = [json.loads(line).get("review_status") for line in lines if line.strip()]
+        summary[name] = {
+            "rows": len(statuses),
+            "pending": statuses.count("pending_human_review"),
+            "approved": statuses.count("human_approved"),
+            "rejected": statuses.count("human_rejected"),
+        }
+    return summary
+
+
+def _review_section(gold_rows: list, gold_status: list, corpora: dict) -> dict:
+    release, safety = corpora["release_gold"], corpora["safety_gold"]
+    complete = bool(release["rows"] and safety["rows"]
+                    and not release["pending"] and not safety["pending"])
+    return {
+        "legacy_gold_rows": len(gold_rows),
+        "legacy_gold_status": gold_status,
+        "release_gold_rows": release["rows"],
+        "release_pending": release["pending"],
+        "release_rejected": release["rejected"],
+        "safety_gold_rows": safety["rows"],
+        "safety_pending": safety["pending"],
+        "safety_rejected": safety["rejected"],
+        "release_approval": "human_review_complete" if complete else "pending_human_review",
+    }
+
+
+def build_model_card(result: dict, model_dir: Path, data_dir: Path) -> dict:
+    config = json.loads((Path(model_dir) / "config.json").read_text(encoding="utf-8"))
+    gold_rows = build_gold_examples()
+    review_status = sorted({str(row.get("review_status", "unspecified")) for row in gold_rows})
+    gated = result["with_direct_policy_gate"]
+    benchmark_path = Path(data_dir) / "benchmark_results.json"
+    benchmark = (
+        json.loads(benchmark_path.read_text(encoding="utf-8"))
+        if benchmark_path.is_file() else {}
+    )
+    warm_ms = benchmark.get("warm_ms") or {}
+    return {
+        "model_name": "local_command_classifier",
+        "model_version": config.get("version", 1),
+        "model_sha256": result["model_sha256"],
+        "task": "classify short Korean, English, and Japanese command requests",
+        "supported_languages": sorted(result["by_language"]),
+        "architecture": "hashed character n-gram linear classifier",
+        "intended_use": "development evaluation and conservative local command selection",
+        "direct_eligible_tools": sorted(DIRECT_ALLOWLIST),
+        "runtime_policy_default": {
+            "mode": DEFAULT_SETTINGS["local_decision_mode"],
+            "direct_execution": DEFAULT_SETTINGS["local_decision_direct_execution"],
+        },
+        "training": {
+            "dataset_version": config.get("dataset_version"),
+            "training_sha256": config.get("training_sha256"),
+            "augmentation_enabled": bool(config.get("augmentation_enabled")),
+        },
+        "evaluation": {
+            "partition": "held_out_test",
+            "row_count": result["overall"]["count"],
+            "top1_accuracy": result["overall"]["accuracy"],
+            "parser_confirmed_selected_count": gated["selected_count"],
+            "parser_confirmed_precision": gated["selective_accuracy"],
+            "parser_confirmed_precision_wilson95_lower": gated[
+                "selective_accuracy_wilson95_lower"
+            ],
+            "false_direct_count": gated["false_direct_count"],
+            "by_language": {
+                language: {
+                    "selected_count": values["with_direct_policy_gate"]["selected_count"],
+                    "selective_accuracy": values["with_direct_policy_gate"]["selective_accuracy"],
+                    "selective_accuracy_wilson95_lower": values[
+                        "with_direct_policy_gate"
+                    ]["selective_accuracy_wilson95_lower"],
+                    "false_direct_count": values["with_direct_policy_gate"]["false_direct_count"],
+                }
+                for language, values in result["by_language"].items()
+            },
+            "precision_evidence": {
+                "sample_floors": {
+                    "development": {
+                        "overall": MIN_DEV_OVERALL_DIRECT_SELECTIONS,
+                        "per_language": MIN_DEV_LANGUAGE_DIRECT_SELECTIONS,
+                    },
+                    "strict_release": {
+                        "overall": MIN_STRICT_RELEASE_OVERALL_DIRECT_SELECTIONS,
+                        "per_language": MIN_STRICT_RELEASE_LANGUAGE_DIRECT_SELECTIONS,
+                    },
+                },
+                "observed_parser_confirmed_selection_counts": {
+                    "overall": gated["selected_count"],
+                    "by_language": {
+                        language: values["with_direct_policy_gate"]["selected_count"]
+                        for language, values in result["by_language"].items()
+                    },
+                },
+                "wilson95_lower_bounds": {
+                    "overall": gated["selective_accuracy_wilson95_lower"],
+                    "by_language": {
+                        language: values["with_direct_policy_gate"][
+                            "selective_accuracy_wilson95_lower"
+                        ]
+                        for language, values in result["by_language"].items()
+                    },
+                },
+                "interpretation": (
+                    "Sample floors guard against vacuous regression results; they do not "
+                    "establish 99% precision. With zero errors, at least 381 samples are "
+                    "needed for a two-sided 95% Wilson lower bound of 0.99."
+                ),
+            },
+            "commands_dispatched": 0,
+        },
+        "resource_usage": {
+            "model_resource_bytes": benchmark.get("resource_bytes"),
+            "additional_steady_rss_bytes": benchmark.get("additional_steady_rss_bytes"),
+            "warm_p95_ms": warm_ms.get("p95"),
+            "gpu_used": benchmark.get("gpu_used"),
+        },
+        "review": _review_section(gold_rows, review_status, review_corpus_summary(data_dir)),
+        "limitations": [
+            "The evaluation set is generated and does not represent microphone acceptance.",
+            "The held-out measurements do not establish release readiness.",
+            "The evaluator checks parser confirmation but does not dispatch commands.",
+        ],
+        "provenance": result["provenance"],
+        "split_baseline": {
+            "ref": BASELINE_REF,
+            "commit": BASELINE_COMMIT,
+            "manifest_sha256": BASELINE_MANIFEST_SHA256,
+            "snapshot_sha256": sha256_file(Path(data_dir) / "split_manifest_baseline.json"),
+        },
     }
 
 
@@ -177,30 +413,49 @@ def evaluate(model_dir: Path, threshold=0.92, *, gold=False) -> dict:
         mask = np.array([row["is_noise"] == kind for row in test])
         result["by_bucket"]["noise" if kind else "clean"] = metrics(
             probabilities[mask], targets[mask], labels, threshold)
-    eligible = [get_llm_router().route(row["text"]).task_type == "simple_chat" for row in test]
+    eligible = [not is_multi_intent(row["text"]) for row in test]
     result["with_existing_rule_gate"] = metrics(probabilities, targets, labels, threshold, eligible)
     direct_eligible = [
         rule_pass and is_direct_allowed(prediction.choice, "fast")
         for rule_pass, prediction in zip(eligible, predictions)
     ]
+    parser_eligible = parser_confirmed_eligibility(test, predictions, direct_eligible)
+    candidate_gate_selected = _selection(
+        probabilities, targets, labels, threshold, direct_eligible
+    )[1]
+    parser_gate_selected = _selection(
+        probabilities, targets, labels, threshold, parser_eligible
+    )[1]
+    result["parser_rejected_count"] = int((candidate_gate_selected & ~parser_gate_selected).sum())
+    result["with_candidate_policy_gate"] = metrics(
+        probabilities, targets, labels, threshold, direct_eligible
+    )
     for language in ("ko", "en", "ja"):
         mask = np.array([row["language"] == language for row in test])
-        result["by_language"][language]["with_direct_policy_gate"] = metrics(
+        result["by_language"][language]["with_candidate_policy_gate"] = metrics(
             probabilities[mask], targets[mask], labels, threshold,
             np.asarray(direct_eligible, dtype=bool)[mask],
         )
+        result["by_language"][language]["with_direct_policy_gate"] = metrics(
+            probabilities[mask], targets[mask], labels, threshold,
+            np.asarray(parser_eligible, dtype=bool)[mask],
+        )
     result["with_direct_policy_gate"] = metrics(
-        probabilities, targets, labels, threshold, direct_eligible)
+        probabilities, targets, labels, threshold, parser_eligible)
     # 계열 하나가 수백 행으로 늘어나므로 행 평균과 별개로 계열 한 표 기준을 함께 낸다.
     result["family"] = family_metrics(test, probabilities, targets, labels, threshold)
     result["family_with_direct_policy_gate"] = family_metrics(
+        test, probabilities, targets, labels, threshold, parser_eligible)
+    result["family_with_candidate_policy_gate"] = family_metrics(
         test, probabilities, targets, labels, threshold, direct_eligible)
     result["macro"] = macro_metrics(test, probabilities, targets, labels, threshold)
     result["macro_with_direct_policy_gate"] = macro_metrics(
+        test, probabilities, targets, labels, threshold, parser_eligible)
+    result["macro_with_candidate_policy_gate"] = macro_metrics(
         test, probabilities, targets, labels, threshold, direct_eligible)
     result["direct_executions"] = 0
-    # 산출물이 어느 모델의 결과인지 배포 검사에서 대조한다.
-    result["model_sha256"] = getattr(scorer, "sha256", None)
+    result["provenance"] = artifact_fingerprints(model_dir)
+    result["model_sha256"] = result["provenance"]["model_sha256"]
     return result
 
 
@@ -208,14 +463,34 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, default=Path("resources/decision"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--compare-with", type=Path,
+                        help="prior evaluation artifact used for confusion-pair comparison")
     parser.add_argument("--gold", action="store_true", help="evaluate the reserved partition")
     args = parser.parse_args(argv)
     if args.output is None:
         filename = "gold_evaluation.json" if args.gold else "evaluation.json"
         args.output = Path("scripts/decision_data") / filename
+    comparison_path = args.compare_with or args.output
+    previous = None
+    previous_sha256 = None
+    if comparison_path.is_file():
+        previous_bytes = comparison_path.read_bytes()
+        previous_sha256 = hashlib.sha256(previous_bytes).hexdigest()
+        try:
+            previous = json.loads(previous_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            previous = None
     result = evaluate(args.model, gold=args.gold)
+    result["confusion_comparison"] = confusion_comparison(
+        result["overall"]["confusion_matrix"], previous, previous_sha256
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if not args.gold and args.output.resolve() == Path("scripts/decision_data/evaluation.json").resolve():
+        card = build_model_card(result, args.model, args.output.parent)
+        (args.output.parent / "model_card.json").write_text(
+            json.dumps(card, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     import matplotlib
     matplotlib.use("Agg")
     from matplotlib import pyplot as plt

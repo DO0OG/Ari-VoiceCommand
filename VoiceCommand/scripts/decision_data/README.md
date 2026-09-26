@@ -27,6 +27,15 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
   언어별 선택 정확도 0.99 이상
 - `evaluation.json`, `benchmark_results.json`의 `model_sha256`과 평가 행 해시
 
+PR CI는 직접 처리 선택 수의 개발 하한(전체 50, 언어별 10)을 쓰고, 검수 후보 묶음
+(`release_gold`, `safety_gold`)은 형식·격리·검수 이력만 확인한다. 배포 빌드는
+`--strict-release`로 릴리즈 하한(전체 100, 언어별 30)과 함께 두 묶음에 미검수 행이
+없을 것, 그리고 승인 행이 충분할 것을 요구한다. 승인 하한은 생성 규모의 약 80%로,
+`release_gold`는 언어별 220행·직접 처리 도구×언어별 45행, `safety_gold`는 언어별
+80행이다. 대부분을 거절하고 일부만 승인해서는 통과하지 않는다. 이어서 텍스트 확인을 실행하므로, 하나라도
+어긋나면 실행 파일을 만들기 전에 멈춘다. 검수 상태가 바뀌면 `evaluate`로
+`model_card.json`을 다시 만든다.
+
 모델을 바꾸면 `evaluate`, `evaluate --gold`, `benchmark`를 다시 실행해 산출물을 함께
 커밋한다. 예비 자료 결과는 사람 검토 전이므로 판정에 쓰지 않는다.
 
@@ -35,7 +44,10 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
 family별 분할은 `split_manifest.json`에 기록하고 그 값을 그대로 따른다. 한 번
 배정한 family는 문장을 고쳐도 분할이 바뀌지 않으며, 기록에 없는 새 family만
 해당 라벨에서 가장 부족한 분할에 배정한다. 기록이 비어 있을 때의 배정 규칙은
-이전의 train 두 칸 순환과 같은 결과를 낸다.
+이전의 train 두 칸 순환과 같은 결과를 낸다. 이 재현을 지키려면 새 family의
+이름이 해당 라벨의 기존 family보다 이름순으로 뒤에 와야 한다. 예를 들어 seed의
+`get_current_time.single_action.NN`은 `expanded.get_current_time.*`보다 뒤지만
+`adjust_volume.single_action.NN`은 `expanded.adjust_volume.*`보다 앞이다.
 
 이 장치가 없을 때는 family가 하나만 늘어도 뒤쪽 배정이 통째로 밀렸고, 같은
 자료에서 시험 분할의 `false_direct_count`가 0에서 111과 118까지 움직였다.
@@ -92,10 +104,19 @@ bucket별 결과와 오선택 수가 들어 있다. Selective accuracy는 신뢰
 
 이번 범위는 후보 정책과 자료 확장이다. `local_decision_engine_enabled=true`,
 `local_decision_backend=linear`, `local_decision_threshold=0.92`가 기본값이다.
-`local_decision_mode`는 `off` / `shadow` / `fast` / `adaptive`이며 기본값은 `shadow`다.
-설정 키가 없거나 값이 잘못되어도 `shadow`로 처리한다. `off`는 분류를 건너뛴다.
-`local_decision_direct_execution` 기본값은 false다. 직접 처리는 모드가 `fast` 또는
-`adaptive`이고 이 설정이 true일 때만 열리며, 그때도 허용 후보(시간, 실행 앱 목록,
+`local_decision_mode`는 `off` / `shadow` / `fast`이며 기본값은 `off`다. 사람 검수와
+실사용 검증을 포함한 배포 판정을 통과하기 전까지 기본값을 켜지 않는다. 설정 키가 없거나
+값이 잘못되면 `off`로 처리하고, `off`는 분류 모듈과 NumPy를 불러오지 않는다. `shadow`는
+실행하지 않고 판단만 남기는 진단용이다. `adaptive`는 내부 이름으로만 남아 있고 설정에서
+고를 수 없으며, 저장된 값은 직접 처리가 켜져 있으면 같은 조건의 `fast`로, 아니면 `off`로
+옮긴다. 이전 기본값(`shadow` + 직접 처리 false)으로 저장된 설정은 한 번만 `off`로 옮기고
+`local_decision_settings_version=2`를 기록해 이후 사용자가 고른 값은 그대로 둔다. 설정
+파일에 아직 옮기지 않은 인증 정보가 있거나 암호화 저장소를 읽을 수 없으면 파일은 다시 쓰지
+않고 이번 실행에만 적용한다. `off`·`shadow`에서 직접 처리가 true로 남아 있으면 false로
+맞춘다. 설정 화면의 토글 하나가 모드와 직접 처리 값을 함께 바꾸고, 고급 목록에서만 세
+모드를 고를 수 있다.
+`local_decision_direct_execution` 기본값은 false다. 직접 처리는 모드가 `fast`이고 이
+설정이 true일 때만 열리며, 그때도 허용 후보(시간, 실행 앱 목록,
 스크린샷, 음량)이면서 의미 해석기가 인자와 의도를 확정하고 모순이나 남은 동작이
 없어야 한다. 하나라도 어긋나면 기존 호출을 진행한다. 직접 처리는 기존 처리기를
 그대로 호출하고 응답은 번역된 고정 문구를 쓰므로 대화 호출이 생기지 않는다.

@@ -5,9 +5,11 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 실행: py -3.11 build_exe.py --onefile # 단일 파일 빌드 (배포용, 느림)
 권장: py -3.11 validate_repo.py       # 빌드 전 검증
 
-nofollow 정책:
-  numpy, torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
-  API 클라이언트는 --nofollow-import-to 처리. 런타임에 site-packages에서 직접 로드됨.
+Nuitka import 제외 정책:
+  torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
+  API 클라이언트는 --nofollow-import-to 옵션으로 제외한다. 배포 폴더에는 들어가지 않으므로
+  이 패키지를 쓰는 선택 기능은 배포판에서 동작하지 않는다.
+  numpy는 로컬 판단 엔진과 Whisper 워커가 필요로 하므로 제외하지 않는다.
 
 출력: dist/Ari/
 
@@ -23,8 +25,8 @@ nofollow 정책:
   ui/conversation_search.py — 대화 검색 UI
 
 포함 모듈 (2026-04-29):
-  agent/response_cache.py — from_config() 팩토리 + _coerce_positive_int() 헬퍼 추가
-  agent/task_queue.py     — AgentTaskQueue PriorityQueue + worker thread 비동기 큐 (신규)
+  agent/response_cache.py — from_config() 팩토리 + _coerce_positive_int() 보조 함수 추가
+  agent/task_queue.py     — AgentTaskQueue PriorityQueue + 워커 스레드 기반 비동기 큐 (신규)
   agent/llm_router.py     — 영어·일본어 키워드 추가 (CODE/PLAN/LONG 다국어 라우팅)
   agent/safety_checker.py — curl/wget DANGEROUS → CAUTION 재분류
   commands/weather_command.py — 다국어 키워드 + CommandResult 반환
@@ -45,17 +47,17 @@ nofollow 정책:
   i18n/locales/*.po            — ko/en/ja 54개 번역 키 추가 (타이머·확인 다이얼로그·안전 점검기)
 
 포함 모듈 (2026-04-14 최신):
-  agent/agent_orchestrator.py — shared context 캐시, 동적 계획 반복, 반복 실패 조기 종료
+  agent/agent_orchestrator.py — 공유 컨텍스트 캐시, 동적 계획 반복, 반복 실패 조기 종료
   agent/execution_engine.py   — 반복 동일 오류 중단, 회복 전략 다변화, 단계 타임아웃 힌트
-  agent/agent_planner.py      — StrategyMemory lift 게이팅 + optional step 필드 전달
+  agent/agent_planner.py      — StrategyMemory lift 게이팅 + 선택적 step 필드 전달
   agent/agent_math.py         — cosine_similarity 공통 유틸
   agent/tag_keywords.py       — 공통 TAG_KEYWORDS 사전
-  agent/record_store.py       — append-only 기반 증분 저장 스토어 스캐폴드
-  agent/learning_engine.py    — background reflection 스레드 + lesson 업데이트 helper
-  agent/reflection_engine.py  — fallback 메시지 i18n 런타임 번역 + 추정 토큰 계측
-  agent/skill_library.py      — goal embedding 기반 스킬 매칭 + compile_failed 추적
-  agent/episode_memory.py     — embedder 우선 저장/검색 + missing embedding background backfill
-  agent/learning_metrics.py   — 일별 학습 통계/카운터/추정 토큰 summary 집계 + lift 게이팅
+  agent/record_store.py       — 추가 전용 방식의 증분 저장 스토어 기본 골격
+  agent/learning_engine.py    — 백그라운드 성찰 스레드 + 학습 항목 업데이트 보조 함수
+  agent/reflection_engine.py  — 대체 메시지 i18n 실행 시 번역 + 추정 토큰 계측
+  agent/skill_library.py      — 목표 임베딩 기반 스킬 매칭 + compile_failed 추적
+  agent/episode_memory.py     — embedder 우선 저장/검색 + 임베딩 누락 항목의 백그라운드 보충
+  agent/learning_metrics.py   — 일별 학습 통계/카운터/추정 토큰 요약 집계 + lift 게이팅
   agent/weekly_report.py      — 자기개선 루프 활동/신규 스킬/Python 컴파일/토큰 리포트 표시
   i18n/locales/*.po           — ko/en/ja 자기개선 루프 문자열 동기화
 
@@ -70,10 +72,10 @@ nofollow 정책:
   agent/planner_json_utils.py   — 잘린 JSON 응답 복구/파싱 책임 분리
   agent/automation_plan_utils.py — 브라우저/데스크톱 액션 계획 조립·정렬 유틸리티 분리
   agent/agent_planner.py        — JSON 복구 헬퍼 위임으로 플래너 본체 응집도 개선
-  agent/automation_helpers.py   — resilient/adaptive 계획 조립 중복 제거
+  agent/automation_helpers.py   — 복원력 강화/적응형 계획 조립 중복 제거
 
 포함 모듈 (2026-04-04 최신):
-  agent/execution_engine.py   — AgentOrchestrator에서 분리된 단계 실행 엔진 (ExecutionEngine)
+  agent/execution_engine.py   — AgentOrchestrator에서 분리한 단계 실행 엔진 (ExecutionEngine)
   agent/verification_engine.py — 검증 전담 모듈 (VerificationEngine)
   agent/learning_engine.py    — 학습/기록 전담 모듈 (LearningEngine)
   agent/autonomous_executor.py — 자식 프로세스 환경변수 격리 (_build_child_env), 좀비 방지
@@ -82,7 +84,7 @@ nofollow 정책:
   agent/safety_checker.py     — api_key 민감 키워드 추가
   core/plugin_loader.py       — 유니코드 ZIP entry 경로 검증, except 범위 축소
   core/plugin_sandbox.py      — finally 블록으로 stdout 복구 보장
-  memory/memory_manager.py    — double-checked locking 싱글톤, 정규식 캐싱
+  memory/memory_manager.py    — 이중 확인 잠금 싱글톤, 정규식 캐싱
   memory/trust_engine.py      — update_source_weight 스레드 락 추가
   ui/settings_llm_page.py    — SettingsDialog LLM 탭 분리 (settings_dialog.py 1190→388줄)
   ui/settings_tts_page.py    — SettingsDialog TTS 탭 분리
@@ -95,12 +97,12 @@ nofollow 정책:
   ui/text_interface.py      — 스트리밍 청크 반영 + 문장 경계 TTS 즉시 시작
   core/resource_manager.py  — 개발 모드 `.ari_runtime` 분리 + 레거시 상태 마이그레이션
                               빌드된 exe 실행 시 런타임 루트는 `%AppData%/Ari`
-  validate_repo.py          — clean environment runtime / marketplace sha256 contract smoke 추가
+  validate_repo.py          — 깨끗한 실행 환경 / marketplace SHA-256 계약 스모크 테스트 추가
   market/web/src/*          — Codacy 대응용 비동기 핸들러/nullable 정리 (웹 배포 산출물과 동작 일치)
-  market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 별도 functions deploy 필요)
-  agent/agent_planner.py    — workspace audit 템플릿 강화 (창 분류/탭 추정/백업 보고)
-  core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + timeout 상한 적용
-  services/web_tools.py     — ddgs 우선 검색 클라이언트 + legacy fallback
+  market/supabase/functions — upload-plugin / notify-developer 검증 로직 보강 (배포 시 functions를 별도로 배포해야 함)
+  agent/agent_planner.py    — 작업 공간 감사 템플릿 강화 (창 분류/탭 추정/백업 보고)
+  core/plugin_sandbox.py    — multiprocessing 기반 격리 실행 + 시간 초과 상한 적용
+  services/web_tools.py     — ddgs 우선 검색 클라이언트 + 기존 대체 경로
   requirements.txt          — certifi / requests(>=2.33.0) / Pillow 보안 업데이트, ddgs 기본 채택
 
 포함 모듈 (2026-03-30):
@@ -119,15 +121,15 @@ nofollow 정책:
 포함 모듈 (이전 2026-03-26):
   agent/ocr_helper.py        — easyocr/pytesseract 화면 텍스트 추출 (선택 의존성)
   agent/dag_builder.py       — 리소스 충돌 기반 의존성 DAG + 병렬 그룹 계산
-  agent/embedder.py          — sentence-transformers/API/해시 임베딩 + cross-encoder 재랭킹
+  agent/embedder.py          — sentence-transformers/API/해시 임베딩 + cross-encoder 재순위화
   agent/real_verifier.py     — 4단계 검증 파이프라인 (휴리스틱→OCR→코드→LLM)
   agent/agent_planner.py     — ActionStep DAG 필드 추가, decompose() DAG 주석
   agent/agent_orchestrator.py — 병렬 그룹 실행 + DOM 재계획 플래그 처리
   agent/strategy_memory.py   — embedding 필드 + 3단계 검색 파이프라인
   services/dom_analyser.py   — Selenium DOM 분석 + 다음 액션 제안
   services/web_tools.py      — login_and_run DOM 재계획, get_state DOM 분석 포함
-  memory/trust_engine.py     — FACT 신뢰도 업데이트 엔진 (출처 가중치/충돌/decay)
-  memory/user_context.py     — record_fact trust_engine 연동, optimize_memory decay 교체
+  memory/trust_engine.py     — FACT 신뢰도 업데이트 엔진 (출처 가중치/충돌/감쇠)
+  memory/user_context.py     — record_fact와 trust_engine 연동, optimize_memory 감쇠 로직 교체
   ui/theme_editor.py         — 팔레트 색상 피커 + JSON 편집 위젯
   ui/settings_dialog.py      — ThemeEditorWidget 통합, 팔레트 편집 토글
   agent/llm_provider.py      — 역할별 독립 LLM 제공자(플래너/실행) + API 키 검증 UI
@@ -136,16 +138,16 @@ nofollow 정책:
   Main.py                    — 로그 자동 순환 (최대 10개 보관)
 
 포함 모듈 (2026-03-25):
-  agent/agent_orchestrator  — 병렬 실행 및 자율 반성(Reflection) 지원
+  agent/agent_orchestrator  — 병렬 실행 및 자율 반성(성찰) 지원
   agent/agent_planner       — 플래너/실행 모델 분리, 앱 워크플로우 템플릿 확장
   agent/file_tools.py       — 확장된 파일 작업군 (이름 변경, 병합, 정리, 분석, 로그 리포트)
   agent/proactive_scheduler — 주제 기반 선제 제안 및 지정 시각 알람
-  agent/real_verifier.py    — 창/URL/이미지/workflow JSON 기반 실제 상태 검증 강화
+  agent/real_verifier.py    — 창/URL/이미지/워크플로 JSON 기반 실제 상태 검증 강화
   services/web_tools.py      — 브라우저 셀렉터/액션 전략 지속 메모리 + goal_hint 재사용
   agent/automation_helpers.py — 데스크톱 창 타깃/워크플로우 기억 + wait_image
-  agent/strategy_memory.py    — workflow hint 축적 및 재사용
-  agent/autonomous_executor.py — adaptive/resilient workflow + planning snapshot 노출
-  agent/episode_memory.py     — 목표 에피소드 기억 + recovery guidance 재주입
+  agent/strategy_memory.py    — 워크플로 힌트 축적 및 재사용
+  agent/autonomous_executor.py — 적응형/복원력 강화 워크플로 + 계획 스냅샷 노출
+  agent/episode_memory.py     — 목표 에피소드 기억 + 복구 지침 재주입
   core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점 (.py / .zip)
   ui/theme.py, ui/common.py — `%AppData%/Ari/theme/*.json` 기반 UI 테마 시스템
   plugins/sample_plugin.py   — 사용자 플러그인 템플릿
@@ -251,7 +253,6 @@ nuitka_args = [
     "--include-data-dir=images=images",
     "--include-data-dir=theme=theme",
     "--include-data-dir=i18n/locales=i18n/locales",
-    "--include-data-dir=plugins=plugins",
     "--include-data-dir=resources/decision=resources/decision",
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
@@ -305,6 +306,7 @@ nuitka_args = [
     "--include-module=commands.memory_command",
     "--include-module=core.plugin_loader",
     "--include-module=core.plugin_sandbox",
+    "--include-module=core._whisper_worker",
     "--include-module=core.resource_manager",
     "--include-module=services.web_tools",
     "--include-module=services.google_calendar",
@@ -368,12 +370,11 @@ nuitka_args = [
         "win32api",
     ),
 
-    # ── nofollow: C 확장 / 컴파일 불가 패키지 ──────────────────────────────────
+    # ── 가져오기 제외 대상: C 확장 / 컴파일 불가 패키지 ─────────────────────────
     # Nuitka가 C로 컴파일하지 않도록 제외. 런타임에는 site-packages의
     # 사전 컴파일된 .pyd/.dll 또는 순수 Python 파일로 동작.
 
-    # ML / 수치 연산
-    "--nofollow-import-to=numpy",
+    # ML / 수치 연산 (numpy는 로컬 판단 엔진이 쓰므로 포함한다)
     "--nofollow-import-to=torch",
     "--nofollow-import-to=torchvision",
     "--nofollow-import-to=torchaudio",

@@ -1,4 +1,5 @@
 from commands.base_command import BaseCommand
+from commands.ai_fast_path import FastPathMixin
 import inspect
 import json
 import logging
@@ -7,7 +8,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from agent.assistant_text_utils import (
     clean_tool_artifact_text,
@@ -19,11 +20,8 @@ from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 from i18n.translator import _, get_language
 
-if TYPE_CHECKING:
-    from agent.decision.engine import FastPathResult
 
-
-class AICommand(BaseCommand):
+class AICommand(FastPathMixin, BaseCommand):
     """AI 어시스턴트 대화 명령 (기본/fallback)"""
     priority = 100
     _KR_NUM = {
@@ -63,11 +61,6 @@ class AICommand(BaseCommand):
         "shutdown", "shut down", "turn off", "power off",
         "シャットダウン", "終了", "オフ", "切",
     )
-    _FAST_PATH_MESSAGES = {
-        "get_running_apps": "실행 중인 앱 목록을 확인했습니다.",
-        "take_screenshot": "스크린샷을 저장했습니다.",
-        "adjust_volume": "볼륨을 조절했습니다.",
-    }
 
     def __init__(self, ai_assistant, tts_func, learning_mode_ref):
         self.ai_assistant = ai_assistant
@@ -432,7 +425,7 @@ class AICommand(BaseCommand):
         max_results = int(args.get("max_results", 5))
         try:
             from services.web_tools import web_search
-            logging.info("[AICommand] web_search 실행: query=%r, max_results=%s", query, max_results)
+            logging.info("[AICommand] web_search 실행: query=%d자, max_results=%s", len(query), max_results)
             result = web_search(query, max_results=max_results)
             return f"[웹 검색 결과]\n{result}\n\n지시사항: 위 검색 결과를 바탕으로 사용자의 원래 질문에 대해 구어체로 3문장 이내로 요약하여 자연스럽게 대답해주세요."
         except Exception as e:
@@ -465,7 +458,7 @@ class AICommand(BaseCommand):
             try:
                 raw_arguments = json.loads(raw_arguments)
             except json.JSONDecodeError:
-                logging.warning("[AICommand] MCP arguments JSON 파싱 실패, input 래핑: %r", raw_arguments)
+                logging.warning("[AICommand] MCP arguments JSON 파싱 실패, input 래핑")
                 raw_arguments = {"input": raw_arguments}
         if raw_arguments is None:
             raw_arguments = {}
@@ -1404,29 +1397,6 @@ class AICommand(BaseCommand):
 
     # ── 실행 ────────────────────────────────────────────────────────────────────
 
-    def try_fast_path(self, text: str) -> Optional["FastPathResult"]:
-        """선택적 로컬 분류 실패는 기존 대화 경로에 영향을 주지 않는다."""
-        try:
-            from core.config_manager import ConfigManager
-
-            mode = ConfigManager.get("local_decision_mode", "shadow")
-            if not isinstance(mode, str) or mode not in {"off", "shadow", "fast", "adaptive"}:
-                mode = "shadow"
-            if mode == "off":
-                return None
-            if ConfigManager.get("local_decision_engine_enabled", True) is not True:
-                return None
-            from agent.decision.engine import LocalDecisionEngine
-            from core.resource_manager import ResourceManager
-
-            if not hasattr(self, "_decision_engine"):
-                self._decision_engine = LocalDecisionEngine(
-                    ResourceManager.get_bundle_path("resources/decision")
-                )
-            return self._decision_engine.try_fast_path(text)
-        except Exception:
-            return None
-
     def execute(self, text: str) -> None:
         from core.VoiceCommand import _state
         from core.config_manager import ConfigManager
@@ -1475,11 +1445,10 @@ class AICommand(BaseCommand):
             response = None
             tool_calls: List[dict] = []
             fast_result = self.try_fast_path(text)
-            if fast_result is not None:
-                self._execute_fast_path_result(
-                    fast_result,
-                    tool_result_callback=tool_result_callback,
-                )
+            if fast_result is not None and self._execute_fast_path_result(
+                fast_result,
+                tool_result_callback=tool_result_callback,
+            ):
                 return
 
             self._current_goal = text
@@ -1519,7 +1488,7 @@ class AICommand(BaseCommand):
                             "explanation": "복합 작업으로 판단되어 단계별 실행으로 전환할게요.",
                         },
                     }]
-                    logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격: %s", text[:80])
+                    logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격 (%d자)", len(text))
 
                 if tool_calls:
                     data_source = self._infer_data_source_from_tool_calls(tool_calls)
@@ -1605,82 +1574,13 @@ class AICommand(BaseCommand):
         normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
         return normalized in {"이어서 해줘", "계속해", "계속", "resume", "continue"}
 
-    @staticmethod
-    def _fast_handler_failed(result) -> bool:
-        if isinstance(result, bool):
-            return not result
-        if isinstance(result, dict) and result.get("success") is False:
-            return True
-        if isinstance(result, str):
-            normalized = result.strip().casefold()
-            return normalized.startswith(
-                (
-                    "오류:",
-                    "error:",
-                    "failed:",
-                    "failed to adjust volume",
-                    "볼륨 조절 실패",
-                    "실행 앱 목록 조회 실패",
-                    "スクリーンショットの保存に失敗",
-                    # 현재 언어로 번역된 실패 문구도 실패로 본다.
-                    _("볼륨 조절 실패").casefold(),
-                    _("실행 앱 목록 조회 실패: {error}").split("{", 1)[0].strip().casefold(),
-                )
-            )
-        return result is None
-
-    def _fast_response(self, name: str, handler_result: Optional[str]) -> Optional[str]:
-        if name == "get_current_time" and handler_result:
-            return str(handler_result)
-
-        message = self._FAST_PATH_MESSAGES.get(name)
-        if not message:
-            return None
-        if name == "take_screenshot" and handler_result:
-            return _("스크린샷을 저장했습니다: {path}").format(path=handler_result)
-        if name == "get_running_apps" and handler_result:
-            return _("실행 중인 앱 목록입니다.\n{apps}").format(apps=handler_result)
-        return _(message)
-
-    def _execute_fast_path_result(
-        self,
-        result,
-        *,
-        tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None,
-    ) -> None:
-        name = str(getattr(result, "tool_name", "") or "")
-        arguments = getattr(result, "arguments", {})
-        if not name or not isinstance(arguments, dict):
-            return
-        try:
-            from agent.decision.candidates import is_direct_allowed
-
-            allowed = is_direct_allowed(name, "fast")
-        except Exception:
-            allowed = False
-        if not allowed:
-            return
-
-        results = self._execute_tool_calls(
-            [{"id": "fast_path_1", "name": name, "arguments": arguments}],
-            tool_result_callback=tool_result_callback,
-        )
-        handler_result = results[0] if results else None
-        if self._fast_handler_failed(handler_result):
-            if handler_result:
-                self._emit_user_message(str(handler_result))
-            return
-        response = self._fast_response(name, handler_result)
-        if response:
-            self._emit_user_message(response)
-
     def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""
         results: List[Optional[str]] = []
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
-            logging.info("AI tool 실행: %s %s", name, args)
+            logging.info("AI tool 실행: %s", name)
 
             handler = self._dispatch.get(name)
             if handler:

@@ -5,7 +5,6 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from commands.ai_command import AICommand
@@ -60,11 +59,6 @@ def _write_model(directory, *, labels=None, weights=None, bias=None, **overrides
 
 
 class DecisionEngineTests(unittest.TestCase):
-    def _simple_router(self):
-        return SimpleNamespace(
-            route=Mock(return_value=SimpleNamespace(task_type="simple_chat"))
-        )
-
     def _config_patch(
         self,
         *,
@@ -186,26 +180,88 @@ class DecisionEngineTests(unittest.TestCase):
         self.assertGreaterEqual(result.margin, 0.0)
         self.assertEqual(result.source, "linear")
 
-    def test_complex_router_result_abstains_before_model_load(self):
+    def test_multi_intent_request_abstains_before_model_load(self):
         engine = _engine_module()
-        router = SimpleNamespace(
-            route=Mock(return_value=SimpleNamespace(task_type="complex_plan"))
-        )
         local = engine.LocalDecisionEngine("unused")
 
-        with patch.object(engine, "get_llm_router", return_value=router):
-            with patch.object(engine, "LinearScorer") as scorer:
-                self.assertIsNone(local.choice("organize these files"))
+        with patch.object(engine, "LinearScorer") as scorer:
+            self.assertIsNone(local.choice("turn the volume up and then take a screenshot"))
 
-        router.route.assert_called_once_with("organize these files")
         scorer.assert_not_called()
         self.assertFalse(local._load_attempted)
+        self.assertEqual(local.metrics()["multi_intent_rejected"], 1)
+
+    def test_app_name_collision_is_still_scored_locally(self):
+        engine = _engine_module()
+        model_dir = Path(__file__).resolve().parents[1] / "resources" / "decision"
+        local = engine.LocalDecisionEngine(model_dir)
+
+        # 일반 라우터는 이 문장을 코딩 요청으로 보지만 전용 판정은 그렇지 않다.
+        self.assertIsNotNone(local.choice("Visual Studio Code 열어줘"))
+
+    def test_manual_reload_recovers_after_repair_and_health_has_no_text(self):
+        engine = _engine_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "model"
+            local = engine.LocalDecisionEngine(model_dir)
+
+            self.assertIsNone(local.choice("private phrase 4821"))
+            health = local.health()
+            self.assertEqual(health["state"], "error")
+            self.assertEqual(health["error_code"], "model_load_failed")
+            self.assertNotIn("private phrase 4821", str(health))
+
+            model_dir.mkdir()
+            _write_model(model_dir)
+            self.assertIsNone(local.choice("hello"))
+            local.reload()
+            self.assertIsNotNone(local.choice("hello"))
+            self.assertEqual(local.health()["state"], "ready")
+            self.assertEqual(local.health()["error_code"], "")
+
+    def test_counters_track_outcomes_and_reset(self):
+        engine = _engine_module()
+        local = engine.LocalDecisionEngine("unused")
+        local.choice = Mock(return_value=engine.DecisionResult(
+            "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
+        ))
+
+        with self._config_patch(mode="fast"):
+            self.assertIsNotNone(local.try_fast_path("what time is it"))
+            self.assertIsNone(local.try_fast_path("what time is it in Paris tomorrow"))
+
+        counts = local.metrics()
+        self.assertEqual(counts["decision_total"], 2)
+        self.assertEqual(counts["fast_selected"], 1)
+        self.assertEqual(counts["parser_rejected"], 1)
+        self.assertEqual(counts["llm_fallback"], 1)
+        local.reset_diagnostics()
+        self.assertEqual(set(local.metrics().values()), {0})
+
+    def test_opposite_volume_request_soon_after_direct_run_is_a_possible_correction(self):
+        engine = _engine_module()
+        local = engine.LocalDecisionEngine("unused")
+        local.note_executed(engine.FastPathResult(
+            "adjust_volume", {"direction": "up"}, 0.99, 0.8, "linear", True
+        ))
+        local.choice = Mock(return_value=engine.DecisionResult(
+            "adjust_volume", {"adjust_volume": 0.99}, 0.99, 0.80, "linear", 1.0
+        ))
+
+        with self._config_patch(mode="shadow"):
+            local.try_fast_path("볼륨 내려줘")
+            local.try_fast_path("볼륨 내려줘")
+
+        counts = local.metrics()
+        self.assertEqual(counts["fast_executed"], 1)
+        self.assertEqual(counts["llm_calls_saved"], 1)
+        self.assertEqual(counts["possible_correction"], 1)
 
     def test_missing_model_falls_back_and_does_not_retry_load(self):
         engine = _engine_module()
         with tempfile.TemporaryDirectory() as temp_dir:
             local = engine.LocalDecisionEngine(Path(temp_dir) / "missing")
-            with patch.object(engine, "get_llm_router", return_value=self._simple_router()):
+            with patch.object(engine, "is_multi_intent", return_value=False):
                 with patch.object(engine, "LinearScorer", wraps=engine.LinearScorer) as scorer:
                     self.assertIsNone(local.choice("hello"))
                     self.assertIsNone(local.choice("hello again"))
@@ -223,7 +279,7 @@ class DecisionEngineTests(unittest.TestCase):
             weights_path.write_bytes(weights_path.read_bytes() + b"corrupt")
             local = engine.LocalDecisionEngine(model_dir)
 
-            with patch.object(engine, "get_llm_router", return_value=self._simple_router()):
+            with patch.object(engine, "is_multi_intent", return_value=False):
                 with patch.object(engine, "LinearScorer", wraps=engine.LinearScorer) as scorer:
                     self.assertIsNone(local.choice("hello"))
                     _write_model(model_dir)
@@ -252,7 +308,7 @@ class DecisionEngineTests(unittest.TestCase):
                         )
                     local = engine.LocalDecisionEngine(model_dir)
                     with patch.object(
-                        engine, "get_llm_router", return_value=self._simple_router()
+                        engine, "is_multi_intent", return_value=False
                     ):
                         self.assertIsNone(local.choice("hello"))
                         self.assertTrue(local._load_attempted)
@@ -266,7 +322,7 @@ class DecisionEngineTests(unittest.TestCase):
         local._load_attempted = True
         local._scorer = scorer
 
-        with patch.object(engine, "get_llm_router", return_value=self._simple_router()):
+        with patch.object(engine, "is_multi_intent", return_value=False):
             self.assertIsNone(local.choice("hello"))
             self.assertIsNone(local.choice("hello again"))
 
@@ -339,7 +395,7 @@ class DecisionEngineTests(unittest.TestCase):
             for name in candidate_names():
                 with self.subTest(mode=mode, name=name):
                     self.assertFalse(is_direct_allowed(name, mode))
-    def test_explicit_modes_allow_proven_request_and_invalid_mode_shadows(self):
+    def test_explicit_modes_allow_proven_request_and_invalid_mode_is_off(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             "get_current_time", {"get_current_time": 1.0}, 1.0, 1.0, "linear", 1.0
@@ -364,7 +420,8 @@ class DecisionEngineTests(unittest.TestCase):
         local.choice = Mock(return_value=decision)
         with self._config_patch(mode="invalid"):
             self.assertIsNone(local.try_fast_path("what time is it"))
-        self.assertIs(local.last_decision, decision)
+        local.choice.assert_not_called()
+        self.assertIsNone(local.last_decision)
 
     def test_off_mode_stops_before_prediction(self):
         engine = _engine_module()
@@ -375,7 +432,7 @@ class DecisionEngineTests(unittest.TestCase):
         local.choice.assert_not_called()
         self.assertIsNone(local.last_decision)
 
-    def test_missing_mode_defaults_to_shadow(self):
+    def test_missing_mode_defaults_to_off(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             engine.UNKNOWN, {engine.UNKNOWN: 1.0}, 1.0, 1.0, "linear", 1.0
@@ -393,8 +450,8 @@ class DecisionEngineTests(unittest.TestCase):
 
         with patch("core.config_manager.ConfigManager.get", side_effect=get):
             self.assertIsNone(local.try_fast_path("hello"))
-        self.assertIs(local.last_decision, decision)
-        local.choice.assert_called_once_with("hello")
+        self.assertIsNone(local.last_decision)
+        local.choice.assert_not_called()
 
     def test_non_finite_confidence_and_margin_are_rejected(self):
         engine = _engine_module()
@@ -512,8 +569,13 @@ class DecisionEngineTests(unittest.TestCase):
 
                 self.assertEqual(result, "ordinary chat response")
                 self.assertEqual(events[0], ("chat", "what time is it", True))
-                self.assertIs(local.last_decision, decision)
-                local.choice.assert_called_once_with("what time is it")
+                if mode_setting is None:
+                    # 모드가 없으면 꺼짐이므로 점수를 전혀 매기지 않는다.
+                    self.assertIsNone(local.last_decision)
+                    local.choice.assert_not_called()
+                else:
+                    self.assertIs(local.last_decision, decision)
+                    local.choice.assert_called_once_with("what time is it")
                 dispatch.assert_not_called()
 
     def test_ai_command_high_risk_prediction_uses_chat_and_existing_safety_handler(self):
@@ -632,8 +694,10 @@ class DecisionEngineTests(unittest.TestCase):
 
         template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
         template = json.loads(template_path.read_text(encoding="utf-8"))
-        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "shadow")
-        self.assertEqual(template["local_decision_mode"], "shadow")
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "off")
+        self.assertEqual(template["local_decision_mode"], "off")
+        self.assertEqual(template["local_decision_settings_version"], 2)
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_settings_version"], 2)
         for key in (
             "local_decision_engine_enabled",
             "local_decision_backend",

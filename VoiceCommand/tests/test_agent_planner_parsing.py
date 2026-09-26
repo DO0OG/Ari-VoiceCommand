@@ -365,6 +365,13 @@ class AgentPlannerParsingTests(unittest.TestCase):
         self.assertFalse(planner.is_allowed_developer_path("VoiceCommand/docs/README.md", goal=goal))
         self.assertTrue(planner.is_allowed_developer_path("VoiceCommand/agent/agent_planner.py", goal=goal))
         self.assertTrue(planner.is_allowed_developer_path("docs/README.md", goal=goal))
+        self.assertFalse(
+            planner.is_allowed_developer_path("VoiceCommand/agent/../../VoiceCommand/core/settings_schema.py", goal=goal)
+        )
+        self.assertEqual(
+            planner._find_disallowed_developer_reason("open('../VoiceCommand/agent/x.py', 'w')", goal=goal),
+            "parent directory path",
+        )
 
     def test_decompose_repository_goal_rejects_py_compile_only_retry_plan(self):
         provider = DummyLLMProvider()

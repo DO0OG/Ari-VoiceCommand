@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
+from core.resource_manager import is_bundled
+from core.script_worker import python_script_command
 from i18n.translator import _
 
 from agent.child_environment import _SENSITIVE_ENV_PREFIXES, _SENSITIVE_ENV_SUBSTRINGS, _is_sensitive_env_var, _build_child_env
@@ -36,6 +38,21 @@ _PDF_FONT_CANDIDATES = (
     ("NotoSansKR", "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf"),
 )
 from agent.source_normalization import _ONE_LINE_SUITE_KEYWORDS, _split_top_level_semicolons
+
+
+def _kill_process_tree(process) -> None:
+    """Windows에서는 실행한 프로세스가 띄운 자식 프로세스까지 함께 종료한다."""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+                timeout=_PROCESS_KILL_WAIT_SECONDS,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logging.debug("[Executor] 프로세스 트리 종료 실패: %s", exc)
+    process.kill()
 
 
 @dataclass
@@ -273,7 +290,7 @@ class AutonomousExecutor:
         for process in processes:
             try:
                 if process.poll() is None:
-                    process.kill()
+                    _kill_process_tree(process)
             except Exception as exc:
                 logging.debug("[Executor] 프로세스 중단 실패: %s", exc)
 
@@ -432,7 +449,7 @@ class AutonomousExecutor:
             child_env["PYTHONIOENCODING"] = "utf-8"
             child_env["PYTHONUTF8"] = "1"
             process = subprocess.Popen(
-                [sys.executable, runner_path],
+                python_script_command(runner_path),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -459,7 +476,7 @@ class AutonomousExecutor:
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
             if process:
-                process.kill()
+                _kill_process_tree(process)
                 self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
@@ -520,7 +537,7 @@ class AutonomousExecutor:
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Shell 시간 초과: %s", command)
             if process:
-                process.kill()
+                _kill_process_tree(process)
                 self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
@@ -1111,6 +1128,9 @@ except Exception:
         return os.path.dirname(os.path.dirname(__file__))
 
     def _get_repo_root(self) -> str:
+        # 배포판의 상위 폴더(Program Files 등)는 쓸 수 없으므로 작업 폴더를 사용자 홈으로 둔다.
+        if is_bundled():
+            return os.path.expanduser("~")
         return os.path.dirname(self._get_module_dir())
 
     def _build_subprocess_kwargs(self) -> dict:

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 from agent.real_verifier import RealVerifier, VerificationResult
@@ -315,7 +315,8 @@ class RealVerifierTests(unittest.TestCase):
         planner_client = _SequencedCompletionClient([
             Exception("429 RESOURCE_EXHAUSTED: retry in 1s"),
             ("print('hel", "length"),
-            ("lo')\nprint(True)", "stop"),
+            # 완성된 줄이 없으면 이어 붙이지 않고 처음부터 다시 받는다.
+            ("print('hello')\nprint(True)", "stop"),
         ])
         llm = type(
             "LLM",
@@ -403,6 +404,48 @@ class RealVerifierTests(unittest.TestCase):
         self.assertFalse(result.verified)
         self.assertEqual(result.method, "developer")
         self.assertIn("실패 신호", result.summary)
+
+    def test_run_verification_rejects_write_mode_and_shell_calls(self):
+        executor = _DummyExecutor()
+        executor._do_run_python = MagicMock(return_value=_DummyExecResult(output="True"))
+        verifier = RealVerifier(llm_provider=None, executor=executor)
+
+        for code in (
+            "open(p, mode='w').close()\nprint(True)",
+            "open(str(p), mode='w').close()\nprint(True)",
+            "open(p, mode).close()\nprint(True)",
+            "from pathlib import Path\nmode = 'w'\nPath(p).open(mode).close()\nprint(True)",
+            "import os\nos.system('rd /s /q C:/x')\nprint(True)",
+        ):
+            with self.subTest(code=code):
+                self.assertIsNone(verifier._run_verification(code))
+        executor._do_run_python.assert_not_called()
+
+    def test_call_planner_llm_continues_from_last_complete_line(self):
+        planner_client = _SequencedCompletionClient([
+            ("import os\nprint(os.path.exists('a') and", "length"),
+            ("print(os.path.exists('a') and True)", "stop"),
+        ])
+        llm = type("LLM", (), {"planner_client": planner_client, "planner_provider": "gemini", "planner_model": "m"})()
+        verifier = RealVerifier(llm_provider=llm, executor=_DummyExecutor())
+
+        with patch("agent.real_verifier.time.sleep", return_value=None):
+            code = verifier._call_planner_llm("검증 코드 생성")
+
+        self.assertEqual(code, "import os\nprint(os.path.exists('a') and True)")
+
+    def test_call_planner_llm_discards_partial_code_when_continuation_fails(self):
+        planner_client = _SequencedCompletionClient([
+            ("import os\nprint(", "length"),
+            Exception("400 bad request"),
+        ])
+        llm = type("LLM", (), {"planner_client": planner_client, "planner_provider": "gemini", "planner_model": "m"})()
+        verifier = RealVerifier(llm_provider=llm, executor=_DummyExecutor())
+
+        with patch("agent.real_verifier.time.sleep", return_value=None):
+            code = verifier._call_planner_llm("검증 코드 생성")
+
+        self.assertEqual(code, "")
 
     def test_run_verification_rejects_mutating_code(self):
         verifier = RealVerifier(llm_provider=None, executor=_DummyExecutor())

@@ -59,6 +59,13 @@
 
 ### 설치 및 실행
 
+[Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases)에서 `Ari-Setup-<버전>.exe`를 받아 실행하면 됩니다.
+기본 설치 경로는 `Program Files\Ari`이고, 설치 중에 다른 폴더를 고를 수 있습니다.
+설정과 기록은 `%AppData%\Ari`에 저장되므로 제거해도 남습니다.
+예전 zip 배포판을 쓰셨다면 설정 → 장치 설정에서 "이전 버전 데이터 가져오기"를 누르고 예전 `.ari_runtime` 폴더(또는 그 폴더가 들어 있는 폴더)를 고르세요. 없는 파일만 복사하고 기존 파일은 덮어쓰지 않습니다. 가져온 뒤에는 아리를 다시 시작하세요.
+
+소스에서 직접 실행하려면:
+
 ```bat
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
 cd Ari-VoiceCommand

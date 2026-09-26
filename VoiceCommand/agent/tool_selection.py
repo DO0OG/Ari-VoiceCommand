@@ -38,6 +38,8 @@ _TOOL_NAMES_BY_INTENT = {
     "conversation": {
         "get_weather",
         "get_current_time",
+        "get_running_apps",
+        "take_screenshot",
         "web_search",
         "web_fetch",
         "list_scheduled_tasks",
@@ -76,6 +78,7 @@ _TOOL_NAMES_BY_INTENT = {
         "set_clipboard",
     },
     "automation": {
+        "adjust_volume",
         "launch_app",
         "close_app",
         "get_running_apps",

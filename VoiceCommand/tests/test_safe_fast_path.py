@@ -1,3 +1,4 @@
+import builtins
 import gettext
 import tempfile
 import unittest
@@ -149,6 +150,68 @@ class SafeFastPathTests(unittest.TestCase):
         self.assistant.feed_tool_result.assert_not_called()
         self.assertFalse(self.command._exec_lock.locked())
 
+    def test_empty_handler_failure_reports_fixed_message_once(self):
+        from i18n.translator import _
+
+        self.predict("take_screenshot")
+        self.handlers["take_screenshot"].return_value = None
+        output = self.command.run_interaction("take a screenshot")
+        self.assertEqual(output, _("요청한 작업을 완료하지 못했어요."))
+        self.handlers["take_screenshot"].assert_called_once()
+        self.assistant.chat_with_tools.assert_not_called()
+        self.assertEqual(self.local.metrics()["execution_failed"], 1)
+
+    def test_rejection_before_dispatch_keeps_conversation_path(self):
+        from agent.decision.engine import FastPathResult
+
+        self.command.try_fast_path = Mock(return_value=FastPathResult(
+            "delete_file", {}, 1.0, 1.0, "linear", True,
+        ))
+        self.assert_fallback("delete this file")
+
+    def test_direct_run_updates_local_counters(self):
+        self.predict("get_current_time")
+        self.command.run_interaction("what time is it")
+        counts = self.local.metrics()
+        self.assertEqual(counts["fast_selected"], 1)
+        self.assertEqual(counts["fast_executed"], 1)
+        self.assertEqual(counts["llm_calls_saved"], 1)
+
+    def test_tool_execution_log_omits_user_supplied_arguments(self):
+        query = "private phrase 4821"
+        with self.assertLogs(level="INFO") as captured:
+            self.command._execute_tool_calls([{
+                "name": "web_search",
+                "arguments": {"query": query},
+            }])
+
+        self.assertNotIn(query, "\n".join(captured.output))
+        self.handlers["web_search"].assert_called_once_with({"query": query})
+
+    def test_voice_command_event_preserves_original_text_and_shape(self):
+        spoken = "private phrase 4821"
+        self.command.run_interaction(spoken)
+
+        self.events.assert_called_once()
+        event_name, payload = self.events.call_args.args
+        self.assertEqual(event_name, "on_voice_command")
+        self.assertEqual(payload["text"], spoken)
+        self.assertEqual(payload["response"], "기존 응답")
+
+    def test_malformed_mcp_argument_log_omits_user_text(self):
+        spoken_arguments = "private phrase 4821"
+        with patch("agent.mcp_client.get_mcp_pool") as get_pool:
+            with self.assertLogs(level="WARNING") as captured:
+                result = self.command._handle_mcp_call({
+                    "endpoint": "local",
+                    "tool": "echo",
+                    "arguments": spoken_arguments,
+                })
+
+        self.assertEqual(result, get_pool.return_value.call.return_value)
+        get_pool.return_value.call.assert_called_once_with("local", "echo", {"input": spoken_arguments})
+        self.assertNotIn(spoken_arguments, "\n".join(captured.output))
+
     def test_successful_payload_with_error_word_is_not_a_failure(self):
         from i18n.translator import _
 
@@ -199,7 +262,7 @@ class SafeFastPathTests(unittest.TestCase):
             "increase volume by 101%",
             "increase volume by -10%",
             "increase volume by 10.5%",
-            "increase volume",
+            "set volume to 50",
             "turn the volume up and down by 10%",
             "take a screenshot of the second monitor",
             "take a screenshot and save it to private.png",
@@ -323,6 +386,40 @@ class SafeFastPathTests(unittest.TestCase):
                             self.assertEqual(self.command.run_interaction(sentence), failure)
         self.assistant.chat_with_tools.assert_not_called()
         self.assistant.feed_tool_result.assert_not_called()
+
+
+class DisabledEngineImportTests(unittest.TestCase):
+    def test_off_mode_does_not_import_numpy_or_the_engine(self):
+        real_import = builtins.__import__
+        imported = []
+
+        def recording_import(name, *args, **kwargs):
+            imported.append(name)
+            return real_import(name, *args, **kwargs)
+
+        with patch("core.config_manager.ConfigManager.get",
+                   side_effect=lambda key, default=None: "off" if key == "local_decision_mode" else default),                 patch("builtins.__import__", side_effect=recording_import):
+            self.assertIsNone(AICommand.try_fast_path(object(), "volume up"))
+
+        self.assertFalse([name for name in imported if name == "numpy" or name.startswith("agent.decision")])
+
+
+class RunningAppsResponseTests(unittest.TestCase):
+    def test_json_app_list_is_shortened_for_the_reply(self):
+        import json
+
+        from commands.ai_fast_path import FastPathMixin
+
+        apps = [f"app{index}.exe" for index in range(54)]
+        payload = json.dumps({"apps": apps, "count": len(apps)})
+        reply = FastPathMixin()._fast_response("get_running_apps", payload)
+
+        self.assertTrue(reply.startswith("실행 중인 앱이 54개 있어요: app0.exe, "))
+        self.assertIn("app9.exe …", reply)
+        self.assertNotIn("app10.exe", reply)
+        # 대체된 처리기가 일반 텍스트를 반환하면 기존 목록 응답을 유지한다.
+        self.assertEqual(FastPathMixin()._fast_response("get_running_apps", "sample.exe"),
+                         "실행 중인 앱 목록입니다.\nsample.exe")
 
 
 if __name__ == "__main__":

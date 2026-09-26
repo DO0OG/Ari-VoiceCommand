@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import ast
 import copy
 import os
 import re
@@ -47,6 +48,42 @@ _URL_RE = re.compile(r"https?://[^\s)\"']+")
 _GOAL_HINT_RE = re.compile(r"goal_hint\s*=\s*['\"]([^'\"]+)['\"]")
 _WORKFLOW_CALL_RE = re.compile(r"\b(run_browser_actions|run_desktop_workflow|focus_window|wait_for_window)\b")
 _WINDOW_TARGET_RE = re.compile(r"(?:expected_window|window|title_substring)\s*=\s*['\"]([^'\"]+)['\"]")
+# 문자열 목록은 open(path, mode='w')나 os.system(...)을 놓치므로 쓰기 모드 열기와 셸 호출은 따로 찾는다.
+_WRITE_OR_SHELL_CALL_RE = re.compile(
+    r"\bopen\s*\([^)]*['\"](?:[wax]|r\+|rb\+)[bt+]*['\"]"
+    r"|\bos\s*\.\s*(?:system|popen|startfile|exec\w*|spawn\w*)\s*\("
+)
+_OPEN_MODE_RE = re.compile(r"[rwxabtU+]{1,4}")
+# 첫 인자로 경로를 받고 모드는 둘째 인자로 받는 open (Image.open(path), gzip.open(path, 'wb') 등).
+_PATH_FIRST_OPENERS = frozenset({"Image", "webbrowser", "io", "codecs", "os", "gzip", "bz2", "lzma", "tarfile", "wave"})
+
+
+def _opens_for_write(content: str) -> bool:
+    """open(str(p), mode='w')처럼 정규식이 놓치는 호출까지 AST로 본다. 모드를 코드만으로 알 수 없으면 쓰기로 본다."""
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return False  # 파이썬 코드가 아니면 정규식 검사에 맡긴다.
+    for node in ast.walk(tree):
+        func = getattr(node, "func", None)
+        if isinstance(func, ast.Name) and func.id == "open":
+            modes = node.args[1:2]
+        elif isinstance(func, ast.Attribute) and func.attr == "open":
+            owner = getattr(func.value, "id", None) or getattr(func.value, "attr", None)
+            # Path(p).open(mode)는 첫 인자가 모드다. 경로를 먼저 받는 모듈과 경로 문자열 리터럴은 모드에서 뺀다.
+            modes = [] if owner in _PATH_FIRST_OPENERS else [
+                arg for arg in node.args[:1]
+                if not isinstance(arg, ast.Constant) or _OPEN_MODE_RE.fullmatch(str(arg.value))
+            ]
+            modes += node.args[1:2]
+        else:
+            continue
+        modes += [arg for arg in node.args if isinstance(arg, ast.Starred)]
+        modes += [keyword.value for keyword in node.keywords if keyword.arg in ("mode", None)]
+        for mode in modes:
+            if not (isinstance(mode, ast.Constant) and isinstance(mode.value, str)) or set(mode.value) & set("wax+"):
+                return True
+    return False
 
 
 @dataclass
@@ -107,6 +144,8 @@ def analyze_failure(error_message: str) -> ErrorAnalysis:
 def is_read_only_step_content(content: str, description: str = "") -> bool:
     lowered_content = (content or "").lower()
     lowered_desc = (description or "").lower()
+    if _WRITE_OR_SHELL_CALL_RE.search(lowered_content) or _opens_for_write(content or ""):
+        return False
     return not any(token in lowered_content or token in lowered_desc for token in _MUTATING_TOKENS)
 
 

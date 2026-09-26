@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from agent.decision.semantics import DIRECT_CANDIDATES, parse_candidate
+
 _GENERIC_AGENT_PHRASES = (
     "복합 작업으로 판단되어 단계별 실행으로 전환할게요",
     "복합 작업을 실행할게요",
@@ -29,10 +31,29 @@ _SPECIFIC_GOAL_MARKERS = (
 )
 
 
+# "A 그리고 B", "캡처해서 저장해줘"처럼 동작이 이어지는 표현. "설명해서 알려줘"는 동작 하나다.
+_SEQUENCE_RE = re.compile(r"(?:^|\s)그리고(?:\s|$)|한\s*뒤|고\s*나서|해서(?!\s*(?:알려|말해|보여|설명))")
+# "다음" 바로 앞 글자를 잡는다. 뒤에 시간 명사와 조사가 오면("다음 주에") 제외하고, "다음 주소"는 남긴다.
+_NEXT_AFTER_VERB_RE = re.compile(
+    r"(\S)\s*다음(?!\s*(?:주말|주|달|해|번|날|시간)(?:[에엔은는도의까부이가을를쯤]|[^가-힣]|$))"
+)
+
+
+def _has_step_sequence(text: str) -> bool:
+    if _SEQUENCE_RE.search(text):
+        return True
+    # "다음"은 받침 ㄴ으로 끝나는 동사 뒤("연 다음", "저장한 다음")에서만 순서를 뜻한다.
+    # 조사 "는" 뒤나 "다음 주(에)", "다음 달이야" 같은 시간 표현은 제외한다.
+    return any(
+        "가" <= match.group(1) <= "힣" and match.group(1) != "는" and (ord(match.group(1)) - 0xAC00) % 28 == 4
+        for match in _NEXT_AFTER_VERB_RE.finditer(text)
+    )
+
+
 def analyze_tool_request(user_message: str) -> dict:
     text = (user_message or "").strip()
     lowered = text.lower()
-    multi_step = any(token in text for token in ("그리고", "해서", "한 뒤", "다음"))
+    multi_step = _has_step_sequence(text)
     preferred = None
     intent = "conversation"
     force_tool = False
@@ -88,6 +109,15 @@ def analyze_tool_request(user_message: str) -> dict:
     ):
         intent = "automation"
         force_tool = True
+
+    # 문장 전체가 바로 처리 도구 하나로 해석되면("화면 캡처해 줘") 그 도구를 쓰게 한다.
+    direct_tool = next(
+        (name for name in sorted(DIRECT_CANDIDATES) if parse_candidate(text, name).parse_success),
+        None,
+    )
+    if direct_tool:
+        force_tool = True
+        preferred = direct_tool
 
     if multi_step:
         intent = "automation"

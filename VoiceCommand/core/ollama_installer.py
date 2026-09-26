@@ -23,6 +23,8 @@ DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_OPENAI_URL = "http://localhost:11434/v1"
 _LOCAL_OLLAMA_HOSTS = {"localhost", "127.0.0.1"}
 _SAFE_MODEL_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+OLLAMA_EXECUTABLE_SETTING = "ollama_executable_path"
+_OLLAMA_EXECUTABLE_NAMES = {"ollama.exe", "ollama"}
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +68,26 @@ def normalize_models(models: Iterable[str]) -> list[str]:
     return normalized
 
 
+def _configured_ollama_executable() -> str | None:
+    """설정에서 사용자가 지정한 ollama.exe 경로를 읽는다. 파일이 없거나 이름이 다르면 None."""
+    try:
+        from core.config_manager import ConfigManager
+
+        configured = str(ConfigManager.get(OLLAMA_EXECUTABLE_SETTING, "") or "").strip()
+    except Exception as exc:
+        logger.debug("Ollama 실행 파일 설정 조회 실패: %s", exc)
+        return None
+    if not configured or not os.path.isfile(configured):
+        return None
+    if os.path.basename(configured).lower() not in _OLLAMA_EXECUTABLE_NAMES:
+        return None
+    return os.path.abspath(configured)
+
+
 def find_ollama_executable() -> str | None:
+    configured = _configured_ollama_executable()
+    if configured:
+        return configured
     path = shutil.which("ollama")
     if path:
         return path
@@ -169,6 +190,19 @@ def _server_ready(base_url: str) -> bool:
             return response.status == 200
     except Exception:
         return False
+
+
+def list_installed_models(base_url: str = DEFAULT_OLLAMA_BASE_URL) -> list[str] | None:
+    """로컬 Ollama 서버에 설치된 모델 이름을 반환한다. 서버가 응답하지 않으면 None."""
+    try:
+        with _safe_open_url(f"{base_url}/api/tags", timeout=2.0) as response:
+            raw = response.read().decode("utf-8", errors="replace").strip()
+        payload = json.loads(raw) if raw else {}
+    except (OSError, ValueError) as exc:
+        logger.debug("Ollama 모델 목록 조회 실패: %s", exc)
+        return None
+    models = payload.get("models", []) if isinstance(payload, dict) else []
+    return normalize_models(item.get("name", "") for item in models if isinstance(item, dict))
 
 
 def ensure_ollama_server(ollama_exe: str, base_url: str, log: Callable[[str], None]) -> None:

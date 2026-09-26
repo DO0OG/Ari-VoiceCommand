@@ -1,15 +1,18 @@
-"""Unit checks for the Phase 0 dataset contract."""
+"""Phase 0 자료 계약에 대한 단위 검사."""
 
 from __future__ import annotations
 
 from collections import defaultdict
 import copy
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 import unicodedata
+from unittest.mock import patch
 
-# ``pytest`` loads tests/conftest.py, while direct unittest discovery does not.
+# ``pytest``는 tests/conftest.py를 불러오지만 unittest 직접 탐색은 그렇지 않다.
 VOICECOMMAND_ROOT = Path(__file__).resolve().parents[1]
 if str(VOICECOMMAND_ROOT) not in sys.path:
     sys.path.insert(0, str(VOICECOMMAND_ROOT))
@@ -20,11 +23,15 @@ from scripts.decision_data.seed_data import HARD_NEGATIVE_FAMILIES
 from scripts.decision_data.split_dataset import (
     SPLITS,
     assign_family_splits,
+    baseline_manifest_drift,
     load_manifest,
     manifest_drift,
     validate_manifest,
     validate_family_splits,
 )
+from scripts.decision_data.evaluate import confusion_comparison
+from scripts.decision_data.validate_release import check_metrics
+from scripts.decision_data import provenance
 from agent.decision.candidates import candidate_names as registry_candidate_names
 
 
@@ -114,6 +121,134 @@ class DecisionDataTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_manifest(unrecorded)
 
+    def test_baseline_comparison_rejects_moved_families_and_allows_additions(self):
+        baseline = load_manifest()
+        current = dict(baseline)
+        family = next(iter(current))
+        current[family] = "test" if current[family] != "test" else "train"
+        current["new.family"] = "calibration"
+        drift = baseline_manifest_drift(current, baseline)
+        self.assertEqual(drift["moved"], [family])
+        self.assertEqual(drift["added"], ["new.family"])
+
+    def test_current_split_manifest_matches_the_pinned_baseline(self):
+        drift = baseline_manifest_drift()
+        self.assertEqual(drift["moved"], [])
+        self.assertEqual(drift["removed"], [])
+
+    def test_release_metrics_reject_empty_overall_and_language_samples(self):
+        empty_gate = {
+            "selected_count": 0,
+            "selective_accuracy": None,
+            "false_direct_count": 0,
+            "unknown_false_accept_count": 0,
+        }
+        result = {
+            "with_direct_policy_gate": empty_gate,
+            "family_with_direct_policy_gate": {"family_false_direct": 0},
+            "by_language": {
+                language: {"with_direct_policy_gate": dict(empty_gate)}
+                for language in ("ko", "en", "ja")
+            },
+        }
+        failures = check_metrics(result)
+        self.assertEqual(len(failures), 4)
+        self.assertTrue(any("overall direct selection" in failure for failure in failures))
+        for language in ("ko", "en", "ja"):
+            self.assertTrue(any(f"{language} direct selection" in failure for failure in failures))
+
+    def test_release_metrics_require_all_supported_languages(self):
+        gate = {
+            "selected_count": 1,
+            "selective_accuracy": 1.0,
+            "false_direct_count": 0,
+            "unknown_false_accept_count": 0,
+        }
+        result = {
+            "with_direct_policy_gate": dict(gate),
+            "family_with_direct_policy_gate": {"family_false_direct": 0},
+            "by_language": {
+                language: {"with_direct_policy_gate": dict(gate)}
+                for language in ("ko", "en", "ja")
+            },
+        }
+        del result["by_language"]["ja"]
+        self.assertIn("ja metrics are missing", check_metrics(result))
+
+    def test_candidate_policy_fingerprint_changes_when_policy_fixture_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            data_dir = root / "data"
+            model_dir = root / "model"
+            policy_path = root / "agent" / "decision" / "candidates.py"
+            for path in (
+                root / "agent" / "decision" / "semantics.py",
+                root / "agent" / "decision" / "engine.py",
+                root / "agent" / "llm_router.py",
+                root / "core" / "settings_schema.py",
+                data_dir / "candidate_snapshot.json",
+                data_dir / "split_manifest.json",
+                data_dir / "gold.jsonl",
+                model_dir / "weights.npz",
+                model_dir / "config.json",
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture", encoding="utf-8")
+            policy_path.parent.mkdir(parents=True, exist_ok=True)
+            policy_path.write_text("policy v1", encoding="utf-8")
+            baseline_path = data_dir / "split_manifest_baseline.json"
+            baseline_path.write_text("baseline", encoding="utf-8")
+            template = {
+                key: provenance.DEFAULT_SETTINGS[key]
+                for key in provenance.DECISION_SETTING_KEYS
+            }
+            (root / "ari_settings.template.json").write_text(
+                json.dumps(template), encoding="utf-8"
+            )
+            with patch.object(provenance, "VOICECOMMAND_ROOT", root), patch.object(
+                provenance, "BASELINE_MANIFEST_PATH", baseline_path
+            ):
+                before = provenance.artifact_fingerprints(model_dir, data_dir)
+                policy_path.write_text("policy v2", encoding="utf-8")
+                after = provenance.artifact_fingerprints(model_dir, data_dir)
+        self.assertNotEqual(before["candidate_policy_sha256"], after["candidate_policy_sha256"])
+        self.assertEqual(before["engine_sha256"], after["engine_sha256"])
+        self.assertEqual(before["router_sha256"], after["router_sha256"])
+
+    def test_confusion_comparison_reports_major_and_worsened_pairs(self):
+        current = {
+            "get_weather": {"get_weather": 30, "get_current_time": 5},
+            "set_timer": {"set_timer": 40, "cancel_timer": 4},
+            "launch_app": {"close_app": 7},
+        }
+        previous = {
+            "overall": {
+                "confusion_matrix": {
+                    "get_weather": {"get_current_time": 2},
+                    "set_timer": {"cancel_timer": 1},
+                }
+            }
+        }
+        comparison = confusion_comparison(current, previous, "a" * 64)
+        self.assertEqual(comparison["previous_artifact_sha256"], "a" * 64)
+        self.assertEqual(
+            comparison["major_pairs"],
+            [
+                {"actual": "launch_app", "predicted": "close_app", "count": 7},
+                {"actual": "get_weather", "predicted": "get_current_time", "count": 5},
+                {"actual": "set_timer", "predicted": "cancel_timer", "count": 4},
+            ],
+        )
+        self.assertEqual(
+            [(row["actual"], row["predicted"], row["increase"])
+             for row in comparison["top_10_worsened_pairs"]],
+            [
+                ("launch_app", "close_app", 7),
+                ("get_weather", "get_current_time", 3),
+                ("set_timer", "cancel_timer", 3),
+            ],
+        )
+
     def test_validator_rejects_unknown_split_and_cross_split_duplicate(self):
         unknown = copy.deepcopy(self.rows)
         unknown[0]["split"] = "validation"
@@ -150,8 +285,8 @@ class DecisionDataTests(unittest.TestCase):
         for text, label in expected.items():
             self.assertEqual(labels_by_text[text], label)
 
-        # Keep this golden list in sync with the hand-written seed itself: all
-        # hard-negative records must use a supported candidate or abstain.
+        # 이 기준 목록은 직접 작성한 seed와 맞춰 둔다. 모든 hard-negative
+        # 기록은 지원하는 후보나 판단 보류를 써야 한다.
         candidate_labels = set(self.manifest["candidate_labels"])
         self.assertTrue(all(label in candidate_labels for label, _, _ in HARD_NEGATIVE_FAMILIES))
 

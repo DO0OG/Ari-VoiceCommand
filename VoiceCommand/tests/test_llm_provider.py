@@ -302,6 +302,32 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(memory["intent"], "memory")
         self.assertFalse(memory["force_tool"])
 
+    def test_analyze_request_does_not_treat_time_words_or_explanations_as_steps(self):
+        provider = LLMProvider()
+
+        self.assertNotEqual(provider._analyze_request("다음 주 날씨 알려줘")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("회의는 다음 주 몇 시야?")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("일정은 다음 주에 뭐 있어?")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("왜 그런지 설명해서 알려줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("메모장 연 다음 내용 적어줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("사진 찍은 다음 저장해줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("화면 캡처해서 저장해줘")["preferred_tool"], "run_agent_task")
+
+    def test_analyze_request_prefers_direct_tool_only_for_single_parsed_request(self):
+        provider = LLMProvider()
+
+        capture = provider._analyze_request("화면 캡처해 줘")
+        apps = provider._analyze_request("실행 중인 앱 알려 줘")
+        compound = provider._analyze_request("볼륨 올리고 캡처해줘")
+        tools, tool_choice = provider._select_tools_for_request(provider._analyze_request("캡처해줘"))
+
+        self.assertEqual(capture["preferred_tool"], "take_screenshot")
+        self.assertTrue(capture["force_tool"])
+        self.assertEqual(apps["preferred_tool"], "get_running_apps")
+        self.assertIsNone(compound["preferred_tool"])
+        self.assertEqual(tool_choice, "auto")
+        self.assertIn("take_screenshot", {tool["function"]["name"] for tool in tools})
+
     def test_select_tools_for_request_excludes_execution_tools_for_memory_intent(self):
         provider = LLMProvider()
 

@@ -8,6 +8,7 @@ import io
 import json
 import math
 from pathlib import Path
+import threading
 import time
 import unicodedata
 import zlib
@@ -18,15 +19,14 @@ from agent.decision.candidates import (
     candidate_names as registry_candidate_names,
     is_direct_allowed,
 )
-from agent.llm_router import get_llm_router
-from agent.decision.semantics import parse_candidate
+from agent.decision.semantics import is_multi_intent, parse_candidate
 
 
 UNKNOWN = "unknown_or_complex"
 
 
 def candidate_names() -> tuple[str, ...]:
-    """Return the registered candidate names with the abstain label last."""
+    """후보 이름을 등록 순서대로 반환하고 판단 보류 라벨은 맨 뒤에 둔다."""
     return registry_candidate_names()
 
 
@@ -135,6 +135,48 @@ class LinearScorer:
         )
 
 
+_MODES = frozenset({"off", "shadow", "fast", "adaptive"})
+# 원문 없이 세는 로컬 카운터다. 프로세스가 다시 시작되거나 reset_diagnostics()를 부르면
+# 초기화되고, 학습 자료로 다시 쓰이지 않는다.
+_COUNTERS = (
+    "decision_total",
+    "fast_selected",
+    "fast_executed",
+    "parser_rejected",
+    "multi_intent_rejected",
+    "llm_fallback",
+    "execution_failed",
+    "llm_calls_saved",
+    "possible_correction",
+)
+# ponytail: 반대 방향을 따질 수 있는 도구는 음량뿐이다. 다른 도구에 방향이 생기면 추가한다.
+_CORRECTION_WINDOW_S = 20.0
+_OPPOSITE_DIRECTION = {"up": "down", "down": "up"}
+
+
+def _configured_mode() -> str:
+    from core.config_manager import ConfigManager
+
+    mode = ConfigManager.get("local_decision_mode", "off")
+    return mode if isinstance(mode, str) and mode in _MODES else "off"
+
+
+def _disabled_reason() -> str:
+    """로컬 판단 결과를 바로 실행하지 않는 이유를 사용자 원문 없이 설명한다."""
+    from core.config_manager import ConfigManager
+
+    mode = _configured_mode()
+    if mode == "off":
+        return "mode_off"
+    if ConfigManager.get("local_decision_engine_enabled", True) is not True:
+        return "engine_disabled"
+    if mode == "shadow":
+        return "shadow_mode"
+    if ConfigManager.get("local_decision_direct_execution", False) is not True:
+        return "direct_execution_off"
+    return ""
+
+
 class LocalDecisionEngine:
     """요청 시에만 분류하고 불확실하거나 지원되지 않은 요청은 넘긴다."""
 
@@ -143,32 +185,109 @@ class LocalDecisionEngine:
         self._load_attempted = False
         self._scorer: LinearScorer | None = None
         self.last_decision: DecisionResult | None = None
+        self._lock = threading.Lock()
+        self._counters = dict.fromkeys(_COUNTERS, 0)
+        self._error_code = ""
+        self._last_volume: tuple[str, float] | None = None
+
+    def record(self, name: str) -> None:
+        """진단 카운터 하나를 1 올린다."""
+        with self._lock:
+            self._counters[name] += 1
+
+    def metrics(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._counters)
+
+    def health(self) -> dict[str, str]:
+        """적재 상태, 마지막 오류 코드, 직접 실행이 꺼진 이유를 반환한다."""
+        with self._lock:
+            scorer = self._scorer
+            attempted = self._load_attempted
+            error_code = self._error_code
+        if scorer is not None:
+            state = "ready"
+        else:
+            state = "error" if attempted else "not_loaded"
+        try:
+            reason = _disabled_reason()
+        except Exception:
+            reason = "settings_unavailable"
+        if state == "error" and not reason:
+            reason = "model_unavailable"
+        return {
+            "state": state,
+            "error_code": error_code,
+            "disabled_reason": reason,
+            "model_sha256": scorer.sha256 if scorer is not None else "",
+        }
+
+    def reload(self) -> None:
+        """다음 요청에서 다시 적재한다. 적재 실패는 스스로 재시도하지 않는다."""
+        with self._lock:
+            self._load_attempted = False
+            self._scorer = None
+            self._error_code = ""
+
+    def reset_diagnostics(self) -> None:
+        with self._lock:
+            self._counters = dict.fromkeys(_COUNTERS, 0)
+            self._error_code = ""
+            self._last_volume = None
+
+    def note_executed(self, result: FastPathResult) -> None:
+        """완료된 직접 실행을 세고, 되돌림 안내를 위해 음량 변경을 기억한다."""
+        with self._lock:
+            self._counters["fast_executed"] += 1
+            self._counters["llm_calls_saved"] += 1
+            direction = result.arguments.get("direction")
+            if result.tool_name == "adjust_volume" and direction in _OPPOSITE_DIRECTION:
+                self._last_volume = (str(direction), time.monotonic())
+
+    def _note_possible_correction(self, text: str, decision: DecisionResult) -> None:
+        with self._lock:
+            last = self._last_volume
+        if last is None or decision.choice != "adjust_volume":
+            return
+        direction, executed_at = last
+        if time.monotonic() - executed_at > _CORRECTION_WINDOW_S:
+            return
+        parsed = parse_candidate(text, "adjust_volume")
+        if parsed.arguments.get("direction") == _OPPOSITE_DIRECTION[direction]:
+            with self._lock:
+                self._counters["possible_correction"] += 1
+                self._last_volume = None
 
     def choice(self, state: str) -> DecisionResult | None:
-        """기존 복합 요청 규칙을 먼저 적용하고 최대 한 번 추론한다."""
+        """전용 복합 요청 검사를 먼저 적용하고 최대 한 번 추론한다."""
         try:
             if not isinstance(state, str) or not state.strip():
                 return None
-            if get_llm_router().route(state).task_type != "simple_chat":
+            if is_multi_intent(state):
+                self.record("multi_intent_rejected")
                 return None
             if not self._load_attempted:
                 self._load_attempted = True
-                self._scorer = LinearScorer(self.model_dir)
+                try:
+                    self._scorer = LinearScorer(self.model_dir)
+                except Exception:
+                    self._error_code = "model_load_failed"
+                    return None
             if self._scorer is None:
                 return None
             return self._scorer.predict(state)
         except Exception:
+            self._error_code = "prediction_failed"
             return None
 
     def try_fast_path(self, text: str) -> FastPathResult | None:
         """분류와 의미 해석, 허용 정책이 모두 일치할 때만 실행 요청을 반환한다."""
         self.last_decision = None
+        counted = False
         try:
             from core.config_manager import ConfigManager
 
-            mode = ConfigManager.get("local_decision_mode", "shadow")
-            if not isinstance(mode, str) or mode not in {"off", "shadow", "fast", "adaptive"}:
-                mode = "shadow"
+            mode = _configured_mode()
             if mode == "off":
                 return None
             if ConfigManager.get("local_decision_engine_enabled", True) is not True:
@@ -180,15 +299,18 @@ class LocalDecisionEngine:
                 return None
             if not math.isfinite(threshold) or not 0 <= threshold <= 1:
                 return None
+            self.record("decision_total")
+            counted = True
             decision = self.choice(text)
             if decision is None:
-                return None
+                return self._fallback()
             self.last_decision = decision
+            self._note_possible_correction(text, decision)
             if mode == "shadow":
-                return None
+                return self._fallback()
             # 모드와 별개로 직접 실행 설정이 명시적으로 켜져 있어야 한다.
             if ConfigManager.get("local_decision_direct_execution", False) is not True:
-                return None
+                return self._fallback()
             direct_allowed = is_direct_allowed(decision.choice, mode)
             if (
                 decision.choice == UNKNOWN
@@ -198,10 +320,12 @@ class LocalDecisionEngine:
                 or decision.margin < 0.30
                 or not direct_allowed
             ):
-                return None
+                return self._fallback()
             parsed = parse_candidate(text, decision.choice)
             if not parsed.parse_success:
-                return None
+                self.record("parser_rejected")
+                return self._fallback()
+            self.record("fast_selected")
             return FastPathResult(
                 tool_name=decision.choice,
                 arguments=dict(parsed.arguments),
@@ -211,4 +335,9 @@ class LocalDecisionEngine:
                 parse_success=parsed.parse_success,
             )
         except Exception:
-            return None
+            self._error_code = "fast_path_failed"
+            return self._fallback() if counted else None
+
+    def _fallback(self) -> None:
+        self.record("llm_fallback")
+        return None

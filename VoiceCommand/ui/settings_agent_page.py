@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QGroupBox, QLabel, QLineEdit, QSlider, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from i18n.translator import _
+
+
+def _live_decision_engine():
+    """앱 핵심 모듈을 import하지 않고 실행 중인 로컬 판단 엔진을 반환한다."""
+    state = getattr(sys.modules.get("core.VoiceCommand"), "_state", None)
+    registry = getattr(state, "command_registry", None)
+    for command in getattr(registry, "commands", ()) or ():
+        engine = getattr(command, "_decision_engine", None)
+        if engine is not None:
+            return engine
+    return None
 
 
 class _AgentSettingsPage(QWidget):
@@ -64,13 +88,83 @@ class _AgentSettingsPage(QWidget):
         box.addWidget(self.image_provider)
 
         layout.addWidget(group)
+        layout.addWidget(self._build_local_decision_group(settings))
         layout.addStretch(1)
         self._update_timeout_label(self.timeout_slider.value())
+
+    def _build_local_decision_group(self, settings: dict) -> QGroupBox:
+        group = QGroupBox(_("빠른 로컬 처리"))
+        box = QVBoxLayout(group)
+        mode = settings.get("local_decision_mode", "off")
+        if mode not in ("off", "shadow", "fast"):
+            mode = "off"
+        direct = settings.get("local_decision_direct_execution") is True
+
+        self.local_decision_checkbox = QCheckBox(_("간단한 명령을 로컬에서 바로 처리"))
+        self.local_decision_checkbox.setChecked(mode == "fast" and direct)
+        box.addWidget(self.local_decision_checkbox)
+        note = QLabel(_("사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."))
+        note.setWordWrap(True)
+        box.addWidget(note)
+
+        box.addWidget(QLabel(_("고급: 동작 모드")))
+        self.local_decision_mode = QComboBox()
+        for value, label in (("off", _("끄기")), ("shadow", _("기록만 (진단용)")), ("fast", _("빠른 처리"))):
+            self.local_decision_mode.addItem(label, value)
+        self.local_decision_mode.setCurrentIndex(self.local_decision_mode.findData(mode))
+        box.addWidget(self.local_decision_mode)
+        # 토글 하나가 저장값 두 개를 함께 쓰고, 고급 목록은 토글을 따른다.
+        self.local_decision_checkbox.toggled.connect(self._on_local_decision_toggled)
+        self.local_decision_mode.currentIndexChanged.connect(
+            lambda _index: self.local_decision_checkbox.setChecked(
+                self.local_decision_mode.currentData() == "fast"
+            )
+        )
+
+        self.local_decision_status = QLabel("")
+        box.addWidget(self.local_decision_status)
+        reload_button = QPushButton(_("모델 다시 불러오기"))
+        reload_button.clicked.connect(self._reload_local_decision)
+        box.addWidget(reload_button)
+        self._refresh_local_decision_status()
+        return group
+
+    def _on_local_decision_toggled(self, checked: bool) -> None:
+        current = self.local_decision_mode.currentData()
+        # 체크를 풀면 fast만 해제한다. 목록에서 진단용으로 고른 shadow는 유지한다.
+        if checked and current != "fast":
+            target = "fast"
+        elif not checked and current == "fast":
+            target = "off"
+        else:
+            return
+        self.local_decision_mode.setCurrentIndex(self.local_decision_mode.findData(target))
+
+    def _refresh_local_decision_status(self) -> None:
+        engine = _live_decision_engine()
+        health = engine.health() if engine is not None else {"state": "not_loaded", "error_code": ""}
+        if health.get("state") == "ready":
+            text = _("로컬 판단 모델: 준비됨")
+        elif health.get("state") == "error":
+            text = _("로컬 판단 모델: 오류 ({code})").format(code=health.get("error_code") or "-")
+        else:
+            text = _("로컬 판단 모델: 아직 불러오지 않음")
+        self.local_decision_status.setText(text)
+
+    def _reload_local_decision(self) -> None:
+        engine = _live_decision_engine()
+        if engine is not None:
+            engine.reload()
+        self._refresh_local_decision_status()
 
     def _update_timeout_label(self, value: int) -> None:
         self.timeout_label.setText(_("{seconds}초").format(seconds=int(value)))
 
     def get_values(self) -> dict:
+        mode = self.local_decision_mode.currentData() or "off"
+        # 기준은 체크박스다. 저장된 fast + direct=false 조합이 다른 설정을 저장했다는
+        # 이유만으로 직접 실행으로 바뀌면 안 된다.
+        direct = mode == "fast" and self.local_decision_checkbox.isChecked()
         return {
             "agent_timeout_seconds": int(self.timeout_slider.value()),
             "agent_dashboard_enabled": self.dashboard_checkbox.isChecked(),
@@ -82,4 +176,6 @@ class _AgentSettingsPage(QWidget):
             "google_client_secret": self.google_client_secret.text().strip(),
             "image_generation_enabled": self.image_checkbox.isChecked(),
             "image_gen_provider": self.image_provider.text().strip() or "openai",
+            "local_decision_mode": mode,
+            "local_decision_direct_execution": direct,
         }

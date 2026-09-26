@@ -26,6 +26,7 @@ from agent.execution_analysis import (
     mutates_runtime_state,
 )
 from agent.dag_builder import extract_resources
+from core.resource_manager import is_bundled
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -547,6 +548,16 @@ class ExecutionEngine:
             return False
         pkg = match.group(1).split(".")[0]
         pip_pkg = _IMPORT_TO_PIP.get(pkg, pkg)
+
+        # 배포판에는 파이썬과 pip가 없어 설치해도 실행 파일이 가져올 수 없다.
+        if is_bundled():
+            logger.info("[ExecutionEngine] 배포판이라 pip 자동 설치 생략: %s", pip_pkg)
+            self._say(_(
+                "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. "
+                "이 패키지 없이 할 수 있는 방법으로 다시 시도합니다.",
+                package=pip_pkg,
+            ))
+            return False
 
         # 미확인 패키지 → 사용자 동의 필요
         if pip_pkg not in self._AUTO_INSTALL_SAFE and pkg not in self._AUTO_INSTALL_SAFE:
