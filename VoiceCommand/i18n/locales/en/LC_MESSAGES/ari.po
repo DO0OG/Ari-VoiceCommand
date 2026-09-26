@@ -3043,3 +3043,6 @@ msgstr "Local decision model: not loaded yet"
 
 msgid "모델 다시 불러오기"
 msgstr "Reload model"
+
+msgid "설치된 아리에서는 '{package}' 패키지를 자동으로 설치할 수 없습니다. 이 패키지 없이 할 수 있는 방법으로 다시 시도합니다."
+msgstr "The installed Ari cannot install the '{package}' package automatically. It will try again without that package."
