@@ -21,6 +21,17 @@ class SafetyCheckerTests(unittest.TestCase):
         self.assertEqual(self.checker.check_shell("shutdown /r /t 0").level, DangerLevel.DANGEROUS)
         self.assertEqual(self.checker.check_shell("logoff").level, DangerLevel.DANGEROUS)
 
+    def test_powershell_destructive_commands_are_dangerous(self):
+        for command in (
+            "Remove-Item -Recurse -Force C:/Users/x/Documents",
+            "rm -r -fo C:/x",
+            "Stop-Computer",
+            "Format-Volume -DriveLetter D",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.checker.check_shell(command).level, DangerLevel.DANGEROUS)
+        self.assertEqual(self.checker.check_shell("Get-ChildItem C:/Users/x").level, DangerLevel.SAFE)
+
     def test_url_checks_are_cached_without_changing_result(self):
         first = self.checker.check_url("https://example.com/delete-account")
         second = self.checker.check_url("https://example.com/delete-account")

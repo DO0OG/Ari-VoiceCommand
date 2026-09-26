@@ -1,11 +1,37 @@
 import unittest
+from unittest.mock import patch
 
 from commands.calculator_command import CalculatorCommand
+from commands.system_command import SystemCommand
 from commands.time_command import TimeCommand
 from commands.volume_command import VolumeCommand
 
 
 class LegacyCommandMatchingTests(unittest.TestCase):
+    def test_system_command_only_takes_whole_power_commands(self):
+        command = SystemCommand(lambda _msg: None)
+
+        for text in ("컴퓨터 좀 꺼 줘", "10분 뒤에 컴퓨터 종료해줘", "재부팅", "종료 취소"):
+            self.assertTrue(command.matches(text), text)
+        for text in (
+            "재부팅하지 마",
+            "컴퓨터 종료 방법 알려줘",
+            "모니터 전원 꺼줘",
+            "시스템 설정 창 꺼줘",
+            "npc 대화창 꺼줘",
+            "how do I restart my router",
+        ):
+            self.assertFalse(command.matches(text), text)
+
+    def test_system_command_cancel_does_not_restart(self):
+        command = SystemCommand(lambda _msg: None)
+
+        with patch.object(command, "_cancel_shutdown") as cancel, patch.object(command, "_restart_immediate") as restart:
+            command.execute("재부팅 취소")
+
+        cancel.assert_called_once()
+        restart.assert_not_called()
+
     def test_time_command_leaves_other_places_and_compound_requests(self):
         command = TimeCommand(lambda _msg: None)
 

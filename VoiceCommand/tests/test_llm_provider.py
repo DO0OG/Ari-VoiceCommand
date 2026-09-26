@@ -302,6 +302,17 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(memory["intent"], "memory")
         self.assertFalse(memory["force_tool"])
 
+    def test_analyze_request_does_not_treat_time_words_or_explanations_as_steps(self):
+        provider = LLMProvider()
+
+        self.assertNotEqual(provider._analyze_request("다음 주 날씨 알려줘")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("회의는 다음 주 몇 시야?")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("일정은 다음 주에 뭐 있어?")["preferred_tool"], "run_agent_task")
+        self.assertNotEqual(provider._analyze_request("왜 그런지 설명해서 알려줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("메모장 연 다음 내용 적어줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("사진 찍은 다음 저장해줘")["preferred_tool"], "run_agent_task")
+        self.assertEqual(provider._analyze_request("화면 캡처해서 저장해줘")["preferred_tool"], "run_agent_task")
+
     def test_analyze_request_prefers_direct_tool_only_for_single_parsed_request(self):
         provider = LLMProvider()
 

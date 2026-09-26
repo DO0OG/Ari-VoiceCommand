@@ -40,6 +40,21 @@ _PDF_FONT_CANDIDATES = (
 from agent.source_normalization import _ONE_LINE_SUITE_KEYWORDS, _split_top_level_semicolons
 
 
+def _kill_process_tree(process) -> None:
+    """Windows에서는 실행한 프로세스가 띄운 자식 프로세스까지 함께 종료한다."""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+                timeout=_PROCESS_KILL_WAIT_SECONDS,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logging.debug("[Executor] 프로세스 트리 종료 실패: %s", exc)
+    process.kill()
+
+
 @dataclass
 class ExecutionResult:
     success: bool
@@ -275,7 +290,7 @@ class AutonomousExecutor:
         for process in processes:
             try:
                 if process.poll() is None:
-                    process.kill()
+                    _kill_process_tree(process)
             except Exception as exc:
                 logging.debug("[Executor] 프로세스 중단 실패: %s", exc)
 
@@ -461,7 +476,7 @@ class AutonomousExecutor:
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Python 시간 초과")
             if process:
-                process.kill()
+                _kill_process_tree(process)
                 self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)
@@ -522,7 +537,7 @@ class AutonomousExecutor:
         except subprocess.TimeoutExpired:
             logging.error("[Executor] Shell 시간 초과: %s", command)
             if process:
-                process.kill()
+                _kill_process_tree(process)
                 self._unregister_process(process)
                 try:
                     process.communicate(timeout=_PROCESS_KILL_WAIT_SECONDS)

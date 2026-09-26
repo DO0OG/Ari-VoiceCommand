@@ -3,10 +3,12 @@ from types import SimpleNamespace
 from dataclasses import asdict
 from unittest.mock import Mock, patch
 import threading
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from agent.agent_orchestrator import AgentOrchestrator, StepResult
 from agent.agent_planner import ActionStep
 from agent.autonomous_executor import ExecutionResult
+from i18n.translator import _
 
 
 class _NoopExecutor:
@@ -78,6 +80,70 @@ class InterruptResumeTests(unittest.TestCase):
         self.assertTrue(result.achieved)
         self.assertEqual(calls, [1, 2])
         self.assertEqual(orchestrator.planner.decompose.call_count, 1)
+
+    def test_unverifiable_success_is_not_replanned_and_keeps_output(self):
+        orchestrator = self._orchestrator()
+        step = ActionStep(1, "python", "print(apps())", "앱 목록")
+        orchestrator.planner.decompose.return_value = [step]
+        orchestrator._verify_engine.verify.return_value = (False, _("요청한 결과를 실제 상태로 검증하지 못했습니다."))
+        orchestrator._execute_plan = Mock(
+            return_value=(True, [StepResult(step, ExecutionResult(success=True, output="Chrome, Code"))])
+        )
+
+        result = orchestrator.run("실행 중인 앱 알려줘")
+
+        self.assertFalse(result.achieved)
+        self.assertIn("Chrome, Code", result.summary)
+        orchestrator.planner.decompose.assert_called_once()
+        orchestrator._execute_plan.assert_called_once()
+        orchestrator._learn.reflect_on_failure.assert_not_called()
+
+    def test_reflection_retry_keeps_output_when_only_verification_is_unavailable(self):
+        from agent import agent_orchestrator as module
+
+        orchestrator = self._orchestrator()
+        orchestrator._learn.reflect_on_failure.return_value = SimpleNamespace(lesson="경로 확인", avoid_patterns=[])
+        retried = module.AgentRunResult(
+            goal="task", achieved=False, summary="검증 불가 Chrome, Code", verification_unavailable=True
+        )
+        orchestrator._run_loop = Mock(side_effect=[module.AgentRunResult(goal="task", summary="실패"), retried])
+
+        result = orchestrator.run("task")
+
+        self.assertEqual(orchestrator._run_loop.call_count, 2)
+        self.assertTrue(result.verification_unavailable)
+        self.assertIn("Chrome, Code", result.summary)
+
+    def test_subagent_timeout_interrupts_only_the_running_child(self):
+        from agent import agent_orchestrator as module
+
+        started = threading.Event()
+
+        def child_run(child, goal, timeout=None):
+            started.set()
+            child._interrupt_requested.wait(5)
+            return module.AgentRunResult(goal=goal, achieved=False, summary="stopped")
+
+        class _TimeoutPool:
+            def submit(self, fn):
+                self.thread = threading.Thread(target=fn)
+                self.thread.start()
+                started.wait(5)
+                future = Mock()
+                future.result.side_effect = FuturesTimeoutError()
+                return future
+
+        orchestrator = AgentOrchestrator(_NoopExecutor(), Mock())
+        orchestrator._subagent_pool = pool = _TimeoutPool()
+        with patch.object(module, "AutonomousExecutor", lambda tts=None: _NoopExecutor()), \
+             patch.object(module, "get_planner", lambda: Mock()), \
+             patch.object(AgentOrchestrator, "run", child_run):
+            result = orchestrator.spawn_subagent("child", timeout=1)
+            pool.thread.join(2)
+
+        self.assertFalse(result.achieved)
+        self.assertFalse(pool.thread.is_alive())
+        self.assertFalse(orchestrator._interrupt_requested.is_set())
 
     def test_parent_cancellation_is_not_cleared_by_child_run(self):
         event = threading.Event()

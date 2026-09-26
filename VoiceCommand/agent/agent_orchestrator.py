@@ -41,6 +41,8 @@ class AgentRunResult:
     summary: str = ""
     total_iterations: int = 0
     learning_components: Dict[str, bool] = field(default_factory=dict)
+    # 단계는 모두 성공했지만 상태를 확인할 수단이 없었다. 다시 실행하면 동작이 중복된다.
+    verification_unavailable: bool = False
 
     def all_exec_results(self) -> List[ExecutionResult]:
         return [sr.exec_result for sr in self.step_results]
@@ -165,15 +167,23 @@ class AgentOrchestrator:
         if context_text:
             delegated_goal = f"{goal}\n\n[전달 컨텍스트]\n{context_text[:2000]}"
 
+        # 자식마다 중단 신호를 따로 둬야 시간 초과 때 부모를 멈추지 않고 그 자식만 멈출 수 있다.
+        # 부모의 중단은 interrupt()가 _children을 돌며 전달한다.
+        child_event = threading.Event()
+        started: list = []
+
         def _run() -> AgentRunResult:
             child = AgentOrchestrator(
                 executor=AutonomousExecutor(self.tts),
                 planner=get_planner(),
                 tts_func=self.tts,
-                cancel_event=self._interrupt_requested,
+                cancel_event=child_event,
             )
             with self._children_lock:
                 self._children.add(child)
+                started.append(child)
+            if self._interrupt_requested.is_set():
+                child.interrupt()
             try:
                 return child.run(delegated_goal, timeout=timeout)
             finally:
@@ -188,6 +198,10 @@ class AgentOrchestrator:
             return result
         except FuturesTimeoutError:
             future.cancel()
+            # 이미 실행 중인 자식은 cancel()로 멈추지 않으므로 중단 신호와 실행 중인 프로세스 종료를 요청한다.
+            child_event.set()
+            for child in list(started):
+                child.interrupt()
             self._emit_progress("subagent_timeout", goal=goal)
             return AgentRunResult(goal=goal, achieved=False, summary=_("subagent.timeout"))
         except Exception as exc:
@@ -247,6 +261,7 @@ class AgentOrchestrator:
             reflection = None
             if (
                 not run_result.achieved
+                and not run_result.verification_unavailable
                 and not self._is_timeout_exceeded(deadline)
                 and not self._interrupt_requested.is_set()
             ):
@@ -267,7 +282,7 @@ class AgentOrchestrator:
                         shared_context=shared_context,
                         deadline=deadline,
                     )
-                    if retry_result.achieved:
+                    if retry_result.achieved or retry_result.verification_unavailable:
                         retry_result.learning_components["ReflectionEngine"] = True
                         run_result = retry_result
             elif not self._interrupt_requested.is_set():
@@ -558,6 +573,22 @@ class AgentOrchestrator:
                 self._say(f"[기쁨] {summary}")
                 break
             else:
+                # 모든 단계가 성공했고 상태를 확인할 수단만 없으면 다시 실행하지 않는다.
+                # 재계획하면 이미 끝난 동작(파일 생성, 전송 등)이 한 번 더 실행되고 얻은 결과도 사라진다.
+                if summary == _("요청한 결과를 실제 상태로 검증하지 못했습니다."):
+                    output = next(
+                        (
+                            str(sr.exec_result.output).strip()
+                            for sr in reversed(current_results)
+                            if str(getattr(sr.exec_result, "output", "") or "").strip()
+                        ),
+                        "",
+                    )
+                    if output:
+                        run_result.summary = f"{summary} {output[:200]}"
+                    run_result.verification_unavailable = True
+                    self._emit_progress("not_achieved", summary=run_result.summary, iteration=iteration)
+                    break
                 with self._context_lock:
                     context["이전_시도"] = summary
                 self._emit_progress(
