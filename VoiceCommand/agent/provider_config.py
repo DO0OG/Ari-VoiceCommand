@@ -49,3 +49,14 @@ _KEY_MAP = {
     "ollama": "",
 }
 
+
+def get_provider_configs(settings):
+    """기본 제공자와 검증된 사용자 제공자 설정을 반환한다."""
+    from core.custom_llm_providers import get_custom_providers
+
+    configs = {provider: dict(config) for provider, config in _PROVIDER_CONFIG.items()}
+    configs.update({
+        provider: {**config, "requires_api_key": False}
+        for provider, config in get_custom_providers(settings).items()
+    })
+    return configs

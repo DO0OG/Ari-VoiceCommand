@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from core.config_manager import ConfigManager
+from core.custom_llm_providers import is_custom_secret_key
 from i18n.translator import _, set_language, get_language
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
@@ -39,7 +40,7 @@ class SettingsDialog(QDialog):
         "llm_provider", "llm_model",
         "llm_planner_provider", "llm_planner_model",
         "llm_execution_provider", "llm_execution_model",
-        "ollama_base_url",
+        "ollama_base_url", "custom_llm_providers",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction", "response_verbosity",
@@ -581,7 +582,7 @@ class SettingsDialog(QDialog):
         return any(key in self.changed_keys for key in self.TTS_KEYS)
 
     def llm_settings_changed(self) -> bool:
-        return any(key in self.changed_keys for key in self.LLM_KEYS)
+        return any(key in self.LLM_KEYS or is_custom_secret_key(key) for key in self.changed_keys)
 
     def character_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.CHARACTER_KEYS)

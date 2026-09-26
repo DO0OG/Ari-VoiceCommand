@@ -3109,3 +3109,57 @@ msgstr "Please select the ollama.exe file."
 
 msgid "CosyVoice3가 이미 설치되어 있습니다.\n\n{path}\n\n다시 설치할까요?"
 msgstr "CosyVoice3 is already installed.\n\n{path}\n\nDo you want to reinstall it?"
+
+msgid "사용자 지정 제공자 설정"
+msgstr "Custom provider settings"
+
+msgid "표시 이름"
+msgstr "Display name"
+
+msgid "기본 URL"
+msgstr "Base URL"
+
+msgid "예: My LLM"
+msgstr "Example: My LLM"
+
+msgid "API 키와 기본 모델은 제공자별 설정 목록에서 수정할 수 있습니다."
+msgstr "You can change the API key and default model in the provider settings list."
+
+msgid "표시 이름을 입력하세요."
+msgstr "Enter a display name."
+
+msgid "기본 URL은 사용자 정보, 쿼리 또는 프래그먼트가 없는 http 또는 https 주소여야 합니다."
+msgstr "The base URL must use HTTP or HTTPS and cannot contain user information, a query, or a fragment."
+
+msgid "기본 모델을 입력하세요."
+msgstr "Enter a default model."
+
+msgid "✓ {model} 연결 성공"
+msgstr "✓ Connected to {model}"
+
+msgid "연결에 실패했습니다. URL, 모델, API 키를 확인해 주세요."
+msgstr "Connection failed. Check the URL, model, and API key."
+
+msgid "사용자 지정 OpenAI 호환 제공자"
+msgstr "Custom OpenAI-compatible providers"
+
+msgid "OpenAI 호환 서버의 이름과 기본 URL을 등록합니다. API 키와 기본 모델은 아래에서 설정합니다."
+msgstr "Add a name and base URL for an OpenAI-compatible server. Set its API key and default model below."
+
+msgid "제공자 추가"
+msgstr "Add provider"
+
+msgid "선택 사항"
+msgstr "Optional"
+
+msgid "수정"
+msgstr "Edit"
+
+msgid "API 키 (선택 사항)"
+msgstr "API key (optional)"
+
+msgid "제공자 삭제"
+msgstr "Delete provider"
+
+msgid "'{name}' 제공자를 삭제할까요?"
+msgstr "Delete the '{name}' provider?"

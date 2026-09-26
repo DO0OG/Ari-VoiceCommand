@@ -579,6 +579,12 @@ class AgentPlanner(TemplatePlansMixin):
                             finish_reason = str(getattr(choice, "finish_reason", "") or "")
                         break
                     except Exception as e:
+                        is_custom_provider = getattr(self.llm, "_is_custom_provider", None)
+                        error_for_log = (
+                            self.llm._safe_custom_provider_error(e)
+                            if callable(is_custom_provider) and is_custom_provider(provider)
+                            else e
+                        )
                         has_fallback = candidate_index < len(candidates) - 1
                         delay = self._extract_retry_delay_seconds(e, attempt) if self._is_retryable_llm_error(e) else 0.0
                         if has_fallback and delay >= 8.0:
@@ -588,7 +594,7 @@ class AgentPlanner(TemplatePlansMixin):
                                 target_model,
                                 delay,
                                 next_model,
-                                e,
+                                error_for_log,
                             )
                             failed = True
                             break
@@ -597,7 +603,7 @@ class AgentPlanner(TemplatePlansMixin):
                                 "[Planner] LLM 일시 오류 (%s) → %.1fs 대기 후 재시도: %s",
                                 target_model,
                                 delay,
-                                e,
+                                error_for_log,
                             )
                             time.sleep(delay)
                             continue
@@ -607,11 +613,11 @@ class AgentPlanner(TemplatePlansMixin):
                                 "[Planner] %s 호출 실패 → 선택된 대체 모델 %s로 전환: %s",
                                 target_model,
                                 next_model,
-                                e,
+                                error_for_log,
                             )
                             failed = True
                             break
-                        logging.error("[Planner] LLM 호출 오류 (%s): %s", target_model, e)
+                        logging.error("[Planner] LLM 호출 오류 (%s): %s", target_model, error_for_log)
                         # 이어받기 중에 실패하면 잘린 JSON을 돌려주지 않는다.
                         return ""
                 if failed:

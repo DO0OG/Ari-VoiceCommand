@@ -444,29 +444,35 @@ class RealVerifier:
                             finish_reason = str(getattr(choice, "finish_reason", "") or "")
                         break
                     except Exception as e:
+                        is_custom_provider = getattr(self.llm, "_is_custom_provider", None)
+                        error_for_log = (
+                            self.llm._safe_custom_provider_error(e)
+                            if callable(is_custom_provider) and is_custom_provider(provider)
+                            else e
+                        )
                         has_fallback = candidate_index < len(candidates) - 1
                         delay = self._extract_retry_delay_seconds(e, attempt) if self._is_retryable_llm_error(e) else 0.0
                         if has_fallback and delay >= 8.0:
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
-                                f"[RealVerifier] {target_model} 장기 대기 오류({delay:.1f}s) → 선택된 대체 모델 {next_model}로 즉시 전환: {e}"
+                                f"[RealVerifier] {target_model} 장기 대기 오류({delay:.1f}s) → 선택된 대체 모델 {next_model}로 즉시 전환: {error_for_log}"
                             )
                             failed = True
                             break
                         if attempt < 2 and self._is_retryable_llm_error(e):
                             logging.warning(
-                                f"[RealVerifier] LLM 일시 오류 ({target_model}) → {delay:.1f}s 대기 후 재시도: {e}"
+                                f"[RealVerifier] LLM 일시 오류 ({target_model}) → {delay:.1f}s 대기 후 재시도: {error_for_log}"
                             )
                             time.sleep(delay)
                             continue
                         if has_fallback and self._is_retryable_llm_error(e):
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
-                                f"[RealVerifier] {target_model} 호출 실패 → 선택된 대체 모델 {next_model}로 전환: {e}"
+                                f"[RealVerifier] {target_model} 호출 실패 → 선택된 대체 모델 {next_model}로 전환: {error_for_log}"
                             )
                             failed = True
                             break
-                        logging.error(f"[RealVerifier] LLM 호출 오류 ({target_model}): {e}")
+                        logging.error(f"[RealVerifier] LLM 호출 오류 ({target_model}): {error_for_log}")
                         # 이어받기 중에 실패하면 잘린 코드를 돌려주지 않는다.
                         return ""
                 if failed:
