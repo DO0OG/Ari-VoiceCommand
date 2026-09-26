@@ -96,12 +96,12 @@
       "pending_human_review"
     ],
     "release_gold_rows": 825,
-    "release_pending": 825,
-    "release_rejected": 0,
+    "release_pending": 0,
+    "release_rejected": 6,
     "safety_gold_rows": 300,
-    "safety_pending": 300,
+    "safety_pending": 0,
     "safety_rejected": 0,
-    "release_approval": "pending_human_review"
+    "release_approval": "human_review_complete"
   },
   "limitations": [
     "The evaluation set is generated and does not represent microphone acceptance.",

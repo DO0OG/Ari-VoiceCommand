@@ -76,7 +76,9 @@ class ReleaseGateTests(unittest.TestCase):
         approved = lambda: (reviewed(release), reviewed(safety))  # noqa: E731
         self.assertEqual(check_review_corpora(True, loader=approved), [])
 
-        pending = lambda: (release, reviewed(safety))  # noqa: E731
+        # 배포된 코퍼스는 검수를 마쳤으므로 대기 상태는 테스트 안에서 되돌려 만든다.
+        waiting = [{**row, "review_status": "pending_human_review"} for row in release]
+        pending = lambda: (waiting, reviewed(safety))  # noqa: E731
         self.assertEqual(check_review_corpora(False, loader=pending), [])
         failures = check_review_corpora(True, loader=pending)
         self.assertTrue(any("release_gold: 825 rows are pending" in item for item in failures))
@@ -102,9 +104,9 @@ class ReleaseGateTests(unittest.TestCase):
             raise ValueError("review row fields differ from the required schema")
 
         self.assertEqual(len(check_review_corpora(False, loader=broken)), 1)
-        # 배포된 코퍼스는 형식은 맞지만 아직 검수 전이므로 배포 빌드만 멈춘다.
+        # 배포된 코퍼스는 검수를 마쳐 개발 검사와 배포 검사를 모두 통과한다.
         self.assertEqual(check_review_corpora(False), [])
-        self.assertTrue(check_review_corpora(True))
+        self.assertEqual(check_review_corpora(True), [])
 
     def test_shipped_model_and_data_pass(self):
         self.assertEqual(check_model(MODEL_DIR, self.rows, SNAPSHOT), [])
