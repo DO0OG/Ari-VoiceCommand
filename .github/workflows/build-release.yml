@@ -147,6 +147,26 @@ jobs:
           }
           if (Test-Path $report) { Get-Content $report -Encoding utf8 }
           if ($test.ExitCode -ne 0) { throw "설치본 자체 검사 실패 (exit $($test.ExitCode))" }
+
+          # 자율 실행 파이썬 코드는 설치된 실행 파일의 숨은 워커 모드로 돈다.
+          $script = Join-Path $env:RUNNER_TEMP "ari-script-smoke.py"
+          Set-Content -Path $script -Encoding utf8 -Value @(
+            "import webbrowser",
+            "from agent.automation_helpers import AutomationHelpers",
+            "print('스크립트 실행 확인')"
+          )
+          $scriptOut = Join-Path $env:RUNNER_TEMP "ari-script-smoke.out"
+          $run = Start-Process "$dir\Ari.exe" -ArgumentList @("--ari-run-python-script", "`"$script`"") -RedirectStandardOutput $scriptOut -PassThru
+          $null = $run.Handle
+          if (-not $run.WaitForExit(60000)) {
+            Stop-Process -Id $run.Id -Force
+            throw "설치본 스크립트 실행이 시간 안에 끝나지 않았습니다."
+          }
+          $printed = Get-Content -Raw -Encoding utf8 $scriptOut
+          if ($run.ExitCode -ne 0 -or $printed -notmatch "스크립트 실행 확인") {
+            throw "설치본 스크립트 실행 실패 (exit $($run.ExitCode)): $printed"
+          }
+
           # Program Files에는 쓸 수 없으므로 사용자 데이터가 설치 폴더에 생기면 안 된다.
           if (Test-Path "$dir\.ari_runtime") { throw "설치 폴더에 사용자 데이터 폴더가 생겼습니다." }
 

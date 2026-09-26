@@ -42,6 +42,11 @@ class BundledPythonExecutionTests(unittest.TestCase):
         self.assertTrue(result.success, result.error)
         self.assertEqual(result.output, "안녕 2")
 
+    def test_bundle_runs_scripts_in_writable_home_folder(self):
+        # 설치 폴더의 상위(Program Files)는 쓸 수 없으므로 배포판 작업 폴더는 사용자 홈이다.
+        with patch("agent.autonomous_executor.is_bundled", return_value=True):
+            self.assertEqual(AutonomousExecutor()._get_repo_root(), os.path.expanduser("~"))
+
     def test_script_error_is_reported_as_failure(self):
         result = self._run('raise ValueError("boom")')
         self.assertFalse(result.success)

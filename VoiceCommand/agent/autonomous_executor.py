@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
+from core.resource_manager import is_bundled
 from core.script_worker import python_script_command
 from i18n.translator import _
 
@@ -1112,6 +1113,9 @@ except Exception:
         return os.path.dirname(os.path.dirname(__file__))
 
     def _get_repo_root(self) -> str:
+        # 배포판의 상위 폴더(Program Files 등)는 쓸 수 없으므로 작업 폴더를 사용자 홈으로 둔다.
+        if is_bundled():
+            return os.path.expanduser("~")
         return os.path.dirname(self._get_module_dir())
 
     def _build_subprocess_kwargs(self) -> dict:
