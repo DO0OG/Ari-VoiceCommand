@@ -12,6 +12,8 @@ from PySide6.QtCore import QObject, Signal, QProcess
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from core._whisper_worker import bundled_executable_path
+from core.resource_manager import is_bundled
 from core.threads import VoiceRecognitionThread, TTSThread, CommandExecutionThread
 from core.VoiceCommand import set_tts_thread
 
@@ -63,6 +65,16 @@ def perform_gc():
         f"가비지 컬렉션 완료. 메모리 사용량: RSS: {mem_info.rss / (1024 * 1024):.2f} MB"
     )
 
+def _restart_command() -> tuple[str, list[str]]:
+    """현재 실행 환경을 유지한 재시작 명령을 반환한다.
+
+    배포판의 sys.executable은 존재하지 않는 python.exe를 가리키므로 실제 실행 파일을 다시 띄운다.
+    """
+    if is_bundled():
+        return bundled_executable_path(), sys.argv[1:]
+    return sys.executable, [os.path.abspath(sys.argv[0]), *sys.argv[1:]]
+
+
 class FileChangeHandler(FileSystemEventHandler):
     def __init__(self):
         super().__init__()
@@ -73,10 +85,7 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         if event.src_path.endswith('.py'):
             logging.info(f"파일 {event.src_path}가 수정되었습니다. 프로그램을 재시작합니다...")
-            # 현재 실행 환경을 유지하며 프로세스 재시작
-            executable = sys.executable
-            script_path = os.path.abspath(sys.argv[0])
-            args = [script_path, *sys.argv[1:]]
+            executable, args = _restart_command()
             started = QProcess.startDetached(executable, args, os.getcwd())
             if started:
                 logging.info("새 프로세스를 시작했습니다. 현재 프로세스를 종료합니다.")
@@ -84,8 +93,8 @@ class FileChangeHandler(FileSystemEventHandler):
             logging.error("프로세스 재시작에 실패했습니다.")
 
 def start_file_watcher():
-    # 배포(frozen) 환경에서는 파일 감시 불필요
-    if getattr(sys, 'frozen', False):
+    # 배포(frozen/Nuitka) 환경에서는 파일 감시 불필요
+    if is_bundled():
         return None
     event_handler = FileChangeHandler()
     observer = Observer()

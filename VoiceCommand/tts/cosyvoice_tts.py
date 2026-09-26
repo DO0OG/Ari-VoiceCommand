@@ -18,6 +18,7 @@ from typing import Optional
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
+from core.resource_manager import is_bundled
 from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -42,12 +43,12 @@ def _find_tts_venv_python() -> str:
 
 def _get_python_exe() -> str:
     """실제 Python 인터프리터 경로 반환.
-    frozen(EXE) 환경에서는 sys.executable이 Ari.exe 이므로
+    배포판에서는 sys.executable이 Ari.exe(PyInstaller)이거나 없는 python.exe(Nuitka)이므로
     PATH에서 python을 찾아야 한다."""
     tts_python = _find_tts_venv_python()
     if tts_python:
         return tts_python
-    if getattr(sys, 'frozen', False):
+    if is_bundled():
         python = shutil.which('python') or shutil.which('python3')
         if not python:
             raise RuntimeError(
@@ -96,9 +97,10 @@ def _get_reference_wav() -> str:
     return ResourceManager.get_bundle_path("reference.wav")
 
 def _get_worker_script() -> str:
-    """cosyvoice_worker.py 경로: frozen이면 _MEIPASS, 아니면 _HERE"""
-    if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, "cosyvoice_worker.py")
+    """cosyvoice_worker.py 경로: 배포판이면 번들 폴더(PyInstaller는 _MEIPASS, Nuitka는 실행 파일 옆), 아니면 _HERE"""
+    if is_bundled():
+        from core.resource_manager import ResourceManager
+        return ResourceManager.get_bundle_path("cosyvoice_worker.py")
     return os.path.join(_HERE, "cosyvoice_worker.py")
 
 

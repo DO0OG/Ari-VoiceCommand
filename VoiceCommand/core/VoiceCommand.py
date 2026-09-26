@@ -3,15 +3,16 @@
 import logging
 import os
 import re
-import sys
 import time
 import threading
 from collections import deque
 from typing import Tuple, TypedDict
 import speech_recognition as sr
 
-# SSL 인증서 경로 설정 (PyInstaller 환경)
-if getattr(sys, 'frozen', False):
+from core.resource_manager import is_bundled
+
+# SSL 인증서 경로 설정 (PyInstaller/Nuitka 배포 환경)
+if is_bundled():
     import certifi
     os.environ['SSL_CERT_FILE'] = certifi.where()
 

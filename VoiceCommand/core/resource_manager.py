@@ -39,6 +39,11 @@ def _is_bundled() -> bool:
     return bool(getattr(sys, "frozen", False)) or "__compiled__" in globals()
 
 
+def is_bundled() -> bool:
+    """다른 모듈이 배포 실행 파일 여부를 확인할 때 쓰는 공개 이름."""
+    return _is_bundled()
+
+
 class ResourceManager:
     _app_data_dir = None
 
