@@ -2,7 +2,6 @@
 RP 텍스트 생성기
 """
 import logging
-import re
 
 
 class RPGenerator:
@@ -92,12 +91,10 @@ class RPGenerator:
         if not styled:
             return ""
 
+        # 어미에 "요"를 덧붙이는 보정은 "입니다요"처럼 어색한 문장을 만들어 두지 않는다.
+        # 말투는 성격 설정이 들어간 시스템 프롬프트로 정한다.
         if self.personality:
             personality = self.personality.lower()
-            if "상냥" in personality or "친절" in personality:
-                styled = re.sub(r"(?<!요)\.$", "요.", styled)
-            if "귀여" in personality and not styled.endswith(("요", "요.", "에요", "예요")):
-                styled = f"{styled}요"
             if "차분" in personality:
                 styled = styled.replace("!", ".")
         return styled

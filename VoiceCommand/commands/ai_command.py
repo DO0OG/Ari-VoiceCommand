@@ -1227,7 +1227,9 @@ class AICommand(FastPathMixin, BaseCommand):
             })
             return recovered
 
-        if self._contains_shutdown_reference(response):
+        # 모델 응답(추론 문장 포함)에 종료가 언급됐다는 이유만으로 끄지 않는다.
+        # 사용자가 직접 종료를 요청한 경우에만 복구한다.
+        if self._is_shutdown_request(user_text) and self._contains_shutdown_reference(response):
             if normalized_when:
                 recovered.append({
                     "id": "ai_command_recover_1",
@@ -1335,6 +1337,13 @@ class AICommand(FastPathMixin, BaseCommand):
         return ""
 
     def _is_shutdown_request(self, text: str) -> bool:
+        # "끄지 마", "don't shut down", "終了しないで" 같은 부정·취소는 종료 요청이 아니다.
+        if re.search(
+            r"지\s*마|지\s*말|하지\s*않|안\s*해|취소|don'?t|do\s+not|never|cancel|ないで|しないで|やめて|キャンセル",
+            text or "",
+            flags=re.IGNORECASE,
+        ):
+            return False
         return self._contains_shutdown_reference(text)
 
     def _extract_timer_args_from_response(self, response: str) -> Optional[dict]:

@@ -422,6 +422,28 @@ class AICommandTests(unittest.TestCase):
         self.assertEqual(recovered[0]["name"], "schedule_task")
         self.assertEqual(recovered[0]["arguments"]["when"], "30분에")
 
+    def test_shutdown_recovery_ignores_shutdown_mentioned_only_by_model(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "시간 알려 주지 마",
+            "Okay, the user said don't tell me the time. I should not call get_current_time "
+            "or shutdown_computer here.",
+        )
+
+        self.assertEqual(recovered, [])
+
+    def test_shutdown_recovery_ignores_negated_shutdown_request(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        for user_text, response in (
+            ("컴퓨터 끄지 마", "알겠습니다. 컴퓨터를 종료하지 않을게요."),
+            ("don't shut down the computer", "Okay, I won't shut down the computer."),
+            ("パソコンをシャットダウンしないで", "シャットダウンしません。"),
+        ):
+            with self.subTest(user_text=user_text):
+                self.assertEqual(command._recover_tool_calls_from_response(user_text, response), [])
+
     def test_recover_tool_calls_from_response_parses_web_search_call(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
 
