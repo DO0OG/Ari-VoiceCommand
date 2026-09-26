@@ -94,9 +94,11 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 
 def _resolve_icon_path(log_missing: bool = False):
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
-    if os.path.exists(path):
-        return path
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for name in ("icon.ico", "icon.png"):
+        path = os.path.join(base_dir, name)
+        if os.path.exists(path):
+            return path
     if log_missing:
         logging.warning("아이콘 파일을 찾을 수 없습니다: %s", path)
     return None
@@ -309,11 +311,17 @@ def main():
         logging.info("프로그램 시작")
 
         # 리소스 추출
-        from core.resource_manager import ResourceManager
+        from core.resource_manager import ResourceManager, is_bundled
         logging.info("리소스 추출 확인 중...")
         ResourceManager.extract_resources()
 
+        if sys.platform == "win32" and not is_bundled():
+            # 소스 실행 시 작업 표시줄이 python.exe 아이콘으로 묶이지 않도록 앱 ID를 따로 둔다.
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DO0OG.Ari")
         app = QApplication(sys.argv)
+        if icon_path:
+            app.setWindowIcon(QIcon(icon_path))
 
         # 최초 실행 시 CosyVoice 설치 여부 확인
         check_cosyvoice_first_run(app)

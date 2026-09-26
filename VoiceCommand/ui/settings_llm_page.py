@@ -29,9 +29,9 @@ _live_validator_threads: set[QThread] = set()
 def _llm_providers():
     # (표시 이름, data 키, settings 키, placeholder)
     return [
-        (_("Groq (Llama 3.3, 무료)"), "groq",       "groq_api_key",       _("https://console.groq.com 에서 무료 발급")),
-        (_("OpenAI (GPT-4o)"),        "openai",     "openai_api_key",     _("https://platform.openai.com/api-keys")),
-        (_("Anthropic (Claude)"),     "anthropic",  "anthropic_api_key",  _("https://console.anthropic.com")),
+        (_("Groq"),                   "groq",       "groq_api_key",       _("https://console.groq.com 에서 무료 발급")),
+        (_("OpenAI"),                 "openai",     "openai_api_key",     _("https://platform.openai.com/api-keys")),
+        (_("Anthropic"),              "anthropic",  "anthropic_api_key",  _("https://console.anthropic.com")),
         (_("Mistral AI"),             "mistral",    "mistral_api_key",    _("https://console.mistral.ai")),
         (_("Google Gemini"),          "gemini",     "gemini_api_key",     _("https://aistudio.google.com/app/apikey")),
         (_("OpenRouter (멀티모델)"),   "openrouter",   "openrouter_api_key",  _("https://openrouter.ai/keys")),
@@ -379,10 +379,12 @@ class _LLMSettingsPage(QWidget):
             layout.addWidget(label, 1)
             edit_btn = QPushButton(_("수정"))
             edit_btn.setStyleSheet(secondary_btn_style())
+            edit_btn.setMinimumSize(64, 30)
             edit_btn.clicked.connect(lambda checked=False, p=provider_id: self._edit_custom_provider(p))
             layout.addWidget(edit_btn)
             delete_btn = QPushButton(_("삭제"))
             delete_btn.setStyleSheet(secondary_btn_style())
+            delete_btn.setMinimumSize(64, 30)
             delete_btn.clicked.connect(lambda checked=False, p=provider_id: self._confirm_delete_custom_provider(p))
             layout.addWidget(delete_btn)
             self._custom_provider_list_layout.addWidget(row)

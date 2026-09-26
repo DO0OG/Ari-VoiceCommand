@@ -312,8 +312,8 @@ msgstr "API Key (선택):"
 msgid "API Key:"
 msgstr "API Key:"
 
-msgid "Anthropic (Claude)"
-msgstr "Anthropic (Claude)"
+msgid "Anthropic"
+msgstr "Anthropic"
 
 msgid "CosyVoice 설치"
 msgstr "CosyVoice 설치"
@@ -369,8 +369,8 @@ msgstr "Google Gemini"
 msgid "Google STT (온라인)"
 msgstr "Google STT (온라인)"
 
-msgid "Groq (Llama 3.3, 무료)"
-msgstr "Groq (Llama 3.3, 무료)"
+msgid "Groq"
+msgstr "Groq"
 
 msgid "Hyunsu (남성)"
 msgstr "Hyunsu (남성)"
@@ -420,8 +420,8 @@ msgstr "Ollama 설치를 준비 중입니다.\n설치 창이 뜨면 진행하고
 msgid "Ollama를 설치하고, 사용할 모델을 함께 받아옵니다. "
 msgstr "Ollama를 설치하고, 사용할 모델을 함께 받아옵니다. "
 
-msgid "OpenAI (GPT-4o)"
-msgstr "OpenAI (GPT-4o)"
+msgid "OpenAI"
+msgstr "OpenAI"
 
 msgid "OpenAI TTS"
 msgstr "OpenAI TTS"
