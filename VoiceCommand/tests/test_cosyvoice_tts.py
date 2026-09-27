@@ -44,6 +44,26 @@ class CosyVoiceReferencePathTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertIn("열두시", first)
 
+    def test_tts_venv_prefers_user_data_and_recognizes_legacy_path(self):
+        from tts.cosyvoice_tts import _find_tts_venv_python
+
+        writable_dir = os.path.abspath(r".ari_runtime\.venv-tts")
+        legacy_dir = os.path.join(VOICECOMMAND_ROOT, ".venv-tts")
+        writable_python = os.path.join(writable_dir, "Scripts", "python.exe")
+        legacy_python = os.path.join(legacy_dir, "Scripts", "python.exe")
+
+        with (
+            patch("core.resource_manager.ResourceManager.get_writable_path", return_value=writable_dir),
+            patch("tts.cosyvoice_tts.os.path.isfile", side_effect=lambda path: os.fspath(path) == writable_python),
+        ):
+            self.assertEqual(_find_tts_venv_python(), writable_python)
+
+        with (
+            patch("core.resource_manager.ResourceManager.get_writable_path", return_value=writable_dir),
+            patch("tts.cosyvoice_tts.os.path.isfile", side_effect=lambda path: os.fspath(path) == legacy_python),
+        ):
+            self.assertEqual(_find_tts_venv_python(), legacy_python)
+
 
 class _DummySignal:
     def __init__(self):
@@ -113,6 +133,24 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         self.assertEqual(tts.playback_finished.emitted, 1)
         self.assertEqual(tts._proc.stdin.flush_calls, 1)
         self.assertEqual(tts._proc.stdin.writes, ["테스트 문장\n".encode("utf-8")])
+
+    def test_explicit_cosyvoice_dir_avoids_cached_discovery(self):
+        cosyvoice_dir = os.path.abspath("selected-cosyvoice")
+        with (
+            patch("audio.audio_manager.GlobalAudio.get_instance", return_value=object()),
+            patch("tts.cosyvoice_tts._get_reference_wav", return_value="reference.wav"),
+            patch("tts.cosyvoice_tts._load_tts_volume", return_value=1.0),
+            patch("tts.cosyvoice_tts._get_cosyvoice_dir_cached") as get_cached_dir,
+            patch.object(CosyVoiceTTS, "_start_worker"),
+        ):
+            tts = CosyVoiceTTS(cosyvoice_dir=cosyvoice_dir)
+
+        self.assertEqual(tts._cosyvoice_dir, cosyvoice_dir)
+        self.assertEqual(
+            tts.model_dir,
+            os.path.join(cosyvoice_dir, "pretrained_models", "Fun-CosyVoice3-0.5B"),
+        )
+        get_cached_dir.assert_not_called()
 
 
 class ApplyEmotionProsodyTests(unittest.TestCase):

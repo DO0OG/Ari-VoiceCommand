@@ -39,8 +39,6 @@ Ari.vbs
 # 의미 기반 전략 기억 검색
 .venv\Scripts\python.exe -m pip install sentence-transformers torch
 
-# ElevenLabs TTS
-.venv\Scripts\python.exe -m pip install elevenlabs
 ```
 
 > **주의**: easyocr가 NumPy를 올려 버릴 수 있습니다. 다만 `requirements.txt`에 `numpy<2` 제약이 걸려 있어 설치 순서와 상관없이 `numpy 1.x`가 유지됩니다.

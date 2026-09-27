@@ -144,7 +144,9 @@ class _ValidatorThread(QThread):
                 openai_module = importlib.import_module("openai")
                 kwargs: dict = {"api_key": self.api_key or "not-needed", "timeout": 10, "max_retries": 0}
                 if self.provider == "ollama":
-                    kwargs["base_url"] = ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
+                    kwargs["base_url"] = self.base_url or ConfigManager.get(
+                        "ollama_base_url", "http://localhost:11434/v1"
+                    )
                 elif self.custom:
                     kwargs["base_url"] = self.base_url
                 elif cfg["base_url"]:
@@ -200,7 +202,10 @@ class _LLMSettingsPage(QWidget):
         self._validate_labels: dict[str, QLabel] = {}
         self._validator_threads: dict[str, _ValidatorThread] = {}
         self._retired_validator_threads: set[_ValidatorThread] = set()
+        self._validator_context: dict[_ValidatorThread, tuple[str, int, bool]] = {}
         self._validation_generation: dict[str, int] = {}
+        self._diagnostic_validation_generation: dict[str, int] = {}
+        self._diagnostic_status_provider: str | None = None
         self._role_provider_combos: dict[str, QComboBox] = {}
         self._provider_setting_widgets: dict[str, QWidget] = {}
         self._provider_title_labels: dict[str, QLabel] = {}
@@ -242,6 +247,16 @@ class _LLMSettingsPage(QWidget):
         self._set_combo(self.llm_provider_combo, self._settings.get("llm_provider", "groq"))
         self.llm_provider_combo.currentIndexChanged.connect(self._on_llm_changed)
         llm_vbox.addWidget(self.llm_provider_combo)
+
+        diagnostic_row = QHBoxLayout()
+        self.llm_diagnostic_button = QPushButton(_("선택한 LLM 연결 확인"))
+        self.llm_diagnostic_button.setStyleSheet(secondary_btn_style())
+        self.llm_diagnostic_button.clicked.connect(self._validate_selected_provider)
+        diagnostic_row.addWidget(self.llm_diagnostic_button)
+        self.llm_diagnostic_status = QLabel("")
+        self.llm_diagnostic_status.setWordWrap(True)
+        diagnostic_row.addWidget(self.llm_diagnostic_status, 1)
+        llm_vbox.addLayout(diagnostic_row)
 
         llm_vbox.addWidget(QLabel(_("모델 이름 (비워두면 기본값):")))
         self.llm_model_input = QLineEdit(self._settings.get("llm_model", ""))
@@ -514,23 +529,48 @@ class _LLMSettingsPage(QWidget):
         is_ollama = provider == "ollama"
         self.ollama_hint_label.setVisible(is_ollama)
         self.ollama_url_input.setVisible(is_ollama)
+        if (
+            self._diagnostic_status_provider is not None
+            and self._diagnostic_status_provider != provider
+        ):
+            self._diagnostic_status_provider = None
+            self.llm_diagnostic_status.clear()
 
-    def _run_validation(self, provider: str):
+    def _validate_selected_provider(self):
+        provider = self.llm_provider_combo.currentData()
+        if provider:
+            self._run_validation(provider, diagnostic=True)
+
+    def _run_validation(self, provider: str, diagnostic: bool = False):
+        if diagnostic:
+            self._diagnostic_status_provider = provider
+            generation = self._validation_generation.get(provider, 0) + 1
+            self._validation_generation[provider] = generation
+            self._diagnostic_validation_generation[provider] = generation
         api_key = self._llm_key_inputs[provider].text().strip()
         lbl = self._validate_labels[provider]
         custom = provider in self._custom_providers
         if provider != "ollama" and not custom and not api_key:
-            lbl.setText(_("⚠ API Key를 입력하세요."))
+            message = _("⚠ API Key를 입력하세요.")
+            lbl.setText(message)
             lbl.setStyleSheet("color: #e67e22;")
+            if diagnostic:
+                self.llm_diagnostic_status.setText(message)
+                self.llm_diagnostic_status.setStyleSheet("color: #e67e22;")
             return
         if provider == "ollama":
             api_key = "ollama"
 
-        model = self._llm_model_inputs[provider].text().strip()
+        model_input = self.llm_model_input if diagnostic else self._llm_model_inputs[provider]
+        model = model_input.text().strip()
         if not model:
             if custom:
-                lbl.setText(_("기본 모델을 입력하세요."))
+                message = _("기본 모델을 입력하세요.")
+                lbl.setText(message)
                 lbl.setStyleSheet("color: #e67e22;")
+                if diagnostic:
+                    self.llm_diagnostic_status.setText(message)
+                    self.llm_diagnostic_status.setStyleSheet("color: #e67e22;")
                 return
             model = self._provider_config(provider).get("default_model", "")
             lbl.setText(_("검증 중... (기본 모델: {model})").format(model=model))
@@ -540,6 +580,11 @@ class _LLMSettingsPage(QWidget):
 
         generation = self._validation_generation.get(provider, 0) + 1
         self._validation_generation[provider] = generation
+        if diagnostic:
+            self._diagnostic_validation_generation[provider] = generation
+            self._diagnostic_status_provider = provider
+            self.llm_diagnostic_status.setText(_("검증 중..."))
+            self.llm_diagnostic_status.setStyleSheet("color: #888;")
         old = self._validator_threads.get(provider)
         if old and old.isRunning():
             self._retired_validator_threads.add(old)
@@ -551,13 +596,17 @@ class _LLMSettingsPage(QWidget):
             provider,
             api_key,
             model,
-            base_url=config.get("base_url", "") if custom else "",
+            base_url=(
+                self.ollama_url_input.text().strip()
+                or "http://localhost:11434/v1"
+                if provider == "ollama"
+                else config.get("base_url", "") if custom else ""
+            ),
             custom=custom,
         )
-        thread.done.connect(
-            lambda ok, msg, p=provider, g=generation: self._on_validation_done(p, ok, msg, g)
-        )
-        thread.finished.connect(lambda p=provider, t=thread: self._validator_finished(p, t))
+        self._validator_context[thread] = (provider, generation, diagnostic)
+        thread.done.connect(self._on_validator_result)
+        thread.finished.connect(self._validator_thread_finished)
         thread.finished.connect(lambda t=thread: _live_validator_threads.discard(t))
         _live_validator_threads.add(thread)
         self._validator_threads[provider] = thread
@@ -569,12 +618,34 @@ class _LLMSettingsPage(QWidget):
         if thread and thread.isRunning():
             self._retired_validator_threads.add(thread)
 
-    def _validator_finished(self, provider: str, thread: _ValidatorThread):
+    def _validator_thread_finished(self):
+        thread = self.sender()
+        if thread is None:
+            return
+        provider = thread.provider
         if self._validator_threads.get(provider) is thread:
             self._validator_threads.pop(provider, None)
         self._retired_validator_threads.discard(thread)
+        self._validator_context.pop(thread, None)
 
-    def _on_validation_done(self, provider: str, success: bool, message: str, generation: int | None = None):
+    def _on_validator_result(self, success: bool, message: str):
+        thread = self.sender()
+        if thread is None:
+            return
+        context = self._validator_context.get(thread)
+        if context is None:
+            return
+        provider, generation, diagnostic = context
+        self._on_validation_done(provider, success, message, generation, diagnostic)
+
+    def _on_validation_done(
+        self,
+        provider: str,
+        success: bool,
+        message: str,
+        generation: int | None = None,
+        diagnostic: bool = False,
+    ):
         if generation is not None and self._validation_generation.get(provider) != generation:
             return
         lbl = self._validate_labels.get(provider)
@@ -582,6 +653,16 @@ class _LLMSettingsPage(QWidget):
             return
         lbl.setText(message)
         lbl.setStyleSheet(f"color: {'#27ae60' if success else '#e74c3c'}; font-weight: bold;")
+        if (
+            diagnostic
+            and self._diagnostic_status_provider == provider
+            and self.llm_provider_combo.currentData() == provider
+            and self._diagnostic_validation_generation.get(provider) == generation
+        ):
+            self.llm_diagnostic_status.setText(message)
+            self.llm_diagnostic_status.setStyleSheet(
+                f"color: {'#27ae60' if success else '#e74c3c'}; font-weight: bold;"
+            )
 
     # ── 공개 인터페이스 ────────────────────────────────────────────────────────
 

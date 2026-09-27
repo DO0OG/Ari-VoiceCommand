@@ -1,6 +1,7 @@
 """설정 기반으로 TTS 제공자를 생성하고 서명을 계산하는 팩토리."""
 
 import logging
+import os
 from core.config_manager import ConfigManager
 
 _TTS_SIGNATURE_KEYS = (
@@ -36,9 +37,12 @@ def create_tts_provider(settings=None):
     if tts_mode == "local":
         try:
             from tts.cosyvoice_tts import CosyVoiceTTS
+            # 설정 화면에서 아직 저장하지 않은 경로로 시험 재생할 때도 그 경로를 쓴다.
+            configured_dir = settings.get("cosyvoice_dir", "")
             provider = CosyVoiceTTS(
                 reference_text=settings.get("cosyvoice_reference_text", ""),
                 speed=float(settings.get("cosyvoice_speed", 0.9)),
+                cosyvoice_dir=configured_dir if configured_dir and os.path.isdir(configured_dir) else None,
             )
             logging.info("CosyVoice3 로컬 TTS 초기화 완료")
             return provider, "local"

@@ -155,6 +155,67 @@ class ReleaseBundleDependencyTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertTrue(report["checks"]["ready"]["ok"])
 
+    def test_edge_tts_smoke_retries_transient_failure_then_decodes_audio(self):
+        class FakeCommunicate:
+            calls = 0
+
+            def __init__(self, _text, _voice):
+                pass
+
+            def stream(self):
+                type(self).calls += 1
+
+                async def chunks():
+                    if type(self).calls == 1:
+                        raise ConnectionError("temporary network error")
+                    yield {"type": "audio", "data": b"mp3-sample"}
+
+                return chunks()
+
+        fake_edge_tts = SimpleNamespace(Communicate=FakeCommunicate, __version__="test")
+        fake_av = SimpleNamespace(Codec=lambda *_args: None)
+        with (
+            patch.dict(sys.modules, {"av": fake_av, "edge_tts": fake_edge_tts}),
+            patch("audio.mp3_decoder.decode_mp3_to_pcm", return_value=b"pcm-sample") as decode,
+            patch.object(bundle_import_self_test.time, "sleep"),
+        ):
+            result = bundle_import_self_test._check_edge_tts_and_mp3_decoder()
+
+        self.assertEqual(FakeCommunicate.calls, 2)
+        self.assertEqual(result["synthesis_attempts"], 2)
+        self.assertGreater(result["decoded_pcm_bytes"], 0)
+        decode.assert_called_once_with(b"mp3-sample", 22050)
+
+    def test_edge_tts_smoke_times_out_and_fails_after_all_attempts(self):
+        import asyncio
+
+        class SlowCommunicate:
+            calls = 0
+
+            def __init__(self, _text, _voice):
+                pass
+
+            def stream(self):
+                type(self).calls += 1
+
+                async def chunks():
+                    await asyncio.sleep(0.02)
+                    yield {"type": "audio", "data": b"too-late"}
+
+                return chunks()
+
+        fake_edge_tts = SimpleNamespace(Communicate=SlowCommunicate, __version__="test")
+        fake_av = SimpleNamespace(Codec=lambda *_args: None)
+        with (
+            patch.dict(sys.modules, {"av": fake_av, "edge_tts": fake_edge_tts}),
+            patch.object(bundle_import_self_test, "_EDGE_TTS_TIMEOUT_SECONDS", 0.001),
+            patch.object(bundle_import_self_test.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "after 3 attempts"):
+                bundle_import_self_test._check_edge_tts_and_mp3_decoder()
+
+        self.assertEqual(SlowCommunicate.calls, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

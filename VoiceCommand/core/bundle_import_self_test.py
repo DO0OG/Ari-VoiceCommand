@@ -3,7 +3,13 @@
 import importlib
 import importlib.resources
 import json
+import time
 from pathlib import Path
+
+
+_EDGE_TTS_VOICE = "en-US-AriaNeural"
+_EDGE_TTS_ATTEMPTS = 3
+_EDGE_TTS_TIMEOUT_SECONDS = 30
 
 
 def _check_sdk_client(sdk, class_name):
@@ -36,15 +42,98 @@ def _check_http_and_validation():
 
 
 def _check_edge_tts_and_mp3_decoder():
+    import asyncio
     import av
     import edge_tts
 
     av.Codec("mp3", "r")
     from audio.mp3_decoder import decode_mp3_to_pcm
 
-    if not callable(decode_mp3_to_pcm):
-        raise RuntimeError("PyAV MP3 decoder helper is unavailable")
-    return {"edge_tts": getattr(edge_tts, "__version__", "available"), "mp3_decoder": "available"}
+    last_error = None
+    audio_data = b""
+    attempts = 0
+    for attempts in range(1, _EDGE_TTS_ATTEMPTS + 1):
+        try:
+            async def synthesize_sample():
+                communicate = edge_tts.Communicate(
+                    "Ari release test.", _EDGE_TTS_VOICE
+                )
+                chunks = []
+                async for item in communicate.stream():
+                    if item["type"] == "audio":
+                        chunks.append(item["data"])
+                return b"".join(chunks)
+
+            audio_data = asyncio.run(
+                asyncio.wait_for(
+                    synthesize_sample(), timeout=_EDGE_TTS_TIMEOUT_SECONDS
+                )
+            )
+            if not audio_data:
+                raise RuntimeError("Edge TTS returned no audio data")
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempts < _EDGE_TTS_ATTEMPTS:
+                time.sleep(attempts)
+    if not audio_data:
+        raise RuntimeError(
+            f"Edge TTS synthesis failed after {_EDGE_TTS_ATTEMPTS} attempts: "
+            f"{type(last_error).__name__}: {last_error}"
+        ) from last_error
+
+    pcm = decode_mp3_to_pcm(audio_data, 22050)
+    if not pcm:
+        raise RuntimeError("PyAV decoded no PCM audio from the Edge TTS sample")
+    return {
+        "edge_tts": getattr(edge_tts, "__version__", "available"),
+        "voice": _EDGE_TTS_VOICE,
+        "synthesis_attempts": attempts,
+        "mp3_bytes": len(audio_data),
+        "decoded_pcm_bytes": len(pcm),
+    }
+
+
+def _check_script_data_packages():
+    import io
+
+    import pandas as pd
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from openpyxl import load_workbook
+    from reportlab.pdfgen.canvas import Canvas
+
+    frame = pd.DataFrame({"value": [7, 11]})
+    workbook_bytes = io.BytesIO()
+    frame.to_excel(workbook_bytes, index=False, engine="openpyxl")
+    workbook_bytes.seek(0)
+    workbook = load_workbook(workbook_bytes, read_only=True, data_only=True)
+    try:
+        if workbook.active["A2"].value != 7:
+            raise RuntimeError("pandas/openpyxl Excel round trip failed")
+    finally:
+        workbook.close()
+
+    figure = Figure(figsize=(1, 1))
+    FigureCanvasAgg(figure)
+    figure.subplots().plot([0, 1], [7, 11])
+    image = io.BytesIO()
+    figure.savefig(image, format="png")
+    if not image.getvalue().startswith(b"\x89PNG"):
+        raise RuntimeError("matplotlib did not render a PNG image")
+
+    pdf = io.BytesIO()
+    canvas = Canvas(pdf)
+    canvas.drawString(10, 10, "Ari release test")
+    canvas.save()
+    if not pdf.getvalue().startswith(b"%PDF"):
+        raise RuntimeError("reportlab did not generate a PDF document")
+    return {
+        "pandas_rows": len(frame),
+        "openpyxl": "xlsx round trip",
+        "matplotlib": "PNG render",
+        "reportlab": "PDF generation",
+    }
 
 
 def _check_whisper_and_vad():
@@ -137,6 +226,9 @@ _BUNDLE_CHECKS = (
     ("ddgs_lxml", _check_web_search),
     ("pyautogui_pillow", _check_screenshot_dependencies),
     ("fastapi_mcp", _check_mcp_server),
+    # pandas를 먼저 불러오면 같은 프로세스의 onnxruntime DLL 초기화가 실패한다.
+    # 앱에서는 스크립트가 별도 작업 프로세스에서 실행되므로 점검에서도 맨 마지막에 둔다.
+    ("script_data_packages", _check_script_data_packages),
 )
 
 

@@ -20,6 +20,7 @@ from ui.local_installers import (
     OllamaInstallDialog,
     OllamaInstallerThread,
 )
+from ui.tts_diagnostics import TTSDiagnosticPanel
 
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ class _TTSSettingsPage(QWidget):
         self._set_combo(self.tts_mode_combo, self._settings.get("tts_mode", "fish"))
         self.tts_mode_combo.currentIndexChanged.connect(self._on_tts_changed)
         tts_vbox.addWidget(self.tts_mode_combo)
+
+        self.tts_diagnostic_panel = TTSDiagnosticPanel(self._tts_diagnostic_values, self)
+        tts_vbox.addWidget(self.tts_diagnostic_panel)
 
         # Fish Audio 설정
         fish_grp = QGroupBox(_("Fish Audio 설정"))
@@ -213,6 +217,18 @@ class _TTSSettingsPage(QWidget):
             if grp:
                 grp.setVisible(key == selected)
 
+    def _tts_diagnostic_values(self):
+        selected_mode = self.tts_mode_combo.currentData()
+        settings = dict(self._settings)
+        dialog = self.window()
+        llm_page = getattr(dialog, "_llm_page", None)
+        if llm_page is not None:
+            settings.update(llm_page.get_values())
+        settings.update(self.get_values())
+        speaker_combo = getattr(dialog, "speaker_combo", None)
+        output_device_name = speaker_combo.currentData() if speaker_combo is not None else ""
+        return settings, selected_mode, str(output_device_name or "")
+
     def _open_ollama_installer(self):
         from PySide6.QtWidgets import QDialog
         installed = bool(self.local_install_section.ollama_path)
@@ -291,6 +307,11 @@ class _TTSSettingsPage(QWidget):
         if path:
             self.cosyvoice_dir_input.setText(path)
             self._check_cosyvoice_dir(path)
+        else:
+            self.cosyvoice_dir_status.setText(
+                _("CosyVoice 설치가 감지되지 않았습니다. 설치하거나 폴더를 지정해 주세요.")
+            )
+            self.cosyvoice_dir_status.setStyleSheet("color: #e67e22;")
 
     def _install_cosyvoice(self):
         target_dir = self.cosyvoice_dir_input.text().strip()
@@ -427,6 +448,7 @@ class _TTSSettingsPage(QWidget):
     def cleanup_threads(self):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
         self.local_install_section.stop_detection()
+        self.tts_diagnostic_panel.cancel()
         for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
             if thread and thread.isRunning():
                 thread.quit()

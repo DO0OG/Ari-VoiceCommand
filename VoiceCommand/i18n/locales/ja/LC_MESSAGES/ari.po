@@ -684,8 +684,8 @@ msgstr "ローカル（CosyVoice3）"
 msgid "로컬 LLM 엔진 설치와 모델 다운로드를 한 번에 진행합니다."
 msgstr "ローカルLLMエンジンのインストールとモデルのダウンロードを一度に行います。"
 
-msgid "로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요."
-msgstr "ローカルTTSエンジンCosyVoice3をインストールしますか？\n\n• インストールする場合: 高品質の韓国語TTSが使用可能（GPU推奨、約2～5GB）\n• インストールしない場合: Fish Audio API TTSを使用（インターネット必要）\n\n後でインストールするにはinstall_cosyvoice.pyを直接実行してください。"
+msgid "로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n나중에 설치하려면 설정의 TTS 페이지에서 설치할 수 있습니다."
+msgstr "ローカルTTSエンジンCosyVoice3をインストールしますか？\n\n• インストールする場合: 高品質の韓国語TTSが使用可能（GPU推奨、約2～5GB）\n• インストールしない場合: Fish Audio API TTSを使用（インターネット必要）\n\n後でインストールする場合は、設定のTTSページからインストールできます。"
 
 msgid "로컬 TTS 엔진과 기본 모델을 설치하고 설정 경로를 자동으로 맞춥니다."
 msgstr "ローカルTTSエンジンとデフォルトモデルをインストールし、設定パスを自動的に設定します。"
@@ -3184,3 +3184,141 @@ msgstr "✗ {label}でモデル「{model}」が見つかりません。モデル
 
 msgid "✗ API Key가 유효하지 않습니다. 키를 확인해 주세요."
 msgstr "✗ APIキーが無効です。キーを確認してください。"
+
+msgid "3초 녹음 후 재생"
+msgstr "3秒録音して再生"
+
+msgid "3초 동안 녹음하고 있습니다. 잠시 말씀해 주세요..."
+msgstr "3秒間録音しています。何か話してください..."
+
+msgid "CosyVoice 다시 설치"
+msgstr "CosyVoiceを再インストール"
+
+msgid "CosyVoice 모델 파일이 모두 다운로드되지 않았습니다. 다시 설치해 주세요."
+msgstr "CosyVoiceのモデルファイルがすべてダウンロードされていません。再インストールしてください。"
+
+msgid "CosyVoice 설치 단계에 실패했습니다: {step} ({error})"
+msgstr "CosyVoiceのインストール手順に失敗しました: {step} ({error})"
+
+msgid "CosyVoice 설치 단계에 실패했습니다: {step} (종료 코드: {returncode})"
+msgstr "CosyVoiceのインストール手順に失敗しました: {step} (終了コード: {returncode})"
+
+msgid "CosyVoice 설치가 감지되지 않았습니다. 설치하거나 폴더를 지정해 주세요."
+msgstr "CosyVoiceのインストールが検出されませんでした。インストールするか、フォルダーを指定してください。"
+
+msgid "CosyVoice 설치가 완료되지 않았습니다. 모델 파일을 확인해 주세요."
+msgstr "CosyVoiceのインストールが完了していません。モデルファイルを確認してください。"
+
+msgid "CosyVoice 저장소가 완전하지 않습니다. requirements.txt가 없어 설치를 계속할 수 없습니다."
+msgstr "CosyVoiceのリポジトリが不完全です。requirements.txtがないため、インストールを続行できません。"
+
+msgid "CosyVoice 전용 가상환경을 만드는 중입니다..."
+msgstr "CosyVoice専用の仮想環境を作成しています..."
+
+msgid "CosyVoice 전용 가상환경을 만들지 못했습니다 (종료 코드: {returncode})"
+msgstr "CosyVoice専用の仮想環境を作成できませんでした (終了コード: {returncode})"
+
+msgid "CosyVoice 전용 가상환경을 만들지 못했습니다: {error}"
+msgstr "CosyVoice専用の仮想環境を作成できませんでした: {error}"
+
+msgid "CosyVoice를 설치하려면 Python 3이 별도로 설치되어 있어야 합니다. Python 3을 설치하고 PATH에 추가한 다음 다시 시도해 주세요."
+msgstr "CosyVoiceをインストールするには、Python 3が別途インストールされている必要があります。Python 3をインストールしてPATHに追加してから、もう一度お試しください。"
+
+msgid "TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요."
+msgstr "TTSのテスト再生に失敗しました。設定と出力デバイスを確認してください。"
+
+msgid "TTS 시험 재생에 실패했습니다: {error}"
+msgstr "TTSのテスト再生に失敗しました: {error}"
+
+msgid "녹음한 소리를 선택한 스피커로 재생했습니다."
+msgstr "録音した音声を選択したスピーカーで再生しました。"
+
+msgid "마이크 레벨 확인"
+msgstr "マイクレベルを確認"
+
+msgid "마이크 및 스피커 진단"
+msgstr "マイクとスピーカーの診断"
+
+msgid "마이크 입력 레벨:"
+msgstr "マイク入力レベル:"
+
+msgid "마이크 입력을 확인하고 있습니다..."
+msgstr "マイク入力を確認しています..."
+
+msgid "마이크 확인을 중지하고 있습니다..."
+msgstr "マイクの確認を停止しています..."
+
+msgid "마이크가 다른 작업에서 사용 중입니다. 잠시 후 다시 시도해 주세요."
+msgstr "マイクは別の処理で使用中です。しばらくしてからもう一度お試しください。"
+
+msgid "마이크를 준비하고 있습니다..."
+msgstr "マイクを準備しています..."
+
+msgid "선택한 LLM 연결 확인"
+msgstr "選択したLLMの接続を確認"
+
+msgid "선택한 TTS 엔진을 초기화하지 못해 다른 엔진으로 전환되었습니다. 설정을 확인해 주세요."
+msgstr "選択したTTSエンジンを初期化できなかったため、別のエンジンに切り替えました。設定を確認してください。"
+
+msgid "선택한 마이크를 찾을 수 없습니다. 장치를 다시 선택해 주세요."
+msgstr "選択したマイクが見つかりません。デバイスを選び直してください。"
+
+msgid "선택한 스피커를 찾을 수 없습니다. 장치를 다시 선택해 주세요."
+msgstr "選択したスピーカーが見つかりません。デバイスを選び直してください。"
+
+msgid "설치된 아리에서 사용할 수 없는 파이썬 패키지가 필요합니다: {packages}. 사용할 수 있는 패키지로 바꾸어 다시 실행해 주세요."
+msgstr "インストール版のAriでは使用できないPythonパッケージが必要です: {packages}。使用できるパッケージに置き換えて、もう一度実行してください。"
+
+msgid "세부 의존성 설치"
+msgstr "詳細な依存関係のインストール"
+
+msgid "스피커 출력 장치를 열지 못했습니다: {error}"
+msgstr "スピーカー出力デバイスを開けませんでした: {error}"
+
+msgid "스피커가 다른 작업에서 사용 중입니다. 잠시 후 다시 시도해 주세요."
+msgstr "スピーカーは別の処理で使用中です。しばらくしてからもう一度お試しください。"
+
+msgid "시험 재생"
+msgstr "テスト再生"
+
+msgid "시험 재생 중..."
+msgstr "テスト再生中..."
+
+msgid "안녕하세요. 음성 출력 시험 중입니다."
+msgstr "こんにちは。音声出力のテスト中です。"
+
+msgid "음성 인식 시험"
+msgstr "音声認識テスト"
+
+msgid "음성 인식 시험에 실패했습니다: {error}"
+msgstr "音声認識テストに失敗しました: {error}"
+
+msgid "음성 출력 시험"
+msgstr "音声出力テスト"
+
+msgid "음성을 듣지 못했습니다. 다시 시험해 주세요."
+msgstr "音声が聞き取れませんでした。もう一度お試しください。"
+
+msgid "음성을 인식하고 있습니다..."
+msgstr "音声を認識しています..."
+
+msgid "음성을 인식하지 못했습니다. 다시 말씀해 주세요."
+msgstr "音声を認識できませんでした。もう一度話してください。"
+
+msgid "인식 결과: {text}"
+msgstr "認識結果: {text}"
+
+msgid "저장소 클론"
+msgstr "リポジトリのクローン"
+
+msgid "지금 짧은 문장을 말씀해 주세요."
+msgstr "短い文を話してください。"
+
+msgid "짧은 문장 인식"
+msgstr "短い文を認識"
+
+msgid "핵심 의존성 설치"
+msgstr "主要な依存関係のインストール"
+
+msgid "현재 선택한 TTS 엔진의 시험 재생이 완료되었습니다."
+msgstr "選択中のTTSエンジンのテスト再生が完了しました。"

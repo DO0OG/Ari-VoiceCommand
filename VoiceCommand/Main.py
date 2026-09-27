@@ -157,9 +157,14 @@ def check_cosyvoice_first_run(app):
     FLAG_FILE = ResourceManager.get_writable_path(".cosyvoice_asked")
     from tts.cosyvoice_tts import _get_cosyvoice_dir_cached
     cosyvoice_dir = _get_cosyvoice_dir_cached()
+    from core.cosyvoice_installer import (
+        DEFAULT_COSYVOICE_DIR,
+        is_cosyvoice_install_recorded,
+        mark_cosyvoice_prompt_declined,
+    )
 
-    if os.path.exists(FLAG_FILE) or (cosyvoice_dir and os.path.isdir(cosyvoice_dir)):
-        return  # 이미 물어봤거나 설치됨
+    if is_cosyvoice_install_recorded(FLAG_FILE, cosyvoice_dir):
+        return  # 이미 물어봤거나 설치됨 (설치가 중간에 끝난 경우만 다시 묻는다)
 
     msg = QMessageBox()
     msg.setWindowTitle(_("CosyVoice3 로컬 TTS"))
@@ -167,18 +172,16 @@ def check_cosyvoice_first_run(app):
         _("로컬 TTS 엔진 CosyVoice3를 설치하시겠습니까?\n\n"
           "• 설치 시: 고품질 한국어 TTS 사용 가능 (GPU 권장, 약 2~5GB)\n"
           "• 미설치 시: Fish Audio API TTS 사용 (인터넷 필요)\n\n"
-          "나중에 설치하려면 install_cosyvoice.py를 직접 실행하세요.")
+          "나중에 설치하려면 설정의 TTS 페이지에서 설치할 수 있습니다.")
     )
     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     msg.setDefaultButton(QMessageBox.No)
     msg.button(QMessageBox.Yes).setText(_("설치"))
     msg.button(QMessageBox.No).setText(_("나중에"))
 
-    # 플래그 파일 생성 (다시 묻지 않음)
-    with open(FLAG_FILE, "w"):
-        pass
-
-    if msg.exec() == QMessageBox.Yes:
+    if msg.exec() != QMessageBox.Yes:
+        mark_cosyvoice_prompt_declined(FLAG_FILE)
+    else:
         import threading
 
         progress = QProgressDialog(_("CosyVoice3 설치 중...\n콘솔 창에서 진행 상황을 확인하세요."), None, 0, 0)
@@ -189,11 +192,22 @@ def check_cosyvoice_first_run(app):
         app.processEvents()
         install_done = threading.Event()
         install_error = {"message": ""}
+        installed_dir = {"path": ""}
 
         def run_install():
             try:
-                import install_cosyvoice
-                install_cosyvoice.install()
+                from core.cosyvoice_installer import install_cosyvoice
+                from core.config_manager import ConfigManager
+
+                installed_dir["path"] = install_cosyvoice(
+                    DEFAULT_COSYVOICE_DIR,
+                    log=lambda message: logging.info("%s", message),
+                )
+                if not ConfigManager.set_value("cosyvoice_dir", installed_dir["path"]):
+                    logging.warning("CosyVoice 설치 경로 설정을 저장하지 못했습니다.")
+                from tts.cosyvoice_tts import _reset_cosyvoice_dir_cache
+
+                _reset_cosyvoice_dir_cache()
             except Exception as e:
                 logging.error("CosyVoice 설치 오류: %s", e)
                 install_error["message"] = str(e)

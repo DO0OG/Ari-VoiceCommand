@@ -37,6 +37,7 @@ class FishTTSWebSocket(QObject):
         self.is_playing = False
         self.play_thread = None
         self.stop_event = threading.Event()
+        self._last_playback_success = None
         logging.info("🌊 Fish Audio Streaming TTS Initialized")
 
     def _stream_tts(self, text):
@@ -92,7 +93,10 @@ class FishTTSWebSocket(QObject):
         if not text:
             return False
 
+        self._last_playback_success = False
         try:
+            from audio.audio_manager import get_configured_output_device_name
+            output_device_name = get_configured_output_device_name()
             logging.info(f"TTS 요청: {text[:30]}...")
 
             audio_stream = self._stream_tts(text)
@@ -103,6 +107,7 @@ class FishTTSWebSocket(QObject):
             download_done = threading.Event()
             metadata_ready = threading.Event()
             playback_meta = {"duration_sec": 0.0}
+            playback_result = {"success": False, "error": None}
 
             def play_worker():
                 # 1단계: 전체 WAV 수집
@@ -122,6 +127,7 @@ class FishTTSWebSocket(QObject):
 
                 wav_bytes = buf.getvalue()
                 if not wav_bytes:
+                    playback_result["error"] = "empty audio response"
                     metadata_ready.set()
                     return
 
@@ -147,14 +153,24 @@ class FishTTSWebSocket(QObject):
                     )
                 except Exception as exc:
                     metadata_ready.set()
+                    playback_result["error"] = exc
                     logging.error(f"WAV 파싱 실패: {exc}")
+                    return
+                if not frames:
+                    playback_result["error"] = "empty WAV frames"
+                    metadata_ready.set()
                     return
 
                 # 3단계: PyAudio 재생
-                from audio.audio_manager import _audio_output_lock, get_output_device_index
+                from audio.audio_manager import (
+                    _audio_output_lock,
+                    get_output_device_index,
+                    output_device_override,
+                )
                 stream = None
                 try:
-                    out_idx = get_output_device_index()
+                    with output_device_override(output_device_name):
+                        out_idx = get_output_device_index()
                     with _audio_output_lock:
                         stream = self.pa.open(
                             format=self.pa.get_format_from_width(sample_width),
@@ -177,8 +193,10 @@ class FishTTSWebSocket(QObject):
                     drain_deadline = time.time() + 1.5
                     while stream.is_active() and time.time() < drain_deadline:
                         time.sleep(0.01)
+                    playback_result["success"] = not stop_event.is_set()
 
                 except Exception as exc:
+                    playback_result["error"] = exc
                     logging.error(f"재생 오류: {exc}")
                 finally:
                     if stream:
@@ -229,11 +247,15 @@ class FishTTSWebSocket(QObject):
                 )
                 self.stop_event.set()
                 self.play_thread.join(timeout=2.0)
+                if self.play_thread.is_alive():
+                    playback_result["error"] = "playback thread timed out"
+                    playback_result["success"] = False
 
             time.sleep(0.1)
             self.is_playing = False
             self.playback_finished.emit()
             logging.debug("TTS 재생 프로세스 완전 종료")
+            self._last_playback_success = bool(playback_result["success"])
             return True
 
         except Exception as exc:

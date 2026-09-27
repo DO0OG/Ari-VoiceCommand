@@ -2,11 +2,14 @@
 
 import logging
 import threading
+from contextlib import contextmanager
 
 # 입력(마이크)과 출력(스피커)을 별도 락으로 분리
 # PyAudio의 입력/출력 스트림은 독립적이므로 같은 락을 공유할 필요 없음
 _audio_input_lock = threading.Lock()   # 마이크 캡처용
 _audio_output_lock = threading.Lock()  # 스피커 재생용
+_output_device_override = threading.local()
+_NO_OUTPUT_DEVICE_OVERRIDE = object()
 
 # 하위 호환용 alias (기존 코드가 _audio_lock을 직접 임포트하는 경우 대비)
 _audio_lock = _audio_input_lock
@@ -53,6 +56,27 @@ def get_audio_lock():
 def get_audio_output_lock():
     """전역 오디오 출력 락 반환"""
     return _audio_output_lock
+
+
+@contextmanager
+def output_device_override(device_name: str | None):
+    """현재 스레드에서만 사용할 출력 장치를 임시 지정한다.
+
+    설정 진단처럼 저장 전의 장치 선택을 시험할 때 전역 설정을 바꾸지 않고
+    TTS 제공자가 선택한 장치로 재생하도록 한다.
+    """
+    previous = getattr(_output_device_override, "name", _NO_OUTPUT_DEVICE_OVERRIDE)
+    _output_device_override.name = str(device_name or "")
+    try:
+        yield
+    finally:
+        if previous is _NO_OUTPUT_DEVICE_OVERRIDE:
+            try:
+                del _output_device_override.name
+            except AttributeError:
+                pass
+        else:
+            _output_device_override.name = previous
 
 
 # ── 출력 장치 유틸리티 ─────────────────────────────────────────────────────────
@@ -115,6 +139,9 @@ def list_output_devices() -> list[dict]:
 
 def get_configured_output_device_name() -> str:
     """설정에 저장된 출력 장치 이름(없으면 빈 문자열)."""
+    override = getattr(_output_device_override, "name", _NO_OUTPUT_DEVICE_OVERRIDE)
+    if override is not _NO_OUTPUT_DEVICE_OVERRIDE:
+        return str(override or "")
     try:
         from core.config_manager import ConfigManager
         return str(ConfigManager.get("audio_output_device", "") or "")
@@ -129,8 +156,7 @@ def get_output_device_index() -> int | None:
     설정이 비어있거나 장치를 찾지 못하면 None(시스템 기본값)을 반환한다.
     """
     try:
-        from core.config_manager import ConfigManager
-        device_name = ConfigManager.get("audio_output_device", "")
+        device_name = get_configured_output_device_name()
         if not device_name:
             return None
         return _find_device_index_by_name(device_name)

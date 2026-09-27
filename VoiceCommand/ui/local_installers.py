@@ -300,6 +300,9 @@ class LocalInstallSection(QGroupBox):
         self.ollama_models_label.setText(_models_text(self.ollama_path, result.get("ollama_models")))
         self.ollama_install_btn.setText(_("모델 받기") if self.ollama_path else _("Ollama 설치/모델 받기"))
         self.cosyvoice_status.setText(_status_text(self.cosyvoice_dir))
+        self.cosyvoice_install_btn.setText(
+            _("CosyVoice 다시 설치") if self.cosyvoice_dir else _("CosyVoice 설치")
+        )
         self.detection_finished.emit(result)
 
 
