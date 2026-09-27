@@ -10,6 +10,8 @@ import time
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
+from audio.audio_manager import GlobalAudio
+
 # 지원 한국어 보이스 (edge-tts --list-voices 참고)
 KO_VOICES = [
     ("ko-KR-SunHiNeural", "SunHi (여성, 기본)"),
@@ -29,7 +31,7 @@ class EdgeTTS(QObject):
         self.rate = rate    # 말하기 속도: "+10%" 빠름, "-10%" 느림
         self.volume = volume
         self.is_playing = False
-        self.pa = pyaudio.PyAudio()
+        self.pa = GlobalAudio.get_instance()
         logging.info("Edge TTS 초기화 완료 (voice=%s)", voice)
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
@@ -100,13 +102,6 @@ class EdgeTTS(QObject):
         return b"".join(chunks) if chunks else b""
 
     def cleanup(self):
-        try:
-            self.pa.terminate()
-        except Exception as exc:
-            logging.debug("Edge TTS 정리 중 무시된 오류: %s", exc)
-
-    def __del__(self):
-        try:
-            self.cleanup()
-        except Exception as exc:
-            logging.debug("Edge TTS 소멸자 정리 실패: %s", exc)
+        """재생 상태를 정리한다."""
+        # 전역 PyAudio 인스턴스는 AriCore.cleanup()의 GlobalAudio.terminate()에서만 종료한다.
+        self.is_playing = False

@@ -66,11 +66,81 @@ def _tts_wake_guard_seconds() -> float:
 
 
 class SharedMicrophone(sr.Microphone):
-    """전역 PyAudio 인스턴스를 공유하는 마이크 클래스"""
+    """전역 PyAudio 인스턴스를 공유하는 마이크 클래스.
+
+    sr.Microphone은 생성·열기·닫기마다 PyAudio()를 새로 만들고 terminate()한다.
+    PortAudio 초기화·종료는 스레드 안전하지 않아 다른 스레드의 오디오 사용과
+    겹치면 네이티브 크래시가 나므로, 전역 인스턴스만 쓰고 종료는 앱 정리 때 한 번만 한다.
+    """
+    # sr.Microphone.__init__은 임시 PyAudio를 만들고 terminate()하므로 호출하지 않는다.
+    def __init__(  # pylint: disable=super-init-not-called
+        self, device_index=None, sample_rate=None, chunk_size=1024,
+    ):
+        if device_index is not None and not isinstance(device_index, int):
+            raise ValueError("Device index must be None or an integer")
+        if sample_rate is not None and (not isinstance(sample_rate, int) or sample_rate <= 0):
+            raise ValueError("Sample rate must be None or a positive integer")
+        if not isinstance(chunk_size, int) or chunk_size <= 0:
+            raise ValueError("Chunk size must be a positive integer")
+
+        pyaudio_module = self.get_pyaudio()
+        audio = GlobalAudio.get_instance()
+        count = audio.get_device_count()
+        if device_index is not None and not 0 <= device_index < count:
+            raise OSError(f"Device index out of range ({count} devices available)")
+        if sample_rate is None:
+            # 기본 입력 장치가 없으면 PyAudio가 OSError를 낸다.
+            device_info = (
+                audio.get_device_info_by_index(device_index)
+                if device_index is not None
+                else audio.get_default_input_device_info()
+            )
+            default_rate = device_info.get("defaultSampleRate")
+            if not isinstance(default_rate, (float, int)) or default_rate <= 0:
+                raise OSError(f"Invalid device info returned from PyAudio: {device_info}")
+            sample_rate = int(default_rate)
+
+        self.device_index = device_index
+        self.format = pyaudio_module.paInt16
+        self.SAMPLE_WIDTH = pyaudio_module.get_sample_size(self.format)
+        self.SAMPLE_RATE = sample_rate
+        self.CHUNK = chunk_size
+        self.audio = None
+        self.stream = None
+
     def __enter__(self):
-        if getattr(self, "audio", None) is None:
-            self.audio = GlobalAudio.get_instance()
-        return super().__enter__()
+        if self.stream is not None:
+            raise RuntimeError("This audio source is already inside a context manager")
+        self.audio = GlobalAudio.get_instance()
+        try:
+            self.stream = sr.Microphone.MicrophoneStream(
+                self.audio.open(
+                    input_device_index=self.device_index, channels=1, format=self.format,
+                    rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
+                )
+            )
+        except (OSError, ValueError) as exc:
+            # stream을 None으로 남겨 호출자가 OSError로 처리하게 한다.
+            logging.debug("마이크 스트림 열기 실패: %s", exc)
+            self.stream = None
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if self.stream is not None:
+                self.stream.close()
+        finally:
+            self.stream = None
+            self.audio = None
+
+
+def list_microphone_names() -> list:
+    """전역 PyAudio 인스턴스로 오디오 장치 이름 목록을 반환한다."""
+    audio = GlobalAudio.get_instance()
+    return [
+        audio.get_device_info_by_index(index).get("name")
+        for index in range(audio.get_device_count())
+    ]
 
 
 # ── 초기화 및 설정 ───────────────────────────────────────────────────────────
@@ -438,8 +508,8 @@ def execute_command(command):
 def get_microphone_index_helper(microphone_name):
     if not microphone_name:
         return None
-    for index, name in enumerate(sr.Microphone.list_microphone_names()):
-        if microphone_name in name:
+    for index, name in enumerate(list_microphone_names()):
+        if name and microphone_name in name:
             return index
     return None
 

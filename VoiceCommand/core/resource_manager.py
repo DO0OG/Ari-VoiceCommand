@@ -1,4 +1,5 @@
 """PyInstaller 번들 리소스 관리"""
+import filecmp
 import os
 import sys
 import shutil
@@ -8,6 +9,8 @@ from typing import Iterable
 # 앱 이름 (appdata 폴더명)
 APP_NAME = "Ari"
 _DEV_RUNTIME_DIR = ".ari_runtime"
+# 사용자가 편집하지 않는 앱 리소스. 업데이트 뒤 번들본과 다르면 새로 복사한다.
+_APP_MANAGED_FILES = frozenset({"icon.png"})
 _LEGACY_RUNTIME_MAPPINGS = (
     ("ari_settings.json", "ari_settings.json"),
     ("ari_memory.db", "ari_memory.db"),
@@ -204,6 +207,22 @@ class ResourceManager:
         return path
 
     @staticmethod
+    def refresh_app_managed_file(source: str, destination: str) -> bool:
+        """앱이 관리하는 파일이 번들본과 다르면 번들본으로 바꾸고, 바꿨으면 True를 반환한다."""
+        if not os.path.isfile(source):
+            return False
+        try:
+            if os.path.isfile(destination) and filecmp.cmp(source, destination, shallow=False):
+                return False
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            shutil.copy2(source, destination)
+            logging.info("✓ 파일 갱신: %s", os.path.basename(destination))
+            return True
+        except OSError as e:
+            logging.error("리소스 갱신 실패 %s: %s", os.path.basename(destination), e)
+            return False
+
+    @staticmethod
     def extract_resources():
         """첫 실행 시 번들 리소스를 appdata로 추출"""
         if not _is_bundled():
@@ -223,6 +242,9 @@ class ResourceManager:
             source = ResourceManager.get_bundle_path(src_name)
             destination = ResourceManager.get_writable_path(dest_name)
 
+            if dest_name in _APP_MANAGED_FILES:
+                ResourceManager.refresh_app_managed_file(source, destination)
+                continue
             if os.path.exists(destination):
                 continue  # 이미 추출됨
 

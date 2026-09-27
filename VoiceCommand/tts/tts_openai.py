@@ -10,6 +10,8 @@ import time
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
+from audio.audio_manager import GlobalAudio
+
 VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 MODELS = ["tts-1", "tts-1-hd"]
 _SAMPLE_RATE = 24000  # OpenAI PCM 출력 고정값
@@ -38,7 +40,7 @@ class OpenAITTS(QObject):
             logging.error("OpenAI TTS 초기화 실패: %s", e)
             raise RuntimeError("OpenAI TTS client initialization failed") from e
 
-        self.pa = pyaudio.PyAudio()
+        self.pa = GlobalAudio.get_instance()
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or self._client is None:
@@ -84,13 +86,6 @@ class OpenAITTS(QObject):
             return False
 
     def cleanup(self):
-        try:
-            self.pa.terminate()
-        except Exception as exc:
-            logging.debug("OpenAI TTS 정리 중 무시된 오류: %s", exc)
-
-    def __del__(self):
-        try:
-            self.cleanup()
-        except Exception as exc:
-            logging.debug("OpenAI TTS 소멸자 정리 실패: %s", exc)
+        """재생 상태를 정리한다."""
+        # 전역 PyAudio 인스턴스는 AriCore.cleanup()의 GlobalAudio.terminate()에서만 종료한다.
+        self.is_playing = False

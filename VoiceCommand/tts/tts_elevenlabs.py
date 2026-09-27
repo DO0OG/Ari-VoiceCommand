@@ -9,6 +9,8 @@ import time
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
+from audio.audio_manager import GlobalAudio
+
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
 _SAMPLE_RATE = 22050
 
@@ -26,7 +28,7 @@ class ElevenLabsTTS(QObject):
         self.stability = stability
         self.similarity_boost = similarity_boost
         self.is_playing = False
-        self.pa = pyaudio.PyAudio()
+        self.pa = GlobalAudio.get_instance()
         self._session = None
 
         if api_key:
@@ -124,10 +126,7 @@ class ElevenLabsTTS(QObject):
                 self._session = None
         except Exception as exc:
             logging.debug("ElevenLabs 세션 정리 중 무시된 오류: %s", exc)
-        try:
-            self.pa.terminate()
-        except Exception as exc:
-            logging.debug("ElevenLabs TTS 정리 중 무시된 오류: %s", exc)
+        # 전역 PyAudio 인스턴스는 AriCore.cleanup()의 GlobalAudio.terminate()에서만 종료한다.
 
     def __del__(self):
         try:
