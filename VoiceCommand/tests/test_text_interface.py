@@ -1,5 +1,7 @@
+import importlib
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
 
 
 from agent.proactive_scheduler import ScheduledTask
+from ui import theme as theme_module
 from ui.scheduler_panel import SchedulerPanel, TaskRow
 from ui.text_interface import ChatWidget, TextInterface
 
@@ -165,6 +168,95 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         needed = msg_lbl.heightForWidth(msg_lbl.width())
         self.assertGreater(needed, 0)
         self.assertGreaterEqual(msg_lbl.height(), needed)
+
+    def test_chat_bubble_fits_mixed_text_after_resize_and_theme_scale(self):
+        host = QWidget()
+        host_layout = QVBoxLayout(host)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        widget = ChatWidget()
+        scroll.setWidget(widget)
+        host_layout.addWidget(scroll)
+        host.resize(640, 800)
+        host.show()
+        self.addCleanup(host.close)
+        self._app.processEvents()
+
+        message = (
+            "한글과 English 문장이 섞여도 줄바꿈되어야 합니다.\n"
+            "새 줄도 유지하고, 이어지는 응답도 모두 보여야 합니다.\n"
+            + "unbrokenEnglishText" * 24
+        )
+        widget.add_message(message, is_user=True)
+
+        def assert_bubble_fits():
+            self._app.processEvents()
+            widget.layout().activate()
+            row_widget = widget.layout().itemAt(0).widget()
+            row_layout = row_widget.layout()
+            bubble = next(
+                item.widget()
+                for index in range(row_layout.count())
+                if (item := row_layout.itemAt(index)).widget() and isinstance(item.widget(), QFrame)
+            )
+            msg_lbl = next(
+                label for label in bubble.findChildren(QLabel) if label.text() == message
+            )
+            contents = widget.layout().contentsMargins()
+
+            self.assertTrue(msg_lbl.wordWrap())
+            self.assertEqual(msg_lbl.textFormat(), Qt.PlainText)
+            self.assertLessEqual(
+                bubble.width(), widget.width() - contents.left() - contents.right()
+            )
+            self.assertGreaterEqual(bubble.height(), bubble.minimumHeight())
+            self.assertGreaterEqual(row_widget.height(), row_widget.minimumHeight())
+            self.assertLessEqual(bubble.geometry().right() + 1, row_widget.width())
+            needed = msg_lbl.heightForWidth(msg_lbl.width())
+            self.assertGreater(needed, 0)
+            long_line = "unbrokenEnglishText" * 24
+            self.assertGreater(
+                msg_lbl.fontMetrics().horizontalAdvance(long_line), msg_lbl.width()
+            )
+            self.assertGreater(needed, msg_lbl.fontMetrics().height() * 3)
+            self.assertGreaterEqual(msg_lbl.height(), needed)
+            self.assertLessEqual(msg_lbl.geometry().bottom() + 1, bubble.height())
+            self.assertGreaterEqual(bubble.height(), bubble.layout().sizeHint().height())
+            return msg_lbl
+
+        previous_host_width = host.width()
+        previous_widget_width = widget.width()
+        for width in (640, 360, 240, 180):
+            host.resize(width, 800)
+            self._app.processEvents()
+            self.assertLessEqual(widget.width(), scroll.viewport().width())
+            if width < previous_host_width:
+                self.assertLess(widget.width(), previous_widget_width)
+            assert_bubble_fits()
+            previous_host_width = width
+            previous_widget_width = widget.width()
+
+        original_settings = dict(theme_module._SETTINGS)
+        original_scale = theme_module.theme_metadata()["scale"]
+        target_scale = 0.9 if original_scale > 1.0 else 1.35
+        try:
+            with patch(
+                "core.config_manager.ConfigManager.load_settings",
+                return_value={**original_settings, "ui_theme_scale": target_scale},
+            ):
+                importlib.reload(theme_module)
+            widget.refresh_theme()
+            msg_lbl = assert_bubble_fits()
+            self.assertEqual(theme_module.theme_metadata()["scale"], target_scale)
+            self.assertEqual(msg_lbl.font().pointSize(), theme_module.FONT_SIZE_LARGE)
+        finally:
+            with patch(
+                "core.config_manager.ConfigManager.load_settings",
+                return_value=original_settings,
+            ):
+                importlib.reload(theme_module)
+            widget.refresh_theme()
 
     def test_chat_widget_preserves_message_timestamp_across_rerender(self):
         widget = ChatWidget()

@@ -3,7 +3,7 @@
 import logging
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
-from ui.settings_dialog import SettingsDialog
+from ui.settings_dialog import SettingsDialog, should_apply_microphone
 from i18n.translator import _
 
 class SystemTrayIcon(QSystemTrayIcon):
@@ -119,6 +119,12 @@ class SystemTrayIcon(QSystemTrayIcon):
     def open_settings(self):
         dialog = SettingsDialog()
         if dialog.exec() == QDialog.Accepted:
+            if should_apply_microphone(dialog, self.character_widget):
+                if self.character_widget:
+                    self.character_widget.apply_microphone_settings()
+                else:
+                    logging.warning("캐릭터 위젯이 없어 마이크 설정을 적용할 수 없습니다.")
+
             if dialog.tts_settings_changed():
                 from VoiceCommand import initialize_tts, _tts_init_event
                 import threading

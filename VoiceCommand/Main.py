@@ -130,26 +130,35 @@ def _cleanup_old_logs(log_dir: str) -> None:
         logging.debug("로그 디렉터리 읽기 실패: %s", e)
 
 def setup_logging():
-    from core.resource_manager import ResourceManager
-    log_dir = ResourceManager.get_writable_path("logs")
-    os.makedirs(log_dir, exist_ok=True)
-
-    _cleanup_old_logs(log_dir)
-
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"ari_log_{current_time}.log")
-
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
+
+    handlers = []
+    log_error = None
+    try:
+        from core.resource_manager import ResourceManager
+        log_dir = ResourceManager.get_writable_path("logs")
+        os.makedirs(log_dir, exist_ok=True)
+        _cleanup_old_logs(log_dir)
+
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(log_dir, f"ari_log_{current_time}.log")
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    except OSError as exc:
+        log_error = exc
+
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
+    elif not handlers:
+        handlers.append(logging.NullHandler())
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_file, encoding="utf-8"),
-            *(  [logging.StreamHandler(sys.stdout)] if sys.stdout is not None else [] ),
-        ],
+        handlers=handlers,
     )
+    if log_error is not None:
+        logging.warning("로그 파일을 만들 수 없습니다. 파일 로그 없이 계속 실행합니다: %s", log_error)
 
 def check_cosyvoice_first_run(app):
     """최초 실행 시 CosyVoice 설치 여부 확인"""
@@ -343,7 +352,10 @@ def main():
             app.setWindowIcon(QIcon(icon_path))
 
         # 최초 실행 시 CosyVoice 설치 여부 확인
-        check_cosyvoice_first_run(app)
+        try:
+            check_cosyvoice_first_run(app)
+        except Exception as exc:
+            logging.warning("CosyVoice 첫 실행 확인을 건너뜁니다: %s", exc)
 
         # AI 어시스턴트 초기화
         ai_assistant = get_ai_assistant()
@@ -362,12 +374,15 @@ def main():
 
         ari_core = AriCore()
 
-        # 전역 오디오 인스턴스 초기화 (메인 스레드에서 생성)
-        from audio.audio_manager import GlobalAudio
-        GlobalAudio.get_instance()
+        # 전역 오디오 초기화는 선택 기능이므로 장치/권한 오류로 앱 시작을 중단하지 않는다.
+        from audio.audio_manager import initialize_global_audio
+        initialize_global_audio()
 
         # TTS 백그라운드 초기화 시작 (CosyVoice 모델 로드를 미리 시작)
-        start_tts_background()
+        try:
+            start_tts_background()
+        except Exception as exc:
+            logging.error("TTS 초기화 실패; 음성 출력 기능을 사용할 수 없습니다: %s", exc)
 
         try:
             from core.config_manager import ConfigManager
@@ -380,17 +395,24 @@ def main():
         except Exception as exc:
             logging.debug("로컬 MCP 서버 시작 생략: %s", exc)
 
-        scheduler = get_scheduler(tts_wrapper)
+        scheduler = None
         try:
-            register_background_learning_tasks(scheduler)
+            scheduler = get_scheduler(tts_wrapper)
         except Exception as exc:
-            logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
+            logging.warning("예약 작업 초기화 실패; 예약 기능을 사용할 수 없습니다: %s", exc)
+
+        if scheduler is not None:
+            try:
+                register_background_learning_tasks(scheduler)
+            except Exception as exc:
+                logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
 
         # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
-        try:
-            scheduler.check_missed_tasks_on_startup()
-        except Exception as exc:
-            logging.debug("놓친 작업 확인 생략: %s", exc)
+        if scheduler is not None:
+            try:
+                scheduler.check_missed_tasks_on_startup()
+            except Exception as exc:
+                logging.debug("놓친 작업 확인 생략: %s", exc)
 
         # 캐릭터 위젯 생성
         logging.info("캐릭터 위젯 생성 시작")
@@ -398,9 +420,30 @@ def main():
         logging.info("캐릭터 위젯 생성 완료")
         set_character_widget(character)
 
+        voice_thread = getattr(ari_core, "voice_thread", None)
+        if voice_thread is not None:
+            character.voice_thread = voice_thread
+
+            def _show_microphone_unavailable() -> None:
+                if (
+                    voice_thread.microphone_available is False
+                    and voice_thread.claim_microphone_unavailable_notification()
+                ):
+                    character.say(_("마이크를 찾을 수 없어 음성 인식을 사용할 수 없습니다. 설정에서 마이크를 지정해 주세요."))
+
+            try:
+                voice_thread.microphone_unavailable.connect(_show_microphone_unavailable)
+                _show_microphone_unavailable()
+            except Exception as exc:
+                logging.warning("마이크 상태 안내 연결을 건너뜁니다: %s", exc)
+
         # 텍스트 인터페이스 생성 및 설정
-        text_interface = create_text_interface(ai_assistant, tts_wrapper)
-        character.set_text_interface(text_interface)
+        try:
+            text_interface = create_text_interface(ai_assistant, tts_wrapper)
+            character.set_text_interface(text_interface)
+        except Exception as exc:
+            text_interface = None
+            logging.error("텍스트 인터페이스 초기화 실패; 텍스트 채팅을 사용할 수 없습니다: %s", exc)
 
         # 트레이 아이콘에 캐릭터 참조 및 텍스트 인터페이스 설정
         if use_system_tray and tray_icon:
@@ -441,34 +484,39 @@ def main():
             get_llm_provider().register_plugin_tool(schema)
             ai_command.register_plugin_tool_handler(tool_name, handler)
 
-        plugin_manager = get_plugin_manager()
-        if cmd_registry and hasattr(cmd_registry, "set_event_emitter"):
-            cmd_registry.set_event_emitter(plugin_manager.emit_event)
-        plugin_manager.load_plugins(
-            PluginContext(
-                app=app,
-                tray_icon=tray_icon,
-                character_widget=character,
-                text_interface=text_interface,
-                register_menu_action=tray_icon.add_plugin_menu_action if tray_icon else None,
-                register_command=cmd_registry.register_command if cmd_registry else None,
-                register_tool=_register_tool_for_plugin,
-                register_character_pack=character.register_character_pack if character else None,
-                set_character_menu_enabled=character.set_context_menu_enabled if character else None,
-            )
-        )
-        logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))
-
         try:
-            from core.plugin_watcher import PluginWatcher
-
-            plugin_watcher = PluginWatcher(plugin_manager.plugin_dir(), plugin_manager)
-            plugin_watcher.start()
-            plugin_flush_timer = QTimer()
-            plugin_flush_timer.timeout.connect(plugin_watcher.flush)
-            plugin_flush_timer.start(1000)
+            plugin_manager = get_plugin_manager()
+            if cmd_registry and hasattr(cmd_registry, "set_event_emitter"):
+                cmd_registry.set_event_emitter(plugin_manager.emit_event)
+            plugin_manager.load_plugins(
+                PluginContext(
+                    app=app,
+                    tray_icon=tray_icon,
+                    character_widget=character,
+                    text_interface=text_interface,
+                    register_menu_action=tray_icon.add_plugin_menu_action if tray_icon else None,
+                    register_command=cmd_registry.register_command if cmd_registry else None,
+                    register_tool=_register_tool_for_plugin,
+                    register_character_pack=character.register_character_pack if character else None,
+                    set_character_menu_enabled=character.set_context_menu_enabled if character else None,
+                )
+            )
+            logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))
         except Exception as exc:
-            logging.error("플러그인 감시 시작 실패: %s", exc)
+            plugin_manager = None
+            logging.error("플러그인 초기화 실패; 플러그인을 사용할 수 없습니다: %s", exc)
+
+        if plugin_manager is not None:
+            try:
+                from core.plugin_watcher import PluginWatcher
+
+                plugin_watcher = PluginWatcher(plugin_manager.plugin_dir(), plugin_manager)
+                plugin_watcher.start()
+                plugin_flush_timer = QTimer()
+                plugin_flush_timer.timeout.connect(plugin_watcher.flush)
+                plugin_flush_timer.start(1000)
+            except Exception as exc:
+                logging.error("플러그인 감시 시작 실패: %s", exc)
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용

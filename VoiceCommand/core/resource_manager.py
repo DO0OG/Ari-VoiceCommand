@@ -165,7 +165,12 @@ class ResourceManager:
         else:
             base = ResourceManager._dev_runtime_dir()
 
-        os.makedirs(base, exist_ok=True)
+        try:
+            os.makedirs(base, exist_ok=True)
+        except OSError as exc:
+            logging.warning("사용자 데이터 디렉터리를 만들 수 없어 저장 기능이 제한될 수 있습니다: %s", exc)
+            ResourceManager._app_data_dir = base
+            return base
         if not _is_bundled():
             ResourceManager._migrate_dev_runtime_state(base)
             ResourceManager._cleanup_legacy_runtime_state(base)

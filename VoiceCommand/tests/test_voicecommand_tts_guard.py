@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 
 from core import VoiceCommand
@@ -41,6 +42,74 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand.time.monotonic = old_monotonic
 
         self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 103.5)
+
+    def test_tts_startup_failure_does_not_escape_or_leave_waiters_blocked(self):
+        old_started = VoiceCommand._state.tts_init_started
+        event = VoiceCommand._state.tts_init_event
+        old_event_is_set = event.is_set()
+        event.clear()
+        VoiceCommand._state.tts_init_started = False
+        try:
+            with (
+                patch(
+                    "core.config_manager.ConfigManager.load_settings",
+                    return_value={"tts_mode": "edge"},
+                ),
+                patch.object(
+                    VoiceCommand,
+                    "initialize_tts",
+                    side_effect=TypeError("unexpected provider initialization error"),
+                ),
+            ):
+                VoiceCommand.start_tts_background()
+            initialized_event = event.is_set()
+        finally:
+            VoiceCommand._state.tts_init_started = old_started
+            if old_event_is_set:
+                event.set()
+            else:
+                event.clear()
+
+        self.assertTrue(initialized_event)
+
+    def test_tts_settings_load_failure_releases_waiters(self):
+        old_started = VoiceCommand._state.tts_init_started
+        event = VoiceCommand._state.tts_init_event
+        old_event_is_set = event.is_set()
+        event.clear()
+        VoiceCommand._state.tts_init_started = False
+        try:
+            with patch(
+                "core.config_manager.ConfigManager.load_settings",
+                side_effect=PermissionError("settings are read-only"),
+            ):
+                VoiceCommand.start_tts_background()
+            initialized_event = event.is_set()
+        finally:
+            VoiceCommand._state.tts_init_started = old_started
+            if old_event_is_set:
+                event.set()
+            else:
+                event.clear()
+
+        self.assertTrue(initialized_event)
+
+    def test_character_widget_startup_survives_orchestrator_storage_failure(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        previous_character = VoiceCommand._state.character_widget
+        character = SimpleNamespace(thinking_signal=SimpleNamespace(emit=Mock()))
+        try:
+            with patch(
+                "agent.agent_orchestrator.get_orchestrator",
+                side_effect=PermissionError("runtime directory is read-only"),
+            ):
+                VoiceCommand.set_character_widget(character)
+
+            self.assertIs(VoiceCommand._state.character_widget, character)
+        finally:
+            VoiceCommand._state.character_widget = previous_character
 
 
 if __name__ == "__main__":

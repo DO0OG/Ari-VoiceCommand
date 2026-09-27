@@ -101,7 +101,7 @@ def set_character_widget(widget: object) -> None:
         from agent.agent_orchestrator import get_orchestrator
         orch = get_orchestrator()
         orch.set_thinking_callback(widget.thinking_signal.emit)
-    except (ImportError, AttributeError, RuntimeError) as e:
+    except Exception as e:
         logging.warning("오케스트레이터 생각 콜백 연결 실패: %s", e)
         
     reconnect_tts_signals()
@@ -112,28 +112,33 @@ def start_tts_background():
         return
     _state.tts_init_started = True
 
-    from core.config_manager import ConfigManager
-    tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
+    try:
+        from core.config_manager import ConfigManager
+        tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
 
-    if tts_mode == "local":
-        def _run():
+        if tts_mode == "local":
+            def _run():
+                try:
+                    initialize_tts()
+                    if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
+                        _state.fish_tts.wait_until_warmup_done()
+                    _state.tts_init_event.set()
+                    tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
+                except Exception as e:
+                    logging.error("TTS 초기화 실패: %s", e)
+                    _state.tts_init_event.set()
+
+            threading.Thread(target=_run, daemon=True).start()
+        else:
             try:
                 initialize_tts()
-                if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
-                    _state.fish_tts.wait_until_warmup_done()
+            except Exception as e:
+                logging.error("TTS 초기화 실패 (동기): %s", e)
+            finally:
                 _state.tts_init_event.set()
-                tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
-            except (ImportError, OSError, RuntimeError, ValueError) as e:
-                logging.error("TTS 초기화 실패: %s", e)
-                _state.tts_init_event.set()
-        threading.Thread(target=_run, daemon=True).start()
-    else:
-        try:
-            initialize_tts()
-        except (ImportError, OSError, RuntimeError, ValueError) as e:
-            logging.error("TTS 초기화 실패 (동기): %s", e)
-        finally:
-            _state.tts_init_event.set()
+    except Exception as e:
+        logging.error("TTS 초기화 준비 실패: %s", e, exc_info=True)
+        _state.tts_init_event.set()
 
 
 def initialize_tts():

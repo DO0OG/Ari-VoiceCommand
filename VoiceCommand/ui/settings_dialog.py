@@ -30,6 +30,18 @@ from ui.settings_agent_page import _AgentSettingsPage
 from ui.audio_diagnostic_panel import AudioDiagnosticPanel
 
 
+def should_apply_microphone(dialog, character_widget) -> bool:
+    """저장 후 마이크 설정을 음성 스레드에 다시 적용할지 판단한다.
+
+    마이크가 없어 음성 인식이 멈춘 상태라면, 선택값이 그대로여도(예: 새로 연결한 기본 장치)
+    설정 저장을 사용자의 재시도로 보고 다시 적용한다.
+    """
+    if dialog.microphone_settings_changed():
+        return True
+    voice_thread = getattr(character_widget, "voice_thread", None)
+    return getattr(voice_thread, "microphone_available", None) is False
+
+
 class SettingsDialog(QDialog):
     TTS_KEYS = {
         "tts_mode", "fish_api_key", "fish_reference_id", "fish_model", "tts_volume",
@@ -588,6 +600,9 @@ class SettingsDialog(QDialog):
 
     def tts_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.TTS_KEYS)
+
+    def microphone_settings_changed(self) -> bool:
+        return "microphone" in self.changed_keys
 
     def llm_settings_changed(self) -> bool:
         return any(key in self.LLM_KEYS or is_custom_secret_key(key) for key in self.changed_keys)

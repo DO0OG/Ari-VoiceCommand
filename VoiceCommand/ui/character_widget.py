@@ -159,6 +159,7 @@ class CharacterWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.voice_thread = None
         register_fonts()  # 메인 스레드에서 폰트 등록
         self._screen_geom_cache = None
         self._screen_geom_cache_time = 0
@@ -1053,6 +1054,17 @@ class CharacterWidget(QWidget):
         """텍스트 인터페이스 참조 설정"""
         self.text_interface = text_interface
 
+    def apply_microphone_settings(self):
+        """Apply a saved microphone selection on the voice worker thread."""
+        if self.voice_thread is None:
+            logging.warning("음성 인식 스레드가 없어 마이크 설정을 적용할 수 없습니다.")
+            return False
+
+        from core.config_manager import ConfigManager
+        microphone = ConfigManager.load_settings().get("microphone", "")
+        self.voice_thread.set_microphone(microphone)
+        return True
+
     def open_text_interface(self):
         """텍스트 대화창 열기 (캐릭터 위치 기준)"""
         if hasattr(self, 'text_interface') and self.text_interface:
@@ -1142,9 +1154,11 @@ class CharacterWidget(QWidget):
 
     def open_settings(self):
         """설정 창 열기"""
-        from ui.settings_dialog import SettingsDialog
+        from ui.settings_dialog import SettingsDialog, should_apply_microphone
         dialog = SettingsDialog()
         if dialog.exec():
+            if should_apply_microphone(dialog, self):
+                self.apply_microphone_settings()
             if dialog.tts_settings_changed():
                 from VoiceCommand import initialize_tts
                 initialize_tts()

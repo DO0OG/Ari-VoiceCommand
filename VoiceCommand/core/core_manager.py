@@ -97,9 +97,21 @@ def start_file_watcher():
     if is_bundled():
         return None
     event_handler = FileChangeHandler()
-    observer = Observer()
-    observer.schedule(event_handler, path='.', recursive=False)
-    observer.start()
+    observer = None
+    try:
+        observer = Observer()
+        observer.schedule(event_handler, path='.', recursive=False)
+        observer.start()
+    except Exception as exc:
+        logging.warning("파일 감시 기능을 시작할 수 없습니다: %s", exc, exc_info=True)
+        if observer is not None:
+            try:
+                observer.stop()
+                if observer.is_alive():
+                    observer.join(timeout=2)
+            except Exception as cleanup_error:
+                logging.debug("파일 감시 기능 정리 생략: %s", cleanup_error)
+        return None
     return observer
 
 
@@ -140,7 +152,6 @@ class AriCore(QObject):
             self.voice_thread.set_microphone(selected_microphone)
         else:
             logging.info("기본 마이크를 사용합니다.")
-            self.voice_thread.set_microphone(None)
 
     def handle_voice_result(self, text):
         logging.info("인식된 명령 수신 (%d자)", len(text or ""))

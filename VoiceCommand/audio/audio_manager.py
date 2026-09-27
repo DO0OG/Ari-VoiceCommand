@@ -48,6 +48,16 @@ class GlobalAudio:
                 cls._instance = None
 
 
+def initialize_global_audio() -> bool:
+    """공유 오디오 백엔드를 초기화하되, 앱 시작의 필수 조건으로 두지 않는다."""
+    try:
+        GlobalAudio.get_instance()
+        return True
+    except Exception as exc:
+        logging.warning("전역 오디오 초기화 실패; 오디오 기능을 사용할 수 없습니다: %s", exc)
+        return False
+
+
 def get_audio_lock():
     """전역 오디오 입력 락 반환 (하위 호환)"""
     return _audio_input_lock
