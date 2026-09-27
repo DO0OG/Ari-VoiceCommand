@@ -51,6 +51,27 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             if original_env is not None:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_unwritable_runtime_path_is_cached_and_images_fall_back_to_bundle(self):
+        with tempfile.TemporaryDirectory() as project_root:
+            runtime_dir = os.path.join(project_root, ".ari_runtime")
+            bundle_images = os.path.join(project_root, "bundle", "images")
+            with (
+                patch.dict(os.environ, {"ARI_APP_DATA_DIR": runtime_dir}),
+                patch(
+                    "core.resource_manager.os.makedirs",
+                    side_effect=PermissionError("runtime directory is read-only"),
+                ),
+                patch.object(ResourceManager, "get_bundle_path", return_value=bundle_images),
+                patch.object(ResourceManager, "_migrate_dev_runtime_state") as migrate,
+                patch.object(ResourceManager, "_cleanup_legacy_runtime_state") as cleanup,
+            ):
+                ResourceManager.reset_cache()
+                self.assertEqual(ResourceManager.get_app_data_dir(), runtime_dir)
+                self.assertEqual(ResourceManager.get_images_dir(), bundle_images)
+
+            migrate.assert_not_called()
+            cleanup.assert_not_called()
+
     def test_legacy_settings_and_scheduler_state_migrate_into_runtime_dir(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")
         try:

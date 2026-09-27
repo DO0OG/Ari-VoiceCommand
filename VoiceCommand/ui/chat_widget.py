@@ -2,11 +2,11 @@ import logging
 from datetime import datetime
 from typing import Optional
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import QFont, QFontMetrics
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QStyle, QVBoxLayout, QWidget
 from ui.common import clear_layout
 from ui.theme import (
-    FONT_KO, FONT_SIZE_LARGE, FONT_SIZE_SMALL, SPACING_LG,
+    SPACING_LG,
     COLOR_PRIMARY, COLOR_ACCENT, COLOR_MUTED_LIGHT, COLOR_TEXT_PRIMARY,
     COLOR_BG_CHAT_USER, COLOR_BG_CHAT_AARI,
 )
@@ -33,6 +33,7 @@ class ChatWidget(QFrame):
 
     def __init__(self):
         super().__init__()
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.history = []
         self.setFrameStyle(QFrame.StyledPanel)
         self.setStyleSheet("QFrame { background-color: transparent; border: none; }")
@@ -65,7 +66,7 @@ class ChatWidget(QFrame):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if self.history:
+        if self.history and event.size().width() != event.oldSize().width():
             self.render_history()
 
     def _bubble_max_width(self) -> int:
@@ -73,7 +74,7 @@ class ChatWidget(QFrame):
         contents = layout.contentsMargins()
         available = self.width() - contents.left() - contents.right() - self.BUBBLE_SIDE_GAP
         proportional = int(max(self.width(), self.MIN_BUBBLE_WIDTH) * self.BUBBLE_WIDTH_RATIO)
-        return max(self.MIN_BUBBLE_WIDTH, min(available, proportional))
+        return max(1, min(available, proportional))
 
     def _add_message_widget(self, item: dict) -> None:
         message = str(item.get("message", ""))
@@ -91,47 +92,96 @@ class ChatWidget(QFrame):
         bg_color     = COLOR_BG_CHAT_USER if is_user else COLOR_BG_CHAT_AARI
         corner_style = "border-top-right-radius: 0px;" if is_user else "border-top-left-radius: 0px;"
 
-        bubble_width = self._bubble_max_width()
+        max_bubble_width = self._bubble_max_width()
+        horizontal_margin = min(15, max(0, (max_bubble_width - 1) // 2))
+        max_text_width = max(1, max_bubble_width - horizontal_margin * 2)
         msg_frame = QFrame()
         msg_frame.setObjectName("chatMessageBubble")
-        msg_frame.setMaximumWidth(bubble_width)
         msg_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         msg_lay = QVBoxLayout(msg_frame)
-        msg_lay.setContentsMargins(15, 10, 15, 10)
-        # 라벨에도 최대 폭을 걸어야 줄바꿈된 높이가 sizeHint에 반영된다.
-        # 이 값이 없으면 스크롤 영역이 한 줄 높이로만 말풍선을 잡아 긴 글이 잘린다.
-        text_width = max(1, bubble_width - msg_lay.contentsMargins().left()
-                         - msg_lay.contentsMargins().right())
+        msg_lay.setContentsMargins(horizontal_margin, 10, horizontal_margin, 10)
 
         sender_lbl = QLabel(sender_name)
-        sender_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL + 1, QFont.Bold))
+        sender_font = QFont(
+            theme_module.FONT_KO,
+            theme_module.FONT_SIZE_SMALL + 1,
+            QFont.Bold,
+        )
+        sender_lbl.setFont(sender_font)
         sender_lbl.setStyleSheet(f"color: {sender_color};")
         sender_lbl.setWordWrap(True)
         sender_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         sender_lbl.setMinimumWidth(0)
-        sender_lbl.setMaximumWidth(text_width)
+        sender_lbl.setMaximumWidth(max_text_width)
 
         msg_lbl = QLabel(display_message)
         msg_lbl.setWordWrap(True)
-        msg_lbl.setFont(QFont(FONT_KO, FONT_SIZE_LARGE))
+        msg_lbl.setTextFormat(Qt.PlainText)
+        message_font = QFont(theme_module.FONT_KO, theme_module.FONT_SIZE_LARGE)
+        msg_lbl.setFont(message_font)
         msg_lbl.setStyleSheet(f"color: {COLOR_TEXT_PRIMARY}; margin: 2px 0px;")
         msg_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         msg_lbl.setMinimumWidth(0)
-        msg_lbl.setMaximumWidth(text_width)
+        msg_lbl.setMaximumWidth(max_text_width)
 
         time_lbl = QLabel(timestamp)
-        time_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
+        time_font = QFont(theme_module.FONT_KO, theme_module.FONT_SIZE_SMALL)
+        time_lbl.setFont(time_font)
         time_lbl.setStyleSheet(f"color: {COLOR_MUTED_LIGHT};")
         time_lbl.setAlignment(Qt.AlignRight)
+        time_lbl.setWordWrap(True)
+        time_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        time_lbl.setMinimumWidth(0)
+        time_lbl.setMaximumWidth(max_text_width)
 
-        msg_lay.addWidget(sender_lbl)
-        msg_lay.addWidget(msg_lbl)
-        msg_lay.addWidget(time_lbl)
+        message_metrics = QFontMetrics(message_font)
+        line_widths = [
+            message_metrics.horizontalAdvance(line)
+            for line in display_message.splitlines()
+        ]
+        natural_text_width = max(line_widths, default=0)
+        natural_content_width = max(
+            natural_text_width,
+            QFontMetrics(sender_font).horizontalAdvance(sender_name),
+            QFontMetrics(time_font).horizontalAdvance(timestamp),
+        )
+        text_width = min(max_text_width, max(1, natural_content_width))
+        bubble_width = min(max_bubble_width, text_width + horizontal_margin * 2)
+        horizontal_margin = min(horizontal_margin, max(0, (bubble_width - 1) // 2))
+        text_width = max(1, bubble_width - horizontal_margin * 2)
+
+        msg_lay.setContentsMargins(horizontal_margin, 10, horizontal_margin, 10)
+        labels = (sender_lbl, msg_lbl, time_lbl)
+        for label in labels:
+            label.ensurePolished()
+            label.setFixedWidth(text_width)
+
+        for label in labels:
+            msg_lay.addWidget(label)
         msg_frame.setStyleSheet(
             f"QFrame {{ background-color: {bg_color}; border-radius: 12px; {corner_style} }}"
         )
+        msg_frame.setFixedWidth(bubble_width)
+        msg_frame.ensurePolished()
+        for label in labels:
+            label.ensurePolished()
+            label.setMinimumHeight(max(0, label.heightForWidth(text_width)))
+
+        vertical_spacing = msg_lay.spacing()
+        if vertical_spacing < 0:
+            vertical_spacing = msg_frame.style().pixelMetric(QStyle.PM_LayoutVerticalSpacing)
+        vertical_spacing = max(0, vertical_spacing)
+        margins = msg_lay.contentsMargins()
+        minimum_content_height = (
+            margins.top()
+            + margins.bottom()
+            + sum(label.minimumHeight() for label in labels)
+            + vertical_spacing * (len(labels) - 1)
+        )
+        msg_frame.setMinimumHeight(max(minimum_content_height, msg_lay.sizeHint().height()))
         row_widget = QWidget()
         row_widget.setObjectName("chatMessageRow")
+        row_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(0)
@@ -141,6 +191,7 @@ class ChatWidget(QFrame):
         else:
             row_layout.addWidget(msg_frame)
             row_layout.addStretch()
+        row_widget.setMinimumHeight(row_layout.sizeHint().height())
         self.layout().addWidget(row_widget)
 
     def refresh_theme(self) -> None:

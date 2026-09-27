@@ -1,12 +1,15 @@
 import unittest
+import threading
 from unittest.mock import MagicMock, patch
 
 
 from core.threads import (
     CommandExecutionThread,
     TTSThread,
+    VoiceRecognitionThread,
     _wait_for_tts_playback_completion,
 )
+from core.core_manager import start_file_watcher
 
 
 class TTSThreadTests(unittest.TestCase):
@@ -69,6 +72,117 @@ class TTSThreadTests(unittest.TestCase):
             thread.run()
 
         self.assertEqual(thread.queue.task_done.call_count, 2)
+
+
+class VoiceRecognitionThreadTests(unittest.TestCase):
+    def test_missing_microphone_waits_without_polling_and_stops(self):
+        waiting = threading.Event()
+        original_wait = threading.Event.wait
+
+        def wait_for_microphone(event, timeout=None):
+            waiting.set()
+            return original_wait(event, timeout)
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", side_effect=OSError("no input device")),
+            patch("core.threads.time.sleep", side_effect=AssertionError("unexpected polling")),
+            patch("core.threads.create_stt_provider") as create_provider,
+        ):
+            thread = VoiceRecognitionThread()
+            self.addCleanup(thread.stop)
+            thread._microphone_wakeup.wait = lambda timeout=None: wait_for_microphone(
+                thread._microphone_wakeup, timeout
+            )
+            thread.start()
+
+            self.assertTrue(waiting.wait(1))
+            self.assertIs(thread.microphone_available, False)
+            self.assertTrue(thread.isRunning())
+            self.assertTrue(thread.claim_microphone_unavailable_notification())
+            self.assertFalse(thread.claim_microphone_unavailable_notification())
+            create_provider.assert_not_called()
+
+            thread.stop()
+            self.assertTrue(thread.wait(1000))
+
+    def test_setting_microphone_recovers_on_voice_thread(self):
+        microphone_ready = threading.Event()
+        creation_threads = []
+
+        class FakeMicrophone:
+            def __init__(self):
+                self.stream = None
+
+            def __enter__(self):
+                self.stream = object()
+                return self
+
+            def __exit__(self, *_args):
+                self.stream = None
+
+        def create_microphone(device_index=None):
+            creation_threads.append(threading.current_thread().name)
+            if len(creation_threads) == 1:
+                raise OSError("no default input device")
+            return FakeMicrophone()
+
+        detector = MagicMock()
+        detector.should_stop = False
+        detector.listen_for_wake_word.side_effect = lambda *_args, **_kwargs: (
+            microphone_ready.set() or False
+        )
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", side_effect=create_microphone),
+            patch("VoiceCommand.get_microphone_index_helper", return_value=4),
+            patch("VoiceCommand.should_pause_wake_detection", return_value=False),
+        ):
+            thread = VoiceRecognitionThread()
+            self.addCleanup(thread.stop)
+            thread._initialize_voice_recognition = lambda: (
+                setattr(thread, "wake_detector", detector) or True
+            )
+            thread._apply_recognizer_settings = lambda: None
+            thread._refresh_stt_provider = lambda: None
+            thread.start()
+
+            thread.set_microphone("USB Microphone")
+            self.assertTrue(microphone_ready.wait(2))
+            self.assertIs(thread.microphone_available, True)
+            self.assertEqual(thread.selected_microphone, "USB Microphone")
+            self.assertEqual(thread.microphone_index, 4)
+            self.assertNotEqual(creation_threads[1], threading.current_thread().name)
+
+            thread.stop()
+            self.assertTrue(thread.wait(1000))
+
+    def test_same_microphone_can_retry_failed_voice_setup(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+
+        thread.selected_microphone = "USB Microphone"
+        thread._microphone_active = True
+        thread._voice_setup_failed = True
+
+        thread.set_microphone("USB Microphone")
+
+        self.assertTrue(thread._microphone_request_pending)
+        self.assertTrue(thread._microphone_wakeup.is_set())
+
+
+class FileWatcherTests(unittest.TestCase):
+    def test_observer_failure_does_not_escape_startup(self):
+        observer = MagicMock()
+        observer.is_alive.return_value = False
+        observer.schedule.side_effect = OSError("watch access denied")
+        with (
+            patch("core.core_manager.is_bundled", return_value=False),
+            patch("core.core_manager.Observer", return_value=observer),
+        ):
+            self.assertIsNone(start_file_watcher())
+
+        observer.stop.assert_called_once()
+        observer.join.assert_not_called()
 
 
 if __name__ == "__main__":
