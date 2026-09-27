@@ -39,9 +39,6 @@ Ari.vbs
 # 의미 기반 전략 기억 검색
 .venv\Scripts\python.exe -m pip install sentence-transformers torch
 
-# Edge TTS (무료 클라우드 TTS)
-.venv\Scripts\python.exe -m pip install edge-tts
-
 # ElevenLabs TTS
 .venv\Scripts\python.exe -m pip install elevenlabs
 ```
