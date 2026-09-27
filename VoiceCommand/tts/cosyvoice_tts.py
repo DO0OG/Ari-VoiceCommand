@@ -31,13 +31,18 @@ def _find_tts_venv_python() -> str:
     있다. 메인 .venv는 sentence-transformers가 잡아둔 CPU torch를 쓰므로
     워커를 거기서 띄우면 ModuleNotFoundError로 즉시 죽는다.
     """
+    from core.resource_manager import ResourceManager
+
     app_root = os.path.dirname(_HERE)
-    for candidate in (
-        os.path.join(app_root, ".venv-tts", "Scripts", "python.exe"),
-        os.path.join(app_root, ".venv-tts", "bin", "python"),
-    ):
-        if os.path.isfile(candidate):
-            return candidate
+    writable_venv = ResourceManager.get_writable_path(".venv-tts")
+    for venv_dir in (writable_venv, os.path.join(app_root, ".venv-tts")):
+        candidates = (
+            os.path.join(venv_dir, "Scripts", "python.exe"),
+            os.path.join(venv_dir, "bin", "python"),
+        )
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
     return ""
 
 
@@ -88,6 +93,10 @@ def _get_cosyvoice_dir_cached() -> str:
         _cached_cosyvoice_dir = _get_cosyvoice_dir()
     return _cached_cosyvoice_dir
 
+def _reset_cosyvoice_dir_cache() -> None:
+    global _cached_cosyvoice_dir
+    _cached_cosyvoice_dir = None
+
 def _get_reference_wav() -> str:
     """reference.wav 경로: appdata 우선, 없으면 번들"""
     from core.resource_manager import ResourceManager
@@ -122,10 +131,10 @@ class CosyVoiceTTS(QObject):
     # __init__을 우회해 생성되는 경우(테스트 등)에도 값이 있어야 한다.
     volume = 1.0
 
-    def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9):
+    def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9, cosyvoice_dir=None):
         super().__init__()
         from audio.audio_manager import GlobalAudio
-        cosyvoice_dir = _get_cosyvoice_dir_cached()
+        cosyvoice_dir = cosyvoice_dir or _get_cosyvoice_dir_cached()
         default_model_dir = os.path.join(cosyvoice_dir, "pretrained_models", "Fun-CosyVoice3-0.5B") if cosyvoice_dir else ""
         self.model_dir = model_dir or default_model_dir
         self._cosyvoice_dir = cosyvoice_dir

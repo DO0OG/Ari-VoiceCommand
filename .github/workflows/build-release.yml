@@ -194,21 +194,45 @@ jobs:
           # 자율 실행 파이썬 코드는 설치된 실행 파일의 숨은 워커 모드로 돈다.
           $script = Join-Path $env:RUNNER_TEMP "ari-script-smoke.py"
           Set-Content -Path $script -Encoding utf8 -Value @(
+            "import io",
             "import webbrowser",
+            "import pandas as pd",
+            "from openpyxl import load_workbook",
+            "from matplotlib.backends.backend_agg import FigureCanvasAgg",
+            "from matplotlib.figure import Figure",
+            "from reportlab.pdfgen.canvas import Canvas",
             "from agent.automation_helpers import AutomationHelpers",
-            "print('스크립트 실행 확인')"
+            "xlsx = io.BytesIO()",
+            "pd.DataFrame({'value': [7, 11]}).to_excel(xlsx, index=False, engine='openpyxl')",
+            "xlsx.seek(0)",
+            "workbook = load_workbook(xlsx, read_only=True, data_only=True)",
+            "assert workbook.active['A2'].value == 7",
+            "workbook.close()",
+            "figure = Figure(figsize=(1, 1))",
+            "FigureCanvasAgg(figure)",
+            "figure.subplots().plot([0, 1], [7, 11])",
+            "png = io.BytesIO()",
+            "figure.savefig(png, format='png')",
+            "assert png.getvalue().startswith(b'\x89PNG')",
+            "pdf = io.BytesIO()",
+            "document = Canvas(pdf)",
+            "document.drawString(10, 10, 'Ari release test')",
+            "document.save()",
+            "assert pdf.getvalue().startswith(b'%PDF')",
+            "print('ari-script-smoke-ok')"
           )
           $scriptOut = Join-Path $env:RUNNER_TEMP "ari-script-smoke.out"
-          $run = Start-Process "$dir\Ari.exe" -ArgumentList @("--ari-run-python-script", "`"$script`"") -RedirectStandardOutput $scriptOut -PassThru
+          $run = Start-Process "$dir\Ari.exe" -ArgumentList @("--ari-run-python-script", "`"$script`"") -RedirectStandardOutput $scriptOut -WindowStyle Hidden -PassThru
           $null = $run.Handle
           if (-not $run.WaitForExit(60000)) {
             Stop-Process -Id $run.Id -Force
             throw "설치본 스크립트 실행이 시간 안에 끝나지 않았습니다."
           }
           $printed = Get-Content -Raw -Encoding utf8 $scriptOut
-          if ($run.ExitCode -ne 0 -or $printed -notmatch "스크립트 실행 확인") {
+          if ($run.ExitCode -ne 0 -or $printed -notmatch "ari-script-smoke-ok") {
             throw "설치본 스크립트 실행 실패 (exit $($run.ExitCode)): $printed"
           }
+          Write-Output "Installed script package smoke test passed: pandas/openpyxl, matplotlib PNG, reportlab PDF."
 
           # Program Files에는 쓸 수 없으므로 사용자 데이터가 설치 폴더에 생기면 안 된다.
           if (Test-Path "$dir\.ari_runtime") { throw "설치 폴더에 사용자 데이터 폴더가 생겼습니다." }

@@ -14,6 +14,7 @@ from PySide6.QtGui import QFont
 from core.config_manager import ConfigManager
 from i18n.translator import _
 from ui.theme import FONT_KO, FONT_SIZE_NORMAL, INPUT_STYLE
+from ui.stt_diagnostics import STTSampleDiagnosticPanel
 
 
 class _DownloadSignals(QObject):
@@ -28,6 +29,12 @@ class STTSettingsDialog(QDialog):
         self.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL))
         self.setStyleSheet(INPUT_STYLE)
         self.settings = ConfigManager.load_settings()
+        parent_mic_combo = getattr(parent, "mic_combo", None)
+        self.microphone_name = (
+            str(parent_mic_combo.currentData() or "")
+            if parent_mic_combo is not None
+            else str(self.settings.get("microphone", "") or "")
+        )
         self._init_ui()
 
     def _init_ui(self):
@@ -59,6 +66,11 @@ class STTSettingsDialog(QDialog):
         eg_vbox.addWidget(self.whisper_group)
 
         layout.addWidget(engine_group)
+
+        self.stt_diagnostic_panel = STTSampleDiagnosticPanel(
+            self._stt_diagnostic_settings, self.microphone_name, self
+        )
+        layout.addWidget(self.stt_diagnostic_panel)
 
         # ── 마이크 감도 ────────────────────────────────────────────────────────
         mic_group = QGroupBox(_("마이크 감도"))
@@ -115,6 +127,17 @@ class STTSettingsDialog(QDialog):
         is_whisper = self.stt_provider_combo.currentData() == "whisper"
         self.whisper_group.setVisible(is_whisper)
         self.adjustSize()
+
+    def _stt_diagnostic_settings(self) -> dict:
+        settings = dict(self.settings)
+        settings.update({
+            "stt_provider": self.stt_provider_combo.currentData(),
+            "whisper_model": self.whisper_model_combo.currentData(),
+            "stt_energy_threshold": int(self.stt_energy_slider.value()),
+            "stt_dynamic_energy": self.stt_dynamic_checkbox.isChecked(),
+            "microphone": self.microphone_name,
+        })
+        return settings
 
     def _on_energy_changed(self, value: int):
         self.stt_energy_label.setText(_("현재 감도: {value}").format(value=value))

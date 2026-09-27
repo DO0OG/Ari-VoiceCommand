@@ -3,13 +3,32 @@
 Nuitka 배포판에는 파이썬 인터프리터가 없으므로 배포 실행 파일을 이 인자로 다시 띄워
 새 프로세스에서 스크립트를 runpy로 실행한다.
 """
+import logging
+import os
 import runpy
 import sys
+import tokenize
+from pathlib import Path
 
 from core._whisper_worker import bundled_executable_path
 from core.resource_manager import is_bundled
 
+
 SCRIPT_WORKER_ARGUMENT = "--ari-run-python-script"
+_DLL_DIRECTORY_HANDLES = []
+
+
+def _add_raw_package_dll_paths() -> None:
+    """Expose DLLs copied into package sibling *.libs directories to Windows."""
+    add_dll_directory = getattr(os, "add_dll_directory", None)
+    if not callable(add_dll_directory):
+        return
+    bundle_dir = Path(bundled_executable_path()).resolve().parent
+    for directory in bundle_dir.glob("*.libs"):
+        try:
+            _DLL_DIRECTORY_HANDLES.append(add_dll_directory(str(directory)))
+        except OSError:
+            continue
 
 
 def python_script_command(script_path: str) -> list[str]:
@@ -25,6 +44,26 @@ def run_python_script(script_path: str) -> int:
     for stream in (sys.stdout, sys.stderr):
         if stream is not None and hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    if is_bundled():
+        try:
+            from i18n.translator import init as i18n_init
+
+            i18n_init()
+        except Exception as exc:
+            # 번역 초기화에 실패해도 스크립트 실행은 계속한다(안내 문구만 기본 언어로 나온다).
+            logging.debug("스크립트 작업 번역 초기화 실패: %s", exc)
+        try:
+            with tokenize.open(script_path) as script_file:
+                source = script_file.read()
+        except (OSError, SyntaxError, UnicodeError, LookupError):
+            source = ""
+        from core.script_preflight import find_unavailable_imports, unavailable_packages_message
+
+        missing = find_unavailable_imports(source, search_paths=(str(Path(script_path).resolve().parent),))
+        if missing:
+            print(unavailable_packages_message(missing), file=sys.stderr)
+            return 1
+        _add_raw_package_dll_paths()
     sys.argv = [script_path]
     runpy.run_path(script_path, run_name="__main__")
     return 0

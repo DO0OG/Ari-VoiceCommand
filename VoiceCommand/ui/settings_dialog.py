@@ -27,6 +27,7 @@ from ui.settings_llm_page import _LLMSettingsPage
 from ui.settings_tts_page import _TTSSettingsPage
 from ui.settings_plugin_page import _PluginSettingsPage
 from ui.settings_agent_page import _AgentSettingsPage
+from ui.audio_diagnostic_panel import AudioDiagnosticPanel
 
 
 class SettingsDialog(QDialog):
@@ -229,6 +230,13 @@ class SettingsDialog(QDialog):
 
         vbox.addWidget(stt_group)
         vbox.addWidget(group)
+
+        self.audio_diagnostic_panel = AudioDiagnosticPanel(
+            lambda: str(self.mic_combo.currentData() or ""),
+            lambda: str(self.speaker_combo.currentData() or ""),
+            self,
+        )
+        vbox.addWidget(self.audio_diagnostic_panel)
 
         vbox.addWidget(self._create_character_group())
 

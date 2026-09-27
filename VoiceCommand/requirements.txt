@@ -52,7 +52,6 @@ sentence-transformers>=2.6.0
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
 ormsgpack>=1.5.0
 numpy>=1.26.0,<2  # NumPy 2.x는 shiboken6(PySide6), easyocr 등 C 확장과 충돌
-pydub==0.25.1
 websockets==12.0
 edge-tts>=7.2.8,<8
 # elevenlabs>=1.0.0
@@ -92,7 +91,7 @@ wmi>=1.5.1               # CPU·GPU 온도·하드웨어 정보 (pywin32 기반)
 
 # ── 빌드 및 유틸리티 ───────────────────────────────────────────────────────────
 huggingface_hub>=0.22.0
-nuitka>=2.1.0
+nuitka>=2.5.0
 python-dotenv>=1.2.2
 watchdog>=4.0.0
 

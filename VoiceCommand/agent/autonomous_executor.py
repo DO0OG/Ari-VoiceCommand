@@ -443,6 +443,19 @@ class AutonomousExecutor:
         logging.info("[Executor] Python 실행:\n%s", code)
         runner_path = ""
         process = None
+        if is_bundled():
+            from core.script_preflight import find_unavailable_imports, unavailable_packages_message
+
+            missing = find_unavailable_imports(
+                code,
+                search_paths=(os.path.expanduser("~"),),
+            )
+            if missing:
+                message = unavailable_packages_message(missing)
+                if self.tts_wrapper:
+                    self.tts_wrapper(message)
+                self._log_audit("python", code, "error", message, "")
+                return ExecutionResult(success=False, error=message)
         try:
             runner_path = self._write_python_runner(code, extra_globals=extra_globals)
             child_env = _build_child_env()

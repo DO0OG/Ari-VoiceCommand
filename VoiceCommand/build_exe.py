@@ -161,10 +161,13 @@ import sys
 import multiprocessing
 import importlib.util
 import json
-import re
 from datetime import datetime
 
+from core import release_packaging as _release_packaging
 from core.settings_schema import SENSITIVE_SETTINGS_KEYS, SETTINGS_TEMPLATE_FILE
+
+_raw_package_imports = _release_packaging.raw_package_imports
+_raw_packages = _release_packaging.raw_packages
 
 # 표준 출력 인코딩 설정 (Windows/GitHub Actions 환경 대응)
 if sys.stdout.encoding != 'utf-8':
@@ -228,61 +231,6 @@ def _optional_include_packages(*module_names: str) -> list[str]:
             print(f"• 선택 패키지 생략: {module_name}")
     return args
 
-
-def _raw_packages(*module_names: str) -> list[str]:
-    """순수 Python 패키지를 C로 컴파일하지 않고 .py 파일 그대로 배포 폴더에 복사한다."""
-    args: list[str] = []
-    for module_name in module_names:
-        spec = importlib.util.find_spec(module_name)
-        if spec is None or not spec.submodule_search_locations:
-            print(f"• 원본 복사 패키지 생략: {module_name}")
-            continue
-        package_dir = list(spec.submodule_search_locations)[0]
-        args.append(f"--nofollow-import-to={module_name}")
-        args.append(f"--include-raw-dir={package_dir}={module_name}")
-        args.extend(_raw_package_imports(package_dir, module_name))
-    return args
-
-
-_RAW_IMPORT_SKIP = {"tkinter", "turtle", "idlelib", "test", "lib2to3", "ensurepip", "venv"}
-
-
-def _raw_package_imports(package_dir: str, module_name: str) -> list[str]:
-    """원본 복사 패키지는 Nuitka가 따라가지 않으므로, 그 안에서 import하는 모듈을 직접 포함시킨다."""
-    import ast
-
-    names: set[str] = set()
-    for root, _dirs, files in os.walk(package_dir):
-        for file_name in files:
-            if not file_name.endswith(".py"):
-                continue
-            try:
-                with open(os.path.join(root, file_name), encoding="utf-8") as handle:
-                    tree = ast.parse(handle.read())
-            except (SyntaxError, UnicodeDecodeError):
-                continue
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    names.update(alias.name.split(".")[0] for alias in node.names)
-                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                    names.add(node.module.split(".")[0])
-    # 표준 라이브러리와 패키지가 필수로 선언한 의존성만 포함한다(선택 연동 패키지는 제외).
-    import importlib.metadata
-
-    required = {
-        re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0].strip().lower().replace("-", "_")
-        for requirement in importlib.metadata.requires(module_name) or []
-        if "extra ==" not in requirement
-    }
-    allowed = {name for name in names if name in sys.stdlib_module_names or name.lower() in required}
-    args: list[str] = []
-    for name in sorted(allowed - {module_name} - _RAW_IMPORT_SKIP):
-        spec = importlib.util.find_spec(name)
-        if spec is None:
-            continue
-        option = "--include-package" if spec.submodule_search_locations else "--include-module"
-        args.append(f"{option}={name}")
-    return args
 
 # 클린 빌드 처리
 if clean_build and os.path.exists(os.path.join(HERE, "dist")):
@@ -398,7 +346,6 @@ nuitka_args = [
         "pyaudio",
         "certifi",
         "websockets",
-        "pydub",
         "watchdog",
         "requests",
         "httpx",
@@ -412,7 +359,6 @@ nuitka_args = [
         "fastapi",
         "uvicorn",
         "psutil",
-        "reportlab",
         "ddgs",
         "duckduckgo_search",
         "pyautogui",
@@ -424,16 +370,19 @@ nuitka_args = [
         "pytesseract",
         "sentence_transformers",
         "torch",
-        # 데이터 분석 / 문서 생성 / 시스템 (요청 시 설치된 경우만 포함)
-        "matplotlib",
-        "pandas",
-        "openpyxl",
         "PIL",
         "docx",
         "bs4",
         "wmi",
         "win32api",
     ),
+
+    # 데이터 분석·Excel·시각화·PDF는 패키지 모듈과 wheel 바이너리를 원본 복사한다.
+    # Nuitka가 패키지 전체를 컴파일하는 시간을 추가하지 않는다. 서드파티 의존성
+    # (dateutil·fontTools 등)도 원본 복사하고, 앱이 이미 쓰는 numpy·PIL만 컴파일한다.
+    *_raw_packages("pandas", "openpyxl", "matplotlib", "reportlab", raw_dependencies=True),
+    "--nofollow-import-to=*.tests",
+    "--nofollow-import-to=numpy.f2py",
 
     # ── 가져오기 제외 대상: 대체 경로가 있는 무거운 선택 기능 ───────────────────
     # 제외한 모듈은 배포 폴더에 들어가지 않으므로 import하면 실패한다.
@@ -446,9 +395,7 @@ nuitka_args = [
     "--nofollow-import-to=sentence_transformers",
     "--nofollow-import-to=transformers",
     "--nofollow-import-to=easyocr",
-    "--nofollow-import-to=matplotlib",
     "--nofollow-import-to=tensorflow",
-    "--nofollow-import-to=pandas",
     "--nofollow-import-to=sklearn",
 
     # LLM SDK는 모듈 수가 많아(openai 약 1,000개, anthropic 약 750개) 컴파일하지 않고 원본을 복사한다.
@@ -464,14 +411,12 @@ nuitka_args = [
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
     "--nofollow-import-to=pygments",
-    "--nofollow-import-to=reportlab",
     "--nofollow-import-to=mouseinfo",
     "--nofollow-import-to=comtypes.test",
     "--nofollow-import-to=wmi",
     "--nofollow-import-to=win32api",
     "--nofollow-import-to=win32con",
     "--nofollow-import-to=win32com",
-    "--nofollow-import-to=openpyxl",
     
     "Main.py"
 ]

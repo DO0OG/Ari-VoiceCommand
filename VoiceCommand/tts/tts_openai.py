@@ -24,16 +24,21 @@ class OpenAITTS(QObject):
         self.model = model
         self.speed = max(0.25, min(4.0, speed))  # OpenAI 허용 범위
         self.is_playing = False
-        self.pa = pyaudio.PyAudio()
+        self.pa = None
         self._client = None
 
-        if api_key:
-            try:
-                openai_module = importlib.import_module("openai")
-                self._client = openai_module.OpenAI(api_key=api_key)
-                logging.info("OpenAI TTS 초기화 완료 (voice=%s, model=%s)", voice, model)
-            except Exception as e:
-                logging.error("OpenAI TTS 초기화 실패: %s", e)
+        if not api_key:
+            raise ValueError("OpenAI TTS API key is missing")
+
+        try:
+            openai_module = importlib.import_module("openai")
+            self._client = openai_module.OpenAI(api_key=api_key)
+            logging.info("OpenAI TTS 초기화 완료 (voice=%s, model=%s)", voice, model)
+        except Exception as e:
+            logging.error("OpenAI TTS 초기화 실패: %s", e)
+            raise RuntimeError("OpenAI TTS client initialization failed") from e
+
+        self.pa = pyaudio.PyAudio()
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or self._client is None:
