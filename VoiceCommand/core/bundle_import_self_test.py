@@ -1,28 +1,27 @@
 """Runtime checks for dependencies required by the release bundle."""
 
+import importlib
 import importlib.resources
 import json
 from pathlib import Path
 
 
-def _check_openai_client():
-    from openai import OpenAI
-
-    client = OpenAI(api_key="bundle-import-self-test", max_retries=0)
+def _check_sdk_client(module_name, class_name):
+    # 앱의 다른 SDK 사용처와 같이 모듈 이름으로 불러온다.
+    sdk = importlib.import_module(module_name)
+    client = getattr(sdk, class_name)(api_key="bundle-import-self-test", max_retries=0)
     try:
         return {"client_created": True}
     finally:
         client.close()
+
+
+def _check_openai_client():
+    return _check_sdk_client("openai", "OpenAI")
 
 
 def _check_anthropic_client():
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key="bundle-import-self-test", max_retries=0)
-    try:
-        return {"client_created": True}
-    finally:
-        client.close()
+    return _check_sdk_client("anthropic", "Anthropic")
 
 
 def _check_http_and_validation():
@@ -50,10 +49,10 @@ def _check_edge_tts_and_mp3_decoder():
 
 
 def _check_whisper_and_vad():
-    import faster_whisper
-    import huggingface_hub
     import onnxruntime
     from faster_whisper import WhisperModel
+
+    hub = importlib.import_module("huggingface_hub")
 
     assets = importlib.resources.files("faster_whisper").joinpath("assets")
     vad_asset = next(
@@ -66,7 +65,7 @@ def _check_whisper_and_vad():
         onnxruntime.InferenceSession(str(asset_path), providers=["CPUExecutionProvider"])
     return {
         "whisper_model_class": WhisperModel.__name__,
-        "huggingface_hub": getattr(huggingface_hub, "__version__", "available"),
+        "huggingface_hub": getattr(hub, "__version__", "available"),
         "vad_asset": vad_asset.name,
         "onnxruntime": getattr(onnxruntime, "__version__", "available"),
     }
