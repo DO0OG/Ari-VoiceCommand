@@ -1,6 +1,7 @@
 """설정 화면의 마이크 확인과 녹음 재생 작업."""
 from __future__ import annotations
 
+import logging
 import time
 
 from PySide6.QtCore import QThread, Signal
@@ -135,13 +136,10 @@ class AudioDiagnosticThread(QThread):
             self.done.emit(self, False, str(exc))
         finally:
             if input_stream is not None:
-                try:
-                    input_stream.stop_stream()
-                except Exception:
-                    pass
-                try:
-                    input_stream.close()
-                except Exception:
-                    pass
+                for close_step in (input_stream.stop_stream, input_stream.close):
+                    try:
+                        close_step()
+                    except Exception as exc:
+                        logging.debug("진단용 마이크 스트림 정리 실패: %s", exc)
             if input_acquired:
                 input_lock.release()

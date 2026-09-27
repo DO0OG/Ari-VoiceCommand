@@ -1,6 +1,7 @@
 """설정 화면의 장치 진단에 사용하는 작은 헬퍼."""
 from __future__ import annotations
 
+import logging
 import math
 import struct
 
@@ -36,13 +37,7 @@ def run_tts_diagnostic(
     except Exception as exc:
         return False, _("TTS 시험 재생에 실패했습니다: {error}").format(error=exc)
     finally:
-        if provider is not None:
-            cleanup = getattr(provider, "cleanup", None)
-            if callable(cleanup):
-                try:
-                    cleanup()
-                except Exception:
-                    pass
+        _cleanup_provider(provider)
 
 
 def transcribe_diagnostic_sample(audio_data, settings: dict, provider_factory=None) -> tuple[bool, str]:
@@ -60,13 +55,17 @@ def transcribe_diagnostic_sample(audio_data, settings: dict, provider_factory=No
     except Exception as exc:
         return False, _("음성 인식 시험에 실패했습니다: {error}").format(error=exc)
     finally:
-        if provider is not None:
-            cleanup = getattr(provider, "cleanup", None)
-            if callable(cleanup):
-                try:
-                    cleanup()
-                except Exception:
-                    pass
+        _cleanup_provider(provider)
+
+
+def _cleanup_provider(provider) -> None:
+    """진단용으로 만든 제공자를 정리한다. 정리 실패는 진단 결과에 영향을 주지 않는다."""
+    if provider is None or not hasattr(provider, "cleanup"):
+        return
+    try:
+        provider.cleanup()
+    except Exception as exc:
+        logging.debug("진단용 제공자 정리 실패: %s", exc)
 
 
 def resolve_input_device_index(selected_name: str, devices: list[dict]) -> int | None:

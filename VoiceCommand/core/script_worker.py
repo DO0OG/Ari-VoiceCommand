@@ -3,6 +3,7 @@
 Nuitka 배포판에는 파이썬 인터프리터가 없으므로 배포 실행 파일을 이 인자로 다시 띄워
 새 프로세스에서 스크립트를 runpy로 실행한다.
 """
+import logging
 import os
 import runpy
 import sys
@@ -48,8 +49,9 @@ def run_python_script(script_path: str) -> int:
             from i18n.translator import init as i18n_init
 
             i18n_init()
-        except Exception:
-            pass
+        except Exception as exc:
+            # 번역 초기화에 실패해도 스크립트 실행은 계속한다(안내 문구만 기본 언어로 나온다).
+            logging.debug("스크립트 작업 번역 초기화 실패: %s", exc)
         try:
             with tokenize.open(script_path) as script_file:
                 source = script_file.read()
