@@ -1,5 +1,6 @@
 import ast
 import os
+import types
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -16,9 +17,14 @@ def _load_main_function(function_name, namespace):
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == function_name
     )
+    # Main.py는 가져오기만 해도 앱 초기화가 일어나므로, 대상 함수만 컴파일해 격리된 전역으로 만든다.
     module = ast.Module(body=[function], type_ignores=[])
-    exec(compile(module, str(MAIN_PATH), "exec"), namespace)
-    return namespace[function_name]
+    module_code = compile(module, str(MAIN_PATH), "exec")
+    function_code = next(
+        const for const in module_code.co_consts
+        if isinstance(const, types.CodeType) and const.co_name == function_name
+    )
+    return types.FunctionType(function_code, namespace, function_name)
 
 
 class _Signal:
