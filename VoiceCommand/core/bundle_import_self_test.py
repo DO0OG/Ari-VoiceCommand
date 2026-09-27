@@ -6,9 +6,7 @@ import json
 from pathlib import Path
 
 
-def _check_sdk_client(module_name, class_name):
-    # 앱의 다른 SDK 사용처와 같이 모듈 이름으로 불러온다.
-    sdk = importlib.import_module(module_name)
+def _check_sdk_client(sdk, class_name):
     client = getattr(sdk, class_name)(api_key="bundle-import-self-test", max_retries=0)
     try:
         return {"client_created": True}
@@ -16,12 +14,13 @@ def _check_sdk_client(module_name, class_name):
         client.close()
 
 
+# 앱의 다른 SDK 사용처와 같이 모듈 이름으로 불러온다.
 def _check_openai_client():
-    return _check_sdk_client("openai", "OpenAI")
+    return _check_sdk_client(importlib.import_module("openai"), "OpenAI")
 
 
 def _check_anthropic_client():
-    return _check_sdk_client("anthropic", "Anthropic")
+    return _check_sdk_client(importlib.import_module("anthropic"), "Anthropic")
 
 
 def _check_http_and_validation():
