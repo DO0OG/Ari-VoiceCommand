@@ -6,10 +6,11 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 권장: py -3.11 validate_repo.py       # 빌드 전 검증
 
 Nuitka import 제외 정책:
-  torch 등 C/Rust 확장 패키지 및 groq/openai/anthropic 등 pydantic-v2 기반
-  API 클라이언트는 --nofollow-import-to 옵션으로 제외한다. 배포 폴더에는 들어가지 않으므로
-  이 패키지를 쓰는 선택 기능은 배포판에서 동작하지 않는다.
-  numpy는 로컬 판단 엔진과 Whisper 워커가 필요로 하므로 제외하지 않는다.
+  --nofollow-import-to로 제외한 모듈은 배포 폴더에 들어가지 않는다. 대체 경로가 있는
+  무거운 선택 기능(torch, sentence_transformers, easyocr 등)과 앱이 쓰지 않는
+  groq/mistralai 클라이언트만 제외한다. 기본 기능이 쓰는 패키지(openai/anthropic,
+  httpx/pydantic, Whisper, 웹 검색, 화면 분석)와 그 의존성은 제외하지 않는다.
+  numpy와 scipy는 로컬 판단 엔진과 Whisper 워커가 필요로 한다.
 
 출력: dist/Ari/
 
@@ -160,6 +161,7 @@ import sys
 import multiprocessing
 import importlib.util
 import json
+import re
 from datetime import datetime
 
 from core.settings_schema import SENSITIVE_SETTINGS_KEYS, SETTINGS_TEMPLATE_FILE
@@ -173,9 +175,9 @@ if sys.stdout.encoding != 'utf-8':
 
 clean_build = "--clean" in sys.argv
 one_file = "--onefile" in sys.argv
-# GitHub Actions 등 CI 환경은 메모리 제한이 있어 병렬 작업 수를 절반으로 제한
+# GitHub Actions 러너(4코어, 16GB)도 모든 코어를 쓴다. 메모리 부족이 나면 절반으로 되돌린다.
 _cpu = multiprocessing.cpu_count()
-jobs = max(1, _cpu // 2) if os.environ.get("CI") else _cpu
+jobs = _cpu
 
 print("=" * 60)
 print("   Ari EXE 최적화 빌드 시스템 (Nuitka)")
@@ -224,6 +226,62 @@ def _optional_include_packages(*module_names: str) -> list[str]:
             args.append(f"--include-package={module_name}")
         else:
             print(f"• 선택 패키지 생략: {module_name}")
+    return args
+
+
+def _raw_packages(*module_names: str) -> list[str]:
+    """순수 Python 패키지를 C로 컴파일하지 않고 .py 파일 그대로 배포 폴더에 복사한다."""
+    args: list[str] = []
+    for module_name in module_names:
+        spec = importlib.util.find_spec(module_name)
+        if spec is None or not spec.submodule_search_locations:
+            print(f"• 원본 복사 패키지 생략: {module_name}")
+            continue
+        package_dir = list(spec.submodule_search_locations)[0]
+        args.append(f"--nofollow-import-to={module_name}")
+        args.append(f"--include-raw-dir={package_dir}={module_name}")
+        args.extend(_raw_package_imports(package_dir, module_name))
+    return args
+
+
+_RAW_IMPORT_SKIP = {"tkinter", "turtle", "idlelib", "test", "lib2to3", "ensurepip", "venv"}
+
+
+def _raw_package_imports(package_dir: str, module_name: str) -> list[str]:
+    """원본 복사 패키지는 Nuitka가 따라가지 않으므로, 그 안에서 import하는 모듈을 직접 포함시킨다."""
+    import ast
+
+    names: set[str] = set()
+    for root, _dirs, files in os.walk(package_dir):
+        for file_name in files:
+            if not file_name.endswith(".py"):
+                continue
+            try:
+                with open(os.path.join(root, file_name), encoding="utf-8") as handle:
+                    tree = ast.parse(handle.read())
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    names.add(node.module.split(".")[0])
+    # 표준 라이브러리와 패키지가 필수로 선언한 의존성만 포함한다(선택 연동 패키지는 제외).
+    import importlib.metadata
+
+    required = {
+        re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0].strip().lower().replace("-", "_")
+        for requirement in importlib.metadata.requires(module_name) or []
+        if "extra ==" not in requirement
+    }
+    allowed = {name for name in names if name in sys.stdlib_module_names or name.lower() in required}
+    args: list[str] = []
+    for name in sorted(allowed - {module_name} - _RAW_IMPORT_SKIP):
+        spec = importlib.util.find_spec(name)
+        if spec is None:
+            continue
+        option = "--include-package" if spec.submodule_search_locations else "--include-module"
+        args.append(f"{option}={name}")
     return args
 
 # 클린 빌드 처리
@@ -330,12 +388,12 @@ nuitka_args = [
     "--include-package=services",
     "--include-package-data=agent",
     "--include-package-data=memory",
+    "--include-package-data=faster_whisper",
     *_optional_include_packages(
         "pycaw",
         "comtypes",
         "groq",
-        "anthropic",
-        "fish_audio_sdk",
+        "ormsgpack",
         "speech_recognition",
         "pyaudio",
         "certifi",
@@ -344,6 +402,13 @@ nuitka_args = [
         "watchdog",
         "requests",
         "httpx",
+        "faster_whisper",
+        "huggingface_hub",
+        "cv2",
+        "lxml",
+        "pydantic",
+        "pydantic_core",
+        "edge_tts",
         "fastapi",
         "uvicorn",
         "psutil",
@@ -370,40 +435,36 @@ nuitka_args = [
         "win32api",
     ),
 
-    # ── 가져오기 제외 대상: C 확장 / 컴파일 불가 패키지 ─────────────────────────
-    # Nuitka가 C로 컴파일하지 않도록 제외. 런타임에는 site-packages의
-    # 사전 컴파일된 .pyd/.dll 또는 순수 Python 파일로 동작.
+    # ── 가져오기 제외 대상: 대체 경로가 있는 무거운 선택 기능 ───────────────────
+    # 제외한 모듈은 배포 폴더에 들어가지 않으므로 import하면 실패한다.
+    # 기본 기능이 쓰는 패키지와 그 의존성은 여기에 넣지 않는다.
 
     # ML / 수치 연산 (numpy는 로컬 판단 엔진이 쓰므로 포함한다)
     "--nofollow-import-to=torch",
     "--nofollow-import-to=torchvision",
     "--nofollow-import-to=torchaudio",
     "--nofollow-import-to=sentence_transformers",
+    "--nofollow-import-to=transformers",
     "--nofollow-import-to=easyocr",
-    "--nofollow-import-to=cv2",
     "--nofollow-import-to=matplotlib",
     "--nofollow-import-to=tensorflow",
     "--nofollow-import-to=pandas",
     "--nofollow-import-to=sklearn",
-    "--nofollow-import-to=scipy",
 
-    # LLM / API 클라이언트 (pydantic v2 Rust 확장 포함, clcache 전처리기 실패)
+    # LLM SDK는 모듈 수가 많아(openai 약 1,000개, anthropic 약 750개) 컴파일하지 않고 원본을 복사한다.
+    # 복사한 패키지를 import할 수 있도록 제외 모듈 import 차단만 끈다.
+    *_raw_packages("openai", "anthropic"),
+    "--no-deployment-flag=excluded-module-usage",
+
+    # 앱이 쓰지 않는 LLM 클라이언트
     "--nofollow-import-to=groq",
-    "--nofollow-import-to=openai",
-    "--nofollow-import-to=anthropic",
     "--nofollow-import-to=mistralai",
-    "--nofollow-import-to=httpx",
-    "--nofollow-import-to=pydantic",
-    "--nofollow-import-to=pydantic_core",
-    "--nofollow-import-to=huggingface_hub",
 
     # 기타
     "--nofollow-import-to=pytest",
     "--nofollow-import-to=IPython",
-    "--nofollow-import-to=PIL",
     "--nofollow-import-to=pygments",
     "--nofollow-import-to=reportlab",
-    "--nofollow-import-to=lxml",
     "--nofollow-import-to=mouseinfo",
     "--nofollow-import-to=comtypes.test",
     "--nofollow-import-to=wmi",

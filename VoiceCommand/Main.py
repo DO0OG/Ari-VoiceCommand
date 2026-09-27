@@ -10,6 +10,11 @@ if _worker_exit_code is None:
     from core.script_worker import dispatch_script_command
 
     _worker_exit_code = dispatch_script_command(sys.argv)
+if _worker_exit_code is None and len(sys.argv) == 3 and sys.argv[1] == "--bundle-import-self-test":
+    # 배포 워크플로가 설치본의 필수 모듈 포함 여부를 확인한다. Whisper 워커처럼 GUI 임포트 전에 실행한다.
+    from core.bundle_import_self_test import run_bundle_import_self_test
+
+    _worker_exit_code = run_bundle_import_self_test(sys.argv[2])
 if _worker_exit_code is not None:
     raise SystemExit(_worker_exit_code)
 

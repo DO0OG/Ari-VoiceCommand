@@ -90,11 +90,9 @@ class ElevenLabsTTS(QObject):
                     logging.info("[TTS] ElevenLabs 첫 청크: %.2fs", first_chunk_at - t0)
                 logging.info("[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes", time.time() - t0, f"{bytes_received:,}")
 
-                # MP3 → PCM 변환
-                from pydub import AudioSegment
-                audio = AudioSegment.from_file(audio_buffer, format="mp3")
-            audio = audio.set_channels(1).set_sample_width(2).set_frame_rate(_SAMPLE_RATE)
-            pcm = audio.raw_data
+                # Decode MP3 to PCM with bundled PyAV codecs.
+                from audio.mp3_decoder import decode_mp3_to_pcm
+                pcm = decode_mp3_to_pcm(audio_buffer.read(), _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
             stream = self.pa.open(
