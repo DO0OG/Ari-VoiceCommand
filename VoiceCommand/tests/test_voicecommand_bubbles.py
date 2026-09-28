@@ -69,6 +69,15 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             ("말씀해주세요", 0),
         )
 
+    def test_show_tts_bubble_accepts_a_transient_duration(self):
+        with patch.object(voicecommand._state, "last_bubble_signature", ("", 0.0)):
+            voicecommand._show_tts_bubble("repeat notice", duration=2000)
+
+        self.assertEqual(
+            voicecommand._state.character_widget.say_calls[-1],
+            ("☕ repeat notice", 2000),
+        )
+
     def test_tts_finish_keeps_listening_bubble_visible_when_waiting_for_stt(self):
         voicecommand._state.listening_indicator_active = True
 
@@ -82,7 +91,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             ("말씀해주세요", 0),
         )
         self.assertEqual(voicecommand._state.character_widget.hide_calls, 0)
-        self.assertEqual(voicecommand._state.tts_resume_guard_until, 101.7)
+        self.assertEqual(voicecommand._state.tts_resume_guard_until, 100.5)
 
     def test_should_pause_wake_detection_during_resume_guard(self):
         voicecommand._state.tts_resume_guard_until = 101.2

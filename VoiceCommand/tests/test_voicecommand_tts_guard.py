@@ -14,6 +14,16 @@ class _DummyTTS:
     is_playing = False
 
 
+class _FakePlaybackTTS:
+    def __init__(self):
+        self.is_playing = False
+
+    def speak(self, _text, emotion=None):
+        del emotion
+        self.is_playing = True
+        return True
+
+
 class VoiceCommandWakeGuardTests(unittest.TestCase):
     def setUp(self):
         self._old_thread = VoiceCommand._state.tts_thread
@@ -42,6 +52,40 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand.time.monotonic = old_monotonic
 
         self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 103.5)
+
+    def test_playback_finish_replaces_estimate_with_buffer(self):
+        previous_tts = VoiceCommand._state.fish_tts
+        previous_rp_gen = VoiceCommand._state.rp_gen
+        previous_widget = VoiceCommand._state.character_widget
+        previous_indicator = VoiceCommand._state.listening_indicator_active
+        VoiceCommand._state.fish_tts = _FakePlaybackTTS()
+        VoiceCommand._state.rp_gen = None
+        VoiceCommand._state.character_widget = None
+        VoiceCommand._state.listening_indicator_active = False
+        monotonic_values = iter([100.0, 103.0])
+        try:
+            with (
+                patch.object(
+                    VoiceCommand,
+                    "_estimate_tts_duration",
+                    return_value=10.0,
+                ),
+                patch("core.VoiceCommand.time.monotonic", side_effect=monotonic_values),
+                patch.object(VoiceCommand, "emit_plugin_event"),
+            ):
+                self.assertTrue(VoiceCommand.text_to_speech("응답", show_bubble=False))
+                self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 110.5)
+                VoiceCommand._state.fish_tts.is_playing = False
+                VoiceCommand._handle_tts_playback_finished()
+
+            self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 103.5)
+            self.assertTrue(VoiceCommand.should_pause_wake_detection(now=103.49))
+            self.assertFalse(VoiceCommand.should_pause_wake_detection(now=103.5))
+        finally:
+            VoiceCommand._state.fish_tts = previous_tts
+            VoiceCommand._state.rp_gen = previous_rp_gen
+            VoiceCommand._state.character_widget = previous_widget
+            VoiceCommand._state.listening_indicator_active = previous_indicator
 
     def test_tts_startup_failure_does_not_escape_or_leave_waiters_blocked(self):
         old_started = VoiceCommand._state.tts_init_started

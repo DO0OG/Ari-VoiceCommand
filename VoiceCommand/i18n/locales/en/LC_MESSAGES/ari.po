@@ -3331,3 +3331,6 @@ msgstr "I'm still processing the previous request."
 
 msgid "Version: {version} · Commit: {commit}"
 msgstr "Version: {version} · Commit: {commit}"
+
+msgid "같은 명령을 방금 들어서 무시했어요."
+msgstr "I ignored that command because I just heard it."

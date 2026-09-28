@@ -18,7 +18,12 @@ if is_bundled():
 
 from core.rp_generator import RPGenerator
 from core.constants import (
-    SPEECH_TIMEOUT, SPEECH_PHRASE_LIMIT
+    SPEECH_TIMEOUT,
+    SPEECH_PHRASE_LIMIT,
+    SPEECH_REPEAT_SUPPRESSION_SECONDS,
+    TTS_CHARS_PER_SECOND_BY_LANGUAGE,
+    TTS_CHARS_PER_SECOND_DEFAULT,
+    TTS_WAKE_GUARD_BUFFER_SECONDS,
 )
 
 # 모듈 및 오디오 관리
@@ -26,6 +31,7 @@ from audio.audio_manager import GlobalAudio
 from commands.command_registry import CommandRegistry
 from services.weather_service import WeatherService
 from services.timer_manager import TimerManager
+from i18n import translator
 from i18n.translator import _
 
 
@@ -54,7 +60,6 @@ class AppState:
 
 _state = AppState()
 _TTS_WAKE_GUARD_SECONDS = 1.2
-_TTS_WAKE_GUARD_BUFFER_SECONDS = 0.5
 
 
 def _tts_wake_guard_seconds() -> float:
@@ -343,7 +348,7 @@ def parse_emotion_text(text: str) -> Tuple[str, str]:
     return emotion, pure_text
 
 
-def _show_tts_bubble(text):
+def _show_tts_bubble(text, duration: int = 0):
     """어떤 TTS 경로든 동일한 말풍선을 표시하되, 직전 중복 표시는 짧게 억제."""
     emotion, pure_text = parse_emotion_text(text)
     emoji = EMOTION_EMOJI.get(emotion, "")
@@ -354,7 +359,7 @@ def _show_tts_bubble(text):
         return
     _state.last_bubble_signature = (display_text, now)
     if _state.character_widget:
-        _state.character_widget.say(display_text, duration=0)
+        _state.character_widget.say(display_text, duration=duration)
 
 
 def _show_listening_bubble() -> None:
@@ -382,8 +387,15 @@ def _estimate_tts_duration(text: str) -> float:
     normalized = re.sub(r"\s+", " ", text or "").strip()
     if not normalized:
         return _tts_wake_guard_seconds()
-    # 한국어/일본어 등 공백이 적은 문장을 고려해 글자 수 기반으로 추정한다.
-    return max(_tts_wake_guard_seconds(), min(30.0, len(normalized) / 8.0))
+    language = translator.get_language().split("-", 1)[0].split("_", 1)[0].lower()
+    chars_per_second = TTS_CHARS_PER_SECOND_BY_LANGUAGE.get(
+        language,
+        TTS_CHARS_PER_SECOND_DEFAULT,
+    )
+    return max(
+        _tts_wake_guard_seconds(),
+        min(30.0, len(normalized) / chars_per_second),
+    )
 
 
 def emit_plugin_event(event_name: str, payload: dict | None = None) -> None:
@@ -399,7 +411,7 @@ def extend_tts_resume_guard(duration: float | None = None) -> None:
     """TTS 재생 예상 시간(초)과 버퍼를 반영해 웨이크워드 보호 구간을 연장한다."""
     if duration is None:
         duration = _tts_wake_guard_seconds()
-    guard_duration = max(0.0, duration) + _TTS_WAKE_GUARD_BUFFER_SECONDS
+    guard_duration = max(0.0, duration) + TTS_WAKE_GUARD_BUFFER_SECONDS
     _state.tts_resume_guard_until = max(
         _state.tts_resume_guard_until,
         time.monotonic() + guard_duration,
@@ -408,9 +420,11 @@ def extend_tts_resume_guard(duration: float | None = None) -> None:
 
 def _handle_tts_playback_finished() -> None:
     """TTS 종료 후 현재 상태에 맞게 말풍선을 정리한다."""
-    extend_tts_resume_guard()
     if is_tts_playing():
         return
+    _state.tts_resume_guard_until = (
+        time.monotonic() + TTS_WAKE_GUARD_BUFFER_SECONDS
+    )
     emit_plugin_event("on_tts_end", {})
     emit_plugin_event("tts.playback.finished", {})
 
@@ -515,10 +529,20 @@ def get_microphone_index_helper(microphone_name):
     return None
 
 
-def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previous_texts=None):
+def recognize_speech_helper(
+    recognizer,
+    source,
+    signal,
+    stt_provider=None,
+    previous_texts=None,
+) -> str | None:
     try:
         logging.info("말씀해 주세요...")
-        audio = recognizer.listen(source, timeout=SPEECH_TIMEOUT, phrase_time_limit=SPEECH_PHRASE_LIMIT)
+        audio = recognizer.listen(
+            source,
+            timeout=SPEECH_TIMEOUT,
+            phrase_time_limit=SPEECH_PHRASE_LIMIT,
+        )
         provider = stt_provider
         if provider is None:
             from core.config_manager import ConfigManager
@@ -534,16 +558,21 @@ def recognize_speech_helper(recognizer, source, signal, stt_provider=None, previ
             logging.debug("[STT] 너무 짧은 인식 결과 무시 (%d자)", len(text))
             return
         history = previous_texts if previous_texts is not None else deque(maxlen=3)
-        if history.count(text) >= 2:
-            logging.debug("[STT] 반복 오인식 무시 (%d자)", len(text))
-            return
-        history.append(text)
+        current_time = time.monotonic()
+        if history and history[-1][0] == text:
+            previous_time = history[-1][1]
+            if current_time - previous_time < SPEECH_REPEAT_SUPPRESSION_SECONDS:
+                logging.debug("[STT] 반복 명령 무시 (%d자)", len(text))
+                return _("같은 명령을 방금 들어서 무시했어요.")
+        history.clear()
+        history.append((text, current_time))
         logging.info("인식된 텍스트 수신 (%d자)", len(text))
         signal.emit(text)
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")
     except (sr.RequestError, OSError, RuntimeError, ValueError) as e:
         logging.error("음성 인식 오류: %s", e)
+    return None
 
 
 def wake_detector_recalibrate_helper(detector, source):
