@@ -14,6 +14,33 @@ from i18n.translator import _
 
 
 class LLMProviderTests(unittest.TestCase):
+    def _run_stream_chat(self, provider, callback, clean_response=None):
+        request_context = {
+            "intent": "conversation",
+            "force_tool": False,
+            "preferred_tool": None,
+        }
+        with patch.object(provider, "_build_system", return_value="system"), \
+             patch.object(provider, "_get_skill_context", return_value={}), \
+             patch.object(provider, "_analyze_request", return_value=request_context), \
+             patch.object(provider, "_select_tools_for_request", return_value=([], "auto")), \
+             patch.object(provider, "_load_int_setting", return_value=1), \
+             patch.object(
+                 provider,
+                 "_normalize_tool_arguments",
+                 side_effect=lambda name, args, user_text: args,
+             ), \
+             patch("memory.memory_manager.get_memory_manager") as memory:
+            memory.return_value.clean_response.side_effect = clean_response or (
+                lambda text: text
+            )
+            return provider.chat_with_tools("hello", stream_callback=callback)
+
+    def _stream_provider(self, provider_name="openai"):
+        provider = LLMProvider(provider=provider_name, model="test")
+        provider.client = Mock()
+        return provider
+
     def test_application_request_sends_available_controls_to_completion(self):
         provider = LLMProvider(model="test")
         provider.client = Mock()
@@ -83,6 +110,181 @@ class LLMProviderTests(unittest.TestCase):
         # A token budget must not split the tool-use/result pair.
         provider.conversation_history.pop()
         self.assertEqual(len(provider._history_for_context(max_tokens=1)), 2)
+
+    def test_chat_with_tools_streams_content_before_stream_finishes(self):
+        provider = self._stream_provider()
+        streamed = []
+
+        def response_stream():
+            yield {"choices": [{"delta": {"content": "안녕"}}]}
+            self.assertEqual(streamed, ["안녕"])
+            yield {"choices": [{"delta": {"content": "하세요"}}]}
+
+        provider.client.chat.completions.create.return_value = response_stream()
+
+        result = self._run_stream_chat(provider, streamed.append)
+
+        self.assertEqual(result, ("안녕하세요", []))
+        self.assertEqual(streamed, ["안녕", "하세요"])
+        self.assertTrue(provider.client.chat.completions.create.call_args.kwargs["stream"])
+
+    def test_chat_with_tools_accumulates_tool_call_argument_fragments(self):
+        provider = self._stream_provider()
+        streamed = []
+        provider.client.chat.completions.create.return_value = [
+            {"choices": [{"delta": {"tool_calls": [{
+                "index": 0,
+                "id": "call-1",
+                "function": {"name": "get_current_time", "arguments": "{"},
+            }]}}]},
+            {"choices": [{"delta": {"tool_calls": [{
+                "index": 0,
+                "function": {"arguments": "}"},
+            }]}}]},
+        ]
+
+        result = self._run_stream_chat(provider, streamed.append)
+
+        self.assertEqual(result, ("", [{
+            "id": "call-1",
+            "name": "get_current_time",
+            "arguments": {},
+        }]))
+        self.assertEqual(streamed, [])
+
+    def test_chat_with_tools_streams_preface_alongside_tool_call_deltas(self):
+        provider = self._stream_provider()
+        streamed = []
+        provider.client.chat.completions.create.return_value = [
+            {"choices": [{"delta": {
+                "content": "바로 확인해볼게요.",
+                "tool_calls": [{
+                    "index": 0,
+                    "id": "call-2",
+                    "function": {
+                        "name": "get_current_time",
+                        "arguments": "{}",
+                    },
+                }],
+            }}]},
+        ]
+
+        result = self._run_stream_chat(provider, streamed.append)
+
+        self.assertEqual(result, ("바로 확인해볼게요.", [{
+            "id": "call-2",
+            "name": "get_current_time",
+            "arguments": {},
+        }]))
+        self.assertEqual(streamed, ["바로 확인해볼게요."])
+
+    def test_chat_with_tools_does_not_stream_textual_json(self):
+        provider = self._stream_provider()
+        streamed = []
+        provider.client.chat.completions.create.return_value = [
+            {"choices": [{"delta": {"content": '{"tool_calls":['}}]},
+            {"choices": [{"delta": {"content": '{"name":"get_current_time","arguments":{}}]}'}}]},
+        ]
+
+        result = self._run_stream_chat(
+            provider,
+            streamed.append,
+            clean_response=lambda text: "JSON should remain unchanged",
+        )
+
+        self.assertEqual(
+            result[0],
+            '{"tool_calls":[{"name":"get_current_time","arguments":{}}]}',
+        )
+        self.assertEqual(streamed, [])
+
+    def test_custom_provider_falls_back_when_streaming_is_unsupported(self):
+        class UnsupportedStreamError(RuntimeError):
+            status_code = 400
+
+        provider = self._stream_provider()
+        provider.provider = "custom-test"
+        provider.provider_configs["custom-test"] = {"requires_api_key": False}
+        non_stream_response = {
+            "choices": [{"message": {"content": "완료", "tool_calls": []}}],
+        }
+        provider.client.chat.completions.create.side_effect = [
+            UnsupportedStreamError("stream is not supported"),
+            non_stream_response,
+            non_stream_response,
+        ]
+        streamed = []
+
+        self.assertEqual(
+            self._run_stream_chat(provider, streamed.append),
+            ("완료", []),
+        )
+        self.assertIs(provider._tool_streaming_support["custom-test"], False)
+        self.assertEqual(streamed, ["완료"])
+
+        self._run_stream_chat(provider, lambda text: None)
+
+        calls = provider.client.chat.completions.create.call_args_list
+        self.assertTrue(calls[0].kwargs["stream"])
+        self.assertNotIn("stream", calls[1].kwargs)
+        self.assertNotIn("stream", calls[2].kwargs)
+
+    def test_first_stream_token_timeout_tries_next_provider(self):
+        provider = self._stream_provider()
+        fallback_client = Mock()
+
+        def timeout_stream():
+            raise TimeoutError("read timed out")
+            yield {}
+
+        provider.client.chat.completions.create.return_value = timeout_stream()
+        fallback_client.chat.completions.create.return_value = [
+            {"choices": [{"delta": {"content": "fallback"}}]},
+        ]
+        provider.get_role_fallback_targets = Mock(return_value=[
+            (provider.client, "openai", "test"),
+            (fallback_client, "fallback", "fallback-model"),
+        ])
+        streamed = []
+
+        result = self._run_stream_chat(provider, streamed.append)
+
+        self.assertEqual(result, ("fallback", []))
+        self.assertEqual(streamed, ["fallback"])
+        provider.client.chat.completions.create.assert_called_once()
+        self.assertEqual(
+            fallback_client.chat.completions.create.call_args.kwargs["model"],
+            "fallback-model",
+        )
+
+    def test_custom_provider_stream_timeout_tries_next_provider(self):
+        provider = self._stream_provider()
+        provider.provider = "custom-timeout"
+        provider.provider_configs["custom-timeout"] = {"requires_api_key": False}
+        fallback_client = Mock()
+
+        def timeout_stream():
+            raise TimeoutError("read timed out")
+            yield {}
+
+        provider.client.chat.completions.create.return_value = timeout_stream()
+        fallback_client.chat.completions.create.return_value = [
+            {"choices": [{"delta": {"content": "fallback"}}]},
+        ]
+        provider.get_role_fallback_targets = Mock(return_value=[
+            (provider.client, "custom-timeout", "test"),
+            (fallback_client, "fallback", "fallback-model"),
+        ])
+        streamed = []
+
+        result = self._run_stream_chat(provider, streamed.append)
+
+        self.assertEqual(result, ("fallback", []))
+        self.assertEqual(streamed, ["fallback"])
+        self.assertEqual(
+            fallback_client.chat.completions.create.call_args.kwargs["model"],
+            "fallback-model",
+        )
 
     def test_anthropic_tool_result_rejects_missing_or_mismatched_calls(self):
         provider = LLMProvider(provider="anthropic", model="test")

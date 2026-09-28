@@ -131,6 +131,10 @@ class AICommandTests(unittest.TestCase):
 
         self.assertFalse(command._should_emit_preface_response("(평온)..."))
         self.assertFalse(command._should_emit_preface_response("get_current_time"))
+        self.assertFalse(command._should_emit_preface_response('{"tool_calls": []}'))
+        self.assertFalse(
+            command._should_emit_preface_response(chr(96) * 3 + "json\n{}")
+        )
         self.assertTrue(command._should_emit_preface_response("알겠습니다. 바로 확인해볼게요."))
 
     def test_agent_task_prefers_detailed_explanation_over_short_label(self):
@@ -171,6 +175,13 @@ class AICommandTests(unittest.TestCase):
         )
 
         self.assertEqual(cleaned, "(진지) 알겠습니다. 이제 진행할게요.")
+
+    def test_sanitize_user_facing_text_discards_json_and_code_fences(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        self.assertEqual(command._sanitize_user_facing_text('{"tool_calls": []}'), "")
+        code_fence_response = chr(96) * 3 + "json\n{}\n" + chr(96) * 3
+        self.assertEqual(command._sanitize_user_facing_text(code_fence_response), "")
 
     def test_run_agent_task_skips_long_followup_response(self):
         command = AICommand(_AgentTaskAssistant(), lambda msg: None, {"enabled": False})
@@ -491,6 +502,35 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(recovered[0]["name"], "web_search")
         self.assertEqual(recovered[0]["arguments"]["query"], "LCK 2026-04-10 경기 결과")
+
+    def test_recover_tool_calls_from_json_response(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        recovered = command._recover_tool_calls_from_response(
+            "지금 몇 시야?",
+            '{"tool_calls":[{"id":"call-1","function":'
+            '{"name":"get_current_time","arguments":"{}"}}]}',
+        )
+
+        self.assertEqual(recovered, [{
+            "id": "call-1",
+            "name": "get_current_time",
+            "arguments": {},
+        }])
+
+    def test_json_tool_call_response_executes_without_speaking_json(self):
+        assistant = _FakeAssistant()
+        assistant.chat_with_tools = lambda text, include_context=True: (
+            '{"tool_calls":[{"name":"json_echo","arguments":{"value":"done"}}]}',
+            [],
+        )
+        command = AICommand(assistant, lambda msg: None, {"enabled": False})
+        command._dispatch["json_echo"] = lambda args: "JSON 복구 완료"
+
+        result = command.run_interaction("테스트 실행")
+
+        self.assertEqual(result, "JSON 복구 완료")
+        self.assertNotIn("tool_calls", result)
 
     def test_set_timer_response_for_shutdown_is_recovered_as_schedule_task(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
