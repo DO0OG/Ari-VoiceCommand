@@ -3556,3 +3556,21 @@ msgstr "The screen is unlocked."
 
 msgid "장시간 계속 일하셨네요. 잠시 쉬어 가는 게 어때요?"
 msgstr "You've worked for a long time. How about taking a short break?"
+
+msgid "[캐릭터 성격]"
+msgstr "[Character personality]"
+
+msgid "[현재 상황]"
+msgstr "[Current situation]"
+
+msgid "[대화 방식]"
+msgstr "[Conversation style]"
+
+msgid "[예시 대사]"
+msgstr "[Example dialogue]"
+
+msgid "영어 예시 대사:"
+msgstr "English example dialogue:"
+
+msgid "일본어 예시 대사:"
+msgstr "Japanese example dialogue:"

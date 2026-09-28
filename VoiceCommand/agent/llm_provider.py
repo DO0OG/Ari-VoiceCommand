@@ -50,7 +50,8 @@ class LLMProvider:
                  planner_provider="", execution_provider="",
                  planner_api_key="", execution_api_key="",
                  system_prompt="", personality="", scenario="", history_instruction="",
-                 response_verbosity="concise", router_enabled=False, provider_configs=None):
+                 response_verbosity="concise", router_enabled=False,
+                 provider_configs=None, personality_examples_en="", personality_examples_ja=""):
         self.provider = provider
         self.api_key = api_key
         self.provider_configs = {
@@ -92,6 +93,8 @@ class LLMProvider:
             scenario=scenario,
             system_prompt=system_prompt,
             history_instruction=history_instruction,
+            personality_examples_en=personality_examples_en,
+            personality_examples_ja=personality_examples_ja,
             response_verbosity=response_verbosity,
         )
 
@@ -1645,7 +1648,7 @@ class LLMProvider:
             logging.debug("[LLMProvider] 언어 설정 조회 실패, ko 기본값 사용: %s", exc)
             lang = "ko"
         _BASE_PROMPT = {
-            "ko": "당신은 한국어 AI 어시스턴트 아리입니다.",
+            "ko": "당신은 AI 어시스턴트 아리입니다.",
             "en": "You are Ari, an AI assistant.",
             "ja": "あなたはAIアシスタントのAriです。",
         }
@@ -1794,6 +1797,8 @@ def get_llm_provider() -> LLMProvider:
                     personality=s.get("personality", ""),
                     scenario=s.get("scenario", ""),
                     history_instruction=s.get("history_instruction", ""),
+                    personality_examples_en=s.get("personality_examples_en", ""),
+                    personality_examples_ja=s.get("personality_examples_ja", ""),
                     response_verbosity=s.get("response_verbosity", "concise"),
                     router_enabled=s.get("llm_router_enabled", False),
                     provider_configs=provider_configs,

@@ -10,15 +10,20 @@ from core.emotions import get_emotion_instruction
 class RPGenerator:
     def __init__(self):
         self.personality = ""
+        self.personality_examples_en = ""
+        self.personality_examples_ja = ""
         self.scenario = ""
         self.system_prompt = ""
         self.history_instruction = ""
         self.response_verbosity = "concise"
 
     def set_config(self, personality="", scenario="", system_prompt="", history_instruction="",
-                    response_verbosity="concise"):
+                   response_verbosity="concise", personality_examples_en="",
+                   personality_examples_ja=""):
         """RP 설정"""
         self.personality = personality
+        self.personality_examples_en = personality_examples_en
+        self.personality_examples_ja = personality_examples_ja
         self.scenario = scenario
         self.system_prompt = system_prompt
         self.history_instruction = history_instruction
@@ -35,7 +40,7 @@ class RPGenerator:
         except Exception:
             lang = "ko"
         _BASE_PROMPT = {
-            "ko": "당신은 한국어 AI 어시스턴트 아리입니다.",
+            "ko": "당신은 AI 어시스턴트 아리입니다.",
             "en": "You are Ari, an AI assistant.",
             "ja": "あなたはAIアシスタントのAriです。",
         }
@@ -65,11 +70,17 @@ class RPGenerator:
         )
         parts = [prompt]
         if self.personality:
-            parts.append(f"[캐릭터 성격]\n{self.personality.strip()}")
+            parts.append(f"{_('[캐릭터 성격]')}\n{self.personality.strip()}")
+        examples = {
+            "en": self.personality_examples_en,
+            "ja": self.personality_examples_ja,
+        }.get(lang, "")
+        if isinstance(examples, str) and examples.strip():
+            parts.append(f"{_('[예시 대사]')}\n{examples.strip()}")
         if self.scenario:
-            parts.append(f"[현재 상황]\n{self.scenario.strip()}")
+            parts.append(f"{_('[현재 상황]')}\n{self.scenario.strip()}")
         if self.history_instruction:
-            parts.append(f"[대화 방식]\n{self.history_instruction.strip()}")
+            parts.append(f"{_('[대화 방식]')}\n{self.history_instruction.strip()}")
         verbosity_map = _VERBOSITY_INSTRUCTION.get(lang, _VERBOSITY_INSTRUCTION["ko"])
         parts.append(verbosity_map.get(self.response_verbosity, verbosity_map["concise"]))
         parts.append(get_emotion_instruction(lang))
