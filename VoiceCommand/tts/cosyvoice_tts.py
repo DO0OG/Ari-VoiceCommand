@@ -18,6 +18,7 @@ from typing import Optional
 import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
+from audio.audio_manager import GlobalAudio
 from core.resource_manager import is_bundled
 from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
 
@@ -133,7 +134,6 @@ class CosyVoiceTTS(QObject):
 
     def __init__(self, model_dir=None, reference_wav=None, reference_text="", speed=0.9, cosyvoice_dir=None):
         super().__init__()
-        from audio.audio_manager import GlobalAudio
         cosyvoice_dir = cosyvoice_dir or _get_cosyvoice_dir_cached()
         default_model_dir = os.path.join(cosyvoice_dir, "pretrained_models", "Fun-CosyVoice3-0.5B") if cosyvoice_dir else ""
         self.model_dir = model_dir or default_model_dir
@@ -143,7 +143,6 @@ class CosyVoiceTTS(QObject):
         self.speed = speed
         self.volume = _load_tts_volume()
 
-        self.pa = GlobalAudio.get_instance()
         self.sample_rate = 24000  # 워커에서 갱신됨
         self.is_playing = False
         self._proc = None
@@ -279,7 +278,7 @@ class CosyVoiceTTS(QObject):
         return np.clip(samples, -1.0, 1.0).astype(np.float32).tobytes()
 
     def _open_stream_on(self, device_index):
-        return self.pa.open(
+        return GlobalAudio.open_stream(
             format=pyaudio.paFloat32,
             channels=1,
             rate=self.sample_rate,
@@ -339,15 +338,7 @@ class CosyVoiceTTS(QObject):
         if not self._stream:
             self._stream_rate = None
             return
-        try:
-            if self._stream.is_active():
-                self._stream.stop_stream()
-        except Exception:  # nosec B110
-            pass
-        try:
-            self._stream.close()
-        except Exception:  # nosec B110
-            pass
+        GlobalAudio.close_stream(self._stream)
         self._stream = None
         self._stream_rate = None
 

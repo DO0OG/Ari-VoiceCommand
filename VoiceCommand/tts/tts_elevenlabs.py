@@ -9,6 +9,8 @@ import time
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
+from audio.audio_manager import GlobalAudio
+
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
 _SAMPLE_RATE = 22050
 
@@ -26,7 +28,6 @@ class ElevenLabsTTS(QObject):
         self.stability = stability
         self.similarity_boost = similarity_boost
         self.is_playing = False
-        self.pa = pyaudio.PyAudio()
         self._session = None
 
         if api_key:
@@ -95,16 +96,17 @@ class ElevenLabsTTS(QObject):
                 pcm = decode_mp3_to_pcm(audio_buffer.read(), _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
-            stream = self.pa.open(
+            stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
                 output_device_index=get_output_device_index(),
             )
-            stream.write(pcm)
-            stream.stop_stream()
-            stream.close()
+            try:
+                stream.write(pcm)
+            finally:
+                GlobalAudio.close_stream(stream)
 
             logging.info("[TTS] ElevenLabs 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False
@@ -124,10 +126,7 @@ class ElevenLabsTTS(QObject):
                 self._session = None
         except Exception as exc:
             logging.debug("ElevenLabs 세션 정리 중 무시된 오류: %s", exc)
-        try:
-            self.pa.terminate()
-        except Exception as exc:
-            logging.debug("ElevenLabs TTS 정리 중 무시된 오류: %s", exc)
+        # 전역 PyAudio 인스턴스는 AriCore.cleanup()의 GlobalAudio.terminate()에서만 종료한다.
 
     def __del__(self):
         try:

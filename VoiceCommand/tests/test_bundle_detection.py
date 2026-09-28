@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -46,6 +47,41 @@ class BundleDetectionTests(unittest.TestCase):
                 patch.object(sys, "_MEIPASS", "bundle_root", create=True):
             path = cosyvoice_tts._get_worker_script()
         self.assertEqual(path, os.path.join("bundle_root", "cosyvoice_worker.py"))
+
+
+
+class BundledResourceRefreshTests(unittest.TestCase):
+    @staticmethod
+    def _write(path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+    @staticmethod
+    def _read(path):
+        with open(path, "rb") as handle:
+            return handle.read()
+
+    def test_stale_icon_is_replaced_but_user_files_are_kept(self):
+        with tempfile.TemporaryDirectory() as bundle, tempfile.TemporaryDirectory() as app_data:
+            self._write(os.path.join(bundle, "icon.png"), b"new-icon")
+            self._write(os.path.join(bundle, "images", "idle1.png"), b"bundled-image")
+            self._write(os.path.join(app_data, "icon.png"), b"old-icon")
+            self._write(os.path.join(app_data, "images", "idle1.png"), b"user-image")
+
+            manager = resource_manager.ResourceManager
+            bundle_icon = os.path.join(bundle, "icon.png")
+            user_icon = os.path.join(app_data, "icon.png")
+            user_image = os.path.join(app_data, "images", "idle1.png")
+            with _nuitka(), \
+                    patch.object(manager, "get_bundle_path",
+                                 side_effect=lambda name: os.path.join(bundle, name)), \
+                    patch.object(manager, "get_writable_path",
+                                 side_effect=lambda name: os.path.join(app_data, name)):
+                manager.extract_resources()
+                self.assertEqual(self._read(user_icon), b"new-icon")
+                self.assertEqual(self._read(user_image), b"user-image")
+                self.assertFalse(manager.refresh_app_managed_file(bundle_icon, user_icon))
 
 
 if __name__ == "__main__":

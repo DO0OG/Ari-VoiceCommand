@@ -35,7 +35,7 @@ class TTSFactoryTests(unittest.TestCase):
                 "importlib",
                 SimpleNamespace(import_module=Mock(side_effect=ImportError("missing sdk"))),
             ),
-            patch("tts.tts_openai.pyaudio.PyAudio") as audio,
+            patch("tts.tts_openai.GlobalAudio.get_instance") as audio,
             patch.dict(sys.modules, {"tts.tts_edge": SimpleNamespace(EdgeTTS=FakeEdgeTTS)}),
         ):
             provider, mode = create_tts_provider(

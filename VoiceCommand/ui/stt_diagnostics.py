@@ -40,7 +40,11 @@ class STTSampleThread(QThread):
             recognizer.energy_threshold = int(self.settings.get("stt_energy_threshold", 300))
             recognizer.dynamic_energy_threshold = bool(self.settings.get("stt_dynamic_energy", True))
             self.status_changed.emit(_("지금 짧은 문장을 말씀해 주세요."))
-            with sr.Microphone(device_index=microphone_index) as source:
+            from VoiceCommand import SharedMicrophone
+            microphone = SharedMicrophone(device_index=microphone_index)
+            with microphone as source:
+                if microphone.stream is None:
+                    raise OSError(_("선택한 마이크를 찾을 수 없습니다. 장치를 다시 선택해 주세요."))
                 recognizer.adjust_for_ambient_noise(source, duration=0.25)
                 audio_data = recognizer.listen(source, timeout=5, phrase_time_limit=4)
             audio_lock.release()

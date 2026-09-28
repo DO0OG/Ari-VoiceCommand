@@ -164,6 +164,7 @@ class FishTTSWebSocket(QObject):
                 # 3단계: PyAudio 재생
                 from audio.audio_manager import (
                     _audio_output_lock,
+                    GlobalAudio,
                     get_output_device_index,
                     output_device_override,
                 )
@@ -172,7 +173,7 @@ class FishTTSWebSocket(QObject):
                     with output_device_override(output_device_name):
                         out_idx = get_output_device_index()
                     with _audio_output_lock:
-                        stream = self.pa.open(
+                        stream = GlobalAudio.open_stream(
                             format=self.pa.get_format_from_width(sample_width),
                             channels=channels,
                             rate=sample_rate,
@@ -200,10 +201,7 @@ class FishTTSWebSocket(QObject):
                     logging.error(f"재생 오류: {exc}")
                 finally:
                     if stream:
-                        try:
-                            stream.close()
-                        except Exception:  # nosec B110
-                            pass
+                        GlobalAudio.close_stream(stream)
                     logging.debug("재생 장치 닫기 완료")
 
             self.is_playing = True

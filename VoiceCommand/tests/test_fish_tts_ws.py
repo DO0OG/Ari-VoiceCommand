@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import ormsgpack
 
+from audio.audio_manager import GlobalAudio
 from tts.fish_tts_ws import (
     FishTTSWebSocket,
     _estimate_pcm_duration_seconds,
@@ -89,13 +90,19 @@ class FishTTSWebSocketTests(unittest.TestCase):
         tts.stop_event = threading.Event()
         tts.playback_finished = _DummySignal()
 
-        result = tts.speak("안녕하세요")
+        with (
+            patch.object(GlobalAudio, "open_stream", return_value=tts.pa.stream) as open_stream,
+            patch.object(GlobalAudio, "close_stream") as close_stream,
+        ):
+            result = tts.speak("안녕하세요")
 
         self.assertTrue(result)
         self.assertEqual(sent["text"], "안녕하세요")
         self.assertFalse(tts.is_playing)
         self.assertEqual(tts.playback_finished.emitted, 1)
         self.assertTrue(tts.pa.stream.writes)
+        open_stream.assert_called_once()
+        close_stream.assert_called_once_with(tts.pa.stream)
 
     def test_stream_tts_posts_sdk_compatible_msgpack_request(self):
         class _FakeResponse:

@@ -206,8 +206,8 @@ class SettingsDialog(QDialog):
         self.mic_combo = QComboBox()
         self.mic_combo.addItem(_("시스템 기본 마이크"), "")
         try:
-            import speech_recognition as sr
-            mics = sr.Microphone.list_microphone_names()
+            from VoiceCommand import list_microphone_names
+            mics = list_microphone_names()
             for mic in mics:
                 self.mic_combo.addItem(mic, mic)
         except Exception as e:
