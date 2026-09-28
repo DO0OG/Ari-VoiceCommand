@@ -13,6 +13,7 @@ from functools import wraps
 from typing import List, Dict, Any, Optional
 
 from core.atomic_io import backup_corrupt_file, write_text_atomic
+from core.mood_state import get_mood_state
 
 logger = logging.getLogger(__name__)
 _context_manager: Optional["UserContextManager"] = None
@@ -37,7 +38,18 @@ _SITUATION_IDLE_TIMEOUT = timedelta(minutes=30)
 _PRAISE_MARKERS = (
     "잘했", "잘하네", "최고", "대단", "똑똑", "멋져", "고마워", "고맙", "감사해",
     "great", "good job", "well done", "amazing", "excellent", "brilliant", "awesome",
-    "thank you", "thanks", "すごい", "ありがとう", "よくでき", "えらい", "最高", "上手",
+    "thank you", "thanks", "👍", "すごい", "ありがとう", "よくでき", "えらい", "最高",
+    "上手",
+)
+_NEGATED_PRAISE_MARKERS = (
+    "not great", "not good", "not very good", "not amazing", "not excellent",
+    "not brilliant", "not awesome", "not well done", "좋지 않", "좋진 않",
+    "최고는 아니", "대단하지 않", "대단하진 않", "すごくない", "すごいわけではない",
+    "すごいわけじゃない", "最高ではない",
+    "良くない", "よくない", "上手くない",
+)
+_CRITICISM_MARKERS = (
+    "👎", "틀렸", "잘못됐", "그게 아니", "that's wrong", "not correct", "間違い", "違います",
 )
 
 
@@ -204,12 +216,23 @@ class UserContextManager:
         situation = self.context.setdefault("situation", self._normalize_situation({}))
         last_interaction = self._parse_situation_timestamp(situation.get("last_interaction_at"))
         session_started = self._parse_situation_timestamp(situation.get("session_started_at"))
+        late_night_long_use = False
         if (
             last_interaction is None
             or current - last_interaction > _SITUATION_IDLE_TIMEOUT
             or session_started is None
         ):
             session_started = current
+        elif current.hour in range(1, 6):
+            previous_use = last_interaction - session_started
+            current_use = current - session_started
+            late_night_long_use = (
+                current_use >= timedelta(hours=3)
+                and (
+                    previous_use < timedelta(hours=3)
+                    or last_interaction.hour < 1
+                )
+            )
 
         today = current.date().isoformat()
         if situation.get("today_date") != today:
@@ -234,6 +257,18 @@ class UserContextManager:
             praise_timestamps.append(current.isoformat())
         situation["praise_timestamps"] = praise_timestamps
         self.save_context()
+
+        mood_state = get_mood_state()
+        if mood_state is not None:
+            try:
+                mood_state.record_interaction(
+                    praised=self._contains_praise(user_message),
+                    criticized=self._contains_criticism(user_message),
+                    late_night_long_use=late_night_long_use,
+                    now=current.timestamp(),
+                )
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                logger.debug("기분 상태 갱신 생략: %s", exc)
 
     @_context_locked
     def get_situation_metrics(self, now: Optional[datetime] = None) -> Dict[str, Any]:
@@ -280,7 +315,14 @@ class UserContextManager:
     @staticmethod
     def _contains_praise(user_message: str) -> bool:
         text = str(user_message or "").casefold()
+        for marker in _NEGATED_PRAISE_MARKERS:
+            text = text.replace(marker.casefold(), "")
         return any(marker.casefold() in text for marker in _PRAISE_MARKERS)
+
+    @staticmethod
+    def _contains_criticism(user_message: str) -> bool:
+        text = str(user_message or "").casefold()
+        return any(marker.casefold() in text for marker in _CRITICISM_MARKERS)
 
     @_context_locked
     def save_context(self) -> bool:

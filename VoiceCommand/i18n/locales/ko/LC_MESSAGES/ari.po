@@ -3680,3 +3680,15 @@ msgstr "근거: {evidence}"
 
 msgid "거절"
 msgstr "거절"
+
+msgid "좋음"
+msgstr "좋음"
+
+msgid "평온"
+msgstr "평온"
+
+msgid "가라앉음"
+msgstr "가라앉음"
+
+msgid " · 기분 {mood}"
+msgstr " · 기분 {mood}"

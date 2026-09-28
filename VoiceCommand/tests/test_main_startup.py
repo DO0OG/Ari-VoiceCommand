@@ -151,6 +151,10 @@ class MainStartupTests(unittest.TestCase):
         with (
             patch("audio.audio_manager.initialize_global_audio", return_value=False),
             patch("core.config_manager.ConfigManager.get", return_value=False),
+            patch(
+                "core.mood_state.initialize_mood_state",
+                side_effect=RuntimeError("mood storage unavailable"),
+            ),
         ):
             main()
 

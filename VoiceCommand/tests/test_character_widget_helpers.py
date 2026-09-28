@@ -139,6 +139,18 @@ class CharacterWidgetHelperTests(unittest.TestCase):
 
         self.assertIsNone(widget.move_animation)
 
+    def test_emote_overlay_keeps_idle_frame_animation_running(self):
+        widget = self._make_widget()
+
+        widget._change_emotion_slot("기쁨")
+        widget._activity_away = True
+        widget._refresh_activity_behavior()
+
+        self.assertEqual(widget.emote_overlay.text(), "😊")
+        self.assertEqual(widget.current_animation, "idle")
+        self.assertTrue(widget.emote_overlay_timer.isActive())
+        self.assertTrue(widget.animation_timer.isActive())
+
     def test_mouse_release_restarts_animation_timer_at_70ms(self):
         widget = self._make_widget()
         widget.dragging = True

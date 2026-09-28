@@ -179,6 +179,29 @@ class LLMProviderTests(unittest.TestCase):
         self.assertNotIn("private", situation)
         self.assertLessEqual(len(situation), 120)
 
+    def test_situation_prompt_includes_short_character_mood(self):
+        provider = LLMProvider()
+        metrics = {
+            "last_interaction_elapsed_minutes": 4,
+            "today_interaction_count": 2,
+            "continuous_use_minutes": 9,
+            "local_time": "14:25",
+            "recent_praise_count": 1,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        mood_state = SimpleNamespace(values=lambda: (0.6, 0.4))
+        translate = lambda message, **values: message.format(**values) if values else message
+        with (
+            patch("agent.llm_provider._", side_effect=translate),
+            patch("memory.user_context.get_context_manager", return_value=context),
+            patch("core.window_inspector.get_foreground_fullscreen", return_value=None),
+            patch("agent.llm_provider.get_mood_state", return_value=mood_state),
+        ):
+            situation = provider._build_situation_prompt()
+
+        self.assertIn("기분 좋음", situation)
+        self.assertLessEqual(len(situation), 120)
+
     def test_static_answer_cache_key_changes_with_situation_metadata(self):
         provider = LLMProvider(provider="openai", model="test")
         provider.client = Mock()
@@ -281,11 +304,13 @@ class LLMProviderTests(unittest.TestCase):
                     "Use {continuous} · Time {time} · Praise24h {praise}"
                 ),
                 " · 전체 화면: {fullscreen}": " · Fullscreen: {fullscreen}",
+                " · 기분 {mood}": " · Mood {mood}",
                 "{minutes}분": "{minutes}m",
                 "{hours}시간": "{hours}h",
                 "없음": "None",
                 "예": "Yes",
                 "아니요": "No",
+                "평온": "calm",
             },
             "ja": {
                 block_message: (
@@ -293,11 +318,13 @@ class LLMProviderTests(unittest.TestCase):
                     "連続 {continuous} · 時刻 {time} · 称賛24h {praise}回"
                 ),
                 " · 전체 화면: {fullscreen}": " · 全画面: {fullscreen}",
+                " · 기분 {mood}": " · 気分 {mood}",
                 "{minutes}분": "{minutes}分",
                 "{hours}시간": "{hours}時間",
                 "없음": "なし",
                 "예": "はい",
                 "아니요": "いいえ",
+                "평온": "穏やか",
             },
         }
         for language, catalogue in translations.items():
@@ -313,10 +340,14 @@ class LLMProviderTests(unittest.TestCase):
                 situation = provider._build_situation_prompt()
 
             self.assertLessEqual(len(situation), 120)
-            if language == "en":
+            if language == "ko":
+                self.assertIn("기분 평온", situation)
+            elif language == "en":
                 self.assertTrue(situation.startswith("[Situation]"))
+                self.assertIn("Mood calm", situation)
             elif language == "ja":
                 self.assertTrue(situation.startswith("[状況]"))
+                self.assertIn("気分 穏やか", situation)
 
     def test_rp_prompt_localizes_situation_guidance(self):
         provider = LLMProvider()

@@ -31,6 +31,7 @@ from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, get_provider_configs
 from core.config_manager import ConfigManager
 from core.activity_monitor import get_activity_context
+from core.mood_state import get_mood_state
 from i18n.translator import _
 
 _EN_MONTHS = {
@@ -1712,6 +1713,20 @@ class LLMProvider:
             prompt += _(" · 전체 화면: {fullscreen}").format(fullscreen=_("예"))
         elif fullscreen is False:
             prompt += _(" · 전체 화면: {fullscreen}").format(fullscreen=_("아니요"))
+
+        mood_label = _("평온")
+        mood_state = get_mood_state()
+        if mood_state is not None:
+            try:
+                mood_valence, _mood_arousal = mood_state.values()
+            except (ArithmeticError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("[LLMProvider] 기분 상태 조회 실패: %s", exc)
+            else:
+                if mood_valence >= 0.2:
+                    mood_label = _("좋음")
+                elif mood_valence <= -0.2:
+                    mood_label = _("가라앉음")
+        prompt += _(" · 기분 {mood}").format(mood=mood_label)
         return prompt
 
     @staticmethod

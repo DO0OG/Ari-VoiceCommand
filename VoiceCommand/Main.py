@@ -353,6 +353,7 @@ def main():
     telegram_bridge = None
     update_checker = None
     activity_monitor = None
+    mood_state = None
 
     def _show_character():
         if character is not None:
@@ -372,6 +373,14 @@ def main():
         from core.resource_manager import ResourceManager, is_bundled
         logging.info("리소스 추출 확인 중...")
         ResourceManager.extract_resources()
+
+        # 기분 상태는 선택 기능이므로 저장소 초기화에 실패해도 앱을 시작한다.
+        try:
+            from core.mood_state import initialize_mood_state
+
+            mood_state = initialize_mood_state()
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("기분 상태를 초기화하지 못했습니다: %s", exc)
 
         if sys.platform == "win32" and not is_bundled():
             # 소스 실행 시 작업 표시줄이 python.exe 아이콘으로 묶이지 않도록 앱 ID를 따로 둔다.
@@ -401,6 +410,13 @@ def main():
         # 활동 감지는 선택 기능이므로 실패해도 앱 시작을 막지 않는다.
         try:
             activity_monitor = ActivityMonitor()
+            if mood_state is not None:
+                try:
+                    activity_monitor.user_returned.connect(
+                        mood_state.record_away_return
+                    )
+                except (AttributeError, RuntimeError, TypeError) as exc:
+                    logging.warning("기분 상태 활동 연결을 건너뜁니다: %s", exc)
             activity_monitor.session_locked.connect(lambda: set_session_locked(True))
             activity_monitor.session_unlocked.connect(lambda: set_session_locked(False))
             activity_monitor.quiet_state_changed.connect(
