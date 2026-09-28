@@ -41,6 +41,86 @@ class LLMProviderTests(unittest.TestCase):
         provider.client = Mock()
         return provider
 
+    def test_personality_section_labels_follow_ui_language(self):
+        provider = LLMProvider(
+            personality="calm",
+            scenario="at home",
+            history_instruction="listen carefully",
+        )
+        labels = {
+            "en": {
+                "[캐릭터 성격]": "[Character personality]",
+                "[현재 상황]": "[Current situation]",
+                "[대화 방식]": "[Conversation style]",
+            },
+            "ja": {
+                "[캐릭터 성격]": "[キャラクターの性格]",
+                "[현재 상황]": "[現在の状況]",
+                "[대화 방식]": "[会話スタイル]",
+            },
+        }
+
+        for language, expected in labels.items():
+            translate = lambda message: expected.get(message, message)
+            with (
+                patch("i18n.translator.get_language", return_value=language),
+                patch("i18n.translator._", side_effect=translate),
+            ):
+                prompt = provider.rp_generator.build_system_prompt("Ari")
+
+            for label in expected.values():
+                self.assertIn(label, prompt)
+
+    def test_personality_examples_only_use_the_current_ui_language(self):
+        provider = LLMProvider(
+            personality_examples_en="English example",
+            personality_examples_ja="Japanese example",
+        )
+        for language, included, excluded in (
+            ("en", "English example", ("Japanese example",)),
+            ("ja", "Japanese example", ("English example",)),
+            ("ko", "", ("English example", "Japanese example")),
+        ):
+            with (
+                patch("i18n.translator.get_language", return_value=language),
+                patch("i18n.translator._", side_effect=lambda message: message),
+            ):
+                prompt = provider.rp_generator.build_system_prompt("Ari")
+
+            if included:
+                self.assertIn(included, prompt)
+            for example in excluded:
+                self.assertNotIn(example, prompt)
+
+        with (
+            patch("i18n.translator.get_language", return_value="en"),
+            patch("i18n.translator._", side_effect=lambda message: message),
+        ):
+            prompt = LLMProvider().rp_generator.build_system_prompt("Ari")
+
+        self.assertNotIn("[예시 대사]", prompt)
+
+    def test_language_instruction_is_added_once_by_system_assembly(self):
+        provider = LLMProvider()
+        instructions = {
+            "ko": "항상 한국어로 응답하세요.",
+            "en": "Always respond in English.",
+            "ja": "常に日本語で応答してください。",
+        }
+        for language, instruction in instructions.items():
+            with (
+                patch("i18n.translator.get_language", return_value=language),
+                patch.object(provider, "_get_skill_context", return_value={}),
+                patch.object(provider, "_build_situation_prompt", return_value=""),
+            ):
+                prompt = provider._build_system()
+
+            self.assertEqual(prompt.count(instruction), 1)
+            for other_instruction in instructions.values():
+                if other_instruction != instruction:
+                    self.assertNotIn(other_instruction, prompt)
+            self.assertNotIn("반드시 한국어로만 대답하세요", prompt)
+
     def test_system_prompt_ends_with_situation_even_without_general_context(self):
         provider = LLMProvider(model="test")
         metrics = {

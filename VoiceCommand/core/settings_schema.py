@@ -72,6 +72,8 @@ DEFAULT_SETTINGS = {
     "tts_cache_max_bytes": 50 * 1024 * 1024,
     # ── 캐릭터 / RP ─────────────────────────────────────────────────────
     "personality": "",
+    "personality_examples_en": "",
+    "personality_examples_ja": "",
     "scenario": "",
     "system_prompt": "",
     "history_instruction": "",

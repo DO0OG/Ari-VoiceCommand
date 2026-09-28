@@ -12,14 +12,12 @@ def _get_tool_instruction() -> str:
     if lang == "en":
         return (
             "[Tool Usage Guidelines]\n"
-            "- Always respond in English.\n"
             "- Use appropriate tools for PC control requests.\n"
             "- Do not damage URLs, code, or English names in responses."
         )
     if lang == "ja":
         return (
             "[ツール使用ガイドライン]\n"
-            "- 常に日本語で回答してください。\n"
             "- PC操作の要求には適切なツールを使用してください。\n"
             "- URL・コード・英語の名称は変更しないでください。"
         )
@@ -27,7 +25,7 @@ def _get_tool_instruction() -> str:
         "[도구 사용 지침]\n"
         "- 사용자의 PC 동작 요청은 적절한 도구를 우선 호출하세요.\n"
         "- 위험하거나 파괴적인 작업은 명확한 의도를 확인하세요.\n"
-        "- 답변은 한국어로 하되, URL/코드/영문 명칭은 손상시키지 마세요."
+        "- URL/코드/영문 명칭은 손상시키지 마세요."
     )
 
 _CORE_TOOL_NAMES = {

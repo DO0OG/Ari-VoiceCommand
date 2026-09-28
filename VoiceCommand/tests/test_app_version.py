@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 from core.app_version import (
     DEV_VERSION,
+    OLD_TEMPLATE_SYSTEM_PROMPT,
+    _migrate_unmodified_system_prompt,
     compare_versions,
     dispatch_version_command,
     get_build_info,
@@ -82,6 +84,7 @@ class AppVersionTests(unittest.TestCase):
                 patch.object(ResourceManager, "get_runtime_path", return_value=path),
                 patch("core.app_version.get_version", return_value="1.2.4"),
                 patch("core.app_version.is_release_build", return_value=True),
+                patch("core.app_version._migrate_unmodified_system_prompt") as migrate,
             ):
                 self.assertTrue(record_last_run_version())
                 with open(path, "w", encoding="utf-8") as handle:
@@ -92,6 +95,89 @@ class AppVersionTests(unittest.TestCase):
                 self.assertTrue(record_last_run_version())
                 with open(path, encoding="utf-8") as handle:
                     self.assertEqual(json.load(handle)["installed_update_pending"], "1.2.4")
+                migrate.assert_called_once_with()
+
+    def test_prompt_migration_updates_only_the_exact_template_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            template_path = os.path.join(directory, "ari_settings.template.json")
+            with open(template_path, "w", encoding="utf-8") as handle:
+                json.dump({"system_prompt": "new default"}, handle)
+            settings = {"system_prompt": OLD_TEMPLATE_SYSTEM_PROMPT}
+            with (
+                patch(
+                    "core.config_manager.ConfigManager.load_settings",
+                    return_value=settings,
+                ),
+                patch(
+                    "core.config_manager.ConfigManager.save_settings",
+                    return_value=True,
+                ) as save_settings,
+                patch.object(ResourceManager, "get_bundle_path", return_value=template_path),
+            ):
+                _migrate_unmodified_system_prompt()
+
+            self.assertEqual(settings["system_prompt"], "new default")
+            save_settings.assert_called_once_with(settings)
+
+    def test_prompt_migration_preserves_a_customized_prompt(self):
+        settings = {"system_prompt": OLD_TEMPLATE_SYSTEM_PROMPT + " custom"}
+        with (
+            patch(
+                "core.config_manager.ConfigManager.load_settings",
+                return_value=settings,
+            ),
+            patch("core.config_manager.ConfigManager.save_settings") as save_settings,
+        ):
+            _migrate_unmodified_system_prompt()
+
+        save_settings.assert_not_called()
+
+    def test_prompt_migration_failure_does_not_stop_version_recording(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"last_run_version": "1.2.3"}, handle)
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                patch("core.app_version.get_version", return_value="1.2.4"),
+                patch("core.app_version.is_release_build", return_value=False),
+                patch(
+                    "core.app_version._migrate_unmodified_system_prompt",
+                    side_effect=OSError("settings unavailable"),
+                ),
+            ):
+                self.assertTrue(record_last_run_version())
+
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["last_run_version"], "1.2.4")
+
+    def test_prompt_save_failure_does_not_stop_version_recording(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = os.path.join(directory, "runtime_state.json")
+            template_path = os.path.join(directory, "ari_settings.template.json")
+            with open(state_path, "w", encoding="utf-8") as handle:
+                json.dump({"last_run_version": "1.2.3"}, handle)
+            with open(template_path, "w", encoding="utf-8") as handle:
+                json.dump({"system_prompt": "new default"}, handle)
+            settings = {"system_prompt": OLD_TEMPLATE_SYSTEM_PROMPT}
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=state_path),
+                patch.object(ResourceManager, "get_bundle_path", return_value=template_path),
+                patch("core.app_version.get_version", return_value="1.2.4"),
+                patch("core.app_version.is_release_build", return_value=False),
+                patch(
+                    "core.config_manager.ConfigManager.load_settings",
+                    return_value=settings,
+                ),
+                patch(
+                    "core.config_manager.ConfigManager.save_settings",
+                    return_value=False,
+                ),
+            ):
+                self.assertTrue(record_last_run_version())
+
+            with open(state_path, encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["last_run_version"], "1.2.4")
 
     def test_runtime_path_error_skips_last_run_write(self):
         with patch.object(

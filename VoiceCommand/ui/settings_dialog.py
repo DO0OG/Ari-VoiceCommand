@@ -63,6 +63,7 @@ class SettingsDialog(QDialog):
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction", "response_verbosity",
+        "personality_examples_en", "personality_examples_ja",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
     CHARACTER_KEYS = {"character_scale", "character_ground_offset"}
@@ -192,6 +193,8 @@ class SettingsDialog(QDialog):
 
         rp_fields = [
             ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
+            ("examples_en_input",  _("영어 예시 대사:"), "personality_examples_en", ""),
+            ("examples_ja_input",  _("일본어 예시 대사:"), "personality_examples_ja", ""),
             ("scenario_input",     _("시나리오:"),        "scenario",            _("예) 주인님을 보좌하는 역할극")),
             ("system_input",       _("시스템 프롬프트:"), "system_prompt",       _("AI에게 직접 전달할 시스템 지시문")),
             ("history_input",      _("대화 지침:"),       "history_instruction", _("이전 대화를 참고할 때의 태도")),
@@ -203,7 +206,9 @@ class SettingsDialog(QDialog):
             edit = QTextEdit()
             edit.setPlainText(self.settings.get(key, ""))
             edit.setPlaceholderText(ph)
-            edit.setMinimumHeight(90)
+            edit.setMinimumHeight(
+                56 if key in {"personality_examples_en", "personality_examples_ja"} else 90
+            )
             setattr(self, attr, edit)
             gvbox.addWidget(edit, 1)
 
@@ -741,6 +746,8 @@ class SettingsDialog(QDialog):
         new_settings = {
             # RP
             "personality": self.personality_input.toPlainText().strip(),
+            "personality_examples_en": self.examples_en_input.toPlainText().strip(),
+            "personality_examples_ja": self.examples_ja_input.toPlainText().strip(),
             "scenario": self.scenario_input.toPlainText().strip(),
             "system_prompt": self.system_input.toPlainText().strip(),
             "history_instruction": self.history_input.toPlainText().strip(),
