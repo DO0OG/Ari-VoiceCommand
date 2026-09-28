@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Dict, List
 
+from core.atomic_io import backup_corrupt_file, write_json_atomic
+
 
 @dataclass
 class UserProfile:
@@ -37,16 +39,27 @@ class UserProfileEngine:
             )
         except FileNotFoundError:
             return UserProfile()
-        except Exception as e:
-            logging.warning(f"[UserProfile] 로드 실패: {e}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            try:
+                backup_corrupt_file(self.file_path)
+            except OSError as backup_error:
+                logging.error("[UserProfile] 손상 파일 백업 실패: %s", backup_error)
+            logging.warning("[UserProfile] JSON 로드 실패: %s", exc)
+            return UserProfile()
+        except (OSError, TypeError, ValueError, AttributeError) as exc:
+            logging.warning("[UserProfile] 로드 실패: %s", exc)
             return UserProfile()
 
     def _save(self):
         try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(asdict(self.profile), f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.warning(f"[UserProfile] 저장 실패: {e}")
+            write_json_atomic(
+                self.file_path,
+                asdict(self.profile),
+                ensure_ascii=False,
+                indent=2,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            logging.warning("[UserProfile] 저장 실패: %s", exc)
 
     def update(self, user_msg: str, command_type: str = "", success: bool = True):
         text = (user_msg or "").lower()

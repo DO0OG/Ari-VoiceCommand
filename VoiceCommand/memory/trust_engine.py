@@ -5,6 +5,7 @@ FACT 신뢰도 업데이트 엔진.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 import math
 import threading
@@ -82,22 +83,25 @@ def batch_decay(facts: dict, current_time) -> dict:
     updated = {}
     for key, payload in (facts or {}).items():
         try:
+            confidence = float(payload.get("confidence", 0.7))
+            base_confidence = float(payload.get("base_confidence", confidence))
+            new_payload = dict(payload)
+            new_payload["base_confidence"] = base_confidence
             updated_at = payload.get("updated_at")
             if not updated_at:
-                updated[key] = payload
+                updated[key] = new_payload
                 continue
-            days = max((current_time - __import__("datetime").datetime.fromisoformat(updated_at)).days, 0)
+            days = max((current_time - datetime.fromisoformat(updated_at)).days, 0)
             result = compute_decay(
-                float(payload.get("confidence", 0.7)),
+                base_confidence,
                 days,
                 int(payload.get("access_count", 0)),
             )
             if should_remove(result.new_confidence, int(payload.get("conflict_count", 0)), days):
                 continue
-            new_payload = dict(payload)
             new_payload["confidence"] = round(result.new_confidence, 2)
             updated[key] = new_payload
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
             logging.debug("batch_decay 오류 (key=%s): %s", key, exc)
             updated[key] = payload
     return updated

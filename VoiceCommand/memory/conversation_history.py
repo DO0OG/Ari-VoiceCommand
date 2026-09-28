@@ -3,8 +3,10 @@ import atexit
 import json
 import logging
 import threading
-from datetime import datetime
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from typing import List, Dict, Callable
+
+from core.atomic_io import backup_corrupt_file, write_json_atomic
 
 _INTERNAL_USER_PREFIXES = (
     "당신은 AI 에이전트 스킬을 Python 함수로 컴파일합니다.",
@@ -89,6 +91,42 @@ class ConversationHistory:
         if needs_more:
             with self._lock:
                 self._compress_oldest()
+
+    def compact_older_than(
+        self,
+        days: int,
+        summarize_fn: Callable[[List[Dict[str, object]]], str],
+    ) -> int:
+        cutoff = datetime.now() - timedelta(days=days)
+        with self._lock:
+            snapshot = [dict(item) for item in self.active]
+            old_items = []
+            remaining = []
+            for item in snapshot:
+                try:
+                    timestamp = datetime.fromisoformat(str(item.get("timestamp", "")))
+                except (AttributeError, TypeError, ValueError):
+                    remaining.append(item)
+                    continue
+                if timestamp < cutoff:
+                    old_items.append(item)
+                else:
+                    remaining.append(item)
+
+        if not old_items:
+            return 0
+        summary = summarize_fn(old_items)
+        if not summary:
+            return 0
+
+        with self._lock:
+            if self.active[:len(snapshot)] != snapshot:
+                return 0
+            self.summaries.append(summary)
+            self.summaries = self.summaries[-self.MAX_SUMMARIES:]
+            self.active = remaining + self.active[len(snapshot):]
+            self.save()
+            return len(old_items)
 
     def _summarize_chunk(self, items: List[Dict[str, object]]) -> str:
         if not items:
@@ -220,10 +258,9 @@ class ConversationHistory:
             self._save_timer = None
             payload = {"active": self.active, "summaries": self.summaries}
             try:
-                with open(self.file_path, "w", encoding="utf-8") as f:
-                    json.dump(payload, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logging.error("대화 기록 저장 실패: %s", e)
+                write_json_atomic(self.file_path, payload, ensure_ascii=False, indent=2)
+            except (OSError, TypeError, ValueError) as exc:
+                logging.error("대화 기록 저장 실패: %s", exc)
 
     def load(self):
         with self._lock:
@@ -247,8 +284,16 @@ class ConversationHistory:
                 )
             except FileNotFoundError:
                 logging.info("새 대화 기록 시작")
-            except Exception as e:
-                logging.error("대화 기록 로드 실패: %s", e)
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                try:
+                    backup_corrupt_file(self.file_path)
+                except OSError as backup_error:
+                    logging.error("손상된 대화 기록 백업 실패: %s", backup_error)
+                self.active = []
+                self.summaries = []
+                logging.warning("대화 기록 JSON 로드 실패: %s", exc)
+            except (OSError, TypeError, ValueError, AttributeError) as exc:
+                logging.error("대화 기록 로드 실패: %s", exc)
 
     def _schedule_save(self) -> None:
         with self._lock:

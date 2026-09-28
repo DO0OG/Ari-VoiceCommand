@@ -8,7 +8,10 @@ import logging
 import re
 import threading
 from datetime import datetime, timedelta
+from functools import wraps
 from typing import List, Dict, Any, Optional
+
+from core.atomic_io import backup_corrupt_file, write_text_atomic
 
 logger = logging.getLogger(__name__)
 _context_manager: Optional["UserContextManager"] = None
@@ -28,6 +31,16 @@ _SUMMARY_TOPIC_LIMIT = 5
 _DEFAULT_FACT_TTL_DAYS = 180
 _MAX_FACT_HISTORY = 8
 
+
+def _context_locked(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 _KOREAN_STOPWORDS = {
     "그리고", "하지만", "그러나", "오늘", "지금", "이번", "저번", "관련", "대한",
     "해주세요", "해줘", "정리", "요약", "저장", "실행", "작업", "요청", "결과",
@@ -39,6 +52,7 @@ class UserContextManager:
     """사용자 행동 패턴 및 컨텍스트 관리"""
 
     def __init__(self, context_file="user_context.json"):
+        self._lock = threading.RLock()
         try:
             from core.resource_manager import ResourceManager
             self.context_file = ResourceManager.get_writable_path(context_file)
@@ -53,8 +67,14 @@ class UserContextManager:
                 with open(self.context_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
                 return self._normalize_context(loaded)
-            except Exception as e:
-                logging.exception(f"컨텍스트 로드 실패: {self.context_file} ({e})")
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                try:
+                    backup_corrupt_file(self.context_file)
+                except OSError as backup_error:
+                    logger.error("손상된 컨텍스트 백업 실패: %s", backup_error)
+                logger.warning("컨텍스트 JSON 로드 실패: %s", exc)
+            except (OSError, TypeError, ValueError, AttributeError) as exc:
+                logger.warning("컨텍스트 로드 실패: %s", exc)
 
         return self._default_context()
 
@@ -104,18 +124,32 @@ class UserContextManager:
             "time_patterns": {}, "preferences": {}, "last_commands": [], "conversation_topics": {},
         }
 
+    @_context_locked
     def save_context(self):
         try:
-            with open(self.context_file, 'w', encoding='utf-8') as f:
-                json.dump(self.context, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.error(f"컨텍스트 저장 실패: {e}")
+            payload = json.dumps(self.context, ensure_ascii=False, indent=2)
+            write_text_atomic(self.context_file, payload)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.error("컨텍스트 저장 실패: %s", exc)
 
     # ── 지능형 사실 관리 (Phase 3.1) ──────────────────────────────────────────
 
-    def record_fact(self, key: str, value: str, source: str = "assistant", confidence: float = 0.7, ttl_days: int = _DEFAULT_FACT_TTL_DAYS):
+    @_context_locked
+    def record_fact(
+        self,
+        key: str,
+        value: str,
+        source: str = "assistant",
+        confidence: float = 0.7,
+        ttl_days: int = _DEFAULT_FACT_TTL_DAYS,
+    ):
         """사용자에 대한 사실 기록 및 충돌 해소."""
-        from memory.trust_engine import compute_reinforcement, compute_conflict_update, SOURCE_WEIGHTS, DEFAULT_SOURCE_WEIGHT
+        from memory.trust_engine import (
+            compute_reinforcement,
+            compute_conflict_update,
+            SOURCE_WEIGHTS,
+            DEFAULT_SOURCE_WEIGHT,
+        )
 
         facts = self.context["facts"]
         history_bucket = self.context.setdefault("fact_history", {}).setdefault(key, [])
@@ -135,7 +169,9 @@ class UserContextManager:
                 existing["reinforcement_count"] = ex_reinforce + 1
                 existing["access_count"] = int(existing.get("access_count", 0)) + 1
             else:
-                result = compute_conflict_update(ex_confidence, confidence, ex_source, source, ex_conflict)
+                result = compute_conflict_update(
+                    ex_confidence, confidence, ex_source, source, ex_conflict
+                )
                 if result.action == "conflict_replace":
                     existing["value"] = value
                     existing["source"] = source
@@ -147,6 +183,7 @@ class UserContextManager:
                 existing["conflict_values"] = conflict_values[-5:]
 
             existing["updated_at"] = now.isoformat()
+            existing["base_confidence"] = existing["confidence"]
             existing["expires_at"] = (now + timedelta(days=ttl_days)).isoformat() if ttl_days else None
             source_history = list(existing.get("source_history", []))
             source_history.append(source)
@@ -159,6 +196,7 @@ class UserContextManager:
                 "updated_at": now.isoformat(),
                 "source": source,
                 "confidence": round(initial_confidence, 2),
+                "base_confidence": round(initial_confidence, 2),
                 "expires_at": (now + timedelta(days=ttl_days)).isoformat() if ttl_days else None,
                 "conflict_count": 0,
                 "reinforcement_count": 0,
@@ -178,19 +216,35 @@ class UserContextManager:
         self.context["fact_history"][key] = history_bucket[-_MAX_FACT_HISTORY:]
         self.save_context()
 
+    @_context_locked
+    def delete_fact(self, key: str) -> bool:
+        facts = self.context.get("facts", {})
+        if key not in facts:
+            return False
+        del facts[key]
+        self.save_context()
+        return True
+
+    @_context_locked
     def update_bio(self, field, value):
         """기본 정보 업데이트 (이름, 관심사 등)"""
         if field in self.context["user_bio"]:
             if isinstance(self.context["user_bio"][field], list):
-                if value not in self.context["user_bio"][field]:
-                    self.context["user_bio"][field].append(value)
-                self.context["user_bio"][field] = self._dedupe_recent(
-                    self.context["user_bio"][field], _MAX_BIO_LIST_ITEMS
-                )
+                if isinstance(value, list):
+                    self.context["user_bio"][field] = self._dedupe_recent(
+                        value, _MAX_BIO_LIST_ITEMS
+                    )
+                else:
+                    if value not in self.context["user_bio"][field]:
+                        self.context["user_bio"][field].append(value)
+                    self.context["user_bio"][field] = self._dedupe_recent(
+                        self.context["user_bio"][field], _MAX_BIO_LIST_ITEMS
+                    )
             else:
                 self.context["user_bio"][field] = value
             self.save_context()
 
+    @_context_locked
     def record_topics(self, topics):
         """대화 주제 빈도 기록"""
         for topic in topics or []:
@@ -204,6 +258,7 @@ class UserContextManager:
         )
         self.save_context()
 
+    @_context_locked
     def record_preference(self, category: str, value: str):
         """선호도 기록."""
         category = str(category or "").strip()
@@ -239,6 +294,7 @@ class UserContextManager:
         flattened.sort(key=lambda item: item.get("recorded_at", ""), reverse=True)
         return flattened[:limit]
 
+    @_context_locked
     def record_command(self, command_type, params=None):
         """명령어 패턴 기록"""
         # 최근 명령어와의 시퀀스 학습
@@ -335,6 +391,7 @@ class UserContextManager:
                 logger.debug(f"[UserContext] 전략 기반 추천 보강 생략: {exc}")
         return recommendations[:limit]
 
+    @_context_locked
     def optimize_memory(self):
         """주기적 메모리 최적화 및 감쇄(Decay) 적용."""
         logger.info("[UserContext] 메모리 최적화 수행 중...")
@@ -390,11 +447,13 @@ class UserContextManager:
 
     def _normalize_fact_entry(self, raw):
         if isinstance(raw, dict):
+            confidence = float(raw.get("confidence", 0.6))
             return {
                 "value": str(raw.get("value", "")),
                 "updated_at": raw.get("updated_at", datetime.now().isoformat()),
                 "source": raw.get("source", "assistant"),
-                "confidence": float(raw.get("confidence", 0.6)),
+                "confidence": confidence,
+                "base_confidence": float(raw.get("base_confidence", confidence)),
                 "expires_at": raw.get("expires_at"),
                 "conflict_count": int(raw.get("conflict_count", 0)),
                 "reinforcement_count": int(raw.get("reinforcement_count", 1)),
@@ -409,6 +468,7 @@ class UserContextManager:
                 "updated_at": datetime.now().isoformat(),
                 "source": "legacy",
                 "confidence": 0.6,
+                "base_confidence": 0.6,
                 "expires_at": None,
                 "conflict_count": 0,
                 "reinforcement_count": 1,

@@ -4,10 +4,10 @@ import json
 import logging
 import os
 import threading
-import tempfile
 from pathlib import Path
 from typing import Callable, Optional, cast
 
+from core.atomic_io import write_json_atomic
 from core.settings_schema import (
     migrate_local_decision_settings,
     normalize_local_decision_settings,
@@ -220,22 +220,7 @@ class ConfigManager:
 
     @classmethod
     def _write_public_settings(cls, path: str, settings: SettingsDict) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(path), delete=False) as f:
-                temp_path = f.name
-                json.dump(cls._public_settings(settings), f, indent=2, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp_path, path)
-            temp_path = None
-        finally:
-            if temp_path is not None:
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
+        write_json_atomic(path, cls._public_settings(settings), indent=2, ensure_ascii=False)
 
     @classmethod
     def _normalize_settings(cls, settings: SettingsDict) -> SettingsDict:
