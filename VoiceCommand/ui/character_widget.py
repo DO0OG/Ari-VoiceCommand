@@ -23,7 +23,6 @@ from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL
 )
-from core.config_manager import ConfigManager
 
 _RNG = secrets.SystemRandom()
 _BUBBLE_HISTORY_LOCK = threading.Lock()
