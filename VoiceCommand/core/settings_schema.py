@@ -67,6 +67,8 @@ DEFAULT_SETTINGS = {
     "elevenlabs_model_id": "eleven_multilingual_v2",
     "edge_tts_voice": "ko-KR-SunHiNeural",
     "edge_tts_rate": "+0%",
+    "tts_sentence_timeout_seconds": 10,
+    "tts_cache_max_bytes": 50 * 1024 * 1024,
     # ── 캐릭터 / RP ─────────────────────────────────────────────────────
     "personality": "",
     "scenario": "",
