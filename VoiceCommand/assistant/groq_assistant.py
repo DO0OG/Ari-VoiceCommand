@@ -62,6 +62,9 @@ class GroqAssistant:
             stream_callback=stream_callback,
         )
 
+    def record_tool_result(self, tool_calls, results, response):
+        self._provider.record_tool_result(tool_calls, results, response)
+
     def clear_history(self):
         self._provider.clear_history()
         logging.info("대화 기록 초기화됨")

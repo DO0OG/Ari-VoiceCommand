@@ -46,6 +46,7 @@ DEFAULT_SETTINGS = {
     "llm_timeout_planner_seconds": 90,
     "llm_timeout_local_seconds": 120,
     "llm_streaming_enabled": True,
+    "tool_followup_policy_enabled": True,
     "local_decision_engine_enabled": True,
     "local_decision_backend": "linear",
     "local_decision_threshold": 0.92,

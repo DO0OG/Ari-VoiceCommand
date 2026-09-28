@@ -51,6 +51,28 @@ class _StreamingAssistant:
         return ""
 
 
+class _ToolCallAssistant:
+    def __init__(self, tool_calls, response=""):
+        self.tool_calls = tool_calls
+        self.response = response
+        self.followups = []
+        self.recorded_results = []
+
+    def chat_with_tools(self, text, include_context=True, stream_callback=None):
+        del text, include_context
+        if stream_callback and self.response:
+            stream_callback(self.response)
+        return self.response, self.tool_calls
+
+    def feed_tool_result(self, original_text, tool_calls, results, stream_callback=None):
+        del original_text, stream_callback
+        self.followups.append((tool_calls, results))
+        return "후속 설명 응답입니다."
+
+    def record_tool_result(self, tool_calls, results, response):
+        self.recorded_results.append((tool_calls, results, response))
+
+
 class _FakeScheduler:
     def __init__(self):
         self.calls = []
@@ -191,6 +213,155 @@ class AICommandTests(unittest.TestCase):
 
         self.assertIn("작업 완료.", combined)
         self.assertNotIn("읽히면 안 됩니다", combined)
+
+    def test_simple_tool_records_local_response_without_followup(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "launch_app",
+            "arguments": {"name": "메모장"},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["launch_app"] = lambda args: args["name"]
+        streamed = []
+
+        tool_results = []
+        with patch("core.config_manager.ConfigManager.get", return_value=True), \
+             patch("memory.conversation_history.add_conversation") as add_conversation:
+            response = command.run_interaction(
+                "메모장을 열어줘",
+                stream_callback=streamed.append,
+                tool_result_callback=lambda name, result: tool_results.append((name, result)),
+            )
+
+        self.assertIn("앱을 실행했습니다.", response)
+        self.assertEqual(assistant.followups, [])
+        self.assertEqual(len(assistant.recorded_results), 1)
+        self.assertIn("앱을 실행했습니다.", assistant.recorded_results[0][2])
+        self.assertEqual(streamed, ["앱을 실행했습니다."])
+        self.assertEqual(tool_results, [("launch_app", "메모장")])
+        add_conversation.assert_called_once()
+        self.assertIn("앱을 실행했습니다.", add_conversation.call_args.args[1])
+
+    def test_tool_followup_handles_failures_and_empty_results(self):
+        cases = (
+            ("adjust_volume", {"direction": "up"}, _("볼륨 조절 실패"), "볼륨을 올려줘"),
+            ("adjust_volume", {"direction": "up"}, "", "볼륨을 올려줘"),
+            (
+                "set_timer",
+                {"minutes": 1},
+                _("타이머는 최대 {max}개까지 설정할 수 있습니다.").format(max=10),
+                "타이머를 설정해줘",
+            ),
+        )
+        for tool_name, arguments, result, text in cases:
+            with self.subTest(tool_name=tool_name, result=result):
+                assistant = _ToolCallAssistant([{
+                    "id": "tool_1",
+                    "name": tool_name,
+                    "arguments": arguments,
+                }])
+                command = AICommand(assistant, lambda message: None, {"enabled": False})
+                command.try_fast_path = lambda text: None
+                command._get_skill_context = lambda text: {"skills": []}
+                command._dispatch[tool_name] = lambda args: result
+
+                with patch("core.config_manager.ConfigManager.get", return_value=True):
+                    response = command.run_interaction(text)
+
+                self.assertEqual(len(assistant.followups), 1)
+                self.assertEqual(assistant.recorded_results, [])
+                self.assertIn("후속 설명 응답입니다.", response)
+
+    def test_multiple_tool_calls_always_use_followup(self):
+        assistant = _ToolCallAssistant([
+            {"id": "tool_1", "name": "launch_app", "arguments": {"name": "앱"}},
+            {"id": "tool_2", "name": "take_screenshot", "arguments": {}},
+        ])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["launch_app"] = lambda args: args["name"]
+        command._dispatch["take_screenshot"] = lambda args: "shot.png"
+
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            response = command.run_interaction("앱을 열고 화면도 저장해줘")
+
+        self.assertEqual(len(assistant.followups), 1)
+        self.assertEqual(assistant.recorded_results, [])
+        self.assertIn("후속 설명 응답입니다.", response)
+
+    def test_explanation_request_uses_followup_for_simple_tool(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "launch_app",
+            "arguments": {"name": "메모장"},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["launch_app"] = lambda args: args["name"]
+
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            response = command.run_interaction("메모장을 열고 실행 결과를 설명해줘")
+
+        self.assertEqual(len(assistant.followups), 1)
+        self.assertEqual(assistant.recorded_results, [])
+        self.assertIn("후속 설명 응답입니다.", response)
+
+    def test_weather_result_uses_local_response_when_it_is_usable(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "get_weather",
+            "arguments": {},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["get_weather"] = lambda args: "현재 날씨는 맑음입니다. 기온은 20도입니다."
+
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            response = command.run_interaction("오늘 날씨 알려줘")
+
+        self.assertEqual(assistant.followups, [])
+        self.assertIn("현재 날씨는 맑음입니다.", response)
+
+    def test_ambiguous_action_result_uses_followup(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "focus_window",
+            "arguments": {"title": "메모장"},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["focus_window"] = lambda args: '{"focused": false, "title": "메모장"}'
+
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            response = command.run_interaction("메모장 창으로 전환해줘")
+
+        self.assertEqual(len(assistant.followups), 1)
+        self.assertEqual(assistant.recorded_results, [])
+        self.assertIn("후속 설명 응답입니다.", response)
+
+    def test_disabling_tool_followup_policy_keeps_llm_followup(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "launch_app",
+            "arguments": {"name": "메모장"},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["launch_app"] = lambda args: args["name"]
+
+        with patch("core.config_manager.ConfigManager.get", return_value=False):
+            response = command.run_interaction("메모장을 열어줘")
+
+        self.assertEqual(len(assistant.followups), 1)
+        self.assertEqual(assistant.recorded_results, [])
+        self.assertIn("후속 설명 응답입니다.", response)
 
     def test_run_interaction_passes_stream_callback_when_supported(self):
         command = AICommand(_StreamingAssistant(), lambda msg: None, {"enabled": False})

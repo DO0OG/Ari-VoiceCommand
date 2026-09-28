@@ -6749,7 +6749,7 @@
     "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
-    "settings_schema_sha256": "bf14adeb93fbaa3126702d09a5dc4d473ea7f9dc61de8dc2043cd6e1ef828dad",
+    "settings_schema_sha256": "39364fba90efc30222abdeac7e9a212bd736aa1d3454e71484a9508132103736",
     "split_manifest_sha256": "3cd060b4f6ee6f1e95dd7b089c22866701e395c98bad73344c73f2e4544697ab",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
@@ -6759,7 +6759,7 @@
   "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "8696b8c31455c2b7af8d75199cabc79456491f80dcc73e357df673d86d792d94",
+    "previous_artifact_sha256": "4fdb9f6512feb9f1d522809f03243965b6143564f33973be16f7d95890ad72f6",
     "major_pairs": [
       {
         "actual": "focus_window",
