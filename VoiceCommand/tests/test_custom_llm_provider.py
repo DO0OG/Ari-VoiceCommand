@@ -42,6 +42,14 @@ class CustomLLMProviderTests(unittest.TestCase):
     def tearDown(self):
         reset_llm_provider()
 
+    def _assert_openai_call(self, call, api_key, base_url, read_timeout):
+        self.assertEqual(call.kwargs["api_key"], api_key)
+        self.assertEqual(call.kwargs["base_url"], base_url)
+        self.assertEqual(call.kwargs["max_retries"], 1)
+        timeout = call.kwargs["timeout"]
+        self.assertEqual(timeout.read, read_timeout)
+        self.assertEqual(timeout.connect, 5.0)
+
     def test_provider_configs_merge_builtins_with_validated_custom_entries(self):
         custom = {CUSTOM_A: _config("Local", "http://localhost:1234/v1", "local-model")}
         with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module(custom)}):
@@ -56,6 +64,10 @@ class CustomLLMProviderTests(unittest.TestCase):
         config = _config("Test", "https://llm.example/v1", "test-model")
         with patch.dict(sys.modules, {"openai": _openai_module(openai)}), \
              patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
+             patch(
+                 "agent.llm_provider.ConfigManager.get",
+                 side_effect=lambda key, default: default,
+             ), \
              patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
             LLMProvider(
                 provider=CUSTOM_A,
@@ -64,13 +76,23 @@ class CustomLLMProviderTests(unittest.TestCase):
                 provider_configs={CUSTOM_A: config},
             )
 
-        openai.assert_called_once_with(api_key="fake-custom-key", base_url="https://llm.example/v1")
+        self.assertEqual(openai.call_count, 2)
+        self._assert_openai_call(
+            openai.call_args_list[0], "fake-custom-key", "https://llm.example/v1", 30
+        )
+        self._assert_openai_call(
+            openai.call_args_list[1], "fake-custom-key", "https://llm.example/v1", 90
+        )
 
     def test_no_key_custom_provider_still_creates_client(self):
         openai = Mock(return_value=Mock())
         config = _config("Local", "http://localhost:1234/v1", "local-model")
         with patch.dict(sys.modules, {"openai": _openai_module(openai)}), \
              patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
+             patch(
+                 "agent.llm_provider.ConfigManager.get",
+                 side_effect=lambda key, default: default,
+             ), \
              patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
             provider = LLMProvider(
                 provider=CUSTOM_A,
@@ -79,7 +101,10 @@ class CustomLLMProviderTests(unittest.TestCase):
             )
 
         self.assertIsNotNone(provider.client)
-        openai.assert_called_once_with(api_key="custom-provider", base_url="http://localhost:1234/v1")
+        openai.assert_called_once()
+        self._assert_openai_call(
+            openai.call_args, "custom-provider", "http://localhost:1234/v1", 120
+        )
 
     def test_main_planner_execution_and_fallback_resolve_custom_models_and_keys(self):
         customs = {
@@ -103,6 +128,10 @@ class CustomLLMProviderTests(unittest.TestCase):
         with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module(customs)}), \
              patch.dict(sys.modules, {"openai": _openai_module(openai)}), \
              patch("core.config_manager.ConfigManager.load_settings", return_value=settings), \
+             patch(
+                 "agent.llm_provider.ConfigManager.get",
+                 side_effect=lambda key, default: default,
+             ), \
              patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
              patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
             provider = get_llm_provider()
@@ -117,13 +146,15 @@ class CustomLLMProviderTests(unittest.TestCase):
             [(name, model) for _, name, model in provider.get_role_fallback_targets("planner")],
             [(CUSTOM_B, "planner-default"), (CUSTOM_A, "main-default"), (CUSTOM_C, "execution-default")],
         )
-        self.assertEqual(
-            [call.kwargs for call in openai.call_args_list],
-            [
-                {"api_key": "main-key", "base_url": "https://main.example/v1"},
-                {"api_key": "planner-key", "base_url": "https://planner.example/v1"},
-                {"api_key": "execution-key", "base_url": "https://execution.example/v1"},
-            ],
+        self.assertEqual(openai.call_count, 3)
+        self._assert_openai_call(
+            openai.call_args_list[0], "main-key", "https://main.example/v1", 30
+        )
+        self._assert_openai_call(
+            openai.call_args_list[1], "planner-key", "https://planner.example/v1", 90
+        )
+        self._assert_openai_call(
+            openai.call_args_list[2], "execution-key", "https://execution.example/v1", 30
         )
 
     def test_blank_same_provider_role_models_inherit_main_custom_override(self):
@@ -160,15 +191,22 @@ class CustomLLMProviderTests(unittest.TestCase):
         with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module({})}), \
              patch.dict(sys.modules, {"openai": _openai_module(openai)}), \
              patch("core.config_manager.ConfigManager.load_settings", return_value=settings), \
+             patch(
+                 "agent.llm_provider.ConfigManager.get",
+                 side_effect=lambda key, default: default,
+             ), \
              patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
              patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
             provider = get_llm_provider()
 
         self.assertEqual(provider.provider, "groq")
         self.assertEqual(provider.model, "")
-        openai.assert_called_once_with(
-            api_key="groq-key",
-            base_url=_PROVIDER_CONFIG["groq"]["base_url"],
+        self.assertEqual(openai.call_count, 2)
+        self._assert_openai_call(
+            openai.call_args_list[0], "groq-key", _PROVIDER_CONFIG["groq"]["base_url"], 30
+        )
+        self._assert_openai_call(
+            openai.call_args_list[1], "groq-key", _PROVIDER_CONFIG["groq"]["base_url"], 90
         )
         self.assertEqual(settings["llm_provider"], CUSTOM_A)
         self.assertEqual(settings["llm_model"], "stale-custom-model")

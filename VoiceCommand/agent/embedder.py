@@ -7,13 +7,16 @@ from __future__ import annotations
 import hashlib
 import importlib
 import logging
+import math
 import os
 import threading
 from typing import Any, Optional
 
+import httpx
 import numpy as np
 
 from agent.agent_math import cosine_similarity as _cosine_similarity
+from core.config_manager import ConfigManager
 
 _EMBED_DIM_MINILM = 384
 _EMBED_DIM_FALLBACK = 64
@@ -80,13 +83,33 @@ class Embedder:
             return False
         try:
             openai_module = importlib.import_module("openai")
-            self._client = openai_module.OpenAI(api_key=api_key)
+            self._client = openai_module.OpenAI(
+                api_key=api_key,
+                timeout=httpx.Timeout(self._read_timeout_seconds(), connect=5.0),
+                max_retries=1,
+            )
             self.backend = "openai"
             self.dim = 1536
             return True
         except Exception as exc:
             log.debug("[Embedder] openai 비활성: %s", exc)
             return False
+
+    def _read_timeout_seconds(self) -> float:
+        default = 30.0
+        try:
+            value = ConfigManager.get("llm_timeout_chat_seconds", default)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return default
+        if isinstance(value, bool):
+            return default
+        try:
+            seconds = float(value)
+        except (OverflowError, TypeError, ValueError):
+            return default
+        if not math.isfinite(seconds) or seconds <= 0:
+            return default
+        return seconds
 
     def _try_gemini(self) -> bool:
         api_key = self._get_api_key("gemini_api_key")
@@ -99,7 +122,6 @@ class Embedder:
 
     def _get_api_key(self, key: str) -> str:
         try:
-            from core.config_manager import ConfigManager
             return str(ConfigManager.load_settings().get(key, "") or "").strip()
         except Exception:
             return os.environ.get(key.upper(), "")

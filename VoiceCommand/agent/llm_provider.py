@@ -4,13 +4,18 @@
 Anthropic만 자체 SDK 사용.
 """
 import base64
+import ipaddress
 import json
 import logging
+import math
 import mimetypes
 import os
 import re
 import threading
 from typing import Callable, List, Any
+from urllib.parse import urlsplit
+
+import httpx
 
 from agent.assistant_text_utils import (
     analyze_tool_request,
@@ -23,6 +28,7 @@ from agent.response_cache import ResponseCache, build_response_cache_key
 from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
 from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, get_provider_configs
+from core.config_manager import ConfigManager
 from i18n.translator import _
 
 _EN_MONTHS = {
@@ -91,30 +97,49 @@ class LLMProvider:
         if planner_provider and planner_provider != provider and (
             planner_api_key or not self.provider_configs.get(planner_provider, {}).get("requires_api_key", True)
         ):
-            self.planner_client = self._make_client(self.planner_provider, planner_api_key)
+            self.planner_client = self._make_client(
+                self.planner_provider, planner_api_key, role="planner"
+            )
             if self.planner_client:
                 logging.info("플래너 클라이언트 초기화 완료 (%s / %s)", self.planner_provider, self.planner_model)
+        elif self.client and (
+            self._read_timeout_seconds(self.provider, "planner")
+            != self._read_timeout_seconds(self.provider, "default")
+        ):
+            self.planner_client = self._make_client(
+                self.planner_provider, planner_api_key or api_key, role="planner"
+            )
         if execution_provider and execution_provider != provider and (
             execution_api_key or not self.provider_configs.get(execution_provider, {}).get("requires_api_key", True)
         ):
-            self.execution_client = self._make_client(self.execution_provider, execution_api_key)
+            self.execution_client = self._make_client(
+                self.execution_provider, execution_api_key, role="execution"
+            )
             if self.execution_client:
                 logging.info("실행 클라이언트 초기화 완료 (%s / %s)", self.execution_provider, self.execution_model)
 
     # ── 초기화 ─────────────────────────────────────────────────────────────────
 
-    def _make_client(self, provider: str, api_key: str):
+    def _make_client(self, provider: str, api_key: str, role: str = "default"):
         """제공자와 API 키로 클라이언트 객체를 생성한다."""
         cfg = self.provider_configs.get(provider)
         if cfg is None:
             return None
         try:
+            timeout = httpx.Timeout(
+                self._read_timeout_seconds(provider, role),
+                connect=5.0,
+            )
             if provider == "anthropic":
                 import anthropic
-                return anthropic.Anthropic(api_key=api_key)
+                return anthropic.Anthropic(
+                    api_key=api_key,
+                    timeout=timeout,
+                    max_retries=1,
+                )
             else:
                 from openai import OpenAI
-                kwargs = {"api_key": api_key}
+                kwargs = {"api_key": api_key, "timeout": timeout, "max_retries": 1}
                 if provider == "ollama":
                     kwargs["api_key"] = api_key or "ollama"
                     kwargs["base_url"] = self._get_ollama_url()
@@ -132,6 +157,49 @@ class LLMProvider:
         except Exception as e:
             self._log_provider_exception(logging.error, "LLM 클라이언트 초기화 실패", provider, e)
             return None
+
+    def _read_timeout_seconds(self, provider: str, role: str) -> float:
+        if self._is_local_provider(provider):
+            key, default = "llm_timeout_local_seconds", 120
+        else:
+            key, default = {
+                "planner": ("llm_timeout_planner_seconds", 90),
+                "execution": ("llm_timeout_chat_seconds", 30),
+            }.get(role, ("llm_timeout_chat_seconds", 30))
+        return self._load_timeout_seconds(key, default)
+
+    def _load_timeout_seconds(self, key: str, default: int) -> float:
+        try:
+            value = ConfigManager.get(key, default)
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+            return float(default)
+        if isinstance(value, bool):
+            return float(default)
+        try:
+            seconds = float(value)
+        except (OverflowError, TypeError, ValueError):
+            return float(default)
+        if not math.isfinite(seconds) or seconds <= 0:
+            return float(default)
+        return seconds
+
+    def _is_local_provider(self, provider: str) -> bool:
+        if provider in {"ollama", "local", "localai", "lmstudio", "lm_studio", "llamacpp"}:
+            return True
+        endpoint = self.provider_configs.get(provider, {}).get("base_url")
+        try:
+            hostname = urlsplit(str(endpoint or "")).hostname
+        except ValueError:
+            return False
+        if not hostname:
+            return False
+        if hostname == "localhost" or hostname.endswith((".localhost", ".local")):
+            return True
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            return False
+        return address.is_loopback or address.is_private or address.is_link_local
 
     def _is_custom_provider(self, provider: str) -> bool:
         return provider in self.provider_configs and provider not in _PROVIDER_CONFIG
@@ -158,7 +226,6 @@ class LLMProvider:
 
     def _get_ollama_url(self) -> str:
         try:
-            from core.config_manager import ConfigManager
             return ConfigManager.get("ollama_base_url", "http://localhost:11434/v1")
         except Exception as exc:
             logging.debug("[LLMProvider] ollama_base_url 조회 실패, 기본값 사용: %s", exc)
@@ -228,7 +295,6 @@ class LLMProvider:
 
     def _load_int_setting(self, key: str, default: int) -> int:
         try:
-            from core.config_manager import ConfigManager
             return int(ConfigManager.get(key, default) or default)
         except Exception:
             return default
@@ -378,11 +444,11 @@ class LLMProvider:
         if role == "planner":
             provider = self.planner_provider
             model = self.planner_model
-            client = self.client if provider == self.provider else self.planner_client
+            client = self.planner_client or (self.client if provider == self.provider else None)
         elif role == "execution":
             provider = self.execution_provider
             model = self.execution_model
-            client = self.client if provider == self.provider else self.execution_client
+            client = self.execution_client or (self.client if provider == self.provider else None)
         else:
             provider = self.provider
             model = self.model

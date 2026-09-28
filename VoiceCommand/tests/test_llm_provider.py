@@ -1,11 +1,16 @@
 import threading
+import time
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 from unittest.mock import Mock
 from types import SimpleNamespace
 
+import httpx
+
 
 from agent.llm_provider import LLMProvider
+from i18n.translator import _
 
 
 class LLMProviderTests(unittest.TestCase):
@@ -496,6 +501,149 @@ class LLMProviderTests(unittest.TestCase):
         provider._emit_stream_text("abcdefghijklmnopqrstuvwxyz", chunks.append, chunk_size=10)
 
         self.assertEqual(chunks, ["abcdefghij", "klmnopqrst", "uvwxyz"])
+
+
+class _SilentRequestHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(content_length)
+        self.server.request_received.set()
+        self.server.release_requests.wait()
+
+class _SilentHTTPServer(ThreadingHTTPServer):
+    daemon_threads = False
+    block_on_close = True
+
+    def __init__(self, server_address, request_handler):
+        super().__init__(server_address, request_handler)
+        self.request_received = threading.Event()
+        self.release_requests = threading.Event()
+
+
+class LLMClientTimeoutTests(unittest.TestCase):
+    def setUp(self):
+        self.provider = LLMProvider(
+            provider="openai",
+            provider_configs={
+                "openai": {"requires_api_key": True},
+                "anthropic": {"requires_api_key": True},
+                "ollama": {"requires_api_key": False},
+                "custom-local": {
+                    "requires_api_key": False,
+                    "base_url": "http://127.0.0.1:1234/v1",
+                },
+            },
+        )
+
+    def test_openai_client_receives_configured_timeouts_and_retry_limit(self):
+        settings = {"llm_timeout_chat_seconds": "37"}
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=lambda key, default=None: settings.get(key, default),
+        ), patch("openai.OpenAI") as client_factory:
+            self.provider._make_client("openai", "test-key")
+
+        options = client_factory.call_args.kwargs
+        self.assertIsInstance(options["timeout"], httpx.Timeout)
+        self.assertEqual(options["timeout"].read, 37.0)
+        self.assertEqual(options["timeout"].connect, 5.0)
+        self.assertEqual(options["max_retries"], 1)
+
+    def test_anthropic_client_uses_planner_timeout_and_retry_limit(self):
+        settings = {"llm_timeout_planner_seconds": 87}
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=lambda key, default=None: settings.get(key, default),
+        ), patch("anthropic.Anthropic") as client_factory:
+            self.provider._make_client("anthropic", "test-key", role="planner")
+
+        options = client_factory.call_args.kwargs
+        self.assertIsInstance(options["timeout"], httpx.Timeout)
+        self.assertEqual(options["timeout"].read, 87.0)
+        self.assertEqual(options["timeout"].connect, 5.0)
+        self.assertEqual(options["max_retries"], 1)
+
+    def test_same_provider_planner_uses_its_own_timeout_client(self):
+        clients = [object(), object()]
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=lambda key, default=None: default,
+        ), patch("openai.OpenAI", side_effect=clients) as client_factory:
+            provider = LLMProvider(
+                provider="openai",
+                api_key="test-key",
+                model="test-model",
+                provider_configs={"openai": {"requires_api_key": True}},
+            )
+
+        self.assertEqual(client_factory.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["timeout"].read for call in client_factory.call_args_list],
+            [30.0, 90.0],
+        )
+        self.assertIs(provider._get_role_target("planner")[0], provider.planner_client)
+
+    def test_read_timeout_uses_role_and_local_provider_defaults(self):
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=lambda key, default=None: default,
+        ):
+            self.assertEqual(self.provider._read_timeout_seconds("openai", "default"), 30.0)
+            self.assertEqual(self.provider._read_timeout_seconds("openai", "planner"), 90.0)
+            self.assertEqual(self.provider._read_timeout_seconds("openai", "execution"), 30.0)
+            self.assertEqual(self.provider._read_timeout_seconds("ollama", "planner"), 120.0)
+            self.assertEqual(self.provider._read_timeout_seconds("custom-local", "default"), 120.0)
+
+    def test_invalid_timeout_settings_use_the_role_default(self):
+        invalid_values = (None, "", "invalid", 0, -1, True, float("nan"), float("inf"))
+        for value in invalid_values:
+            with self.subTest(value=value):
+                with patch(
+                    "core.config_manager.ConfigManager.get",
+                    side_effect=lambda key, default=None: value,
+                ):
+                    self.assertEqual(
+                        self.provider._read_timeout_seconds("openai", "planner"),
+                        90.0,
+                    )
+
+    def test_silent_local_server_returns_timeout_fallback_quickly(self):
+        server = _SilentHTTPServer(("127.0.0.1", 0), _SilentRequestHandler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        provider = None
+        settings = {
+            "ollama_base_url": f"http://127.0.0.1:{server.server_port}/v1",
+            "llm_timeout_local_seconds": 0.2,
+        }
+        try:
+            with patch(
+                "core.config_manager.ConfigManager.get",
+                side_effect=lambda key, default=None: settings.get(key, default),
+            ):
+                provider = LLMProvider(provider="ollama", api_key="ollama", model="test")
+                with patch.object(provider, "_build_system", return_value="system"), patch.object(
+                    provider, "_should_cache", return_value=False
+                ):
+                    started_at = time.monotonic()
+                    response = provider.chat("ping", include_context=False, save_history=False)
+                    elapsed = time.monotonic() - started_at
+
+            self.assertTrue(server.request_received.wait(timeout=3.0))
+            self.assertLess(elapsed, 5.0)
+            self.assertEqual(
+                response,
+                _("(걱정) 서버에 연결할 수 없어요. 네트워크 상태를 확인해주세요."),
+            )
+        finally:
+            server.release_requests.set()
+            try:
+                server.shutdown()
+            finally:
+                server_thread.join()
+                server.server_close()
+                if provider and provider.client:
+                    provider.client.close()
 
 
 if __name__ == "__main__":

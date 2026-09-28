@@ -3325,3 +3325,6 @@ msgstr "Test playback with the selected TTS engine is complete."
 
 msgid "마이크를 찾을 수 없어 음성 인식을 사용할 수 없습니다. 설정에서 마이크를 지정해 주세요."
 msgstr "No microphone was found, so voice recognition is unavailable. Please select a microphone in Settings."
+
+msgid "아직 이전 요청을 처리하고 있어요."
+msgstr "I'm still processing the previous request."

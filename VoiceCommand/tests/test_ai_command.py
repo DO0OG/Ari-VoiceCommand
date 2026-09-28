@@ -190,6 +190,43 @@ class AICommandTests(unittest.TestCase):
         self.assertEqual("".join(streamed), "안녕하세요")
         self.assertIn("안녕하세요", combined)
 
+    def test_busy_run_interaction_notifies_once_per_five_seconds(self):
+        now = [100.0]
+        command = AICommand(
+            _FakeAssistant(),
+            lambda msg: None,
+            {"enabled": False},
+            time_fn=lambda: now[0],
+        )
+        spoken = []
+        command._exec_lock.acquire()
+        try:
+            command._run_interaction("안녕", spoken.append)
+            now[0] = 104.9
+            command._run_interaction("안녕", spoken.append)
+            self.assertEqual(spoken, [_("아직 이전 요청을 처리하고 있어요.")])
+            now[0] = 105.0
+            command._run_interaction("안녕", spoken.append)
+            self.assertEqual(
+                spoken,
+                [_("아직 이전 요청을 처리하고 있어요.")] * 2,
+            )
+        finally:
+            command._exec_lock.release()
+
+    def test_interrupt_is_handled_while_execution_lock_is_held(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        spoken = []
+        with patch.object(command.orchestrator, "interrupt") as interrupt:
+            command._exec_lock.acquire()
+            try:
+                command._run_interaction("stop", spoken.append)
+            finally:
+                command._exec_lock.release()
+
+        interrupt.assert_called_once_with()
+        self.assertEqual(spoken, [_("진행 중인 작업을 중단할게요.")])
+
     def test_handle_agent_task_saves_developer_report_in_user_report_dir(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         run_result = AgentRunResult(
