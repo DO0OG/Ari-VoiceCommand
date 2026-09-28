@@ -13,6 +13,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.should_exit = False
         self.character_widget = None
         self.text_interface = None
+        self.update_checker = None
         self._scheduled_tasks_dialog = None
 
         self.menu = QMenu(parent)
@@ -117,7 +118,7 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.mouse_reaction_action.setChecked(self.character_widget.mouse_tracking_enabled)
 
     def open_settings(self):
-        dialog = SettingsDialog()
+        dialog = SettingsDialog(update_checker=self.update_checker)
         if dialog.exec() == QDialog.Accepted:
             if should_apply_microphone(dialog, self.character_widget):
                 if self.character_widget:
@@ -178,6 +179,9 @@ class SystemTrayIcon(QSystemTrayIcon):
 
     def set_text_interface(self, text_interface):
         self.text_interface = text_interface
+
+    def set_update_checker(self, update_checker):
+        self.update_checker = update_checker
 
     def open_text_interface(self):
         if self.text_interface:

@@ -16,9 +16,10 @@ class SettingsSecretUITests(unittest.TestCase):
             "personality_input", "scenario_input", "system_input", "history_input",
             "verbosity_combo", "mic_combo", "speaker_combo", "char_scale_slider",
             "char_offset_slider", "theme_preset_combo", "theme_scale_input",
-            "theme_font_input", "lang_combo",
+            "theme_font_input", "lang_combo", "update_check_enabled",
         )
         dialog = SimpleNamespace(**dict.fromkeys(names, field))
+        dialog.update_checker = None
         dialog.original_settings = {}
         dialog._float = lambda value, default: float(value)
         dialog._llm_page = Mock()

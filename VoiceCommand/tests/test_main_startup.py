@@ -126,6 +126,7 @@ class MainStartupTests(unittest.TestCase):
             "create_text_interface": Mock(side_effect=RuntimeError("text UI init failed")),
             "on_language_changed": Mock(),
             "record_last_run_version": Mock(return_value=True),
+            "is_release_build": Mock(return_value=False),
             "_state": SimpleNamespace(command_registry=None),
             "AICommand": type("AICommand", (), {}),
             "get_plugin_manager": Mock(side_effect=PermissionError("plugin folder is read-only")),

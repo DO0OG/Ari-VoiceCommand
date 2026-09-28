@@ -75,6 +75,24 @@ class AppVersionTests(unittest.TestCase):
             self.assertEqual(state["last_run_version"], "1.2.3")
             self.assertTrue(state["other_state"])
 
+    def test_startup_version_change_is_reported_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                patch("core.app_version.get_version", return_value="1.2.4"),
+                patch("core.app_version.is_release_build", return_value=True),
+            ):
+                self.assertTrue(record_last_run_version())
+                with open(path, "w", encoding="utf-8") as handle:
+                    json.dump({"last_run_version": "1.2.3"}, handle)
+                self.assertTrue(record_last_run_version())
+                with open(path, encoding="utf-8") as handle:
+                    self.assertEqual(json.load(handle)["installed_update_pending"], "1.2.4")
+                self.assertTrue(record_last_run_version())
+                with open(path, encoding="utf-8") as handle:
+                    self.assertEqual(json.load(handle)["installed_update_pending"], "1.2.4")
+
     def test_runtime_path_error_skips_last_run_write(self):
         with patch.object(
             ResourceManager,

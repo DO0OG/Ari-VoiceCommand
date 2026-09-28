@@ -95,6 +95,8 @@ DEFAULT_SETTINGS = {
     "ui_theme_scale": 1.0,
     "ui_font_family": "",
     "language": "ko",               # 인터페이스 언어 (ko | en | ja)
+    "update_check_enabled": True,
+    "update_channel": "stable",
     # ── 캐릭터 위젯 확장 기능 ────────────────────────────────────────────────
     "affinity_points": 0,
     "affinity_level": 0,

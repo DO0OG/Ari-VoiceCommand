@@ -84,6 +84,8 @@
   "telegram_allowed_chat_ids": [],
   "telegram_poll_timeout_seconds": 25,
   "agent_dashboard_enabled": true,
+  "update_check_enabled": true,
+  "update_channel": "stable",
   "max_subagents": 3,
   "google_calendar_enabled": false,
   "google_client_id": "",

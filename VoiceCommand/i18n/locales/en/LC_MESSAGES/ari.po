@@ -3416,3 +3416,54 @@ msgstr "Yes"
 
 msgid "아니요"
 msgstr "No"
+
+msgid "Ari {version}을 사용할 수 있어요."
+msgstr "Ari {version} is available."
+
+msgid "Ari {version}은 직접 설치해야 합니다."
+msgstr "Ari {version} must be installed manually."
+
+msgid "업데이트 확인"
+msgstr "Check for updates"
+
+msgid "Ari {version}으로 업데이트됐어요."
+msgstr "Updated to Ari {version}."
+
+msgid "업데이트 완료"
+msgstr "Update complete"
+
+msgid "정보·업데이트"
+msgstr "About & Updates"
+
+msgid "새 버전을 자동으로 확인합니다"
+msgstr "Automatically check for updates"
+
+msgid "Ari {version} 업데이트를 사용할 수 있습니다."
+msgstr "Ari {version} update is available."
+
+msgid "새 업데이트가 없습니다."
+msgstr "No updates available."
+
+msgid "아직 업데이트 확인 기록이 없습니다."
+msgstr "No update check has been recorded yet."
+
+msgid "변경 사항"
+msgstr "Release notes"
+
+msgid "지금 확인"
+msgstr "Check now"
+
+msgid "이 버전 건너뛰기"
+msgstr "Skip this version"
+
+msgid "새 버전을 확인하고 있습니다."
+msgstr "Checking for updates..."
+
+msgid "이 버전을 건너뛰었습니다."
+msgstr "Skipped this version."
+
+msgid "빠른 로컬 명령 처리를 사용할 수 있습니다."
+msgstr "Faster local command processing is available."
+
+msgid "자동 확인은 GitHub에서 버전 정보만 받고, 개인 식별 정보는 보내지 않습니다."
+msgstr "Only update metadata is fetched from GitHub; no personal identifiers are sent."

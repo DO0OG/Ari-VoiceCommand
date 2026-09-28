@@ -3416,3 +3416,54 @@ msgstr "はい"
 
 msgid "아니요"
 msgstr "いいえ"
+
+msgid "Ari {version}을 사용할 수 있어요."
+msgstr "Ari {version}を利用できます。"
+
+msgid "Ari {version}은 직접 설치해야 합니다."
+msgstr "Ari {version}は手動でインストールする必要があります。"
+
+msgid "업데이트 확인"
+msgstr "更新を確認"
+
+msgid "Ari {version}으로 업데이트됐어요."
+msgstr "Ari {version}に更新されました。"
+
+msgid "업데이트 완료"
+msgstr "更新完了"
+
+msgid "정보·업데이트"
+msgstr "情報・更新"
+
+msgid "새 버전을 자동으로 확인합니다"
+msgstr "新しいバージョンを自動で確認する"
+
+msgid "Ari {version} 업데이트를 사용할 수 있습니다."
+msgstr "Ari {version}の更新を利用できます。"
+
+msgid "새 업데이트가 없습니다."
+msgstr "新しい更新はありません。"
+
+msgid "아직 업데이트 확인 기록이 없습니다."
+msgstr "更新確認の記録はまだありません。"
+
+msgid "변경 사항"
+msgstr "変更内容"
+
+msgid "지금 확인"
+msgstr "今すぐ確認"
+
+msgid "이 버전 건너뛰기"
+msgstr "このバージョンをスキップ"
+
+msgid "새 버전을 확인하고 있습니다."
+msgstr "新しいバージョンを確認しています。"
+
+msgid "이 버전을 건너뛰었습니다."
+msgstr "このバージョンをスキップしました。"
+
+msgid "빠른 로컬 명령 처리를 사용할 수 있습니다."
+msgstr "ローカルコマンドをより速く処理できるようになりました。"
+
+msgid "자동 확인은 GitHub에서 버전 정보만 받고, 개인 식별 정보는 보내지 않습니다."
+msgstr "自動確認ではGitHubからバージョン情報のみを取得し、個人を特定できる情報は送信しません。"
