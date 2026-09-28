@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -24,6 +25,7 @@ from i18n.translator import _, get_language
 class AICommand(FastPathMixin, BaseCommand):
     """AI 어시스턴트 대화 명령 (기본/fallback)"""
     priority = 100
+    _BUSY_NOTICE_INTERVAL_SECONDS = 5.0
     _KR_NUM = {
         "한": 1,
         "두": 2,
@@ -62,10 +64,19 @@ class AICommand(FastPathMixin, BaseCommand):
         "シャットダウン", "終了", "オフ", "切",
     )
 
-    def __init__(self, ai_assistant, tts_func, learning_mode_ref):
+    def __init__(
+        self,
+        ai_assistant,
+        tts_func,
+        learning_mode_ref,
+        time_fn: Optional[Callable[[], float]] = None,
+    ):
         self.ai_assistant = ai_assistant
         self.tts_wrapper = tts_func
         self.learning_mode_ref = learning_mode_ref
+        self._time_fn = time.monotonic if time_fn is None else time_fn
+        self._last_busy_notice_at: Optional[float] = None
+        self._busy_notice_lock = threading.Lock()
         self.executor = get_executor(tts_func)
         self.orchestrator = get_orchestrator(tts_func)
         self._exec_lock = threading.Lock()
@@ -1440,6 +1451,16 @@ class AICommand(FastPathMixin, BaseCommand):
             return
         if not self._exec_lock.acquire(blocking=False):
             logging.warning("명령 실행 중인 동안 새 명령을 건너뜁니다.")
+            with self._busy_notice_lock:
+                now = self._time_fn()
+                should_notify = (
+                    self._last_busy_notice_at is None
+                    or now - self._last_busy_notice_at >= self._BUSY_NOTICE_INTERVAL_SECONDS
+                )
+                if should_notify:
+                    self._last_busy_notice_at = now
+            if should_notify:
+                output_callback(_("아직 이전 요청을 처리하고 있어요."))
             return
 
         original_tts = self.tts_wrapper
