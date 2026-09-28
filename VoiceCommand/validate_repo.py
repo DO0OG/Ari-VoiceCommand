@@ -88,6 +88,7 @@ COMPILE_TARGETS = [
     "core/config_manager.py",
     "core/secret_store.py",
     "core/marketplace_client.py",
+    "scripts/release_manifest.py",
     "memory/memory_consolidator.py",
     "memory/memory_index.py",
     "memory/trust_engine.py",

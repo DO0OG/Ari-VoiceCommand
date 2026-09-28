@@ -194,6 +194,16 @@ jobs:
           if (-not (Test-Path $setup)) { throw "설치 파일이 만들어지지 않았습니다: $setup" }
           Copy-Item $setup (Split-Path $PWD -Parent) -Force
 
+      - name: Create and validate release manifest
+        if: github.ref_type == 'tag'
+        working-directory: VoiceCommand
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.write-build-info.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: .venv\Scripts\python.exe -m scripts.release_manifest --installer "..\Ari-Setup-$($env:APP_VERSION).exe" --version $env:APP_VERSION --tag $env:RELEASE_TAG --repository $env:RELEASE_REPOSITORY --output-dir ..
+
       - name: Smoke test installer (install, self-test, uninstall)
         shell: pwsh
         timeout-minutes: 8
@@ -295,7 +305,11 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: Ari-windows-installer
-          path: Ari-Setup-*.exe
+          path: |
+            Ari-Setup-*.exe
+            update.json
+            update-beta.json
+            SHA256SUMS.txt
           retention-days: 5
 
   release:
@@ -313,12 +327,45 @@ jobs:
         with:
           name: Ari-windows-installer
 
+      - name: Select release assets
+        id: select-release-assets
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            manifest="update-beta.json"
+          else
+            manifest="update.json"
+          fi
+          installer="$(jq -er '.installer.name' "$manifest")"
+          for file in "$installer" "$manifest" "SHA256SUMS.txt"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Required release asset not found: $file" >&2
+              exit 1
+            fi
+          done
+          {
+            echo 'files<<EOF'
+            printf '%s\n' "$installer" "$manifest" "SHA256SUMS.txt"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
-          files: Ari-Setup-*.exe
+          files: ${{ steps.select-release-assets.outputs.files }}
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish beta channel manifest
+        if: contains(github.ref_name, '-')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view beta-channel --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create beta-channel --repo "$GITHUB_REPOSITORY" --title "Ari Beta Channel" --notes "Beta-channel manifest asset." --prerelease --target "$GITHUB_SHA" --latest=false
+          fi
+          gh release edit beta-channel --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+          gh release upload beta-channel update-beta.json --repo "$GITHUB_REPOSITORY" --clobber
