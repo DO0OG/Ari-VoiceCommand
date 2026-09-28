@@ -13,3 +13,6 @@ import tempfile
 _RUNTIME_DIR = tempfile.mkdtemp(prefix="ari_test_runtime_")
 os.environ["ARI_APP_DATA_DIR"] = _RUNTIME_DIR
 atexit.register(shutil.rmtree, _RUNTIME_DIR, ignore_errors=True)
+
+# 테스트가 실제 임베딩 모델(약 130MB)을 내려받지 않도록 Hugging Face를 오프라인으로 둔다.
+os.environ["HF_HUB_OFFLINE"] = "1"
