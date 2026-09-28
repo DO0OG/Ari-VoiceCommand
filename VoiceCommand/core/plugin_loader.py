@@ -544,7 +544,7 @@ class PluginManager:
         module_name = f"ari_user_plugin_{plugin.name}"
         module_path, sys_path_entry = self._resolve_load_target(plugin)
         if plugin.runtime_path:
-            for dirpath, _, filenames in os.walk(plugin.runtime_path):
+            for dirpath, _dirnames, filenames in os.walk(plugin.runtime_path):
                 for fname in filenames:
                     if fname.endswith(".py"):
                         self._inspect_python_source(os.path.join(dirpath, fname))

@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 
 from core.plugin_loader import PluginContext, PluginManager
+from i18n.translator import _
 
 
 class _TempPluginManager(PluginManager):
@@ -48,6 +49,7 @@ class PluginLoaderTests(unittest.TestCase):
 
             self.assertFalse(first.loaded)
             self.assertFalse(second.loaded)
+            self.assertEqual(first.error, _("플러그인 로드가 거부되었습니다."))
             self.assertFalse(os.path.exists(marker_path))
             confirm.assert_called_once_with("rejected_plugin")
 
