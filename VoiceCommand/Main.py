@@ -341,6 +341,7 @@ def main():
     global ai_assistant, icon_path
     ari_core = None
     character = None
+    hotkey_filter = None
     tray_icon = None
     text_interface = None
     plugin_manager = None
@@ -530,6 +531,14 @@ def main():
         voice_thread = getattr(ari_core, "voice_thread", None)
         if voice_thread is not None:
             character.voice_thread = voice_thread
+            try:
+                from ui.global_hotkey import GlobalVoiceHotkey
+
+                hotkey_filter = GlobalVoiceHotkey(voice_thread)
+                character.voice_hotkey_filter = hotkey_filter
+                hotkey_filter.install(app)
+            except Exception as exc:
+                logging.error("전역 단축키 초기화 실패; 단축키 입력을 사용할 수 없습니다: %s", exc)
 
             def _show_microphone_unavailable() -> None:
                 if (
@@ -684,6 +693,11 @@ def main():
         if activity_monitor:
             activity_monitor.stop()
         flush_runtime_state()
+        if hotkey_filter:
+            try:
+                hotkey_filter.cleanup()
+            except (AttributeError, OSError, RuntimeError) as exc:
+                logging.warning("전역 단축키 정리 실패: %s", exc)
         if text_interface:
             text_interface.cleanup()
         if character:

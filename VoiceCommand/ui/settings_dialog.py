@@ -674,7 +674,14 @@ class SettingsDialog(QDialog):
     def _open_stt_settings(self):
         from ui.stt_settings_dialog import STTSettingsDialog
         dlg = STTSettingsDialog(self)
-        dlg.exec()
+        if dlg.exec():
+            self.original_settings.update(ConfigManager.load_settings())
+            parent_widget = self.parent()
+            refresh_voice_settings = getattr(
+                parent_widget, "refresh_voice_input_settings", None
+            )
+            if callable(refresh_voice_settings):
+                refresh_voice_settings()
 
     def _show_theme_hint(self):
         QMessageBox.information(

@@ -7,14 +7,15 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QGroupBox,
     QListWidget, QListWidgetItem, QCheckBox,
-    QInputDialog, QSlider, QMessageBox, QDialogButtonBox,
+    QInputDialog, QSlider, QMessageBox, QDialogButtonBox, QKeySequenceEdit,
 )
 from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence
 from core.config_manager import ConfigManager
 from i18n.translator import _
 from ui.theme import FONT_KO, FONT_SIZE_NORMAL, INPUT_STYLE
 from ui.stt_diagnostics import STTSampleDiagnosticPanel
+from ui.global_hotkey import parse_global_hotkey
 
 
 class _DownloadSignals(QObject):
@@ -25,7 +26,7 @@ class STTSettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(_("음성 인식 설정"))
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(500)
         self.setFont(QFont(FONT_KO, FONT_SIZE_NORMAL))
         self.setStyleSheet(INPUT_STYLE)
         self.settings = ConfigManager.load_settings()
@@ -39,6 +40,45 @@ class STTSettingsDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+
+        # ── 음성 입력 ──────────────────────────────────────────────────────────
+        input_group = QGroupBox(_("단축키·클릭으로 듣기"))
+        ivbox = QVBoxLayout(input_group)
+        ivbox.addWidget(QLabel(_("전역 단축키:")))
+        self.voice_hotkey_edit = QKeySequenceEdit()
+        self.voice_hotkey_edit.setKeySequence(QKeySequence(
+            str(self.settings.get("voice_activation_hotkey", "Ctrl+Alt+Space"))
+        ))
+        ivbox.addWidget(self.voice_hotkey_edit)
+        ivbox.addWidget(QLabel(_("듣기 방식:")))
+        self.voice_activation_mode_combo = QComboBox()
+        self.voice_activation_mode_combo.addItem(
+            _("누르고 있는 동안 듣기 (push-to-talk)"), "push_to_talk"
+        )
+        self.voice_activation_mode_combo.addItem(
+            _("한 번 눌러 시작 (toggle)"), "toggle"
+        )
+        self._set_combo(
+            self.voice_activation_mode_combo,
+            self.settings.get("voice_activation_mode", "push_to_talk"),
+        )
+        ivbox.addWidget(self.voice_activation_mode_combo)
+        self.wake_word_enabled_checkbox = QCheckBox(_("웨이크워드 사용"))
+        self.wake_word_enabled_checkbox.setChecked(
+            bool(self.settings.get("wake_word_enabled", True))
+        )
+        ivbox.addWidget(self.wake_word_enabled_checkbox)
+        input_hint = QLabel(
+            _("캐릭터를 짧게 클릭하면 발화 끝을 감지하고, 길게 누르면 누르는 동안 듣습니다.")
+        )
+        input_hint.setWordWrap(True)
+        ivbox.addWidget(input_hint)
+        hotkey_hint = QLabel(
+            _("단축키가 다른 앱에서 사용 중이면 등록되지 않습니다. 앱은 계속 실행됩니다.")
+        )
+        hotkey_hint.setWordWrap(True)
+        ivbox.addWidget(hotkey_hint)
+        layout.addWidget(input_group)
 
         # ── STT 엔진 ──────────────────────────────────────────────────────────
         engine_group = QGroupBox(_("STT 엔진"))
@@ -194,6 +234,19 @@ class STTSettingsDialog(QDialog):
         self.wake_words_list.takeItem(row)
 
     def _save(self):
+        hotkey = self.voice_hotkey_edit.keySequence().toString(
+            QKeySequence.SequenceFormat.PortableText
+        )
+        try:
+            parse_global_hotkey(hotkey)
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                _("단축키 설정"),
+                _("Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."),
+            )
+            return
+
         wake_words = [
             self.wake_words_list.item(i).text().strip()
             for i in range(self.wake_words_list.count())
@@ -208,6 +261,9 @@ class STTSettingsDialog(QDialog):
             "stt_provider": self.stt_provider_combo.currentData(),
             "whisper_model": self.whisper_model_combo.currentData(),
             "wake_words": wake_words,
+            "wake_word_enabled": self.wake_word_enabled_checkbox.isChecked(),
+            "voice_activation_hotkey": hotkey,
+            "voice_activation_mode": self.voice_activation_mode_combo.currentData(),
             "stt_energy_threshold": int(self.stt_energy_slider.value()),
             "stt_dynamic_energy": self.stt_dynamic_checkbox.isChecked(),
         })

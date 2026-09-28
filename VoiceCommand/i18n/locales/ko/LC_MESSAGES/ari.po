@@ -3572,3 +3572,33 @@ msgstr "영어 예시 대사:"
 
 msgid "일본어 예시 대사:"
 msgstr "일본어 예시 대사:"
+
+msgid "단축키·클릭으로 듣기"
+msgstr "단축키·클릭으로 듣기"
+
+msgid "전역 단축키:"
+msgstr "전역 단축키:"
+
+msgid "듣기 방식:"
+msgstr "듣기 방식:"
+
+msgid "누르고 있는 동안 듣기 (push-to-talk)"
+msgstr "누르고 있는 동안 듣기 (push-to-talk)"
+
+msgid "한 번 눌러 시작 (toggle)"
+msgstr "한 번 눌러 시작 (toggle)"
+
+msgid "웨이크워드 사용"
+msgstr "웨이크워드 사용"
+
+msgid "캐릭터를 짧게 클릭하면 발화 끝을 감지하고, 길게 누르면 누르는 동안 듣습니다."
+msgstr "캐릭터를 짧게 클릭하면 발화 끝을 감지하고, 길게 누르면 누르는 동안 듣습니다."
+
+msgid "단축키가 다른 앱에서 사용 중이면 등록되지 않습니다. 앱은 계속 실행됩니다."
+msgstr "단축키가 다른 앱에서 사용 중이면 등록되지 않습니다. 앱은 계속 실행됩니다."
+
+msgid "단축키 설정"
+msgstr "단축키 설정"
+
+msgid "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."
+msgstr "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."

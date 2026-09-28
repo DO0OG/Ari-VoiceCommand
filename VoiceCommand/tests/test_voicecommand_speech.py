@@ -1,5 +1,7 @@
 import unittest
+import threading
 from collections import deque
+from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 
@@ -61,6 +63,36 @@ class VoiceCommandSpeechTests(unittest.TestCase):
             signal.emit.call_args_list,
             [call("볼륨 올려줘"), call("볼륨 올려줘")],
         )
+
+    def test_push_to_talk_release_ends_capture_and_restores_microphone_stream(self):
+        released = threading.Event()
+        stream = Mock()
+        stream.read.side_effect = lambda _size: released.set() or b"audio"
+        source = SimpleNamespace(
+            stream=stream,
+            SAMPLE_RATE=16000,
+            SAMPLE_WIDTH=2,
+        )
+        recognizer = Mock()
+        recognizer.listen.side_effect = lambda observed_source, **_kwargs: (
+            observed_source.stream.read(4)
+        )
+        provider = Mock()
+        provider.transcribe.return_value = "볼륨 올려줘"
+        signal = Mock()
+
+        with patch("core.VoiceCommand.time.monotonic", return_value=1.0):
+            VoiceCommand.recognize_speech_helper(
+                recognizer,
+                source,
+                signal,
+                stt_provider=provider,
+                push_to_talk_released=released,
+            )
+
+        self.assertIs(source.stream, stream)
+        provider.transcribe.assert_called_once_with(bytes(8))
+        signal.emit.assert_called_once_with("볼륨 올려줘")
 
     def test_estimated_tts_duration_uses_current_language_rate(self):
         with (

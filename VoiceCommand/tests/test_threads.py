@@ -97,6 +97,90 @@ class TTSThreadTests(unittest.TestCase):
 
 
 class VoiceRecognitionThreadTests(unittest.TestCase):
+    def test_activation_is_thread_safe_and_releases_push_to_talk(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+
+        self.assertTrue(thread.request_listening(push_to_talk=True))
+        self.assertFalse(thread.request_listening())
+        request = thread._take_voice_activation()
+        self.assertIsNotNone(request)
+        self.assertFalse(request["released"].is_set())
+
+        self.assertFalse(thread.request_listening())
+        thread.release_listening()
+        self.assertTrue(request["released"].is_set())
+        thread._finish_voice_activation()
+
+    def test_wake_disabled_idle_loop_does_not_open_microphone_or_call_stt(self):
+        settings = {"wake_word_enabled": False}
+        with (
+            patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()),
+            patch("core.threads.ConfigManager.load_settings", return_value=settings),
+            patch("core.threads.create_stt_provider") as create_provider,
+        ):
+            thread = VoiceRecognitionThread()
+            microphone_source = MagicMock()
+            thread._microphone_source = microphone_source
+            self.addCleanup(thread.stop)
+            thread.start()
+
+            self.assertTrue(thread.isRunning())
+            threading.Event().wait(0.05)
+            thread.stop()
+
+        microphone_source.assert_not_called()
+        create_provider.assert_not_called()
+
+    def test_microphone_change_does_not_probe_while_wake_word_is_disabled(self):
+        with (
+            patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()),
+            patch("VoiceCommand.get_microphone_index_helper", return_value=2),
+            patch("core.threads.ConfigManager.get", return_value=False),
+        ):
+            thread = VoiceRecognitionThread()
+            thread._probe_microphone = MagicMock()
+            thread.set_microphone("USB Microphone")
+            thread._apply_pending_microphone()
+
+        thread._probe_microphone.assert_not_called()
+        self.assertFalse(thread._microphone_probed)
+
+    def test_manual_activation_skips_wake_response_and_passes_ptt_release(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        thread._initialize_voice_recognition = MagicMock(return_value=True)
+        thread._apply_recognizer_settings = MagicMock()
+        thread._refresh_stt_provider = MagicMock()
+        thread._listen_for_command = MagicMock()
+
+        with (
+            patch("core.threads.ConfigManager.get", return_value=False),
+            patch("VoiceCommand.is_tts_playing", return_value=False),
+        ):
+            self.assertTrue(thread.request_listening(push_to_talk=True))
+            request = thread._take_voice_activation()
+            thread._listen_for_manual_activation(request)
+
+        thread._initialize_voice_recognition.assert_called_once_with(False)
+        thread._listen_for_command.assert_called_once_with(request["released"])
+        self.assertFalse(thread._command_listening)
+
+    def test_manual_activation_is_ignored_during_tts_playback(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        thread._initialize_voice_recognition = MagicMock()
+        thread._listen_for_command = MagicMock()
+
+        with patch("VoiceCommand.is_tts_playing", return_value=True):
+            self.assertTrue(thread.request_listening())
+            request = thread._take_voice_activation()
+            thread._listen_for_manual_activation(request)
+
+        thread._initialize_voice_recognition.assert_not_called()
+        thread._listen_for_command.assert_not_called()
+        self.assertFalse(thread._command_listening)
+
     def test_duplicate_notice_is_shown_after_listening_cleanup(self):
         with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
             thread = VoiceRecognitionThread()

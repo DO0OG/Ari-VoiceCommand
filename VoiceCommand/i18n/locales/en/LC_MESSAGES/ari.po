@@ -3574,3 +3574,33 @@ msgstr "English example dialogue:"
 
 msgid "일본어 예시 대사:"
 msgstr "Japanese example dialogue:"
+
+msgid "단축키·클릭으로 듣기"
+msgstr "Listen with a shortcut or character click"
+
+msgid "전역 단축키:"
+msgstr "Global shortcut:"
+
+msgid "듣기 방식:"
+msgstr "Listening mode:"
+
+msgid "누르고 있는 동안 듣기 (push-to-talk)"
+msgstr "Listen while held (push-to-talk)"
+
+msgid "한 번 눌러 시작 (toggle)"
+msgstr "Press once to start (toggle)"
+
+msgid "웨이크워드 사용"
+msgstr "Use wake word"
+
+msgid "캐릭터를 짧게 클릭하면 발화 끝을 감지하고, 길게 누르면 누르는 동안 듣습니다."
+msgstr "A short character click listens until speech ends; hold to listen while pressed."
+
+msgid "단축키가 다른 앱에서 사용 중이면 등록되지 않습니다. 앱은 계속 실행됩니다."
+msgstr "If another app is using the shortcut, it will not be registered. The app will keep running."
+
+msgid "단축키 설정"
+msgstr "Shortcut settings"
+
+msgid "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."
+msgstr "Choose a modifier and a key, such as Ctrl+Alt+Space."
