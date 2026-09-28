@@ -51,7 +51,20 @@ class SharedMicrophoneTests(unittest.TestCase):
         audio = _fake_global_audio({"defaultSampleRate": 44100.0})
         module = _fake_pyaudio_module()
         patch_instance, patch_module = self._patch_audio(audio, module)
-        with patch_instance, patch_module:
+        with (
+            patch_instance,
+            patch_module,
+            patch.object(
+                audio_manager.GlobalAudio,
+                "open_stream",
+                wraps=audio_manager.GlobalAudio.open_stream,
+            ) as open_stream,
+            patch.object(
+                audio_manager.GlobalAudio,
+                "close_stream",
+                wraps=audio_manager.GlobalAudio.close_stream,
+            ) as close_stream,
+        ):
             microphone = SharedMicrophone()
             with microphone as source:
                 self.assertIsNotNone(source.stream)
@@ -59,6 +72,8 @@ class SharedMicrophoneTests(unittest.TestCase):
 
         self.assertEqual(microphone.SAMPLE_RATE, 44100)
         self.assertIsNone(microphone.stream)
+        open_stream.assert_called_once()
+        close_stream.assert_called_once_with(audio.open.return_value)
         audio.open.assert_called_once()
         audio.open.return_value.close.assert_called_once()
         module.PyAudio.assert_not_called()

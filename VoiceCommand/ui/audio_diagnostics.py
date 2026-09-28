@@ -1,7 +1,6 @@
 """설정 화면의 마이크 확인과 녹음 재생 작업."""
 from __future__ import annotations
 
-import logging
 import time
 
 from PySide6.QtCore import QThread, Signal
@@ -60,7 +59,7 @@ class AudioDiagnosticThread(QThread):
             if not input_lock.acquire(timeout=3):
                 raise RuntimeError(_("마이크가 다른 작업에서 사용 중입니다. 잠시 후 다시 시도해 주세요."))
             input_acquired = True
-            input_stream = pa.open(
+            input_stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=16000,
@@ -80,8 +79,7 @@ class AudioDiagnosticThread(QThread):
                 if not self.monitor_only:
                     chunks.append(chunk)
 
-            input_stream.stop_stream()
-            input_stream.close()
+            GlobalAudio.close_stream(input_stream)
             input_stream = None
             input_lock.release()
             input_acquired = False
@@ -101,7 +99,7 @@ class AudioDiagnosticThread(QThread):
                 output_stream = None
                 for device_index in output_device_indices:
                     try:
-                        output_stream = pa.open(
+                        output_stream = GlobalAudio.open_stream(
                             format=pyaudio.paInt16,
                             channels=1,
                             rate=16000,
@@ -122,9 +120,8 @@ class AudioDiagnosticThread(QThread):
                         if self.isInterruptionRequested():
                             break
                         output_stream.write(audio_data[offset:offset + frame_bytes])
-                    output_stream.stop_stream()
                 finally:
-                    output_stream.close()
+                    GlobalAudio.close_stream(output_stream)
             finally:
                 output_lock.release()
 
@@ -136,10 +133,6 @@ class AudioDiagnosticThread(QThread):
             self.done.emit(self, False, str(exc))
         finally:
             if input_stream is not None:
-                for close_step in (input_stream.stop_stream, input_stream.close):
-                    try:
-                        close_step()
-                    except Exception as exc:
-                        logging.debug("진단용 마이크 스트림 정리 실패: %s", exc)
+                GlobalAudio.close_stream(input_stream)
             if input_acquired:
                 input_lock.release()

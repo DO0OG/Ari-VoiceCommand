@@ -18,12 +18,12 @@ _audio_lock = _audio_input_lock
 class GlobalAudio:
     """전역 PyAudio 인스턴스 관리 (싱글톤 패턴)"""
     _instance = None
-    _lock = threading.Lock()
+    _pa_api_lock = threading.RLock()
 
     @classmethod
     def get_instance(cls):
         """PyAudio 인스턴스를 반환 (없으면 생성)"""
-        with cls._lock:
+        with cls._pa_api_lock:
             if cls._instance is None:
                 import pyaudio
                 logging.info("전역 PyAudio 인스턴스 초기화 중...")
@@ -36,16 +36,41 @@ class GlobalAudio:
             return cls._instance
 
     @classmethod
+    def open_stream(cls, **kwargs):
+        """PortAudio 잠금 안에서 스트림을 연다."""
+        with cls._pa_api_lock:
+            return cls.get_instance().open(**kwargs)
+
+    @classmethod
+    def close_stream(cls, stream):
+        """PortAudio 잠금 안에서 스트림을 닫는다."""
+        if stream is None:
+            return
+
+        with cls._pa_api_lock:
+            try:
+                if stream.is_active():
+                    stream.stop_stream()
+            except (OSError, RuntimeError, ValueError) as exc:
+                logging.debug("오디오 스트림 중지 생략: %s", exc)
+
+            try:
+                stream.close()
+            except (OSError, RuntimeError, ValueError) as exc:
+                logging.debug("오디오 스트림 닫기 생략: %s", exc)
+
+    @classmethod
     def terminate(cls):
         """PyAudio 인스턴스 종료"""
-        with cls._lock:
-            if cls._instance:
+        with cls._pa_api_lock:
+            if cls._instance is not None:
                 try:
                     cls._instance.terminate()
                     logging.info("전역 PyAudio 인스턴스 종료 완료")
-                except Exception as e:
-                    logging.debug(f"PyAudio 종료 오류 (무시): {e}")
-                cls._instance = None
+                except (OSError, RuntimeError, ValueError) as exc:
+                    logging.debug("PyAudio 종료 오류 (무시): %s", exc)
+                finally:
+                    cls._instance = None
 
 
 def initialize_global_audio() -> bool:

@@ -26,7 +26,6 @@ class OpenAITTS(QObject):
         self.model = model
         self.speed = max(0.25, min(4.0, speed))  # OpenAI 허용 범위
         self.is_playing = False
-        self.pa = None
         self._client = None
 
         if not api_key:
@@ -39,8 +38,6 @@ class OpenAITTS(QObject):
         except Exception as e:
             logging.error("OpenAI TTS 초기화 실패: %s", e)
             raise RuntimeError("OpenAI TTS client initialization failed") from e
-
-        self.pa = GlobalAudio.get_instance()
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
         if not text or self._client is None:
@@ -63,16 +60,17 @@ class OpenAITTS(QObject):
             logging.info("[TTS] OpenAI 수신: %.2fs, %s bytes", time.time() - t0, f"{len(pcm_data):,}")
 
             from audio.audio_manager import get_output_device_index
-            stream = self.pa.open(
+            stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
                 output_device_index=get_output_device_index(),
             )
-            stream.write(pcm_data)
-            stream.stop_stream()
-            stream.close()
+            try:
+                stream.write(pcm_data)
+            finally:
+                GlobalAudio.close_stream(stream)
 
             logging.info("[TTS] OpenAI 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False

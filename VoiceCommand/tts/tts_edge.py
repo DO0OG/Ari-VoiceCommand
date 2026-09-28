@@ -31,7 +31,6 @@ class EdgeTTS(QObject):
         self.rate = rate    # 말하기 속도: "+10%" 빠름, "-10%" 느림
         self.volume = volume
         self.is_playing = False
-        self.pa = GlobalAudio.get_instance()
         logging.info("Edge TTS 초기화 완료 (voice=%s)", voice)
 
     def speak(self, text: str, emotion: str = "평온") -> bool:
@@ -68,16 +67,17 @@ class EdgeTTS(QObject):
             pcm = decode_mp3_to_pcm(audio_data, _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
-            stream = self.pa.open(
+            stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
                 output_device_index=get_output_device_index(),
             )
-            stream.write(pcm)
-            stream.stop_stream()
-            stream.close()
+            try:
+                stream.write(pcm)
+            finally:
+                GlobalAudio.close_stream(stream)
 
             logging.info("[TTS] Edge TTS 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False

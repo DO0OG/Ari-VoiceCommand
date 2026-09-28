@@ -3,7 +3,7 @@ import struct
 import threading
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from tts.cosyvoice_utils import (
@@ -137,7 +137,6 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
     def test_explicit_cosyvoice_dir_avoids_cached_discovery(self):
         cosyvoice_dir = os.path.abspath("selected-cosyvoice")
         with (
-            patch("audio.audio_manager.GlobalAudio.get_instance", return_value=object()),
             patch("tts.cosyvoice_tts._get_reference_wav", return_value="reference.wav"),
             patch("tts.cosyvoice_tts._load_tts_volume", return_value=1.0),
             patch("tts.cosyvoice_tts._get_cosyvoice_dir_cached") as get_cached_dir,
@@ -151,6 +150,26 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
             os.path.join(cosyvoice_dir, "pretrained_models", "Fun-CosyVoice3-0.5B"),
         )
         get_cached_dir.assert_not_called()
+
+    def test_stream_open_and_close_use_global_wrappers(self):
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
+        tts._stream_lock = threading.Lock()
+        tts._stream = None
+        tts.sample_rate = 24000
+        stream = Mock()
+
+        with patch("tts.cosyvoice_tts.GlobalAudio.open_stream", return_value=stream) as open_stream:
+            self.assertIs(tts._open_stream_on(3), stream)
+
+        open_stream.assert_called_once()
+        tts._stream = stream
+        tts._stream_rate = 24000
+        with patch("tts.cosyvoice_tts.GlobalAudio.close_stream") as close_stream:
+            tts._close_stream()
+
+        close_stream.assert_called_once_with(stream)
+        self.assertIsNone(tts._stream)
 
 
 class ApplyEmotionProsodyTests(unittest.TestCase):

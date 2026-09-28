@@ -28,7 +28,6 @@ class ElevenLabsTTS(QObject):
         self.stability = stability
         self.similarity_boost = similarity_boost
         self.is_playing = False
-        self.pa = GlobalAudio.get_instance()
         self._session = None
 
         if api_key:
@@ -97,16 +96,17 @@ class ElevenLabsTTS(QObject):
                 pcm = decode_mp3_to_pcm(audio_buffer.read(), _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
-            stream = self.pa.open(
+            stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
                 rate=_SAMPLE_RATE,
                 output=True,
                 output_device_index=get_output_device_index(),
             )
-            stream.write(pcm)
-            stream.stop_stream()
-            stream.close()
+            try:
+                stream.write(pcm)
+            finally:
+                GlobalAudio.close_stream(stream)
 
             logging.info("[TTS] ElevenLabs 전체 완료: %.2fs", time.time() - t0)
             self.is_playing = False

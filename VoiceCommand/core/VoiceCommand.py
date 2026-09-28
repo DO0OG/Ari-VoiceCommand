@@ -114,7 +114,7 @@ class SharedMicrophone(sr.Microphone):
         self.audio = GlobalAudio.get_instance()
         try:
             self.stream = sr.Microphone.MicrophoneStream(
-                self.audio.open(
+                GlobalAudio.open_stream(
                     input_device_index=self.device_index, channels=1, format=self.format,
                     rate=self.SAMPLE_RATE, frames_per_buffer=self.CHUNK, input=True,
                 )
@@ -128,7 +128,8 @@ class SharedMicrophone(sr.Microphone):
     def __exit__(self, exc_type, exc_value, traceback):
         try:
             if self.stream is not None:
-                self.stream.close()
+                GlobalAudio.close_stream(self.stream.pyaudio_stream)
+                self.stream.pyaudio_stream = None
         finally:
             self.stream = None
             self.audio = None
