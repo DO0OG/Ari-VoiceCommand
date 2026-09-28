@@ -30,6 +30,7 @@ from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
 from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, get_provider_configs
 from core.config_manager import ConfigManager
+from core.activity_monitor import get_activity_context
 from i18n.translator import _
 
 _EN_MONTHS = {
@@ -1707,6 +1708,10 @@ class LLMProvider:
             parts.append(situation)
         if include_context and time_prompt:
             parts.append(time_prompt)
+        if include_context:
+            activity_context = get_activity_context()
+            if activity_context:
+                parts.append(activity_context)
         return "\n\n".join(part for part in parts if part)
 
     def _clean_response(self, text):

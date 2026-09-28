@@ -1,4 +1,5 @@
 import ctypes
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -36,15 +37,20 @@ class WindowInspectorTests(unittest.TestCase):
         user32.GetWindowRect = Mock(side_effect=set_window_rect)
         user32.GetMonitorInfoW = Mock(side_effect=set_monitor_info)
         with patch.object(window_inspector.sys, "platform", "win32"), patch.object(
-            window_inspector.ctypes,
-            "windll",
-            SimpleNamespace(user32=user32),
-            create=True,
+            window_inspector, "_dll", lambda _name: user32
         ):
             self.assertIs(window_inspector.get_foreground_fullscreen(), True)
 
         self.assertIs(user32.GetForegroundWindow.restype, ctypes.c_void_p)
         self.assertIs(user32.MonitorFromWindow.restype, ctypes.c_void_p)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows 전용")
+    def test_helpers_do_not_change_shared_windll_prototypes(self):
+        shared = ctypes.windll.user32.GetWindowRect
+        before = shared.argtypes
+        window_inspector.get_foreground_window_rect()
+        window_inspector.get_foreground_fullscreen()
+        self.assertIs(shared.argtypes, before)
 
 
 if __name__ == "__main__":

@@ -3506,3 +3506,53 @@ msgstr "I canceled the deletion."
 
 msgid "기억을 잊었어요: {key}"
 msgstr "I forgot: {key}"
+
+msgid "활동 반응"
+msgstr "Activity reactions"
+
+msgid "자리 비움·복귀 반응"
+msgstr "React to idle and return"
+
+msgid "자리 비움 기준 (분)"
+msgstr "Idle threshold (minutes)"
+
+msgid "화면 잠금 시 캐릭터 숨기기"
+msgstr "Hide the character when the screen is locked"
+
+msgid "방해 금지·전체 화면 반응"
+msgstr "React to quiet mode and full screen"
+
+msgid "앱 카테고리 반응 (기본 꺼짐)"
+msgstr "React to app categories (off by default)"
+
+msgid "활동 정보는 앱 카테고리와 경과 시간만 포함하며, 창 제목·프로세스명은 전송하지 않습니다."
+msgstr ""
+"Activity context includes only the app category and elapsed time; "
+"window titles and process names are never sent."
+
+msgid "잠금 중 웨이크 감지는 항상 정지됩니다."
+msgstr "Wake word detection always pauses while the session is locked."
+
+msgid "돌아오셨네요! 부재 중 완료된 작업은 없어요."
+msgstr "Welcome back! There were no completed tasks while you were away."
+
+msgid "돌아오셨네요! 부재 중 완료 {completed}건, 대기 {waiting}건이에요."
+msgstr "Welcome back! {completed} task(s) completed while away; {waiting} are waiting."
+
+msgid "다음 일정은 {next_task}예요."
+msgstr "Next scheduled item is {next_task}."
+
+msgid "방해 금지 중 말풍선으로만 응답"
+msgstr "Reply with bubbles only during quiet mode"
+
+msgid "게임·영상 앱에서 게임 모드 자동 적용"
+msgstr "Automatically enable game mode for games and videos"
+
+msgid "IDE 3시간 연속 사용 알림"
+msgstr "Remind me after three continuous hours in an IDE"
+
+msgid "잠금이 풀렸어요."
+msgstr "The screen is unlocked."
+
+msgid "장시간 계속 일하셨네요. 잠시 쉬어 가는 게 어때요?"
+msgstr "You've worked for a long time. How about taking a short break?"

@@ -15,7 +15,7 @@ from watchdog.events import FileSystemEventHandler
 from core._whisper_worker import bundled_executable_path
 from core.resource_manager import is_bundled
 from core.threads import VoiceRecognitionThread, TTSThread, CommandExecutionThread
-from core.VoiceCommand import set_tts_thread
+from core.VoiceCommand import is_session_lock_blocked, set_tts_thread
 
 # 리소스 모니터링 스레드
 class ResourceMonitor(QObject):
@@ -154,6 +154,9 @@ class AriCore(QObject):
             logging.info("기본 마이크를 사용합니다.")
 
     def handle_voice_result(self, text):
+        if is_session_lock_blocked():
+            logging.info("잠금 상태에서 인식된 음성 명령을 무시합니다.")
+            return
         logging.info("인식된 명령 수신 (%d자)", len(text or ""))
         self.command_thread.execute(text)
 

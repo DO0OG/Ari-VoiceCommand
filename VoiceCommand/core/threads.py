@@ -257,7 +257,7 @@ class VoiceRecognitionThread(QThread):
                     self._voice_setup_failed = True
                     logging.warning("음성 인식 설정을 적용하지 못했습니다: %s", exc, exc_info=True)
                     continue
-                from VoiceCommand import should_pause_wake_detection
+                from VoiceCommand import is_session_lock_blocked, should_pause_wake_detection
                 if should_pause_wake_detection():
                     time.sleep(0.05)
                     continue
@@ -277,6 +277,10 @@ class VoiceRecognitionThread(QThread):
                     continue
 
                 try:
+                    if detected and is_session_lock_blocked():
+                        time.sleep(0.05)
+                        continue
+
                     if detected and should_pause_wake_detection():
                         logging.info("TTS 보호 구간과 겹친 웨이크워드 감지를 무시합니다.")
                         with self._microphone_source() as source:
@@ -308,7 +312,11 @@ class VoiceRecognitionThread(QThread):
             wake_detector_recalibrate_helper,
             set_listening_indicator,
             _show_tts_bubble,
+            is_session_lock_blocked,
         )
+
+        if is_session_lock_blocked():
+            return
         
         response = _RNG.choice(get_wake_responses())
         tts_wrapper(response)
@@ -323,6 +331,9 @@ class VoiceRecognitionThread(QThread):
         except Exception as e:
             logging.error("TTS 대기 중 오류: %s", e)
             time.sleep(0.5)
+
+        if is_session_lock_blocked():
+            return
         
         set_listening_indicator(True)
         self.listening_state_changed.emit(True)
@@ -335,6 +346,7 @@ class VoiceRecognitionThread(QThread):
                     self.result,
                     stt_provider=self._stt,
                     previous_texts=self._last_texts,
+                    continue_check=lambda: not is_session_lock_blocked(),
                 )
         finally:
             set_listening_indicator(False)
@@ -344,6 +356,9 @@ class VoiceRecognitionThread(QThread):
                 duplicate_notice,
                 duration=SPEECH_REPEAT_NOTICE_DURATION_MS,
             )
+
+        if is_session_lock_blocked():
+            return
         
         # 대화 후 재캘리브레이션
         with self._microphone_source() as source:

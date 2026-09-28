@@ -2,15 +2,121 @@ import os
 import unittest
 import tempfile
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 
-from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask
+from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask, ScheduledTaskRun
 
 
 class ProactiveSchedulerTests(unittest.TestCase):
+    def test_due_tasks_wait_until_activity_allows_them(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._activity_state_lock = threading.Lock()
+        scheduler._activity_locked = False
+        scheduler._activity_away = False
+        scheduler._activity_quiet = False
+        scheduler._claim_due_tasks = Mock(return_value=[])
+
+        scheduler.set_activity_state(away=True)
+        scheduler._check_due_tasks()
+        scheduler.check_missed_tasks_on_startup()
+        scheduler._claim_due_tasks.assert_not_called()
+
+        scheduler.set_activity_state(away=False, quiet=True)
+        scheduler._check_due_tasks()
+        scheduler._claim_due_tasks.assert_not_called()
+
+        scheduler.set_activity_state(quiet=False)
+        scheduler._check_due_tasks()
+        scheduler._claim_due_tasks.assert_called_once()
+
+    def test_activity_return_summary_reports_waiting_and_upcoming_tasks(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        now = datetime.now()
+        scheduler._tasks = {
+            "due": ScheduledTask(
+                task_id="due",
+                goal="보고서",
+                schedule_expr="오늘 오전",
+                next_run=(now - timedelta(minutes=1)).isoformat(),
+                name="보고서 확인",
+            ),
+            "upcoming": ScheduledTask(
+                task_id="upcoming",
+                goal="일정",
+                schedule_expr="내일 오전",
+                next_run=(now + timedelta(days=1)).isoformat(),
+                name="내일 일정",
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_run_log_file = os.path.join(tmp, "runs.jsonl")
+            scheduler._run_log_lock = threading.Lock()
+            scheduler._append_task_run(
+                ScheduledTaskRun(
+                    task_id="done",
+                    goal="완료 작업",
+                    task_type="agent",
+                    started_at=(now - timedelta(minutes=12)).isoformat(),
+                    finished_at=(now - timedelta(minutes=10)).isoformat(),
+                    success=True,
+                    summary="완료",
+                )
+            )
+            scheduler._append_task_run(
+                ScheduledTaskRun(
+                    task_id="activity_ide_long_use",
+                    goal="IDE 알림",
+                    task_type="activity",
+                    started_at=(now - timedelta(minutes=8)).isoformat(),
+                    finished_at=(now - timedelta(minutes=7)).isoformat(),
+                    success=True,
+                    summary="알림 표시",
+                )
+            )
+            with patch(
+                "agent.proactive_scheduler._",
+                side_effect=lambda text, **values: text.format(**values),
+            ):
+                summary = scheduler.activity_return_summary(30 * 60)
+
+        self.assertIn("완료 1건", summary)
+        self.assertIn("대기 1건", summary)
+        self.assertIn("내일 일정", summary)
+        self.assertEqual(scheduler.activity_return_summary(29 * 60), "")
+
+    def test_ide_long_use_reminder_is_once_daily_and_waits_while_away(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._activity_state_lock = threading.Lock()
+        scheduler._activity_locked = False
+        scheduler._activity_away = True
+        scheduler._activity_quiet = False
+
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_run_log_file = os.path.join(tmp, "runs.jsonl")
+            scheduler._run_log_lock = threading.Lock()
+            with patch("agent.proactive_scheduler._", return_value="쉬어 가세요"):
+                self.assertEqual(
+                    scheduler.activity_ide_long_use_message(3 * 60 * 60),
+                    "",
+                )
+                scheduler.set_activity_state(away=False)
+                self.assertEqual(
+                    scheduler.activity_ide_long_use_message(3 * 60 * 60),
+                    "쉬어 가세요",
+                )
+                self.assertEqual(
+                    scheduler.activity_ide_long_use_message(4 * 60 * 60),
+                    "",
+                )
+
+            runs = scheduler.get_task_runs(task_id="activity_ide_long_use")
+            self.assertEqual(len(runs), 1)
+
     def test_scheduler_instances_keep_distinct_storage_paths(self):
         with patch("agent.proactive_scheduler._init_schedule_file", side_effect=["first.json", "second.json"]):
             with patch("agent.proactive_scheduler._init_schedule_log_file", side_effect=["first.log", "second.log"]):

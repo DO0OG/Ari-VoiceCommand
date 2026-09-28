@@ -106,6 +106,14 @@ DEFAULT_SETTINGS = {
     "affinity_last_login": "",      # YYYY-MM-DD 형식
     "focus_app_reaction_enabled": True,
     "system_monitor_enabled": True,
+    "activity_idle_reaction_enabled": True,
+    "activity_session_lock_reaction_enabled": True,
+    "activity_quiet_reaction_enabled": True,
+    "activity_app_category_reaction_enabled": False,
+    "activity_away_threshold_minutes": 5,
+    "activity_quiet_bubble_only_enabled": False,
+    "activity_auto_game_mode_enabled": False,
+    "activity_ide_long_use_reaction_enabled": True,
     "user_birthday": "",            # MM-DD
     "special_date_events_enabled": True,
     # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────

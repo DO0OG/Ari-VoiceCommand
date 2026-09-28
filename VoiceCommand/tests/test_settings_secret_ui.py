@@ -17,6 +17,10 @@ class SettingsSecretUITests(unittest.TestCase):
             "verbosity_combo", "mic_combo", "speaker_combo", "char_scale_slider",
             "char_offset_slider", "theme_preset_combo", "theme_scale_input",
             "theme_font_input", "lang_combo", "update_check_enabled",
+            "activity_idle_checkbox", "activity_lock_checkbox", "activity_quiet_checkbox",
+            "activity_away_threshold_spin", "activity_app_checkbox",
+            "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
+            "activity_ide_long_use_checkbox",
         )
         dialog = SimpleNamespace(**dict.fromkeys(names, field))
         dialog.update_checker = None
