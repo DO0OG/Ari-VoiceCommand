@@ -2,6 +2,9 @@
 RP 텍스트 생성기
 """
 import logging
+import re
+
+from core.emotions import get_emotion_instruction
 
 
 class RPGenerator:
@@ -34,23 +37,6 @@ class RPGenerator:
             "en": "You are Ari, an AI assistant.",
             "ja": "あなたはAIアシスタントのAriです。",
         }
-        _EMOTION_INSTRUCTION = {
-            "ko": (
-                "[감정 표현]\n"
-                "응답 맨 앞에 감정 태그를 자연스럽게 붙이세요. 사용할 수 있는 예: "
-                "(기쁨) (슬픔) (화남) (놀람) (평온) (수줍) (기대) (진지) (걱정)"
-            ),
-            "en": (
-                "[Emotion Tags]\n"
-                "Start your response with an emotion tag naturally. "
-                "Examples: (joy) (sad) (angry) (surprised) (calm) (shy) (excited) (serious) (worried)"
-            ),
-            "ja": (
-                "[感情タグ]\n"
-                "返答の先頭に感情タグを自然につけてください。"
-                "例: (喜び) (悲しみ) (怒り) (驚き) (穏やか) (恥ずかしい) (期待) (真剣) (心配)"
-            ),
-        }
         _VERBOSITY_INSTRUCTION = {
             "ko": {
                 "concise": "[응답 길이]\n한두 문장으로 핵심만 답하세요. 부연 설명, 배경 설명, 되묻기는 꼭 필요할 때만 덧붙이세요.",
@@ -68,7 +54,14 @@ class RPGenerator:
                 "chatty": "[返答の長さ]\nキャラクターらしく、もう少し豊かに話してもかまいません。",
             },
         }
-        parts = [base_prompt.strip() if base_prompt else _BASE_PROMPT.get(lang, _BASE_PROMPT["ko"])]
+        prompt = base_prompt.strip() if base_prompt else _BASE_PROMPT.get(lang, _BASE_PROMPT["ko"])
+        # 기존 설정에 저장된 감정 지시도 공통 지시로 대체한다.
+        prompt = re.sub(
+            r"(?m)^.*모든 답변 첫머리에 감정 태그를 붙이세요:[^\r\n]*\r?\n?",
+            "",
+            prompt,
+        )
+        parts = [prompt]
         if self.personality:
             parts.append(f"[캐릭터 성격]\n{self.personality.strip()}")
         if self.scenario:
@@ -77,7 +70,7 @@ class RPGenerator:
             parts.append(f"[대화 방식]\n{self.history_instruction.strip()}")
         verbosity_map = _VERBOSITY_INSTRUCTION.get(lang, _VERBOSITY_INSTRUCTION["ko"])
         parts.append(verbosity_map.get(self.response_verbosity, verbosity_map["concise"]))
-        parts.append(_EMOTION_INSTRUCTION.get(lang, _EMOTION_INSTRUCTION["ko"]))
+        parts.append(get_emotion_instruction(lang))
         return "\n\n".join(part for part in parts if part)
 
     def generate(self, text: str) -> str:

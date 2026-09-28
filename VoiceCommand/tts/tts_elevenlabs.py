@@ -10,6 +10,7 @@ import pyaudio
 from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio
+from core.emotions import DEFAULT_EMOTION, get_emotion_details
 
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
 _SAMPLE_RATE = 22050
@@ -20,13 +21,14 @@ class ElevenLabsTTS(QObject):
 
     def __init__(self, api_key="", voice_id="",
                  model_id="eleven_multilingual_v2",
-                 stability=0.5, similarity_boost=0.75):
+                 stability=0.5, similarity_boost=0.75, emotion_enabled=True):
         super().__init__()
         self.api_key = api_key
         self.voice_id = voice_id or _DEFAULT_VOICE_ID
         self.model_id = model_id
         self.stability = stability
         self.similarity_boost = similarity_boost
+        self.emotion_enabled = bool(emotion_enabled)
         self.is_playing = False
         self._session = None
 
@@ -46,7 +48,20 @@ class ElevenLabsTTS(QObject):
         self._session = requests.Session()
         return self._session
 
-    def speak(self, text: str, emotion: str = "평온") -> bool:
+    def _voice_settings(self, emotion: str) -> dict:
+        stability_offset, style_offset = get_emotion_details(emotion)["elevenlabs"]
+        if not self.emotion_enabled:
+            stability_offset = 0.0
+            style_offset = 0.0
+        stability = max(0.0, min(1.0, self.stability + stability_offset))
+        style = max(0.0, min(1.0, style_offset))
+        return {
+            "stability": stability,
+            "similarity_boost": self.similarity_boost,
+            "style": style,
+        }
+
+    def speak(self, text: str, emotion: str = DEFAULT_EMOTION) -> bool:
         if not text or not self.api_key:
             return False
 
@@ -67,10 +82,7 @@ class ElevenLabsTTS(QObject):
             payload = {
                 "text": text,
                 "model_id": self.model_id,
-                "voice_settings": {
-                    "stability": self.stability,
-                    "similarity_boost": self.similarity_boost,
-                },
+                "voice_settings": self._voice_settings(emotion),
             }
 
             bytes_received = 0

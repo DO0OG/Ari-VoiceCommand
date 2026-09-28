@@ -12,6 +12,7 @@ import wave
 import ormsgpack
 import requests
 from PySide6.QtCore import QObject, Signal
+from core.emotions import DEFAULT_EMOTION
 
 
 class FishTTSWebSocket(QObject):
@@ -88,7 +89,7 @@ class FishTTSWebSocket(QObject):
                 if chunk:
                     yield chunk
 
-    def speak(self, text, emotion: str = "평온"):
+    def speak(self, text, emotion: str = DEFAULT_EMOTION):
         """텍스트를 음성으로 변환하여 재생"""
         if not text:
             return False

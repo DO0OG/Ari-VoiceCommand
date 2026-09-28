@@ -27,7 +27,7 @@ class TTSStreamWrapperTests(unittest.TestCase):
     def test_edge_tts_uses_shared_stream_wrappers(self):
         provider = EdgeTTS()
 
-        async def synthesize(_text):
+        async def synthesize(_text, _emotion=None):
             return b"mp3"
 
         with (

@@ -19,6 +19,7 @@ import numpy as np
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 from audio.audio_manager import GlobalAudio
+from core.emotions import DEFAULT_EMOTION
 from core.resource_manager import is_bundled
 from tts.cosyvoice_utils import _PCMChunkBuffer, _normalize_text_cached, apply_emotion_prosody, inject_breath_cues
 
@@ -344,7 +345,7 @@ class CosyVoiceTTS(QObject):
 
     # ── 합성 + 스트리밍 재생 ────────────────────────────────────────────────────
 
-    def speak(self, text: str, emotion: str = "평온") -> bool:
+    def speak(self, text: str, emotion: str = DEFAULT_EMOTION) -> bool:
         from audio.audio_manager import _audio_output_lock as _audio_lock
         text = _normalize_text_cached(text or "")
         text = apply_emotion_prosody(text, emotion)

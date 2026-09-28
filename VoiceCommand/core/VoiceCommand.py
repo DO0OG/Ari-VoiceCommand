@@ -6,10 +6,11 @@ import re
 import time
 import threading
 from collections import deque
-from typing import Tuple, TypedDict
+from typing import TypedDict
 import speech_recognition as sr
 
 from core.resource_manager import is_bundled
+from core.emotions import EMOTION_EMOJI, parse_emotion_text
 
 # SSL 인증서 경로 설정 (PyInstaller/Nuitka 배포 환경)
 if is_bundled():
@@ -281,77 +282,6 @@ def reconnect_tts_signals():
 
 
 # ── 실행 로직 ───────────────────────────────────────────────────────────────
-
-# 감정 태그 파싱용 정규표현식 사전 컴파일 (성능 최적화)
-_EMOTION_ALIASES = {
-    "기쁨": "기쁨",
-    "happy": "기쁨",
-    "joy": "기쁨",
-    "嬉しい": "기쁨",
-    "喜び": "기쁨",
-    "슬픔": "슬픔",
-    "sad": "슬픔",
-    "sadness": "슬픔",
-    "悲しい": "슬픔",
-    "悲しみ": "슬픔",
-    "화남": "화남",
-    "angry": "화남",
-    "anger": "화남",
-    "怒り": "화남",
-    "怒った": "화남",
-    "놀람": "놀람",
-    "surprised": "놀람",
-    "surprise": "놀람",
-    "驚き": "놀람",
-    "びっくり": "놀람",
-    "평온": "평온",
-    "calm": "평온",
-    "neutral": "평온",
-    "serene": "평온",
-    "穏やか": "평온",
-    "平穏": "평온",
-    "수줍": "수줍",
-    "shy": "수줍",
-    "embarrassed": "수줍",
-    "照れ": "수줍",
-    "恥ずかしい": "수줍",
-    "기대": "기대",
-    "excited": "기대",
-    "anticipation": "기대",
-    "期待": "기대",
-    "楽しみ": "기대",
-    "진지": "진지",
-    "serious": "진지",
-    "focused": "진지",
-    "seriousness": "진지",
-    "真剣": "진지",
-    "걱정": "걱정",
-    "worried": "걱정",
-    "worry": "걱정",
-    "anxious": "걱정",
-    "心配": "걱정",
-    "不安": "걱정",
-}
-_EMOTION_NAMES = "|".join(sorted((re.escape(name) for name in _EMOTION_ALIASES), key=len, reverse=True))
-EMOTION_PATTERN = re.compile(rf'[\(\[]({_EMOTION_NAMES})[\)\]]', re.IGNORECASE)
-
-# 감정별 이모지 매핑 (이미지 제작 부담 완화 및 표현력 강화)
-EMOTION_EMOJI = {
-    "기쁨": "😊", "슬픔": "😭", "화남": "💢", "놀람": "😲",
-    "평온": "☕", "수줍": "☺️", "기대": "✨", "진지": "🧐", "걱정": "😟"
-}
-
-
-def parse_emotion_text(text: str) -> Tuple[str, str]:
-    """감정 태그를 제거하고 대표 감정/표시용 텍스트를 반환."""
-    emotion = "평온"
-    matches = EMOTION_PATTERN.findall(text or "")
-    if matches:
-        emotion = _EMOTION_ALIASES.get(matches[-1].casefold(), _EMOTION_ALIASES.get(matches[-1], emotion))
-    pure_text = EMOTION_PATTERN.sub("", text or "")
-    pure_text = re.sub(r'\s+', ' ', pure_text).strip()
-    return emotion, pure_text
-
 
 def _show_tts_bubble(text, duration: int = 0):
     """어떤 TTS 경로든 동일한 말풍선을 표시하되, 직전 중복 표시는 짧게 억제."""

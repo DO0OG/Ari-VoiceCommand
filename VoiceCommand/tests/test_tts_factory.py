@@ -22,6 +22,28 @@ class TTSFactoryTests(unittest.TestCase):
         self.assertEqual(build_tts_signature(base), build_tts_signature(same))
         self.assertNotEqual(build_tts_signature(base), build_tts_signature(changed))
 
+    def test_emotion_setting_is_part_of_the_tts_signature(self):
+        enabled = {"tts_mode": "edge", "tts_emotion_enabled": True}
+        disabled = {"tts_mode": "edge", "tts_emotion_enabled": False}
+
+        self.assertNotEqual(build_tts_signature(enabled), build_tts_signature(disabled))
+
+    def test_edge_provider_receives_emotion_setting(self):
+        with patch("tts.tts_edge.EdgeTTS") as edge_tts:
+            provider, mode = create_tts_provider(
+                {"tts_mode": "edge", "tts_emotion_enabled": False}
+            )
+
+        self.assertIs(provider, edge_tts.return_value)
+        self.assertEqual(mode, "edge")
+        edge_tts.assert_called_once_with(
+            voice="ko-KR-SunHiNeural",
+            rate="+0%",
+            emotion_enabled=False,
+            synthesis_timeout_seconds=10,
+            cache_max_bytes=50 * 1024 * 1024,
+        )
+
     def test_openai_client_initialization_failure_falls_back_to_edge(self):
         edge_provider = object()
 

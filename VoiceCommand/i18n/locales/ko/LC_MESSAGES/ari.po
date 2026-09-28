@@ -3385,3 +3385,6 @@ msgstr "'{key}' 사실을 삭제할까요?"
 
 msgid "이 사실이 언급된 대화 기록도 삭제"
 msgstr "이 사실이 언급된 대화 기록도 삭제"
+
+msgid "Edge/OpenAI/ElevenLabs 감정 조절"
+msgstr "Edge/OpenAI/ElevenLabs 감정 조절"

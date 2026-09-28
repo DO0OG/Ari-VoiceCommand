@@ -11,20 +11,25 @@ import pyaudio
 from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio
+from core.emotions import DEFAULT_EMOTION, get_emotion_details
 
 VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-MODELS = ["tts-1", "tts-1-hd"]
+MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
 _SAMPLE_RATE = 24000  # OpenAI PCM 출력 고정값
 
 
 class OpenAITTS(QObject):
     playback_finished = Signal()
 
-    def __init__(self, api_key="", voice="nova", model="tts-1", speed=1.0):
+    def __init__(
+        self, api_key="", voice="nova", model="tts-1", speed=1.0,
+        emotion_enabled=True,
+    ):
         super().__init__()
         self.voice = voice
         self.model = model
         self.speed = max(0.25, min(4.0, speed))  # OpenAI 허용 범위
+        self.emotion_enabled = bool(emotion_enabled)
         self.is_playing = False
         self._client = None
 
@@ -39,7 +44,7 @@ class OpenAITTS(QObject):
             logging.error("OpenAI TTS 초기화 실패: %s", e)
             raise RuntimeError("OpenAI TTS client initialization failed") from e
 
-    def speak(self, text: str, emotion: str = "평온") -> bool:
+    def speak(self, text: str, emotion: str = DEFAULT_EMOTION) -> bool:
         if not text or self._client is None:
             return False
 
@@ -48,12 +53,17 @@ class OpenAITTS(QObject):
             t0 = time.time()
 
             # PCM 포맷 요청 → 변환 불필요, 즉시 재생 가능
+            options = {
+                "model": self.model,
+                "voice": self.voice,
+                "input": text,
+                "response_format": "pcm",
+                "speed": self.speed,
+            }
+            if self.emotion_enabled and self.model.startswith("gpt-4o-mini-tts"):
+                options["instructions"] = get_emotion_details(emotion)["openai"]
             response = self._client.audio.speech.create(
-                model=self.model,
-                voice=self.voice,
-                input=text,
-                response_format="pcm",
-                speed=self.speed,
+                **options,
             )
             pcm_data = response.content  # bytes: 24kHz mono int16
 

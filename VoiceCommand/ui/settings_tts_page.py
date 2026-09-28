@@ -7,7 +7,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QComboBox, QGroupBox,
-    QScrollArea, QProgressDialog, QMessageBox, QFileDialog,
+    QScrollArea, QProgressDialog, QMessageBox, QFileDialog, QCheckBox,
 )
 from PySide6.QtCore import Qt
 
@@ -84,6 +84,11 @@ class _TTSSettingsPage(QWidget):
 
         self.tts_diagnostic_panel = TTSDiagnosticPanel(self._tts_diagnostic_values, self)
         tts_vbox.addWidget(self.tts_diagnostic_panel)
+        self.tts_emotion_checkbox = QCheckBox(_("Edge/OpenAI/ElevenLabs 감정 조절"))
+        self.tts_emotion_checkbox.setChecked(
+            bool(self._settings.get("tts_emotion_enabled", True))
+        )
+        tts_vbox.addWidget(self.tts_emotion_checkbox)
 
         # Fish Audio 설정
         fish_grp = QGroupBox(_("Fish Audio 설정"))
@@ -158,7 +163,7 @@ class _TTSSettingsPage(QWidget):
         row.addWidget(self.openai_tts_voice_combo)
         row.addWidget(QLabel(_("모델:")))
         self.openai_tts_model_combo = QComboBox()
-        for m in ["tts-1", "tts-1-hd"]:
+        for m in ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]:
             self.openai_tts_model_combo.addItem(m, m)
         self._set_combo(self.openai_tts_model_combo, self._settings.get("openai_tts_model", "tts-1"))
         row.addWidget(self.openai_tts_model_combo)
@@ -426,6 +431,7 @@ class _TTSSettingsPage(QWidget):
         """현재 TTS 설정 값을 dict로 반환."""
         return {
             "tts_mode": self.tts_mode_combo.currentData(),
+            "tts_emotion_enabled": self.tts_emotion_checkbox.isChecked(),
             "fish_api_key": self.fish_key_input.text().strip(),
             "fish_reference_id": self.fish_ref_input.text().strip(),
             # 편집 가능 콤보라 사용자가 직접 입력한 모델명도 그대로 받는다.

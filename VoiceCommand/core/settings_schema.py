@@ -61,12 +61,13 @@ DEFAULT_SETTINGS = {
     "cosyvoice_dir": "",           # CosyVoice 설치 경로 (빈 값이면 자동 탐색)
     "openai_tts_api_key": _UNSET_CREDENTIAL,
     "openai_tts_voice": "nova",    # alloy | echo | fable | onyx | nova | shimmer
-    "openai_tts_model": "tts-1",   # tts-1 | tts-1-hd
+    "openai_tts_model": "tts-1",   # tts-1 | tts-1-hd | gpt-4o-mini-tts
     "elevenlabs_api_key": _UNSET_CREDENTIAL,
     "elevenlabs_voice_id": "",
     "elevenlabs_model_id": "eleven_multilingual_v2",
     "edge_tts_voice": "ko-KR-SunHiNeural",
     "edge_tts_rate": "+0%",
+    "tts_emotion_enabled": True,
     "tts_sentence_timeout_seconds": 10,
     "tts_cache_max_bytes": 50 * 1024 * 1024,
     # ── 캐릭터 / RP ─────────────────────────────────────────────────────

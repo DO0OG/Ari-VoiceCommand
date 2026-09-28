@@ -14,10 +14,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 
 
-def build_tts_cache_key(provider, voice, rate, volume, emotion, language, text):
+def build_tts_cache_key(
+    provider, voice, rate, volume, emotion, language, text, *, pitch=None
+):
     normalized_text = " ".join(unicodedata.normalize("NFC", text).split())
+    fields = [provider, voice, rate, volume, emotion, language, normalized_text]
+    if pitch is not None:
+        fields.append(pitch)
     payload = json.dumps(
-        [provider, voice, rate, volume, emotion, language, normalized_text],
+        fields,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
