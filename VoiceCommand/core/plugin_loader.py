@@ -18,7 +18,6 @@ import logging
 import os
 import shutil
 import sys
-import tempfile
 import threading
 import unicodedata
 import zipfile
@@ -29,6 +28,7 @@ from types import FunctionType
 from types import ModuleType
 from typing import Callable, Dict, List, Optional, Tuple, cast
 
+from core.atomic_io import write_json_atomic
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -177,25 +177,12 @@ class PluginManager:
 
     def _save_trusted_plugin_hashes(self) -> None:
         path = self._trusted_plugins_path()
-        directory = os.path.dirname(path)
-        os.makedirs(directory, exist_ok=True)
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=directory, delete=False,
-            ) as handle:
-                temp_path = handle.name
-                json.dump(self._trusted_plugin_hashes, handle, indent=2, ensure_ascii=False)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temp_path, path)
-            temp_path = None
-        finally:
-            if temp_path is not None:
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
+        write_json_atomic(
+            path,
+            self._trusted_plugin_hashes,
+            indent=2,
+            ensure_ascii=False,
+        )
 
     @staticmethod
     def _plugin_sha256(path: str) -> str:
@@ -235,6 +222,23 @@ class PluginManager:
             return digest
 
         key = (filename, digest)
+        try:
+            from core.resource_manager import ResourceManager
+
+            bundle_path = os.path.join(
+                ResourceManager.get_bundle_path("plugins"), filename
+            )
+            if self._plugin_sha256(bundle_path) == digest:
+                self._trusted_plugin_hashes[filename] = digest
+                self._rejected_plugin_hashes.discard(key)
+                try:
+                    self._save_trusted_plugin_hashes()
+                except OSError as exc:
+                    logger.warning("플러그인 신뢰 목록을 저장하지 못했습니다: %s", exc)
+                return digest
+        except (ImportError, AttributeError, OSError) as exc:
+            logger.debug("번들 플러그인 비교 생략 (%s): %s", filename, exc)
+
         if key in self._rejected_plugin_hashes:
             return None
 
