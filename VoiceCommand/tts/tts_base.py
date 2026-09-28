@@ -4,6 +4,7 @@ TTS 제공자 추상 기반 클래스
 """
 from abc import ABC, abstractmethod
 from PySide6.QtCore import QObject, Signal
+from core.emotions import DEFAULT_EMOTION
 
 
 class BaseTTS(QObject, ABC):
@@ -20,7 +21,7 @@ class BaseTTS(QObject, ABC):
     playback_finished = Signal()
 
     @abstractmethod
-    def speak(self, text: str, emotion: str = "평온") -> bool:
+    def speak(self, text: str, emotion: str = DEFAULT_EMOTION) -> bool:
         """텍스트를 음성으로 합성·재생한다.
 
         Args:

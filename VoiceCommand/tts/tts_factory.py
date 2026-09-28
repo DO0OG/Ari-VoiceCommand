@@ -20,6 +20,7 @@ _TTS_SIGNATURE_KEYS = (
     "elevenlabs_model_id",
     "edge_tts_voice",
     "edge_tts_rate",
+    "tts_emotion_enabled",
     "tts_sentence_timeout_seconds",
     "tts_cache_max_bytes",
 )
@@ -59,6 +60,7 @@ def create_tts_provider(settings=None):
                 api_key=settings.get("openai_tts_api_key", "") or settings.get("openai_api_key", ""),
                 voice=settings.get("openai_tts_voice", "nova"),
                 model=settings.get("openai_tts_model", "tts-1"),
+                emotion_enabled=settings.get("tts_emotion_enabled", True),
             )
             logging.info("OpenAI TTS 초기화 완료")
             return provider, "openai_tts"
@@ -73,6 +75,7 @@ def create_tts_provider(settings=None):
                 api_key=settings.get("elevenlabs_api_key", ""),
                 voice_id=settings.get("elevenlabs_voice_id", ""),
                 model_id=settings.get("elevenlabs_model_id", "eleven_multilingual_v2"),
+                emotion_enabled=settings.get("tts_emotion_enabled", True),
             )
             logging.info("ElevenLabs TTS 초기화 완료")
             return provider, "elevenlabs"
@@ -105,6 +108,7 @@ def create_tts_provider(settings=None):
         provider = EdgeTTS(
             voice=settings.get("edge_tts_voice", "ko-KR-SunHiNeural"),
             rate=settings.get("edge_tts_rate", "+0%"),
+            emotion_enabled=settings.get("tts_emotion_enabled", True),
             synthesis_timeout_seconds=settings.get("tts_sentence_timeout_seconds", 10),
             cache_max_bytes=settings.get("tts_cache_max_bytes", 50 * 1024 * 1024),
         )

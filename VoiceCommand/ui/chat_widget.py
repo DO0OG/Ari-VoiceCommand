@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from typing import Optional
 from PySide6.QtCore import Qt
@@ -12,14 +11,7 @@ from ui.theme import (
 )
 from ui import theme as theme_module
 from i18n.translator import _
-
-
-try:
-    from VoiceCommand import parse_emotion_text, EMOTION_EMOJI
-except Exception as _e:
-    logging.debug("VoiceCommand 임포트 건너뜀: %s", _e)
-    parse_emotion_text = None
-    EMOTION_EMOJI = {}
+from core.emotions import EMOTION_EMOJI, parse_emotion_text
 
 # ── 채팅 위젯 ────────────────────────────────────────────────────────────────
 

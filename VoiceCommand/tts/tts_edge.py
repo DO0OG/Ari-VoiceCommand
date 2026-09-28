@@ -16,6 +16,7 @@ import pyaudio
 from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio
+from core.emotions import DEFAULT_EMOTION, get_emotion_details
 from tts.tts_cache import DEFAULT_MAX_BYTES, DiskTTSAudioCache, build_tts_cache_key
 
 KO_VOICES = [
@@ -32,6 +33,9 @@ _CLOSING_PUNCTUATION = frozenset("\"'”’»』」】）)]}〉》")
 _COMMON_ABBREVIATIONS = frozenset(
     {"dr.", "e.g.", "i.e.", "jr.", "mr.", "mrs.", "ms.", "prof.", "sr.", "u.s.", "vs."}
 )
+_RATE_PATTERN = re.compile(r"^([+-]?\d+)%$")
+_MIN_RATE_PERCENT = -50
+_MAX_RATE_PERCENT = 100
 
 
 def _is_cjk_or_hangul(character: str) -> bool:
@@ -121,11 +125,13 @@ class EdgeTTS(QObject):
         synthesis_timeout_seconds=_SENTENCE_TIMEOUT_SECONDS,
         cache_max_bytes=DEFAULT_MAX_BYTES,
         audio_cache=None,
+        emotion_enabled=True,
     ):
         super().__init__()
         self.voice = voice
         self.rate = rate
         self.volume = volume
+        self.emotion_enabled = bool(emotion_enabled)
         try:
             timeout = float(synthesis_timeout_seconds)
         except (TypeError, ValueError):
@@ -167,16 +173,32 @@ class EdgeTTS(QObject):
         )
         return frozenset((*get_wake_responses(), *fast_path_messages))
 
+    def _prosody(self, emotion: str) -> tuple[str, str]:
+        details = get_emotion_details(emotion)
+        rate_offset = details["edge_rate"] if self.emotion_enabled else 0
+        pitch_offset = details["edge_pitch"] if self.emotion_enabled else 0
+        match = _RATE_PATTERN.fullmatch(str(self.rate).strip())
+        rate = self.rate
+        if match and rate_offset:
+            value = int(match.group(1)) + rate_offset
+            value = max(_MIN_RATE_PERCENT, min(_MAX_RATE_PERCENT, value))
+            rate = f"{value:+d}%"
+        pitch = f"{pitch_offset:+d}Hz"
+        return rate, pitch
+
     def _cache_key(self, text: str, emotion: str, language: str) -> str:
+        rate, pitch = self._prosody(emotion)
         return build_tts_cache_key(
-            "edge", self.voice, self.rate, self.volume, emotion, language, text
+            "edge", self.voice, rate, self.volume, emotion, language, text,
+            pitch=pitch,
         )
 
-    async def _synthesize(self, text: str) -> bytes:
+    async def _synthesize(self, text: str, emotion: str = DEFAULT_EMOTION) -> bytes:
         import edge_tts
 
+        rate, pitch = self._prosody(emotion)
         communicate = edge_tts.Communicate(
-            text, self.voice, rate=self.rate, volume=self.volume
+            text, self.voice, rate=rate, volume=self.volume, pitch=pitch
         )
         chunks = []
         async for item in communicate.stream():
@@ -189,8 +211,8 @@ class EdgeTTS(QObject):
         while not stop_event.is_set():
             await asyncio.sleep(0.05)
 
-    async def _synthesize_with_timeout(self, text, stop_event):
-        synthesis = asyncio.create_task(self._synthesize(text))
+    async def _synthesize_with_timeout(self, text, emotion, stop_event):
+        synthesis = asyncio.create_task(self._synthesize(text, emotion))
         stop_watcher = asyncio.create_task(self._wait_for_stop(stop_event))
         try:
             done, _pending = await asyncio.wait(
@@ -230,7 +252,7 @@ class EdgeTTS(QObject):
                 return cached_pcm
 
         audio_data = loop.run_until_complete(
-            self._synthesize_with_timeout(text, stop_event)
+            self._synthesize_with_timeout(text, emotion, stop_event)
         )
         if not audio_data or stop_event.is_set():
             return None
@@ -481,14 +503,14 @@ class EdgeTTS(QObject):
                     cancel_event.wait(0.25)
                 if cancel_event.is_set() or self._closed:
                     break
-                key = self._cache_key(message, "평온", language)
+                key = self._cache_key(message, DEFAULT_EMOTION, language)
                 if self._audio_cache.get(key) is not None:
                     continue
                 try:
                     self._synthesize_pcm(
                         loop,
                         message,
-                        "평온",
+                        DEFAULT_EMOTION,
                         messages,
                         language,
                         cancel_event,

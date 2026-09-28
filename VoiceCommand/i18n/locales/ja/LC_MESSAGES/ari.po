@@ -3385,3 +3385,6 @@ msgstr "事実「{key}」を削除しますか？"
 
 msgid "이 사실이 언급된 대화 기록도 삭제"
 msgstr "この事実に言及している会話履歴も削除"
+
+msgid "Edge/OpenAI/ElevenLabs 감정 조절"
+msgstr "Edge/OpenAI/ElevenLabs の感情調整"

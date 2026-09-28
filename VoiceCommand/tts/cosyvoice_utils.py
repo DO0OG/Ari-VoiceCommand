@@ -9,6 +9,8 @@ import re
 from collections import deque
 from functools import lru_cache
 
+from core.emotions import get_emotion_details
+
 _SENT_PERIOD = re.compile(r'(?<!\.)[.。](?=[ \t\n]|$)')
 _SPACE_RE = re.compile(r"\s+")
 _TRAILING_PUNCT_RE = re.compile(r"([.!?…。！？]+)$")
@@ -176,15 +178,18 @@ def inject_breath_cues(text: str) -> str:
 
 def apply_emotion_prosody(text: str, emotion: str) -> str:
     """zero_shot TTS에서 감정에 맞는 prosody를 구두점 변환으로 유도."""
-    if not text or emotion in ("평온", "진지"):
+    if not text:
         return text
-    if emotion in ("기쁨", "기대", "화남"):
+    style = get_emotion_details(emotion)["cosyvoice"]
+    if style == "neutral":
+        return text
+    if style == "bright":
         return _SENT_PERIOD.sub("!", text)
-    if emotion in ("슬픔", "걱정"):
+    if style == "sad":
         return _SENT_PERIOD.sub("...", text)
-    if emotion == "수줍":
+    if style == "shy":
         return _SENT_PERIOD.sub("~", text)
-    if emotion == "놀람":
+    if style == "surprised":
         return _SENT_PERIOD.sub("?!", text)
     return text
 

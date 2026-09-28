@@ -33,6 +33,8 @@ class DiskTTSAudioCacheTests(unittest.TestCase):
             with self.subTest(setting=index):
                 self.assertNotEqual(key, build_tts_cache_key(*changed))
 
+        self.assertNotEqual(key, build_tts_cache_key(*base, pitch="+3Hz"))
+
     def test_default_directory_is_resolved_on_first_access(self):
         cache = DiskTTSAudioCache()
         self.assertIsNone(cache._cache_dir)

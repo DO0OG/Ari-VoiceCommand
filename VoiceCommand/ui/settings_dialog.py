@@ -49,6 +49,7 @@ class SettingsDialog(QDialog):
         "cosyvoice_reference_text",
         "cosyvoice_speed", "cosyvoice_dir", "openai_tts_api_key", "openai_tts_voice", "openai_tts_model",
         "elevenlabs_api_key", "elevenlabs_voice_id", "edge_tts_voice", "edge_tts_rate",
+        "tts_emotion_enabled",
     }
     LLM_KEYS = {
         "llm_provider", "llm_model",

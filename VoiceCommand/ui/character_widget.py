@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasin
 from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
 from ui.speech_bubble import SpeechBubble, register_fonts
 from i18n.translator import _
+from core.emotions import EMOTION_CATALOG, PET_EMOTIONS
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL
@@ -699,7 +700,7 @@ class CharacterWidget(QWidget):
         self._is_being_petted = True
         self._pet_cooldown = 3.0
 
-        self.set_emotion(_RNG.choice(["수줍", "기쁨"]))
+        self.set_emotion(_RNG.choice(PET_EMOTIONS))
         pet_messages = [
             _("...알겠어요."),
             _("좀 간지럽네요."),
@@ -1375,27 +1376,14 @@ class CharacterWidget(QWidget):
         """실제 감정 표현 처리 (메인 스레드)"""
         logging.debug(f"캐릭터 감정 표현: {emotion}")
         
-        # 감정에 따른 애니메이션 매핑
-        emotion_map = {
-            "기쁨": ["walk", "idle"],
-            "슬픔": ["sit", "sleep"],
-            "화남": ["surprised"],
-            "놀람": ["surprised"],
-            "평온": ["idle", "sit"],
-            "수줍": ["sit", "idle"],
-            "기대": ["walk", "idle"],
-            "진지": ["sit"],
-            "걱정": ["sit", "idle"]
-        }
-        
-        if emotion in emotion_map:
-            anim = _RNG.choice(emotion_map[emotion])
-            self.set_animation(anim)
-            
-            # 기쁨/기대일 경우 가볍게 점프 효과
-            if emotion in ["기쁨", "기대"] and not self.is_falling:
-                self.velocity_y = -8
-                self.is_falling = True
+        details = EMOTION_CATALOG.get(emotion)
+        if not details:
+            return
+        self.set_animation(_RNG.choice(details["animations"]))
+
+        if details.get("jump") and not self.is_falling:
+            self.velocity_y = -8
+            self.is_falling = True
 
     def say(self, text, duration=5000):
         """말풍선 표시 (외부에서 호출 - 스레드 안전)"""

@@ -45,7 +45,8 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         playback_count = 0
         stream = Mock()
 
-        async def synthesize(text):
+        async def synthesize(text, emotion=None):
+            del emotion
             if text.startswith("둘째"):
                 second_synthesis_started.set()
             elif text.startswith("셋째"):
@@ -81,7 +82,8 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         provider = EdgeTTS(synthesis_timeout_seconds=0.02, audio_cache=Mock())
         stream = Mock()
 
-        async def synthesize(text):
+        async def synthesize(text, emotion=None):
+            del emotion
             if text.startswith("느린"):
                 await asyncio.sleep(0.2)
             return b"second"
@@ -100,7 +102,8 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
             cache = DiskTTSAudioCache(cache_dir)
             cache.put(
                 build_tts_cache_key(
-                    "edge", "ko-KR-SunHiNeural", "+0%", "+0%", "평온", get_language(), text
+                    "edge", "ko-KR-SunHiNeural", "+0%", "+0%", "평온",
+                    get_language(), text, pitch="+0Hz",
                 ),
                 b"cached-pcm",
             )
@@ -125,7 +128,7 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         provider = EdgeTTS(audio_cache=cache)
         stream = Mock()
 
-        async def synthesize(_text):
+        async def synthesize(_text, _emotion=None):
             return b"mp3"
 
         with (
@@ -147,7 +150,11 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
             patch.object(GlobalAudio, "close_stream") as close_stream,
             patch("audio.audio_manager.get_output_device_index", return_value=None),
             patch.object(mp3_decoder, "decode_mp3_to_pcm", return_value=b"x" * 10000),
-            patch.object(provider, "_synthesize", new=lambda _text: _completed_audio()),
+            patch.object(
+                provider,
+                "_synthesize",
+                new=lambda _text, _emotion=None: _completed_audio(),
+            ),
         ):
             self.assertFalse(provider.speak("중단할 문장입니다."))
 
@@ -161,7 +168,7 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         synthesis_cancelled = threading.Event()
         result = []
 
-        async def synthesize(_text):
+        async def synthesize(_text, _emotion=None):
             synthesis_started.set()
             try:
                 await asyncio.sleep(10)
