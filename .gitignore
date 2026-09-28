@@ -167,6 +167,7 @@ cython_debug/
 
 config.json
 !VoiceCommand/resources/decision/config.json
+VoiceCommand/resources/build_info.json
 
 # ── 개발 도구 ──────────────────────────────────────────────────────────────────
 .claude/

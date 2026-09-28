@@ -15,6 +15,10 @@ if _worker_exit_code is None and len(sys.argv) == 3 and sys.argv[1] == "--bundle
     from core.bundle_import_self_test import run_bundle_import_self_test
 
     _worker_exit_code = run_bundle_import_self_test(sys.argv[2])
+if _worker_exit_code is None:
+    from core.app_version import dispatch_version_command
+
+    _worker_exit_code = dispatch_version_command(sys.argv)
 if _worker_exit_code is not None:
     raise SystemExit(_worker_exit_code)
 
@@ -86,6 +90,7 @@ from core.VoiceCommand import (
 )
 
 from core.core_manager import AriCore
+from core.app_version import record_last_run_version
 from ui.tray_icon import SystemTrayIcon
 from core.plugin_loader import PluginContext, get_plugin_manager
 from commands.ai_command import AICommand
@@ -346,6 +351,7 @@ def main():
 
     try:
         setup_logging()
+        record_last_run_version()
         icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
 

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
+from core.app_version import get_build_info
 from core.config_manager import ConfigManager
 from core.custom_llm_providers import is_custom_secret_key
 from i18n.translator import _, set_language, get_language
@@ -109,6 +110,16 @@ class SettingsDialog(QDialog):
         # 6. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
         self.tabs.addTab(self._plugin_page, _("확장"))
+
+        build_info = get_build_info()
+        commit = build_info["commit"][:7] or "—"
+        version_label = QLabel(
+            _("Version: {version} · Commit: {commit}").format(
+                version=build_info["version"],
+                commit=commit,
+            )
+        )
+        layout.addWidget(version_label)
 
         # 하단 버튼
         btn_layout = QHBoxLayout()

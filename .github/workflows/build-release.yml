@@ -51,6 +51,46 @@ jobs:
         working-directory: VoiceCommand
         run: .venv\Scripts\python.exe scripts\compile_po.py
 
+      - name: Write build info
+        id: write-build-info
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          $version = "0.0.0-dev"
+          if ($env:REF_TYPE -eq "tag") {
+            $candidate = ($env:REF_NAME -replace '^v', '') -replace '[^0-9A-Za-z.\-]', ''
+            if ($candidate) { $version = $candidate }
+          }
+
+          $channel = "dev"
+          if ($env:REF_TYPE -eq "tag") {
+            $channel = "stable"
+            if ($env:REF_NAME.Contains("-")) { $channel = "beta" }
+          }
+
+          $buildInfo = [ordered]@{
+            version = $version
+            commit = $env:BUILD_COMMIT
+            built_at = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            channel = $channel
+          } | ConvertTo-Json -Compress
+          $buildInfoPath = Join-Path $env:GITHUB_WORKSPACE "VoiceCommand\resources\build_info.json"
+          [System.IO.Directory]::CreateDirectory((Split-Path $buildInfoPath)) | Out-Null
+          [System.IO.File]::WriteAllText(
+            $buildInfoPath,
+            $buildInfo,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          $versionOutput = "version=$version" + [Environment]::NewLine
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            $versionOutput,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
       # Nuitka 컴파일 결과를 보존해 다음 빌드에서는 바뀐 모듈만 다시 컴파일한다.
       - name: Restore Nuitka compile cache
         uses: actions/cache@v4
@@ -131,8 +171,7 @@ jobs:
         working-directory: VoiceCommand
         shell: pwsh
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
+          APP_VERSION: ${{ steps.write-build-info.outputs.version }}
         run: |
           $sourceDir = @("dist\Ari", "dist\Main.dist") | Where-Object { Test-Path "$_\Ari.exe" } | Select-Object -First 1
           if (-not $sourceDir) {
@@ -141,11 +180,7 @@ jobs:
             throw "설치 파일에 넣을 빌드 산출물 폴더를 찾지 못했습니다."
           }
 
-          $version = "0.0.0-dev"
-          if ($env:REF_TYPE -eq "tag") {
-            $candidate = ($env:REF_NAME -replace '^v', '') -replace '[^0-9A-Za-z.\-]', ''
-            if ($candidate) { $version = $candidate }
-          }
+          $version = $env:APP_VERSION
 
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
@@ -162,12 +197,28 @@ jobs:
       - name: Smoke test installer (install, self-test, uninstall)
         shell: pwsh
         timeout-minutes: 8
+        env:
+          EXPECTED_VERSION: ${{ steps.write-build-info.outputs.version }}
         run: |
           $setup = Get-ChildItem "Ari-Setup-*.exe" | Select-Object -First 1
           $dir = Join-Path $env:RUNNER_TEMP "AriInstall"
           $proc = Start-Process $setup.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"") -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw "설치에 실패했습니다 (exit $($proc.ExitCode))." }
           if (-not (Test-Path "$dir\Ari.exe")) { throw "설치 폴더에 Ari.exe가 없습니다." }
+
+          $reportedVersion = & "$dir\Ari.exe" --version
+          if ($LASTEXITCODE -ne 0 -or $reportedVersion.Trim() -ne $env:EXPECTED_VERSION) {
+            throw "Installed version mismatch: expected $env:EXPECTED_VERSION, got $reportedVersion"
+          }
+          if ($env:EXPECTED_VERSION -match '^(\d+)\.(\d+)\.(\d+)(?:-.*)?$') {
+            $expectedFileVersion = "$($matches[1]).$($matches[2]).$($matches[3]).0"
+            $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo("$dir\Ari.exe")
+            $fileVersionMatches = $versionInfo.FileVersion -eq $expectedFileVersion
+            $productVersionMatches = $versionInfo.ProductVersion -eq $expectedFileVersion
+            if (-not $fileVersionMatches -or -not $productVersionMatches) {
+              throw "Installed PE version metadata does not match $expectedFileVersion."
+            }
+          }
 
           $report = Join-Path $env:RUNNER_TEMP "installed-decision-self-test.json"
           $test = Start-Process "$dir\Ari.exe" -ArgumentList @("--decision-self-test", $report) -PassThru

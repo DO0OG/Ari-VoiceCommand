@@ -164,6 +164,7 @@ import json
 from datetime import datetime
 
 from core import release_packaging as _release_packaging
+from core.app_version import get_windows_version
 from core.settings_schema import SENSITIVE_SETTINGS_KEYS, SETTINGS_TEMPLATE_FILE
 
 _raw_package_imports = _release_packaging.raw_package_imports
@@ -244,7 +245,7 @@ if os.path.exists(PLUGIN_RUNTIME_DIR):
 nuitka_args = [
     "--standalone" if not one_file else "--onefile",
     f"--jobs={jobs}",
-    "--windows-console-mode=disable",
+    "--windows-console-mode=attach",
     "--output-filename=Ari",
     "--output-dir=dist",
     "--show-progress",
@@ -260,6 +261,11 @@ nuitka_args = [
     "--include-data-dir=theme=theme",
     "--include-data-dir=i18n/locales=i18n/locales",
     "--include-data-dir=resources/decision=resources/decision",
+    *(
+        ["--include-data-files=resources/build_info.json=resources/build_info.json"]
+        if os.path.isfile(os.path.join(HERE, "resources", "build_info.json"))
+        else []
+    ),
     "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
@@ -420,6 +426,13 @@ nuitka_args = [
     
     "Main.py"
 ]
+
+_windows_version = get_windows_version()
+if _windows_version:
+    nuitka_args.extend([
+        f"--file-version={_windows_version}",
+        f"--product-version={_windows_version}",
+    ])
 
 start_time = datetime.now().strftime("%H:%M:%S")
 print(f"빌드 시작 시간: {start_time}")

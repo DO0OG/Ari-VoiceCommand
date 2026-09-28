@@ -125,6 +125,7 @@ class MainStartupTests(unittest.TestCase):
             "set_character_widget": Mock(),
             "create_text_interface": Mock(side_effect=RuntimeError("text UI init failed")),
             "on_language_changed": Mock(),
+            "record_last_run_version": Mock(return_value=True),
             "_state": SimpleNamespace(command_registry=None),
             "AICommand": type("AICommand", (), {}),
             "get_plugin_manager": Mock(side_effect=PermissionError("plugin folder is read-only")),
@@ -152,6 +153,7 @@ class MainStartupTests(unittest.TestCase):
         ensure_single_instance.assert_called_once()
         start_single_instance_server.assert_called_once()
         self.assertEqual(instances["app"].exec_count, 1)
+        namespace["record_last_run_version"].assert_called_once_with()
         self.assertEqual(
             instances["character"].messages,
             ["마이크를 찾을 수 없어 음성 인식을 사용할 수 없습니다. 설정에서 마이크를 지정해 주세요."],
@@ -182,6 +184,23 @@ class MainStartupTests(unittest.TestCase):
         ensure_single_instance.assert_called_once()
         setup_logging.assert_not_called()
         flush_runtime_state.assert_not_called()
+
+    def test_version_dispatch_is_before_gui_imports(self):
+        tree = ast.parse(MAIN_PATH.read_text(encoding="utf-8"))
+        dispatch_line = next(
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "dispatch_version_command"
+        )
+        gui_import_line = next(
+            node.lineno
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            and node.module == "PySide6.QtWidgets"
+        )
+        self.assertLess(dispatch_line, gui_import_line)
 
     def test_logging_permission_failure_keeps_console_free_startup(self):
         handlers = []
