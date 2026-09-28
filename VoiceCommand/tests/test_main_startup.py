@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from core.config_manager import ConfigManager
+
 
 MAIN_PATH = Path(__file__).resolve().parents[1] / "Main.py"
 
@@ -57,7 +59,7 @@ class MainStartupTests(unittest.TestCase):
                 return 0
 
         class FakeCharacter:
-            def __init__(self):
+            def __init__(self, activity_monitor=None):
                 self.messages = []
                 self.show_count = 0
                 self.raise_count = 0
@@ -109,6 +111,8 @@ class MainStartupTests(unittest.TestCase):
             "ensure_single_instance": ensure_single_instance,
             "start_single_instance_server": start_single_instance_server,
             "QApplication": FakeApp,
+            "ConfigManager": ConfigManager,
+            "ActivityMonitor": Mock(side_effect=RuntimeError("activity hooks unavailable")),
             "QSystemTrayIcon": SimpleNamespace(isSystemTrayAvailable=lambda: False),
             "QIcon": Mock(),
             "get_ai_assistant": Mock(return_value=object()),

@@ -94,6 +94,10 @@ class ProactiveScheduler:
         self._schedule_run_log_file = _init_schedule_log_file()
         self._tasks: Dict[str, ScheduledTask] = {}
         self._lock = threading.Lock()
+        self._activity_state_lock = threading.Lock()
+        self._activity_locked = False
+        self._activity_away = False
+        self._activity_quiet = False
         self._run_log_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._orchestrator_func: Optional[Callable] = None
@@ -102,6 +106,95 @@ class ProactiveScheduler:
 
     def set_orchestrator_func(self, func: Callable):
         self._orchestrator_func = func
+
+    def set_activity_state(
+        self,
+        *,
+        locked: Optional[bool] = None,
+        away: Optional[bool] = None,
+        quiet: Optional[bool] = None,
+    ) -> None:
+        with self._activity_state_lock:
+            if locked is not None:
+                self._activity_locked = bool(locked)
+            if away is not None:
+                self._activity_away = bool(away)
+            if quiet is not None:
+                self._activity_quiet = bool(quiet)
+
+    def activity_return_summary(self, away_seconds: int) -> str:
+        """30분 이상 자리를 비운 뒤 대기 작업과 다음 일정을 한 줄로 반환한다."""
+        if away_seconds < 30 * 60:
+            return ""
+        now = datetime.now()
+        away_started = now - timedelta(seconds=away_seconds)
+        completed_runs = [
+            run
+            for run in self.get_task_runs(limit=0, since=away_started, until=now)
+            if run.get("task_id") != "activity_ide_long_use"
+        ]
+        completed_count = len(completed_runs)
+        due_count = 0
+        upcoming = []
+        with self._lock:
+            tasks = list(self._tasks.values())
+        for task in tasks:
+            if not task.enabled or not task.next_run:
+                continue
+            try:
+                due_at = datetime.fromisoformat(task.next_run)
+            except ValueError:
+                continue
+            if due_at.tzinfo is not None:
+                due_at = due_at.astimezone().replace(tzinfo=None)
+            if self._is_except_date(task, due_at.date().isoformat()):
+                continue
+            if due_at <= now:
+                due_count += 1
+            else:
+                upcoming.append((due_at, task))
+
+        next_task = min(upcoming, key=lambda item: item[0])[1] if upcoming else None
+        if not completed_count and not due_count and next_task is None:
+            return _("돌아오셨네요! 부재 중 완료된 작업은 없어요.")
+        summary = _(
+            "돌아오셨네요! 부재 중 완료 {completed}건, 대기 {waiting}건이에요.",
+            completed=completed_count,
+            waiting=due_count,
+        )
+        if next_task is not None:
+            summary += " " + _(
+                "다음 일정은 {next_task}예요.",
+                next_task=next_task.name or next_task.schedule_expr,
+            )
+        return summary
+
+    def activity_ide_long_use_message(self, duration_seconds: int) -> str:
+        """IDE를 오래 사용했을 때 하루 한 번 알림 문구를 반환한다."""
+        if duration_seconds < 3 * 60 * 60:
+            return ""
+        with self._activity_state_lock:
+            if self._activity_locked or self._activity_away or self._activity_quiet:
+                return ""
+        now = datetime.now()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if self.get_task_runs(
+            task_id="activity_ide_long_use",
+            limit=1,
+            since=day_start,
+            until=now,
+        ):
+            return ""
+        timestamp = now.isoformat()
+        self._append_task_run(ScheduledTaskRun(
+            task_id="activity_ide_long_use",
+            goal="IDE 연속 사용 알림",
+            task_type="activity",
+            started_at=timestamp,
+            finished_at=timestamp,
+            success=True,
+        ))
+        return _("장시간 계속 일하셨네요. 잠시 쉬어 가는 게 어때요?")
 
     def _get_schedule_file(self) -> str:
         path = getattr(self, "_schedule_file", "") or _SCHEDULE_FILE
@@ -242,11 +335,19 @@ class ProactiveScheduler:
         with self._lock:
             return list(self._tasks.values())
 
-    def get_task_runs(self, task_id: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+    def get_task_runs(
+        self,
+        task_id: str = "",
+        limit: int = 20,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> List[Dict[str, Any]]:
         run_log_file = self._get_schedule_run_log_file()
         if not run_log_file or not os.path.exists(run_log_file):
             return []
         rows: List[Dict[str, Any]] = []
+        since = since.astimezone().replace(tzinfo=None) if since and since.tzinfo else since
+        until = until.astimezone().replace(tzinfo=None) if until and until.tzinfo else until
         try:
             with open(run_log_file, "r", encoding="utf-8") as handle:
                 for raw in handle:
@@ -258,6 +359,20 @@ class ProactiveScheduler:
                         continue
                     if task_id and item.get("task_id") != task_id:
                         continue
+                    if since is not None or until is not None:
+                        finished_at = item.get("finished_at")
+                        if not isinstance(finished_at, str):
+                            continue
+                        try:
+                            finished = datetime.fromisoformat(finished_at)
+                        except ValueError:
+                            continue
+                        if finished.tzinfo is not None:
+                            finished = finished.astimezone().replace(tzinfo=None)
+                        if since is not None and finished < since:
+                            continue
+                        if until is not None and finished > until:
+                            continue
                     rows.append(item)
         except OSError as exc:
             logging.debug("[Scheduler] 실행 로그 읽기 실패: %s", exc)
@@ -336,7 +451,10 @@ class ProactiveScheduler:
             self._check_due_tasks()
 
     def _check_due_tasks(self):
-        due = self._claim_due_tasks(datetime.now())
+        with self._activity_state_lock:
+            if self._activity_locked or self._activity_away or self._activity_quiet:
+                return
+            due = self._claim_due_tasks(datetime.now())
         for task, run_meta in due:
             threading.Thread(target=self._execute_task, args=(task, run_meta), daemon=True).start()
 
@@ -418,7 +536,11 @@ class ProactiveScheduler:
 
     def check_missed_tasks_on_startup(self):
         """앱 시작 시 놓친 반복 작업을 보충 실행."""
-        for task, run_meta in self._claim_due_tasks(datetime.now()):
+        with self._activity_state_lock:
+            if self._activity_locked or self._activity_away or self._activity_quiet:
+                return
+            due = self._claim_due_tasks(datetime.now())
+        for task, run_meta in due:
             logging.info("[Scheduler] 놓친 작업 보충 실행: %s", task.task_id)
             threading.Thread(
                 target=self._execute_task,

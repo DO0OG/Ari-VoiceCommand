@@ -79,15 +79,23 @@ from PySide6.QtGui import QIcon
 from PySide6.QtCore import QEventLoop, QThread, Qt, QTimer
 
 from assistant.ai_assistant import get_ai_assistant
-from ui.character_widget import CharacterWidget
-from ui.text_interface import create_text_interface
+from core.activity_monitor import ActivityMonitor
+from core.config_manager import ConfigManager
 from core.VoiceCommand import (
+    _state,
+    disable_game_mode,
+    enable_game_mode,
+    is_game_mode,
     tts_wrapper,
     set_ai_assistant,
     set_character_widget,
     start_tts_background,
-    _state,
+    set_session_locked,
+    set_session_lock_monitoring_available,
+    set_activity_quiet,
 )
+from ui.character_widget import CharacterWidget
+from ui.text_interface import create_text_interface
 
 from core.core_manager import AriCore
 from core.app_version import is_release_build, record_last_run_version
@@ -342,6 +350,7 @@ def main():
     mcp_server_thread = None
     telegram_bridge = None
     update_checker = None
+    activity_monitor = None
 
     def _show_character():
         if character is not None:
@@ -367,6 +376,47 @@ def main():
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DO0OG.Ari")
         app = QApplication(sys.argv)
+        auto_game_mode_applied = False
+
+        def _sync_activity_game_mode():
+            nonlocal auto_game_mode_applied
+            category_reactions_enabled = bool(
+                ConfigManager.get("activity_app_category_reaction_enabled", False)
+            )
+            auto_enabled = bool(ConfigManager.get("activity_auto_game_mode_enabled", False))
+            should_enable = (
+                category_reactions_enabled
+                and auto_enabled
+                and activity_monitor.foreground_category in ("game", "video")
+            )
+            if should_enable and not auto_game_mode_applied and not is_game_mode():
+                enable_game_mode()
+                auto_game_mode_applied = is_game_mode()
+            elif not should_enable and auto_game_mode_applied:
+                disable_game_mode()
+                auto_game_mode_applied = False
+
+        # 활동 감지는 선택 기능이므로 실패해도 앱 시작을 막지 않는다.
+        try:
+            activity_monitor = ActivityMonitor()
+            activity_monitor.session_locked.connect(lambda: set_session_locked(True))
+            activity_monitor.session_unlocked.connect(lambda: set_session_locked(False))
+            activity_monitor.quiet_state_changed.connect(
+                lambda reason: set_activity_quiet(reason != "none")
+            )
+            lock_detection_available = activity_monitor.start()
+            set_session_lock_monitoring_available(lock_detection_available)
+            set_activity_quiet(activity_monitor.quiet_reason != "none")
+            if not lock_detection_available:
+                logging.error("세션 잠금 감지를 사용할 수 없어 웨이크 감지를 중지합니다.")
+            activity_monitor.foreground_category_changed.connect(
+                lambda _category: _sync_activity_game_mode()
+            )
+            activity_monitor.settings_refreshed.connect(_sync_activity_game_mode)
+            _sync_activity_game_mode()
+        except Exception as exc:
+            activity_monitor = None
+            logging.warning("활동 감지를 시작하지 못했습니다: %s", exc)
         start_single_instance_server(_show_character)
         if icon_path:
             app.setWindowIcon(QIcon(icon_path))
@@ -405,7 +455,6 @@ def main():
             logging.error("TTS 초기화 실패; 음성 출력 기능을 사용할 수 없습니다: %s", exc)
 
         try:
-            from core.config_manager import ConfigManager
             plugin_hot_reload_enabled = bool(
                 ConfigManager.get("plugin_hot_reload_enabled", False)
             )
@@ -425,6 +474,27 @@ def main():
             logging.warning("예약 작업 초기화 실패; 예약 기능을 사용할 수 없습니다: %s", exc)
 
         if scheduler is not None:
+            if activity_monitor is not None:
+                scheduler.set_activity_state(
+                    locked=activity_monitor.session_is_locked,
+                    away=activity_monitor.is_user_away,
+                    quiet=activity_monitor.quiet_reason != "none",
+                )
+                activity_monitor.session_locked.connect(
+                    lambda: scheduler.set_activity_state(locked=True)
+                )
+                activity_monitor.session_unlocked.connect(
+                    lambda: scheduler.set_activity_state(locked=False)
+                )
+                activity_monitor.user_away.connect(
+                    lambda _seconds: scheduler.set_activity_state(away=True)
+                )
+                activity_monitor.user_returned.connect(
+                    lambda _seconds: scheduler.set_activity_state(away=False)
+                )
+                activity_monitor.quiet_state_changed.connect(
+                    lambda reason: scheduler.set_activity_state(quiet=reason != "none")
+                )
             try:
                 register_background_learning_tasks(scheduler)
             except Exception as exc:
@@ -439,9 +509,23 @@ def main():
 
         # 캐릭터 위젯 생성
         logging.info("캐릭터 위젯 생성 시작")
-        character = CharacterWidget()
+        character = CharacterWidget(activity_monitor=activity_monitor)
         logging.info("캐릭터 위젯 생성 완료")
         set_character_widget(character)
+        if scheduler is not None and activity_monitor is not None:
+            def _report_activity_return(away_seconds):
+                summary = scheduler.activity_return_summary(away_seconds)
+                if summary:
+                    character.say(summary, duration=6000)
+
+            activity_monitor.user_returned.connect(_report_activity_return)
+
+            def _report_ide_long_use(duration_seconds):
+                message = scheduler.activity_ide_long_use_message(duration_seconds)
+                if message:
+                    character.say(message, duration=5000)
+
+            activity_monitor.ide_long_use_due.connect(_report_ide_long_use)
 
         voice_thread = getattr(ari_core, "voice_thread", None)
         if voice_thread is not None:
@@ -597,6 +681,8 @@ def main():
         logging.info("=== 앱 종료 시작 ===")
         if update_checker:
             update_checker.stop()
+        if activity_monitor:
+            activity_monitor.stop()
         flush_runtime_state()
         if text_interface:
             text_interface.cleanup()

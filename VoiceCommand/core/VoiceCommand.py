@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+import sys
 import time
 import threading
 from collections import deque
@@ -58,6 +59,9 @@ class AppState:
         self.listening_indicator_active = False
         self.listening_indicator_text = _("말씀해주세요")
         self.tts_resume_guard_until = 0.0
+        self.session_locked = False
+        self.session_lock_monitoring_available = True
+        self.activity_quiet = False
 
 _state = AppState()
 _TTS_WAKE_GUARD_SECONDS = 1.2
@@ -369,9 +373,24 @@ def _handle_tts_playback_finished() -> None:
         _state.character_widget.hide_speech_bubble()
 
 
+def _quiet_bubble_only_enabled() -> bool:
+    if not _state.activity_quiet:
+        return False
+    from core.config_manager import ConfigManager
+
+    return bool(ConfigManager.get("activity_quiet_bubble_only_enabled", False))
+
+
 def text_to_speech(text: str, show_bubble: bool = True) -> bool:
     """TTS로 음성 출력 (최종 최적화 버전)"""
     emotion, text = parse_emotion_text(text)
+
+    if _quiet_bubble_only_enabled():
+        if _state.character_widget:
+            _state.character_widget.set_emotion(emotion)
+            if show_bubble:
+                _show_tts_bubble(text)
+        return True
 
     if _state.character_widget:
         _state.character_widget.set_emotion(emotion)
@@ -417,6 +436,10 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
 
 def tts_wrapper(text: str, show_bubble: bool = True) -> None:
     """TTS 재생 + 말풍선 표시 (감정 이모지 및 동기화 최적화)"""
+    if _quiet_bubble_only_enabled():
+        if show_bubble and _state.character_widget:
+            _show_tts_bubble(text)
+        return
     if _state.tts_thread:
         queued = _state.tts_thread.speak(text)
         if queued and show_bubble:
@@ -440,12 +463,33 @@ def is_tts_playing() -> bool:
     return False
 
 
+def is_session_lock_blocked() -> bool:
+    """잠금 상태이거나 잠금 감지를 사용할 수 없으면 참을 반환한다."""
+    return _state.session_locked or (
+        sys.platform == "win32" and not _state.session_lock_monitoring_available
+    )
+
+
 def should_pause_wake_detection(now: float | None = None) -> bool:
-    """TTS 재생 중이거나 직후 짧은 보호 구간이면 웨이크워드 감지를 멈춘다."""
+    """잠금·TTS 재생 중이거나 직후 보호 구간이면 웨이크 감지를 멈춘다."""
+    if is_session_lock_blocked():
+        return True
     if is_tts_playing():
         return True
     current = time.monotonic() if now is None else now
     return current < _state.tts_resume_guard_until
+
+
+def set_session_locked(locked: bool) -> None:
+    _state.session_locked = bool(locked)
+
+
+def set_session_lock_monitoring_available(available: bool) -> None:
+    _state.session_lock_monitoring_available = bool(available)
+
+
+def set_activity_quiet(quiet: bool) -> None:
+    _state.activity_quiet = bool(quiet)
 
 
 def execute_command(command):
@@ -470,21 +514,30 @@ def recognize_speech_helper(
     signal,
     stt_provider=None,
     previous_texts=None,
+    continue_check=None,
 ) -> str | None:
     try:
+        if continue_check is not None and not continue_check():
+            return None
         logging.info("말씀해 주세요...")
         audio = recognizer.listen(
             source,
             timeout=SPEECH_TIMEOUT,
             phrase_time_limit=SPEECH_PHRASE_LIMIT,
         )
+        if continue_check is not None and not continue_check():
+            return None
         provider = stt_provider
         if provider is None:
             from core.config_manager import ConfigManager
             from core.stt_provider import create_stt_provider
 
             provider = create_stt_provider(ConfigManager.load_settings())
+        if continue_check is not None and not continue_check():
+            return None
         text = provider.transcribe(audio)
+        if continue_check is not None and not continue_check():
+            return None
         if not text:
             logging.warning("음성 인식 불가")
             return

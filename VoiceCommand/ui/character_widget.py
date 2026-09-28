@@ -17,6 +17,8 @@ from PySide6.QtGui import QPixmap, QImage, QCursor, QTransform, QAction
 from ui.speech_bubble import SpeechBubble, register_fonts
 from i18n.translator import _
 from core.emotions import EMOTION_CATALOG, PET_EMOTIONS
+from core.config_manager import ConfigManager
+from core import window_inspector
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL
@@ -158,8 +160,9 @@ class CharacterWidget(QWidget):
 
     char_x = Property(int, get_char_x, set_char_x)
 
-    def __init__(self):
+    def __init__(self, activity_monitor=None):
         super().__init__()
+        self.activity_monitor = activity_monitor
         self.voice_thread = None
         register_fonts()  # 메인 스레드에서 폰트 등록
         self._screen_geom_cache = None
@@ -171,6 +174,12 @@ class CharacterWidget(QWidget):
         self._drag_moved = False
         self._suppress_release_click = False
         self.current_animation = "idle"
+        self._activity_away = False
+        self._activity_locked = False
+        self._activity_quiet = False
+        self._activity_category_quiet = False
+        self._activity_was_visible = False
+        self._last_unlock_greeting_at = None
         self.frame_index = 0
         self.animations = {}
         self._character_packs = {}
@@ -279,9 +288,35 @@ class CharacterWidget(QWidget):
         self.physics_timer.timeout.connect(self.update_physics)
         self.physics_timer.start(33)
 
+        if self.activity_monitor is not None:
+            self.activity_monitor.user_away.connect(self._on_user_away)
+            self.activity_monitor.user_returned.connect(self._on_user_returned)
+            self.activity_monitor.session_locked.connect(self._on_session_locked)
+            self.activity_monitor.session_unlocked.connect(self._on_session_unlocked)
+            self.activity_monitor.quiet_state_changed.connect(self._on_quiet_state_changed)
+            self.activity_monitor.foreground_category_changed.connect(
+                self._on_foreground_category_changed
+            )
+            self.activity_monitor.settings_refreshed.connect(
+                self._sync_session_lock_visibility
+            )
+            self._activity_away = self.activity_monitor.is_user_away
+            self._activity_locked = self.activity_monitor.session_is_locked
+            self._activity_quiet = self.activity_monitor.quiet_reason != "none"
+            self._activity_category_quiet = self.activity_monitor.foreground_category in (
+                "game",
+                "video",
+            )
+            self._refresh_activity_behavior()
+
         # 화면 하단으로 이동
         self.move_to_bottom()
         self.show()
+        if self._activity_locked and ConfigManager.get(
+            "activity_session_lock_reaction_enabled", True
+        ):
+            self._activity_was_visible = True
+            self.hide()
         self._update_sleepy_mode()
 
         # Windows에서 HWND_TOPMOST 강제 적용
@@ -356,7 +391,6 @@ class CharacterWidget(QWidget):
 
     def _load_display_settings(self) -> tuple[float, int]:
         """설정에서 표시 배율과 바닥 보정값을 읽어 적용한다."""
-        from core.config_manager import ConfigManager
         settings = ConfigManager.load_settings()
         self.image_scale = self._clamp(
             settings.get("character_scale", 1.0), self.SCALE_MIN, self.SCALE_MAX, 1.0
@@ -528,26 +562,24 @@ class CharacterWidget(QWidget):
 
             if sys.platform == 'win32':
                 try:
-                    import ctypes
-                    from ctypes import wintypes
-                    
                     # 1. 포그라운드 창이 전체화면인지 확인 (유튜브 전체화면, 게임 등)
-                    foreground_hwnd = ctypes.windll.user32.GetForegroundWindow()
-                    if foreground_hwnd:
-                        rect = wintypes.RECT()
-                        ctypes.windll.user32.GetWindowRect(foreground_hwnd, ctypes.byref(rect))
-                        fw_w = rect.right - rect.left
-                        fw_h = rect.bottom - rect.top
-                        
-                        # 포그라운드 창이 화면을 꽉 채우고 있다면
-                        if fw_w >= full_geom.width() - 5 and fw_h >= full_geom.height() - 5:
-                            self._screen_geom_cache = full_geom
-                            self._screen_geom_cache_time = time.time()
-                            return self._screen_geom_cache
+                    fullscreen = self.activity_monitor is not None and (
+                        self.activity_monitor.foreground_covers(
+                            full_geom.width(), full_geom.height()
+                        )
+                    )
+                    if fullscreen:
+                        self._screen_geom_cache = full_geom
+                        self._screen_geom_cache_time = time.time()
+                        return self._screen_geom_cache
 
                     # 2. 작업표시줄 자체가 숨겨져 있는지 확인 (자동 숨김 모드 등)
-                    h_taskbar = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
-                    if h_taskbar and not ctypes.windll.user32.IsWindowVisible(h_taskbar):
+                    taskbar_hidden = (
+                        self.activity_monitor.taskbar_hidden
+                        if self.activity_monitor is not None
+                        else window_inspector.is_taskbar_hidden()
+                    )
+                    if taskbar_hidden:
                         self._screen_geom_cache = full_geom
                         self._screen_geom_cache_time = time.time()
                         return self._screen_geom_cache
@@ -644,8 +676,92 @@ class CharacterWidget(QWidget):
 
     def start_behavior_timer(self):
         """랜덤 간격으로 행동 타이머 시작"""
+        if self._activity_paused():
+            self.behavior_timer.stop()
+            return
         interval = _RNG.randint(3000, 10000)  # 3~10초
         self.behavior_timer.start(interval)
+
+    def _activity_paused(self) -> bool:
+        return any((
+            self._activity_away,
+            self._activity_locked,
+            self._activity_quiet,
+            self._activity_category_quiet,
+        ))
+
+    def _refresh_activity_behavior(self) -> None:
+        if self._activity_paused():
+            self.behavior_timer.stop()
+            if not self.dragging and not self.is_climbing and not self.is_falling:
+                self.set_animation("idle")
+        else:
+            self.start_behavior_timer()
+
+    @Slot()
+    def _on_user_away(self) -> None:
+        self._activity_away = True
+        self._refresh_activity_behavior()
+
+    @Slot(int)
+    def _on_user_returned(self, away_seconds: int) -> None:
+        self._activity_away = False
+        self._refresh_activity_behavior()
+        if away_seconds >= 30 * 60:
+            animation = "surprised" if "surprised" in self.animations else "idle"
+            self.set_animation(animation)
+            QTimer.singleShot(
+                1000,
+                lambda: self.set_animation("idle")
+                if self.current_animation == animation
+                else None,
+            )
+
+    @Slot()
+    def _on_session_locked(self) -> None:
+        self._activity_locked = True
+        self._sync_session_lock_visibility()
+        self._refresh_activity_behavior()
+
+    @Slot()
+    def _on_session_unlocked(self) -> None:
+        self._activity_locked = False
+        self._sync_session_lock_visibility()
+        self._refresh_activity_behavior()
+        now = time.monotonic()
+        if (
+            self.isVisible()
+            and not self._activity_paused()
+            and (
+                self._last_unlock_greeting_at is None
+                or now - self._last_unlock_greeting_at >= 60
+            )
+        ):
+            self._last_unlock_greeting_at = now
+            self.say(_("잠금이 풀렸어요."), duration=3000)
+
+    @Slot()
+    def _sync_session_lock_visibility(self) -> None:
+        hide_when_locked = ConfigManager.get(
+            "activity_session_lock_reaction_enabled", True
+        )
+        if self._activity_locked and hide_when_locked:
+            if self.isVisible():
+                self._activity_was_visible = True
+                self.hide()
+        elif self._activity_was_visible:
+            self.show()
+            self._activity_was_visible = False
+
+    @Slot(str)
+    def _on_quiet_state_changed(self, reason: str) -> None:
+        self._activity_quiet = reason != "none"
+        self._refresh_activity_behavior()
+
+    @Slot(str)
+    def _on_foreground_category_changed(self, category: str) -> None:
+        self._activity_category_quiet = category in ("game", "video")
+        self._refresh_activity_behavior()
 
     def _update_sleepy_mode(self):
         from datetime import datetime
@@ -673,7 +789,14 @@ class CharacterWidget(QWidget):
     def _do_yawn(self):
         from i18n.translator import _
 
-        if not self._sleepy_mode or self.dragging or self.is_climbing:
+        if (
+            not self._sleepy_mode
+            or self.dragging
+            or self.is_climbing
+            or self._activity_paused()
+        ):
+            if self._sleepy_mode and self._activity_paused():
+                self._schedule_yawn()
             return
         yawn_messages = [
             _("하암~... 졸려요."),
@@ -721,6 +844,8 @@ class CharacterWidget(QWidget):
 
     def random_behavior(self):
         """랜덤 행동 (벽 타기 확률 추가)"""
+        if self._activity_paused():
+            return
         # 이미 다른 작업을 수행 중이면 타이머를 재시작하지 않고 리턴.
         # 작업이 끝나는 시점(on_walk_finished, stop_climbing 등)에서 타이머가 다시 시작됨.
         if self.dragging or self.is_climbing or getattr(self, '_is_landing', False) or _is_geometry_animation_running(self.move_animation):
@@ -1061,7 +1186,6 @@ class CharacterWidget(QWidget):
             logging.warning("음성 인식 스레드가 없어 마이크 설정을 적용할 수 없습니다.")
             return False
 
-        from core.config_manager import ConfigManager
         microphone = ConfigManager.load_settings().get("microphone", "")
         self.voice_thread.set_microphone(microphone)
         return True
@@ -1447,6 +1571,8 @@ class CharacterWidget(QWidget):
 
     def time_based_greeting(self):
         """시간대별 인사"""
+        if self._activity_paused():
+            return
         from datetime import datetime
         from i18n.translator import _
 

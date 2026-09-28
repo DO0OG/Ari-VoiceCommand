@@ -10,12 +10,13 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
     QComboBox, QGroupBox, QWidget, QCheckBox,
-    QTabWidget, QMessageBox, QFrame, QSlider,
+    QTabWidget, QMessageBox, QFrame, QSlider, QSpinBox,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from core.app_version import compare_versions, get_build_info
+from core.activity_monitor import refresh_activity_monitor
 from core.config_manager import ConfigManager
 from core.update_checker import get_update_status
 from core.custom_llm_providers import is_custom_secret_key
@@ -108,11 +109,14 @@ class SettingsDialog(QDialog):
         # 4. 장치 설정 탭
         self.tabs.addTab(self._create_device_tab(), _("장치 설정"))
 
-        # 5. 확장 탭
+        # 5. 활동 반응 탭
+        self.tabs.addTab(self._create_activity_tab(), _("활동 반응"))
+
+        # 6. 확장 탭
         self._agent_page = _AgentSettingsPage(self.settings, self)
         self.tabs.addTab(self._agent_page, _("에이전트"))
 
-        # 6. 확장 탭
+        # 7. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
         self.tabs.addTab(self._plugin_page, _("확장"))
 
@@ -212,6 +216,81 @@ class SettingsDialog(QDialog):
         gvbox.addWidget(self.verbosity_combo)
 
         vbox.addWidget(group, 1)
+        return widget
+
+    def _create_activity_tab(self):
+        widget = QWidget()
+        vbox = QVBoxLayout(widget)
+        group = QGroupBox(_("활동 반응"))
+        group_layout = QVBoxLayout(group)
+
+        self.activity_idle_checkbox = QCheckBox(_("자리 비움·복귀 반응"))
+        self.activity_idle_checkbox.setChecked(
+            bool(self.settings.get("activity_idle_reaction_enabled", True))
+        )
+        group_layout.addWidget(self.activity_idle_checkbox)
+
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel(_("자리 비움 기준 (분)")))
+        self.activity_away_threshold_spin = QSpinBox()
+        self.activity_away_threshold_spin.setRange(1, 240)
+        self.activity_away_threshold_spin.setValue(
+            int(self.settings.get("activity_away_threshold_minutes", 5))
+        )
+        threshold_layout.addWidget(self.activity_away_threshold_spin)
+        threshold_layout.addStretch()
+        group_layout.addLayout(threshold_layout)
+
+        self.activity_lock_checkbox = QCheckBox(_("화면 잠금 시 캐릭터 숨기기"))
+        self.activity_lock_checkbox.setChecked(
+            bool(self.settings.get("activity_session_lock_reaction_enabled", True))
+        )
+        group_layout.addWidget(self.activity_lock_checkbox)
+
+        self.activity_quiet_checkbox = QCheckBox(_("방해 금지·전체 화면 반응"))
+        self.activity_quiet_checkbox.setChecked(
+            bool(self.settings.get("activity_quiet_reaction_enabled", True))
+        )
+        group_layout.addWidget(self.activity_quiet_checkbox)
+
+        self.activity_quiet_bubble_checkbox = QCheckBox(
+            _("방해 금지 중 말풍선으로만 응답")
+        )
+        self.activity_quiet_bubble_checkbox.setChecked(
+            bool(self.settings.get("activity_quiet_bubble_only_enabled", False))
+        )
+        group_layout.addWidget(self.activity_quiet_bubble_checkbox)
+
+        self.activity_app_checkbox = QCheckBox(_("앱 카테고리 반응 (기본 꺼짐)"))
+        self.activity_app_checkbox.setChecked(
+            bool(self.settings.get("activity_app_category_reaction_enabled", False))
+        )
+        group_layout.addWidget(self.activity_app_checkbox)
+
+        self.activity_auto_game_mode_checkbox = QCheckBox(
+            _("게임·영상 앱에서 게임 모드 자동 적용")
+        )
+        self.activity_auto_game_mode_checkbox.setChecked(
+            bool(self.settings.get("activity_auto_game_mode_enabled", False))
+        )
+        group_layout.addWidget(self.activity_auto_game_mode_checkbox)
+
+        self.activity_ide_long_use_checkbox = QCheckBox(
+            _("IDE 3시간 연속 사용 알림")
+        )
+        self.activity_ide_long_use_checkbox.setChecked(
+            bool(self.settings.get("activity_ide_long_use_reaction_enabled", True))
+        )
+        group_layout.addWidget(self.activity_ide_long_use_checkbox)
+
+        privacy_note = QLabel(_(
+            "활동 정보는 앱 카테고리와 경과 시간만 포함하며, 창 제목·프로세스명은 전송하지 않습니다."
+        ))
+        privacy_note.setWordWrap(True)
+        group_layout.addWidget(privacy_note)
+        group_layout.addWidget(QLabel(_("잠금 중 웨이크 감지는 항상 정지됩니다.")))
+        vbox.addWidget(group)
+        vbox.addStretch()
         return widget
 
     def _create_device_tab(self):
@@ -677,6 +756,16 @@ class SettingsDialog(QDialog):
             "ui_font_family": self.theme_font_input.text().strip(),
             "language": self.lang_combo.currentData(),
             "update_check_enabled": self.update_check_enabled.isChecked(),
+
+            # 활동 반응
+            "activity_idle_reaction_enabled": self.activity_idle_checkbox.isChecked(),
+            "activity_session_lock_reaction_enabled": self.activity_lock_checkbox.isChecked(),
+            "activity_quiet_reaction_enabled": self.activity_quiet_checkbox.isChecked(),
+            "activity_away_threshold_minutes": self.activity_away_threshold_spin.value(),
+            "activity_app_category_reaction_enabled": self.activity_app_checkbox.isChecked(),
+            "activity_quiet_bubble_only_enabled": self.activity_quiet_bubble_checkbox.isChecked(),
+            "activity_auto_game_mode_enabled": self.activity_auto_game_mode_checkbox.isChecked(),
+            "activity_ide_long_use_reaction_enabled": self.activity_ide_long_use_checkbox.isChecked(),
         }
 
         # LLM / TTS 값을 각 페이지에서 수집
@@ -693,6 +782,10 @@ class SettingsDialog(QDialog):
             self.changed_keys = set()
             QMessageBox.warning(self, _("settings.save_failed"), _("settings.secret_save_failed"))
             return
+        try:
+            refresh_activity_monitor()
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("활동 설정 적용을 건너뜁니다: %s", exc)
 
         if "update_check_enabled" in self.changed_keys and self.update_checker:
             self.update_checker.settings_changed()
