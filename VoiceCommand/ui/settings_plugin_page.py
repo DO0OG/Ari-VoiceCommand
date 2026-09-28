@@ -28,6 +28,7 @@ class _PluginSettingsPage(QWidget):
         self._market_fetch_thread: MarketplaceFetchThread | None = None
         self._market_install_thread: MarketplaceInstallThread | None = None
         self._market_items: list[dict] = []
+        self._market_installing_plugin_name = ""
         self._init_ui()
 
     # ── UI 구성 ───────────────────────────────────────────────────────────────
@@ -280,12 +281,25 @@ class _PluginSettingsPage(QWidget):
         self.marketplace_status_label.setText(_("{name} 설치 중...").format(name=plugin_name))
         self.marketplace_status_label.setStyleSheet("color: #888;")
 
-        self._market_install_thread = MarketplaceInstallThread(plugin_id)
+        self._market_installing_plugin_name = plugin_name
+        self._market_install_thread = MarketplaceInstallThread(
+            plugin_id,
+            self.plugin_dir_input.text().strip(),
+        )
         self._market_install_thread.done.connect(self._on_marketplace_install_done)
         self._market_install_thread.start()
 
     def _on_marketplace_install_done(self, success: bool, message: str):
         self._market_install_thread = None
+        if success:
+            try:
+                self._activate_installed_marketplace_plugin()
+            except Exception as exc:
+                success = False
+                message = _(
+                    "플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}"
+                ).format(error=exc)
+
         if success:
             self.marketplace_status_label.setText(message)
             self.marketplace_status_label.setStyleSheet("color: #27ae60;")
@@ -297,6 +311,22 @@ class _PluginSettingsPage(QWidget):
             self.marketplace_status_label.setText(message)
             self.marketplace_status_label.setStyleSheet("color: #e74c3c;")
             QMessageBox.warning(self, _("마켓플레이스"), message)
+        self._market_installing_plugin_name = ""
+
+    def _activate_installed_marketplace_plugin(self) -> None:
+        from core.marketplace_client import _plugin_target_filename
+        from core.plugin_loader import get_plugin_manager
+
+        manager = get_plugin_manager()
+        plugin_path = os.path.join(
+            self.plugin_dir_input.text().strip(),
+            _plugin_target_filename(self._market_installing_plugin_name),
+        )
+        if not os.path.isfile(plugin_path):
+            raise RuntimeError(_("설치된 플러그인을 찾지 못했습니다."))
+        loaded = manager.load_plugin(plugin_path)
+        if not loaded.loaded:
+            raise RuntimeError(loaded.error)
 
     def _refresh_skill_list(self):
         from agent.skill_manager import get_skill_manager

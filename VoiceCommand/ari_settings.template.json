@@ -72,6 +72,7 @@
   "memory_consolidation_days": 14,
   "weekly_report_enabled": false,
   "agent_timeout_seconds": 120,
+  "plugin_hot_reload_enabled": false,
   "audit_log_enabled": true,
   "mcp_server_enabled": false,
   "mcp_server_port": 8765,

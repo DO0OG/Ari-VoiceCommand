@@ -90,6 +90,17 @@ class _AgentSettingsPage(QWidget):
 
         layout.addWidget(group)
         layout.addWidget(self._build_learning_metrics_group())
+        developer_group = QGroupBox(_("개발자 설정"))
+        developer_box = QVBoxLayout(developer_group)
+        self.plugin_hot_reload_checkbox = QCheckBox(_("플러그인 핫 리로드 사용"))
+        self.plugin_hot_reload_checkbox.setChecked(
+            bool(settings.get("plugin_hot_reload_enabled", False))
+        )
+        developer_box.addWidget(self.plugin_hot_reload_checkbox)
+        note = QLabel(_("다음 앱 시작 때 적용됩니다."))
+        note.setWordWrap(True)
+        developer_box.addWidget(note)
+        layout.addWidget(developer_group)
         layout.addWidget(self._build_local_decision_group(settings))
         layout.addStretch(1)
         self._update_timeout_label(self.timeout_slider.value())
@@ -195,6 +206,7 @@ class _AgentSettingsPage(QWidget):
         direct = mode == "fast" and self.local_decision_checkbox.isChecked()
         return {
             "agent_timeout_seconds": int(self.timeout_slider.value()),
+            "plugin_hot_reload_enabled": self.plugin_hot_reload_checkbox.isChecked(),
             "agent_dashboard_enabled": self.dashboard_checkbox.isChecked(),
             "audit_log_enabled": self.audit_checkbox.isChecked(),
             "mcp_server_enabled": self.mcp_checkbox.isChecked(),

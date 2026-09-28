@@ -124,12 +124,17 @@ def fetch_plugin(plugin_id: str) -> Optional[Dict]:
         return None
 
 
-def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
+def install_plugin(
+    plugin_id: str,
+    plugin_dir: Optional[str] = None,
+    load_after_install: bool = True,
+    trust_after_install: bool = False,
+) -> bool:
     """
     플러그인을 설치한다.
     1. install-plugin 호출 → install_count 증가 + release_url 획득
     2. ZIP 다운로드 후 plugin_dir에 ZIP 그대로 저장
-    3. 실행 중인 PluginManager에 동적 로드
+    3. 요청된 경우 설치 동의를 신뢰 목록에 저장하고 플러그인을 로드
     """
     if not _marketplace_available():
         return False
@@ -212,16 +217,27 @@ def install_plugin(plugin_id: str, plugin_dir: Optional[str] = None) -> bool:
 
     logger.info("플러그인 설치 완료: %s → %s", installed_files, plugin_dir)
 
-    # 4. 실행 중인 PluginManager에 동적 로드
-    try:
+    if trust_after_install:
         from core.plugin_loader import get_plugin_manager
-        pm = get_plugin_manager()
+
+        manager = get_plugin_manager()
         for fname in installed_files:
             path = os.path.join(plugin_dir, fname)
-            pm.unload_plugin(plugin_name)
-            pm.load_plugin(path)
-            logger.info("플러그인 로드: %s", fname)
-    except Exception as e:
-        raise RuntimeError(_("플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}", error=e)) from e
+            if not manager.trust_plugin(path):
+                logger.warning("플러그인 설치 동의를 신뢰 목록에 저장하지 못했습니다: %s", fname)
+
+    if load_after_install:
+        try:
+            from core.plugin_loader import get_plugin_manager
+            pm = get_plugin_manager()
+            for fname in installed_files:
+                path = os.path.join(plugin_dir, fname)
+                pm.unload_plugin(plugin_name)
+                pm.load_plugin(path)
+                logger.info("플러그인 로드: %s", fname)
+        except Exception as e:
+            raise RuntimeError(
+                _("플러그인 파일은 저장되었지만 활성화에 실패했습니다: {error}", error=e)
+            ) from e
 
     return True

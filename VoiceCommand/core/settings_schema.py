@@ -113,6 +113,7 @@ DEFAULT_SETTINGS = {
     "memory_consolidation_days": 14,     # MemoryConsolidator 압축 기준 (일)
     "weekly_report_enabled": True,       # 주간 자기개선 리포트 (ProactiveScheduler 등록)
     "agent_timeout_seconds": 120,
+    "plugin_hot_reload_enabled": False,
     "audit_log_enabled": True,
     "mcp_server_enabled": False,
     "mcp_server_port": 8765,
