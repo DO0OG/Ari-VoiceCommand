@@ -33,6 +33,8 @@ _CREATE_KNOWLEDGE_FTS_SQL = (
     "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(entity, relation, value)"
 )
 
+_HAS_KNOWLEDGE_SQL = "SELECT EXISTS(SELECT 1 FROM knowledge LIMIT 1)"
+
 
 class KnowledgeBase:
     def __init__(self, db_path: str | None = None):
@@ -183,9 +185,7 @@ class KnowledgeBase:
         with self._lock:
             if self._has_entries is None:
                 with self._connect() as conn:
-                    row = conn.execute(
-                        "SELECT EXISTS(SELECT 1 FROM knowledge LIMIT 1)"
-                    ).fetchone()
+                    row = conn.execute(_HAS_KNOWLEDGE_SQL).fetchone()
                 self._has_entries = bool(row and row[0])
             return self._has_entries
 
