@@ -25,23 +25,21 @@ _RNG = secrets.SystemRandom()
 
 def _wait_for_tts_playback_completion(
     is_tts_playing: Callable[[], bool],
+    playback_finished: threading.Event,
     timeout: float = 15.0,
-    initial_sleep: float = 0.05,
-    backoff_factor: float = 1.5,
-    max_sleep: float = 0.3,
-    sleep_fn: Callable[[float], None] = time.sleep,
-    now_fn: Callable[[], float] = time.time,
+    now_fn: Callable[[], float] = time.monotonic,
 ) -> bool:
-    """TTS 재생 종료까지 지수 백오프로 대기한다."""
+    """TTS 재생 완료 이벤트를 기다린다."""
     wait_start = now_fn()
-    sleep_interval = initial_sleep
     while is_tts_playing():
         elapsed = now_fn() - wait_start
-        if elapsed > timeout:
+        remaining = timeout - elapsed
+        if remaining <= 0:
             logging.warning("TTS 대기 타임아웃 (%.0f초 초과)", timeout)
             return False
-        sleep_fn(min(sleep_interval, max_sleep))
-        sleep_interval = min(sleep_interval * backoff_factor, max_sleep)
+        # 완료 신호가 누락돼도 오래 멈추지 않도록 짧게 나눠 기다린다.
+        playback_finished.wait(min(remaining, 0.3))
+        playback_finished.clear()
     return True
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -250,15 +248,15 @@ class VoiceRecognitionThread(QThread):
             if self.speech_recognizer is None:
                 self.speech_recognizer = sr.Recognizer()
                 self._apply_recognizer_settings()
+            self._refresh_stt_provider()
             if initialize_wake_detector and self.wake_detector is None:
                 from audio.simple_wake import SimpleWakeWord
 
                 self.wake_detector = SimpleWakeWord(
-                    wake_words=ConfigManager.get("wake_words", WAKE_WORDS)
+                    wake_words=ConfigManager.get("wake_words", WAKE_WORDS),
+                    stt_provider=self._stt,
+                    provider_signature=self._stt_signature,
                 )
-                self._stt = getattr(self.wake_detector, "_stt", None)
-                self._stt_signature = getattr(self.wake_detector, "_provider_signature", None)
-            self._refresh_stt_provider()
             return True
         except Exception as exc:
             self.wake_detector = None
@@ -269,6 +267,12 @@ class VoiceRecognitionThread(QThread):
     def _apply_recognizer_settings(self):
         self.speech_recognizer.energy_threshold = int(ConfigManager.get("stt_energy_threshold", 300))
         self.speech_recognizer.dynamic_energy_threshold = bool(ConfigManager.get("stt_dynamic_energy", True))
+        pause_threshold = max(0.0, float(ConfigManager.get("stt_pause_threshold", 0.6)))
+        self.speech_recognizer.pause_threshold = pause_threshold
+        self.speech_recognizer.non_speaking_duration = min(
+            self.speech_recognizer.non_speaking_duration,
+            pause_threshold,
+        )
 
     def _refresh_stt_provider(self):
         settings = ConfigManager.load_settings()
@@ -389,7 +393,7 @@ class VoiceRecognitionThread(QThread):
             self.cleanup()
 
     def handle_wake_word(self):
-        from VoiceCommand import is_session_lock_blocked, tts_wrapper
+        from VoiceCommand import _state, is_session_lock_blocked, tts_wrapper
 
         if is_session_lock_blocked():
             return
@@ -402,14 +406,17 @@ class VoiceRecognitionThread(QThread):
 
         try:
             response = _RNG.choice(get_wake_responses())
+            _state.tts_playback_finished_event.clear()
             tts_wrapper(response)
 
-            # TTS 재생 완료 대기 (유동적 대기)
             try:
                 from VoiceCommand import is_tts_playing
-                _wait_for_tts_playback_completion(is_tts_playing)
-                # 재생이 끝난 후 음성 인식 시작 전 아주 짧은 여유
-                time.sleep(0.2)
+                _wait_for_tts_playback_completion(
+                    is_tts_playing,
+                    _state.tts_playback_finished_event,
+                )
+                delay_ms = max(0, int(ConfigManager.get("post_tts_listen_delay_ms", 100)))
+                time.sleep(delay_ms / 1000)
             except Exception as e:
                 logging.error("TTS 대기 중 오류: %s", e)
                 time.sleep(0.5)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import os
 import queue
@@ -18,7 +19,7 @@ from core._whisper_worker import WORKER_ARGUMENT, bundled_executable_path, norma
 class STTProvider:
     """STT 백엔드 공통 인터페이스."""
 
-    def transcribe(self, audio_data) -> Optional[str]:
+    def transcribe(self, audio_data, mode: str | None = None) -> Optional[str]:
         raise NotImplementedError
 
     def is_healthy(self) -> bool:
@@ -34,9 +35,10 @@ class GoogleSTTProvider(STTProvider):
         self._language = language
         self._recognizer = sr.Recognizer()
 
-    def transcribe(self, audio_data) -> Optional[str]:
+    def transcribe(self, audio_data, mode: str | None = None) -> Optional[str]:
         import speech_recognition as sr
 
+        del mode
         try:
             return self._recognizer.recognize_google(audio_data, language=self._language)
         except sr.UnknownValueError:
@@ -51,7 +53,7 @@ class WhisperSTTProvider(STTProvider):
 
     CTranslate2(MKL)와 torch/numpy(MKL)의 DLL 충돌을 피하기 위해
     Whisper 모델을 별도 프로세스(_whisper_worker.py)에서 실행한다.
-    메인 프로세스와는 stdin/stdout base64 IPC로 통신한다.
+    메인 프로세스와 stdin/stdout JSON(base64 오디오)로 통신한다.
     """
 
     _WORKER = os.path.join(os.path.dirname(__file__), "_whisper_worker.py")
@@ -73,7 +75,7 @@ class WhisperSTTProvider(STTProvider):
         self._proc: Optional[subprocess.Popen] = None
         self._start_worker()
 
-    def transcribe(self, audio_data) -> Optional[str]:
+    def transcribe(self, audio_data, mode: str | None = None) -> Optional[str]:
         try:
             wav_bytes = audio_data.get_wav_data()
             b64 = base64.b64encode(wav_bytes).decode("ascii")
@@ -86,7 +88,8 @@ class WhisperSTTProvider(STTProvider):
                 return None
             try:
                 assert self._proc is not None and self._proc.stdin is not None and self._proc.stdout is not None
-                self._proc.stdin.write((b64 + "\n").encode("ascii"))
+                request = json.dumps({"audio": b64, "mode": mode})
+                self._proc.stdin.write((request + "\n").encode("ascii"))
                 self._proc.stdin.flush()
                 line = self._read_process_line(self._proc.stdout, self._TRANSCRIBE_TIMEOUT_SECONDS)
                 if line is None:
