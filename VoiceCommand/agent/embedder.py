@@ -32,7 +32,7 @@ class Embedder:
 
     def __init__(self, preferred: str = "auto", progress_callback=None):
         self.backend = "onnx"
-        self.dim = _LOCAL_MODEL[3]
+        self.dim = _LOCAL_MODEL[4]
         self.model_id = f"{_LOCAL_MODEL[0]}@{_LOCAL_MODEL[1]}/{_LOCAL_MODEL[2]}"
         self._session = None
         self._tokenizer = None

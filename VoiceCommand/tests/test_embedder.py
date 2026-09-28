@@ -51,6 +51,7 @@ class EmbedderTests(unittest.TestCase):
             embedder = Embedder()
 
             self.assertIsNone(embedder.embed("local model is not ready"))
+            self.assertEqual(embedder.dim, 384)
             self.assertIsInstance(embedder.status, str)
             self.assertIsInstance(embedder.progress, float)
 
