@@ -1103,7 +1103,10 @@ class AICommand(FastPathMixin, BaseCommand):
         return resolve_agent_task_goal(goal, explanation)
 
     def _sanitize_user_facing_text(self, message: Optional[str]) -> str:
-        return clean_tool_artifact_text(message or "", discard_short_text=True)
+        text = message or ""
+        if text.lstrip().startswith("{") or text.lstrip().startswith(chr(96) * 3):
+            return ""
+        return clean_tool_artifact_text(text, discard_short_text=True)
 
     def _emit_user_message(self, message: Optional[str]) -> None:
         cleaned = self._sanitize_user_facing_text(message)
@@ -1174,6 +1177,58 @@ class AICommand(FastPathMixin, BaseCommand):
             return []
 
         recovered: List[dict] = []
+        response_text = response.strip()
+        json_text = response_text
+        if json_text.startswith(chr(96) * 3):
+            first_newline = json_text.find("\n")
+            if first_newline >= 0:
+                json_text = json_text[first_newline + 1:]
+            closing_fence = chr(96) * 3
+            if json_text.rstrip().endswith(closing_fence):
+                json_text = json_text.rstrip()[:-len(closing_fence)]
+            json_text = json_text.strip()
+        if json_text.startswith("{"):
+            try:
+                payload = json.loads(json_text)
+            except json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict):
+                candidates = payload.get("tool_calls")
+                if not isinstance(candidates, list):
+                    candidate = payload.get("tool_call") or payload.get("function_call")
+                    if isinstance(candidate, dict):
+                        candidates = [candidate]
+                    elif payload.get("name"):
+                        candidates = [payload]
+                    else:
+                        candidates = []
+                for index, candidate in enumerate(candidates, start=1):
+                    if not isinstance(candidate, dict):
+                        continue
+                    function = candidate.get("function")
+                    if not isinstance(function, dict):
+                        function = candidate
+                    name = str(function.get("name", "") or "").strip()
+                    if not name or name not in self._dispatch:
+                        continue
+                    if name == "shutdown_computer" and not self._is_shutdown_request(user_text):
+                        continue
+                    arguments = function.get("arguments", {})
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments or "{}")
+                        except json.JSONDecodeError:
+                            continue
+                    if not isinstance(arguments, dict):
+                        continue
+                    recovered.append({
+                        "id": str(candidate.get("id") or f"ai_command_recover_{index}"),
+                        "name": name,
+                        "arguments": arguments,
+                    })
+                if recovered:
+                    return recovered
+
         normalized_when = self._extract_schedule_phrase(user_text)
 
         web_search_patterns = (
@@ -1673,6 +1728,8 @@ class AICommand(FastPathMixin, BaseCommand):
     def _should_emit_preface_response(self, response: str) -> bool:
         normalized = (response or "").strip()
         if not normalized:
+            return False
+        if normalized.startswith("{") or normalized.startswith(chr(96) * 3):
             return False
         if normalized.endswith("...") or normalized in {"...", "(평온)..."}:
             return False

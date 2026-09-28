@@ -76,6 +76,7 @@ class LLMProvider:
         self._history_lock = threading.RLock()
         self.max_history = 10
         self.max_context_tokens = self._load_int_setting("max_context_tokens", 8000)
+        self._tool_streaming_support: dict[str, bool] = {}
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
@@ -219,11 +220,50 @@ class LLMProvider:
             safe_error.status_code = status
         return safe_error
 
-    def _sanitize_custom_stream(self, stream):
+    def _sanitize_custom_stream(self, stream, provider: str = ""):
         try:
             yield from stream
         except Exception as exc:
+            if provider and self._is_streaming_unsupported_error(exc):
+                self._tool_streaming_support[provider] = False
+            if self._is_timeout_error(exc):
+                raise TimeoutError("Custom provider stream timed out") from None
             raise self._safe_custom_provider_error(exc) from None
+
+    @staticmethod
+    def _is_timeout_error(error: Exception) -> bool:
+        return (
+            isinstance(error, (TimeoutError, httpx.TimeoutException))
+            or "timeout" in type(error).__name__.lower()
+        )
+
+    @staticmethod
+    def _is_streaming_unsupported_error(error: Exception) -> bool:
+        status = getattr(error, "status_code", None)
+        if status not in {400, 404, 422}:
+            return False
+        message = str(error).lower()
+        return "stream" in message and any(
+            phrase in message
+            for phrase in (
+                "not support",
+                "unsupported",
+                "not allowed",
+                "unknown parameter",
+                "unrecognized",
+            )
+        )
+
+    @staticmethod
+    def _response_field(value, name: str, default=None):
+        if isinstance(value, dict):
+            return value.get(name, default)
+        return getattr(value, name, default)
+
+    @staticmethod
+    def _is_structured_response(text: str) -> bool:
+        candidate = str(text or "").lstrip()
+        return candidate.startswith("{") or candidate.startswith(chr(96) * 3)
 
     def _get_ollama_url(self) -> str:
         try:
@@ -395,14 +435,29 @@ class LLMProvider:
             return _("(걱정) 서버에 연결할 수 없어요. 네트워크 상태를 확인해주세요.")
         return _("(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요.")
 
-    def _create_completion_with_fallback(self, client, provider, model, **kwargs):
+    def _create_completion_with_fallback(
+        self,
+        client,
+        provider,
+        model,
+        *,
+        _return_target: bool = False,
+        _excluded_targets: set[tuple[str, str]] | None = None,
+        **kwargs,
+    ):
         targets = [(client, provider, model)]
+        excluded_targets = set(_excluded_targets or ())
         attempted = set()
         last_error = None
         last_backend = ""
         while targets:
             candidate, backend, selected = targets.pop(0)
-            if backend in attempted or backend == "anthropic":
+            target_key = (str(backend or ""), str(selected or ""))
+            if (
+                backend in attempted
+                or backend == "anthropic"
+                or target_key in excluded_targets
+            ):
                 continue
             attempted.add(backend)
             try:
@@ -410,11 +465,20 @@ class LLMProvider:
                     model=selected, **kwargs, extra_body=self._reasoning_extra_body(backend),
                 )
                 if kwargs.get("stream") and self._is_custom_provider(backend):
-                    return self._sanitize_custom_stream(response)
+                    response = self._sanitize_custom_stream(response, backend)
+                if _return_target:
+                    return response, (candidate, backend, selected)
                 return response
             except Exception as exc:
                 status = getattr(exc, "status_code", None)
-                if not isinstance(status, int) or not 500 <= status < 600:
+                if (
+                    kwargs.get("stream")
+                    and self._is_custom_provider(backend)
+                    and self._is_streaming_unsupported_error(exc)
+                ):
+                    self._tool_streaming_support[backend] = False
+                is_server_error = isinstance(status, int) and 500 <= status < 600
+                if not is_server_error and not self._is_timeout_error(exc):
                     if self._is_custom_provider(backend):
                         raise self._safe_custom_provider_error(exc) from None
                     raise
@@ -427,6 +491,146 @@ class LLMProvider:
                 raise self._safe_custom_provider_error(last_error) from None
             raise last_error
         raise RuntimeError("요청을 전송할 연결이 없습니다.")
+
+    def _consume_tool_call_stream(self, stream, stream_callback):
+        text_parts = []
+        pending_text = ""
+        suppress_text = False
+        tool_call_parts = {}
+
+        def emit_content(delta: str) -> None:
+            nonlocal pending_text, suppress_text
+            if not stream_callback or suppress_text:
+                return
+            pending_text += delta
+            candidate = pending_text.lstrip()
+            if not candidate:
+                return
+            if candidate.startswith("{") or candidate.startswith(chr(96) * 3):
+                suppress_text = True
+                pending_text = ""
+                return
+            if candidate in {chr(96), chr(96) * 2}:
+                return
+            stream_callback(pending_text)
+            pending_text = ""
+
+        for chunk in stream:
+            choices = self._response_field(chunk, "choices", []) or []
+            if not choices:
+                continue
+            delta = self._response_field(choices[0], "delta", {}) or {}
+            content = self._response_field(delta, "content", "") or ""
+            if isinstance(content, str) and content:
+                text_parts.append(content)
+                emit_content(content)
+
+            for tool_delta in self._response_field(delta, "tool_calls", []) or []:
+                index = self._response_field(tool_delta, "index")
+                if index is None:
+                    index = 0
+                else:
+                    try:
+                        index = int(index)
+                    except (TypeError, ValueError):
+                        index = len(tool_call_parts)
+                partial = tool_call_parts.setdefault(
+                    index,
+                    {"id": "", "name": "", "argument_parts": [], "arguments": None},
+                )
+                call_id = self._response_field(tool_delta, "id")
+                if call_id and not partial["id"]:
+                    partial["id"] = str(call_id)
+                function = self._response_field(tool_delta, "function", {}) or {}
+                name = self._response_field(function, "name")
+                if name:
+                    partial["name"] += str(name)
+                arguments = self._response_field(function, "arguments")
+                if isinstance(arguments, (dict, list)):
+                    partial["arguments"] = arguments
+                elif arguments:
+                    partial["argument_parts"].append(str(arguments))
+
+        if pending_text.strip() and not suppress_text and stream_callback:
+            stream_callback(pending_text)
+
+        tool_calls = []
+        for index in sorted(tool_call_parts):
+            partial = tool_call_parts[index]
+            arguments = partial["arguments"]
+            if arguments is None:
+                arguments = "".join(partial["argument_parts"])
+            tool_calls.append({
+                "id": partial["id"] or f"tool_call_{index}",
+                "function": {
+                    "name": partial["name"],
+                    "arguments": arguments,
+                },
+            })
+        return "".join(text_parts), tool_calls
+
+    def _stream_tool_completion(
+        self,
+        client,
+        provider: str,
+        model: str,
+        request_kwargs: dict,
+        stream_callback,
+    ):
+        emitted_text = False
+
+        def track_emitted_text(text: str) -> None:
+            nonlocal emitted_text
+            emitted_text = True
+            stream_callback(text)
+
+        next_client, next_provider, next_model = client, provider, model
+        excluded_targets: set[tuple[str, str]] = set()
+        timeout_errors = (TimeoutError, httpx.TimeoutException)
+        try:
+            from openai import APITimeoutError
+        except ImportError:
+            pass
+        else:
+            timeout_errors += (APITimeoutError,)
+        while True:
+            stream, active_target = self._create_completion_with_fallback(
+                next_client,
+                next_provider,
+                next_model,
+                _return_target=True,
+                _excluded_targets=excluded_targets,
+                **request_kwargs,
+                stream=True,
+            )
+            _, active_provider, active_model = active_target
+            try:
+                text, tool_calls = self._consume_tool_call_stream(
+                    stream,
+                    track_emitted_text,
+                )
+            except timeout_errors:
+                active_key = (str(active_provider or ""), str(active_model or ""))
+                if emitted_text:
+                    raise
+                excluded_targets.add(active_key)
+                next_target = next(
+                    (
+                        target
+                        for target in self.get_role_fallback_targets()
+                        if (str(target[1] or ""), str(target[2] or ""))
+                        not in excluded_targets
+                    ),
+                    None,
+                )
+                if next_target is None:
+                    raise
+                next_client, next_provider, next_model = next_target
+                continue
+
+            if self._is_custom_provider(active_provider):
+                self._tool_streaming_support[active_provider] = True
+            return text, tool_calls
 
     def _build_cache_key(
         self,
@@ -638,30 +842,84 @@ class LLMProvider:
                     tool_choice=tool_choice,
                 )
 
-            response = self._create_completion_with_fallback(
-                client, provider, model, messages=messages, tools=tools, tool_choice=tool_choice,
-                temperature=0.1 if request_ctx["force_tool"] else 0.3,
-                max_tokens=self._estimate_max_tokens(user_message) + 200,
-            )
-            choice = response.choices[0]
+            request_kwargs = {
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "temperature": 0.1 if request_ctx["force_tool"] else 0.3,
+                "max_tokens": self._estimate_max_tokens(user_message) + 200,
+            }
+            raw_msg = ""
+            raw_tool_calls = []
+            streamed_response = False
+            streaming_enabled = bool(self._load_int_setting("llm_streaming_enabled", 1))
+            if (
+                stream_callback
+                and streaming_enabled
+                and self._tool_streaming_support.get(provider) is not False
+            ):
+                try:
+                    raw_msg, raw_tool_calls = self._stream_tool_completion(
+                        client,
+                        provider,
+                        model,
+                        request_kwargs,
+                        stream_callback,
+                    )
+                    streamed_response = True
+                except RuntimeError:
+                    if (
+                        not self._is_custom_provider(provider)
+                        or self._tool_streaming_support.get(provider) is not False
+                    ):
+                        raise
+                    logging.debug(
+                        "[LLMProvider] 사용자 정의 제공자 스트리밍 미지원, 일반 요청으로 폴백"
+                    )
+
+            if not streamed_response:
+                response = self._create_completion_with_fallback(
+                    client,
+                    provider,
+                    model,
+                    **request_kwargs,
+                )
+                choices = self._response_field(response, "choices", []) or []
+                choice = choices[0]
+                message = self._response_field(choice, "message", {}) or {}
+                raw_msg = self._response_field(message, "content", "") or ""
+                raw_tool_calls = self._response_field(message, "tool_calls", []) or []
+
             tool_calls = []
-            if choice.message.tool_calls:
+            if raw_tool_calls:
                 from memory.memory_manager import get_memory_manager
                 ctx_mgr = get_memory_manager().context_manager
-                for tc in choice.message.tool_calls:
+                for tc in raw_tool_calls:
+                    function = self._response_field(tc, "function", {}) or {}
+                    name = self._response_field(function, "name", "") or ""
+                    raw_arguments = self._response_field(function, "arguments", "")
                     try:
-                        args = json.loads(tc.function.arguments)
-                    except Exception as exc:
+                        args = (
+                            raw_arguments
+                            if isinstance(raw_arguments, dict)
+                            else json.loads(raw_arguments or "{}")
+                        )
+                        if not isinstance(args, dict):
+                            args = {}
+                    except (TypeError, json.JSONDecodeError) as exc:
                         logging.debug("[LLMProvider] tool arguments 파싱 실패, 빈 값 사용: %s", exc)
                         args = {}
-                    args = self._normalize_tool_arguments(tc.function.name, args, user_message)
-                    if tc.function.name == "web_search" and not str(args.get("query", "") or "").strip():
+                    args = self._normalize_tool_arguments(name, args, user_message)
+                    if name == "web_search" and not str(args.get("query", "") or "").strip():
                         query_hint = str(request_ctx.get("search_query_hint", "") or "").strip()
                         args["query"] = query_hint or user_message
-                    tool_calls.append({"id": tc.id, "name": tc.function.name, "arguments": args})
-                    ctx_mgr.record_command(tc.function.name, args)
+                    tool_calls.append({
+                        "id": self._response_field(tc, "id") or "tool_call",
+                        "name": name,
+                        "arguments": args,
+                    })
+                    ctx_mgr.record_command(name, args)
 
-            raw_msg = choice.message.content or ""
             if not tool_calls and raw_msg:
                 tool_calls = self._fallback_tool_calls_from_text(raw_msg, user_message, request_ctx)
                 if tool_calls:
@@ -671,8 +929,11 @@ class LLMProvider:
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
             memory_manager.process_interaction(user_message, raw_msg)
-            msg = self._clean_response(memory_manager.clean_response(raw_msg))
-            if stream_callback and msg and not tool_calls:
+            if self._is_structured_response(raw_msg):
+                msg = raw_msg.strip()
+            else:
+                msg = self._clean_response(memory_manager.clean_response(raw_msg))
+            if stream_callback and msg and not tool_calls and not streamed_response:
                 self._emit_stream_text(msg, stream_callback)
             if msg:
                 self.add_to_history("assistant", msg)
