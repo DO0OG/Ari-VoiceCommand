@@ -804,6 +804,13 @@ class SettingsDialog(QDialog):
         if "update_check_enabled" in self.changed_keys and self.update_checker:
             self.update_checker.settings_changed()
 
+        if "embedding_remote_enabled" in self.changed_keys:
+            try:
+                from agent.embedder import reset_embedder
+                reset_embedder()
+            except (ImportError, RuntimeError):
+                logging.debug("임베더 설정 적용 생략")
+
         if self.character_settings_changed():
             self._apply_character_display(
                 merged_settings["character_scale"],

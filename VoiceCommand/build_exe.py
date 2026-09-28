@@ -122,7 +122,7 @@ Nuitka import 제외 정책:
 포함 모듈 (이전 2026-03-26):
   agent/ocr_helper.py        — easyocr/pytesseract 화면 텍스트 추출 (선택 의존성)
   agent/dag_builder.py       — 리소스 충돌 기반 의존성 DAG + 병렬 그룹 계산
-  agent/embedder.py          — sentence-transformers/API/해시 임베딩 + cross-encoder 재순위화
+  agent/embedder.py          — 백그라운드 ONNX 임베딩
   agent/real_verifier.py     — 4단계 검증 파이프라인 (휴리스틱→OCR→코드→LLM)
   agent/agent_planner.py     — ActionStep DAG 필드 추가, decompose() DAG 주석
   agent/agent_orchestrator.py — 병렬 그룹 실행 + DOM 재계획 플래그 처리
@@ -357,6 +357,8 @@ nuitka_args = [
         "httpx",
         "faster_whisper",
         "huggingface_hub",
+        "onnxruntime",
+        "tokenizers",
         "cv2",
         "lxml",
         "pydantic",
@@ -374,7 +376,6 @@ nuitka_args = [
         "webdriver_manager",
         "easyocr",
         "pytesseract",
-        "sentence_transformers",
         "torch",
         "PIL",
         "docx",

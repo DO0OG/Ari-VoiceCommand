@@ -30,8 +30,7 @@ def _find_tts_venv_python() -> str:
     """TTS 전용 venv 인터프리터 경로(없으면 빈 문자열).
 
     CosyVoice 의존성(hyperpyyaml, CUDA torch, librosa 등)은 .venv-tts에만
-    있다. 메인 .venv는 sentence-transformers가 잡아둔 CPU torch를 쓰므로
-    워커를 거기서 띄우면 ModuleNotFoundError로 즉시 죽는다.
+    있다. 메인 .venv에는 이 의존성이 없어 워커를 거기서 띄우면 즉시 실패한다.
     """
     from core.resource_manager import ResourceManager
 

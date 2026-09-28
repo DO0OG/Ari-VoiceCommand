@@ -3,19 +3,24 @@
 실패 원인 분석(Lesson)을 포함한 지능형 검색 및 전략 주입을 지원한다.
 """
 import atexit
+import hashlib
+import io
 import json
 import logging
 import os
 import re
-import hashlib
 import threading
+import uuid
 from collections import Counter
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import numpy as np
+
 from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 from agent.execution_analysis import classify_failure_message, extract_workflow_hints
+from core.atomic_io import write_bytes_atomic, write_json_atomic
 from i18n.translator import _
 
 def _get_memory_file() -> str:
@@ -34,7 +39,6 @@ _TOKEN_STOPWORDS = {
 }
 
 _NGRAM_SIZE = 3
-_EMBED_DIM = 64
 
 
 @dataclass
@@ -54,6 +58,7 @@ class StrategyRecord:
     duration_ms: int = 0
     timestamp: str = ""
     embedding: List[float] = field(default_factory=list)
+    record_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 class StrategyMemory:
@@ -61,9 +66,16 @@ class StrategyMemory:
 
     def __init__(self, filepath: str = _MEMORY_FILE):
         self.filepath = filepath
+        self.embedding_filepath = os.path.join(
+            os.path.dirname(filepath) or ".", "strategy_embeddings.npy"
+        )
         self._records: List[StrategyRecord] = []
         self._save_lock = threading.RLock()
         self._save_timer: Optional[threading.Timer] = None
+        self._embedding_thread: Optional[threading.Thread] = None
+        self._embedding_model_id = ""
+        self._embedding_dim = 0
+        self._embedding_valid = False
         self._save_delay_seconds = 5.0
         self._load()
 
@@ -95,14 +107,37 @@ class StrategyMemory:
             timestamp=datetime.now().isoformat(),
             embedding=[],
         )
+        embedder = None
         try:
             from agent.embedder import get_embedder
-            rec.embedding = get_embedder().embed(rec.goal_summary).tolist()
-        except Exception:
+            embedder = get_embedder()
+            vector = embedder.embed(rec.goal_summary)
+            rec.embedding = (
+                np.asarray(vector, dtype=np.float32).tolist()
+                if vector is not None
+                else []
+            )
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             rec.embedding = []
-        self._records.append(rec)
-        self._prune()
+        with self._save_lock:
+            empty_before = not self._records
+            if embedder is not None and (
+                self._embedding_model_id != embedder.model_id
+                or self._embedding_dim != embedder.dim
+            ):
+                self._embedding_valid = False
+            if rec.embedding and embedder is not None and len(rec.embedding) == embedder.dim:
+                if empty_before or self._embedding_valid:
+                    self._embedding_model_id = embedder.model_id
+                    self._embedding_dim = embedder.dim
+                    self._embedding_valid = True
+            self._records.append(rec)
+            self._prune()
+            if not rec.embedding:
+                self._embedding_valid = False
         self._schedule_save()
+        if not self._embedding_valid:
+            self._backfill_missing_embeddings()
         logging.info("[StrategyMemory] 저장됨: %s", '성공' if success else '실패')
 
     def get_relevant_context(self, goal: str) -> str:
@@ -132,7 +167,10 @@ class StrategyMemory:
             score += max(0, 20 - days_diff)
             scored.append((score, rec))
 
-        relevant = [rec for _, rec in sorted(scored, key=lambda x: x[0], reverse=True)[:3]]
+        relevant = [
+            item[1]
+            for item in sorted(scored, key=lambda item: item[0], reverse=True)[:3]
+        ]
         if not relevant:
             return ""
 
@@ -156,44 +194,64 @@ class StrategyMemory:
         return "\n".join(lines)
 
     def search_similar_records(self, goal: str, limit: int = 3) -> List[StrategyRecord]:
-        goal_tags = set(self._extract_tags(goal))
+        from agent.embedder import get_embedder
+
+        embedder = get_embedder()
+        with self._save_lock:
+            records = list(self._records)
+            if (
+                self._embedding_model_id != embedder.model_id
+                or self._embedding_dim != embedder.dim
+            ):
+                self._embedding_valid = False
+            embedding_valid = self._embedding_valid
+        if records and not embedding_valid:
+            self._backfill_missing_embeddings()
+
+        goal_tags = set(self._extract_tags(goal)) - {"일반"}
         goal_tokens = self._extract_tokens(goal)
         goal_ngrams = self._extract_ngrams(goal)
-        goal_embedding = None
-        try:
-            from agent.embedder import get_embedder
-            goal_embedding = get_embedder().embed(goal)
-        except Exception:
-            goal_embedding = None
-        scored = []
-        for rec in self._records:
-            tag_overlap = len(goal_tags & set(rec.tags))
+        goal_embedding = embedder.embed(goal) if embedding_valid else None
+        manual_scores = []
+        for index, rec in enumerate(records):
+            tag_overlap = len(goal_tags & (set(rec.tags) - {"일반"}))
             token_score = self._token_similarity(goal_tokens, set(rec.goal_tokens))
             ngram_score = self._ngram_similarity(goal_ngrams, self._extract_ngrams(rec.goal_summary))
             manual_score = tag_overlap * 12 + token_score * 40 + ngram_score * 25
-            if manual_score <= 0:
-                continue
-            scored.append((manual_score, rec))
-        top_candidates = sorted(scored, key=lambda item: item[0], reverse=True)[:20]
+            manual_scores.append((index, manual_score))
+
+        embedding_scores = {}
+        if embedding_valid and goal_embedding is not None and records:
+            vectors = np.asarray([rec.embedding for rec in records], dtype=np.float32)
+            query = np.asarray(goal_embedding, dtype=np.float32)
+            if vectors.shape == (len(records), embedder.dim) and query.shape == (embedder.dim,):
+                norms = np.linalg.norm(vectors, axis=1) * float(np.linalg.norm(query))
+                dots = vectors @ query
+                similarities = np.divide(
+                    dots,
+                    norms,
+                    out=np.zeros_like(dots),
+                    where=norms > 0,
+                )
+                embedding_scores = {
+                    index: float(score)
+                    for index, score in enumerate(similarities)
+                    if score > 0
+                }
+
         rescored = []
-        for manual_score, rec in top_candidates:
-            embedding_score = 0.0
-            if goal_embedding is not None and rec.embedding:
-                try:
-                    from agent.embedder import get_embedder
-                    embedding_score = get_embedder().cosine_similarity(goal_embedding, __import__("numpy").array(rec.embedding, dtype=float))
-                except Exception:
-                    embedding_score = 0.0
-            score = manual_score * 0.4 + embedding_score * 100 * 0.6
-            if score <= 0:
+        for index, manual_score in manual_scores:
+            embedding_score = embedding_scores.get(index)
+            if manual_score <= 0 and embedding_score is None:
                 continue
-            rescored.append((score, rec))
-        try:
-            from agent.embedder import get_reranker
-            rescored = get_reranker().rerank(goal, rescored)
-        except Exception as exc:
-            logging.debug(f"[StrategyMemory] rerank 생략: {exc}")
-        return [rec for _, rec in sorted(rescored, key=lambda item: item[0], reverse=True)[:limit]]
+            score = manual_score
+            if embedding_score is not None:
+                score = manual_score * 0.4 + embedding_score * 100 * 0.6
+            rescored.append((score, records[index]))
+        return [
+            item[1]
+            for item in sorted(rescored, key=lambda item: item[0], reverse=True)[:limit]
+        ]
 
     def recent_failures(self, goal: str, limit: int = 3) -> List[str]:
         """현재 목표와 유사한 최근 실패 사례를 짧게 반환."""
@@ -205,8 +263,7 @@ class StrategyMemory:
                 continue
             token_score = self._token_similarity(goal_tokens, set(rec.goal_tokens))
             ngram_score = self._ngram_similarity(goal_ngrams, self._extract_ngrams(rec.goal_summary))
-            embedding_score = self._embedding_similarity(self._build_embedding(goal), self._build_embedding(rec.goal_summary))
-            score = token_score * 0.5 + ngram_score * 0.2 + embedding_score * 0.3
+            score = token_score * 0.5 + ngram_score * 0.2
             if rec.lesson:
                 score += 0.05
             if score <= 0:
@@ -333,30 +390,6 @@ class StrategyMemory:
             for idx in range(len(normalized) - _NGRAM_SIZE + 1)
         }
 
-    def _build_embedding(self, text: str) -> List[float]:
-        vector = [0.0] * _EMBED_DIM
-        for token in self._extract_tokens(text):
-            index = self._stable_bucket(token)
-            vector[index] += 1.0
-        for ngram in self._extract_ngrams(text):
-            index = self._stable_bucket(f"ng:{ngram}")
-            vector[index] += 0.5
-        return vector
-
-    def _stable_bucket(self, value: str) -> int:
-        digest = hashlib.sha256(value.encode("utf-8")).digest()
-        return int.from_bytes(digest[:4], "big") % _EMBED_DIM
-
-    def _embedding_similarity(self, left: List[float], right: List[float]) -> float:
-        if not left or not right:
-            return 0.0
-        dot = sum(a * b for a, b in zip(left, right))
-        left_norm = sum(a * a for a in left) ** 0.5
-        right_norm = sum(b * b for b in right) ** 0.5
-        if left_norm == 0 or right_norm == 0:
-            return 0.0
-        return dot / (left_norm * right_norm)
-
     def _ngram_similarity(self, left: set[str], right: set[str]) -> float:
         if not left or not right:
             return 0.0
@@ -392,29 +425,138 @@ class StrategyMemory:
             score -= min(age_days / 45.0, 8.0)
             scored.append((score, idx, record))
         kept = sorted(scored, key=lambda item: item[0], reverse=True)[:_MAX_RECORDS]
-        self._records = [record for _, _, record in sorted(kept, key=lambda item: item[1])]
+        self._records = [
+            item[2] for item in sorted(kept, key=lambda item: item[1])
+        ]
 
     def _load(self):
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, encoding="utf-8") as f:
-                    data = json.load(f)
-                self._records = [self._normalize_record(r) for r in data]
+        from agent.embedder import get_embedder
+
+        embedder = get_embedder()
+        self._embedding_model_id = embedder.model_id
+        self._embedding_dim = embedder.dim
+        if not os.path.exists(self.filepath):
+            self._embedding_valid = True
+            return
+        try:
+            with open(self.filepath, encoding="utf-8") as handle:
+                data = json.load(handle)
+            legacy = isinstance(data, list)
+            if legacy:
+                raw_records = data
+                stored_model_id = ""
+                stored_dim = 0
+                stored_ids = []
+                stored_digest = ""
+                complete = False
+            elif isinstance(data, dict):
+                raw_records = data.get("records", [])
+                stored_model_id = str(data.get("embedding_model_id", ""))
+                stored_dim = data.get("dim", 0)
+                stored_ids = data.get("record_ids", [])
+                stored_digest = str(data.get("embedding_sha256", ""))
+                complete = data.get("embedding_complete") is True
+            else:
+                raise ValueError("지원하지 않는 전략 기억 형식입니다.")
+            if not isinstance(raw_records, list) or any(
+                not isinstance(record, dict) for record in raw_records
+            ):
+                raise ValueError("전략 기억 레코드 형식이 올바르지 않습니다.")
+            self._records = [self._normalize_record(record) for record in raw_records]
+            record_ids = [record.record_id for record in self._records]
+            valid = (
+                not legacy
+                and complete
+                and stored_model_id == embedder.model_id
+                and stored_dim == embedder.dim
+                and stored_ids == record_ids
+            )
+            if legacy:
+                legacy_vectors = (
+                    np.asarray(
+                        [record.embedding for record in self._records],
+                        dtype=np.float32,
+                    )
+                    if self._records
+                    else np.empty((0, embedder.dim), dtype=np.float32)
+                )
+                valid = (
+                    legacy_vectors.shape == (len(self._records), embedder.dim)
+                    and np.isfinite(legacy_vectors).all()
+                )
+                if valid:
+                    for record, vector in zip(self._records, legacy_vectors):
+                        record.embedding = vector.tolist()
+                    self._embedding_model_id = embedder.model_id
+                    self._embedding_dim = embedder.dim
+            if valid and not legacy:
+                try:
+                    with open(self.embedding_filepath, "rb") as handle:
+                        embedding_bytes = handle.read()
+                    valid = hashlib.sha256(embedding_bytes).hexdigest() == stored_digest
+                    if valid:
+                        matrix = np.load(io.BytesIO(embedding_bytes), allow_pickle=False)
+                        valid = (
+                            matrix.dtype == np.float16
+                            and matrix.shape == (len(self._records), embedder.dim)
+                        )
+                        if valid:
+                            for record, vector in zip(self._records, matrix):
+                                record.embedding = vector.astype(np.float32).tolist()
+                except (AttributeError, OSError, ValueError, EOFError):
+                    valid = False
+            self._embedding_valid = bool(valid)
+            if not self._embedding_valid:
+                for record in self._records:
+                    record.embedding = []
                 self._backfill_missing_embeddings()
-            except Exception as e:
-                logging.warning(f"[StrategyMemory] 로드 오류: {e}")
+            if legacy:
+                self._schedule_save()
+        except (AttributeError, OSError, TypeError, ValueError, EOFError, OverflowError) as exc:
+            logging.warning("[StrategyMemory] 로드 오류: %s", exc)
 
     def _save(self):
         with self._save_lock:
             self._save_timer = None
             try:
-                os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-                with open(self.filepath, "w", encoding="utf-8") as f:
-                    json.dump([asdict(r) for r in self._records], f, ensure_ascii=False, indent=2)
-            except FileNotFoundError as e:
-                logging.debug(f"[StrategyMemory] 저장 생략: {e}")
-            except Exception as e:
-                logging.warning(f"[StrategyMemory] 저장 오류: {e}")
+                from agent.embedder import get_embedder
+
+                embedder = get_embedder()
+                model_id = self._embedding_model_id or embedder.model_id
+                dim = self._embedding_dim or embedder.dim
+                records = list(self._records)
+                complete = self._embedding_valid and all(
+                    len(record.embedding) == dim for record in records
+                )
+                matrix = np.zeros((len(records), dim), dtype=np.float16)
+                if complete:
+                    matrix = np.asarray(
+                        [record.embedding for record in records], dtype=np.float16
+                    ).reshape((len(records), dim))
+                buffer = io.BytesIO()
+                np.save(buffer, matrix, allow_pickle=False)
+                embedding_bytes = buffer.getvalue()
+                write_bytes_atomic(self.embedding_filepath, embedding_bytes)
+                payload = {
+                    "embedding_model_id": model_id,
+                    "dim": dim,
+                    "record_ids": [record.record_id for record in records],
+                    "embedding_sha256": hashlib.sha256(embedding_bytes).hexdigest(),
+                    "embedding_complete": complete,
+                    "records": [
+                        {key: value for key, value in asdict(record).items()
+                         if key != "embedding"}
+                        for record in records
+                    ],
+                }
+                write_json_atomic(
+                    self.filepath,
+                    payload,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                logging.warning("[StrategyMemory] 저장 오류: %s", exc)
 
     def _normalize_record(self, raw: dict) -> StrategyRecord:
         goal_summary = str(raw.get("goal_summary", ""))
@@ -438,6 +580,7 @@ class StrategyMemory:
             duration_ms=int(raw.get("duration_ms", 0)),
             timestamp=str(raw.get("timestamp", datetime.now().isoformat())),
             embedding=list(raw.get("embedding", []) or []),
+            record_id=str(raw.get("record_id", "") or uuid.uuid4().hex),
         )
 
     def _classify_failure(self, error: str) -> str:
@@ -450,24 +593,59 @@ class StrategyMemory:
             return datetime.min
 
     def _backfill_missing_embeddings(self) -> None:
-        pending = [rec for rec in self._records if not rec.embedding]
-        if not pending:
-            return
+        from agent.embedder import get_embedder
+
+        embedder = get_embedder()
+        with self._save_lock:
+            if not self._records or (
+                self._embedding_thread is not None and self._embedding_thread.is_alive()
+            ):
+                return
+            if embedder.status == "failed":
+                return
 
         def _worker():
             try:
-                from agent.embedder import get_embedder
-                embedder = get_embedder()
-                for rec in pending:
-                    try:
-                        rec.embedding = embedder.embed(rec.goal_summary).tolist()
-                    except Exception as exc:
-                        logging.debug("[StrategyMemory] 임베딩 실패: %s", exc)
-                        rec.embedding = []
-            except Exception as exc:
+                if not embedder.wait_until_ready():
+                    return
+                while True:
+                    with self._save_lock:
+                        records = list(self._records)
+                        record_ids = [record.record_id for record in records]
+                    vectors = []
+                    for record in records:
+                        vector = embedder.embed(record.goal_summary)
+                        if vector is None or len(vector) != embedder.dim:
+                            return
+                        vectors.append(vector.tolist())
+                    with self._save_lock:
+                        if record_ids != [record.record_id for record in self._records]:
+                            continue
+                        for record, vector in zip(self._records, vectors):
+                            record.embedding = vector
+                        self._embedding_model_id = embedder.model_id
+                        self._embedding_dim = embedder.dim
+                        self._embedding_valid = True
+                    self._schedule_save()
+                    return
+            except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
                 logging.debug("[StrategyMemory] 임베딩 백필 중단: %s", exc)
+            finally:
+                with self._save_lock:
+                    self._embedding_thread = None
 
-        threading.Thread(target=_worker, daemon=True).start()
+        with self._save_lock:
+            if self._embedding_thread is None or not self._embedding_thread.is_alive():
+                self._embedding_thread = threading.Thread(
+                    target=_worker,
+                    daemon=True,
+                    name="AriStrategyEmbeddingBackfill",
+                )
+                try:
+                    self._embedding_thread.start()
+                except RuntimeError as exc:
+                    self._embedding_thread = None
+                    logging.debug("[StrategyMemory] 백필 시작 실패: %s", exc)
 
     def _schedule_save(self) -> None:
         with self._save_lock:

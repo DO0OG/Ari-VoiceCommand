@@ -3604,3 +3604,27 @@ msgstr "Shortcut settings"
 
 msgid "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."
 msgstr "Choose a modifier and a key, such as Ctrl+Alt+Space."
+
+msgid "전략 검색"
+msgstr "Strategy search"
+
+msgid "OpenAI 임베딩 사용 (전략 텍스트 외부 전송)"
+msgstr "Use OpenAI embeddings (send strategy text externally)"
+
+msgid "원격 임베딩 사용 중"
+msgstr "Remote embeddings in use"
+
+msgid "로컬 임베딩 모델: 준비됨"
+msgstr "Local embedding model: ready"
+
+msgid "로컬 임베딩 모델 다운로드 중: {progress}%"
+msgstr "Downloading local embedding model: {progress}%"
+
+msgid "로컬 임베딩 모델 불러오는 중"
+msgstr "Loading local embedding model"
+
+msgid "임베딩을 사용할 수 없습니다. 어휘 점수만 사용합니다."
+msgstr "Embeddings unavailable. Using lexical scores only."
+
+msgid "로컬 임베딩 모델: 다운로드 대기"
+msgstr "Local embedding model: waiting to download"

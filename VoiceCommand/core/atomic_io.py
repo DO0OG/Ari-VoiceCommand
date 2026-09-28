@@ -59,6 +59,33 @@ def write_text_atomic(path: str | PathLike[str], text: str) -> None:
     _write_atomic(path, write)
 
 
+def write_bytes_atomic(path: str | PathLike[str], data: bytes) -> None:
+    """같은 디렉터리의 임시 파일에 바이트를 쓴 뒤 원자적으로 교체한다."""
+    target = os.fspath(path)
+    directory = os.path.dirname(target) or "."
+    os.makedirs(directory, exist_ok=True)
+
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=directory,
+            delete=False,
+        ) as handle:
+            temp_path = handle.name
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, target)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+
 def backup_corrupt_file(path: str | PathLike[str]) -> Path:
     """손상된 파일을 같은 디렉터리에 겹치지 않는 이름으로 보존한다."""
     source = Path(path)

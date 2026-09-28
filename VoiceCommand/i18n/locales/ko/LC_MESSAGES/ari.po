@@ -3602,3 +3602,27 @@ msgstr "단축키 설정"
 
 msgid "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."
 msgstr "Ctrl+Alt+Space처럼 수정 키와 기본 키를 함께 지정하세요."
+
+msgid "전략 검색"
+msgstr "전략 검색"
+
+msgid "OpenAI 임베딩 사용 (전략 텍스트 외부 전송)"
+msgstr "OpenAI 임베딩 사용 (전략 텍스트 외부 전송)"
+
+msgid "원격 임베딩 사용 중"
+msgstr "원격 임베딩 사용 중"
+
+msgid "로컬 임베딩 모델: 준비됨"
+msgstr "로컬 임베딩 모델: 준비됨"
+
+msgid "로컬 임베딩 모델 다운로드 중: {progress}%"
+msgstr "로컬 임베딩 모델 다운로드 중: {progress}%"
+
+msgid "로컬 임베딩 모델 불러오는 중"
+msgstr "로컬 임베딩 모델 불러오는 중"
+
+msgid "임베딩을 사용할 수 없습니다. 어휘 점수만 사용합니다."
+msgstr "임베딩을 사용할 수 없습니다. 어휘 점수만 사용합니다."
+
+msgid "로컬 임베딩 모델: 다운로드 대기"
+msgstr "로컬 임베딩 모델: 다운로드 대기"

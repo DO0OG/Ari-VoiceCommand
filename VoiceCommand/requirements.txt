@@ -1,7 +1,7 @@
 # AI-Assistant (Ari) 의존성
 # 업데이트: 2026-05-26
 #   자율 에이전트 핵심 확장: 스트리밍/비전/로컬 MCP 서버/감사 로그/직접 파일·앱 도구
-#   신규 런타임 의존성: fastapi, uvicorn, sentence-transformers 기본 승격
+#   신규 런타임 의존성: fastapi, uvicorn, onnxruntime, tokenizers
 #   고급 도구 확장: Google/REST API는 기존 requests, 이미지 생성은 기존 openai SDK 사용
 # 업데이트: 2026-04-22
 #   i18n 종합 보완: 타이머·확인 다이얼로그·안전 점검기 문자열 국제화 / ko·en·ja .po 54개 키 추가
@@ -23,7 +23,7 @@
 #   2026-04-29: AgentTaskQueue(비동기 작업 큐), ResponseCache.from_config(설정 외부화),
 #              다국어 LLMRouter/WeatherCommand 키워드, safety_checker curl 세분화,
 #              i18n 24개 신규 키(ai_command/SimpleAIAssistant 결과 문자열)
-#   선택 의존성: easyocr, pytesseract, sentence-transformers, elevenlabs, ollama
+#   선택 의존성: easyocr, pytesseract, elevenlabs, ollama
 #   런타임 상태(로그/스케줄/메모리/플러그인 캐시)는 소스 실행 시 VoiceCommand/.ari_runtime,
 #   빌드된 exe 실행 시 %AppData%/Ari 에 저장
 # 개발 검증: validate_repo.py (compile + unittest + smoke)
@@ -47,7 +47,8 @@ opencv-python-headless>=4.9.0.80
 groq>=0.11.0
 openai>=1.0.0
 anthropic>=0.25.0
-sentence-transformers>=2.6.0
+onnxruntime>=1.17.0
+tokenizers>=0.19.0
 
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
 ormsgpack>=1.5.0
@@ -100,7 +101,7 @@ watchdog>=4.0.0
 # easyocr>=1.7.0          # GPU/CPU 한국어 OCR (권장)
 # pytesseract>=0.3.10     # 경량 OCR (Tesseract 별도 설치 필요)
 
-# torch>=2.0.0                  # sentence-transformers 가 필요 시 설치
+# torch>=2.0.0                  # CosyVoice 등 선택 기능에서 필요 시 설치
 
 # Ollama 로컬 LLM (설정의 "로컬 설치" 섹션 또는 install_ollama.py로 별도 설치)
 # Ollama 설치: https://ollama.com  →  ollama pull llama3.2

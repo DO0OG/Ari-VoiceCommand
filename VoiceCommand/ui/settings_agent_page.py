@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -89,6 +89,7 @@ class _AgentSettingsPage(QWidget):
         box.addWidget(self.image_provider)
 
         layout.addWidget(group)
+        layout.addWidget(self._build_embedding_group(settings))
         layout.addWidget(self._build_learning_metrics_group())
         developer_group = QGroupBox(_("개발자 설정"))
         developer_box = QVBoxLayout(developer_group)
@@ -104,6 +105,47 @@ class _AgentSettingsPage(QWidget):
         layout.addWidget(self._build_local_decision_group(settings))
         layout.addStretch(1)
         self._update_timeout_label(self.timeout_slider.value())
+
+    def _build_embedding_group(self, settings: dict) -> QGroupBox:
+        group = QGroupBox(_("전략 검색"))
+        box = QVBoxLayout(group)
+        self.embedding_remote_checkbox = QCheckBox(
+            _("OpenAI 임베딩 사용 (전략 텍스트 외부 전송)")
+        )
+        self.embedding_remote_checkbox.setChecked(
+            settings.get("embedding_remote_enabled") is True
+        )
+        box.addWidget(self.embedding_remote_checkbox)
+        self.embedding_status = QLabel("")
+        self.embedding_status.setWordWrap(True)
+        box.addWidget(self.embedding_status)
+        self.embedding_status_timer = QTimer(self)
+        self.embedding_status_timer.setInterval(1000)
+        self.embedding_status_timer.timeout.connect(self._refresh_embedding_status)
+        self.embedding_status_timer.start()
+        self._refresh_embedding_status()
+        return group
+
+    def _refresh_embedding_status(self) -> None:
+        from agent.embedder import get_embedder
+
+        embedder = get_embedder()
+        if embedder.backend == "openai" and embedder.status == "remote":
+            text = _("원격 임베딩 사용 중")
+        elif embedder.status == "ready":
+            text = _("로컬 임베딩 모델: 준비됨")
+        elif embedder.status == "downloading":
+            progress = int(embedder.progress * 100)
+            text = _("로컬 임베딩 모델 다운로드 중: {progress}%").format(
+                progress=progress
+            )
+        elif embedder.status == "loading":
+            text = _("로컬 임베딩 모델 불러오는 중")
+        elif embedder.status == "failed":
+            text = _("임베딩을 사용할 수 없습니다. 어휘 점수만 사용합니다.")
+        else:
+            text = _("로컬 임베딩 모델: 다운로드 대기")
+        self.embedding_status.setText(text)
 
     def _build_learning_metrics_group(self) -> QGroupBox:
         group = QGroupBox(_("학습 기여도 진단"))
@@ -218,4 +260,5 @@ class _AgentSettingsPage(QWidget):
             "image_gen_provider": self.image_provider.text().strip() or "openai",
             "local_decision_mode": mode,
             "local_decision_direct_execution": direct,
+            "embedding_remote_enabled": self.embedding_remote_checkbox.isChecked(),
         }
