@@ -3328,3 +3328,6 @@ msgstr "마이크를 찾을 수 없어 음성 인식을 사용할 수 없습니�
 
 msgid "아직 이전 요청을 처리하고 있어요."
 msgstr "아직 이전 요청을 처리하고 있어요."
+
+msgid "Version: {version} · Commit: {commit}"
+msgstr "버전 {version} · 커밋 {commit}"

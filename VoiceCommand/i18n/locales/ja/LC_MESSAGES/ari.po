@@ -3328,3 +3328,6 @@ msgstr "マイクが見つからないため、音声認識を利用できませ
 
 msgid "아직 이전 요청을 처리하고 있어요."
 msgstr "前のリクエストを処理中です。"
+
+msgid "Version: {version} · Commit: {commit}"
+msgstr "バージョン {version} · コミット {commit}"

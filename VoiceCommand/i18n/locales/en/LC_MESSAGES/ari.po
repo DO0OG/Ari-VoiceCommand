@@ -3328,3 +3328,6 @@ msgstr "No microphone was found, so voice recognition is unavailable. Please sel
 
 msgid "아직 이전 요청을 처리하고 있어요."
 msgstr "I'm still processing the previous request."
+
+msgid "Version: {version} · Commit: {commit}"
+msgstr "Version: {version} · Commit: {commit}"
