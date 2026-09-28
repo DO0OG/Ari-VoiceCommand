@@ -57,6 +57,9 @@
     "아리야",
     "시작"
   ],
+  "wake_word_enabled": true,
+  "voice_activation_hotkey": "Ctrl+Alt+Space",
+  "voice_activation_mode": "push_to_talk",
   "stt_energy_threshold": 300,
   "stt_dynamic_energy": true,
   "tts_speed": 1.0,

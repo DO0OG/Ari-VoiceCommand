@@ -508,6 +508,23 @@ def get_microphone_index_helper(microphone_name):
     return None
 
 
+class _PushToTalkAudioStream:
+    def __init__(self, stream, released, sample_rate, sample_width):
+        self._stream = stream
+        self._released = released
+        self._sample_rate = sample_rate
+        self._sample_width = sample_width
+
+    def read(self, size):
+        if self._released.is_set():
+            time.sleep(size / self._sample_rate)
+            return bytes(size * self._sample_width)
+        audio = self._stream.read(size)
+        if self._released.is_set():
+            return bytes(size * self._sample_width)
+        return audio
+
+
 def recognize_speech_helper(
     recognizer,
     source,
@@ -515,16 +532,30 @@ def recognize_speech_helper(
     stt_provider=None,
     previous_texts=None,
     continue_check=None,
+    push_to_talk_released=None,
 ) -> str | None:
     try:
         if continue_check is not None and not continue_check():
             return None
         logging.info("말씀해 주세요...")
-        audio = recognizer.listen(
-            source,
-            timeout=SPEECH_TIMEOUT,
-            phrase_time_limit=SPEECH_PHRASE_LIMIT,
-        )
+        original_stream = None
+        if push_to_talk_released is not None:
+            original_stream = source.stream
+            source.stream = _PushToTalkAudioStream(
+                original_stream,
+                push_to_talk_released,
+                source.SAMPLE_RATE,
+                source.SAMPLE_WIDTH,
+            )
+        try:
+            audio = recognizer.listen(
+                source,
+                timeout=SPEECH_TIMEOUT,
+                phrase_time_limit=SPEECH_PHRASE_LIMIT,
+            )
+        finally:
+            if original_stream is not None:
+                source.stream = original_stream
         if continue_check is not None and not continue_check():
             return None
         provider = stt_provider
@@ -556,6 +587,8 @@ def recognize_speech_helper(
         history.append((text, current_time))
         logging.info("인식된 텍스트 수신 (%d자)", len(text))
         signal.emit(text)
+    except sr.WaitTimeoutError:
+        logging.debug("음성 입력 시간이 초과되었습니다.")
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")
     except (sr.RequestError, OSError, RuntimeError, ValueError) as e:

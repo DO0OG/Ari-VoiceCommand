@@ -471,6 +471,37 @@ class CharacterWidgetHelperTests(unittest.TestCase):
 
         self.assertEqual(affinity.calls, [(1, "click")])
 
+    def test_character_click_requests_one_shot_listening(self):
+        widget = self._make_widget()
+        widget.voice_thread = MagicMock()
+
+        with (
+            patch("ui.character_widget.ConfigManager.get", return_value="toggle"),
+            patch.object(widget, "_update_current_screen"),
+        ):
+            widget.mousePressEvent(_FakeMouseEvent(QPoint(150, 150)))
+            widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(150, 150)))
+
+        widget.voice_thread.request_listening.assert_called_once_with()
+        widget.voice_thread.release_listening.assert_not_called()
+
+    def test_character_long_press_uses_push_to_talk_until_release(self):
+        widget = self._make_widget()
+        widget.voice_thread = MagicMock()
+
+        with (
+            patch("ui.character_widget.ConfigManager.get", return_value="push_to_talk"),
+            patch.object(widget, "_update_current_screen"),
+        ):
+            widget.mousePressEvent(_FakeMouseEvent(QPoint(150, 150)))
+            widget._begin_character_push_to_talk()
+            widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(150, 150)))
+
+        widget.voice_thread.request_listening.assert_called_once_with(
+            push_to_talk=True
+        )
+        widget.voice_thread.release_listening.assert_called_once_with()
+
     def test_mouse_release_does_not_reward_drag_motion(self):
         widget = self._make_widget()
         affinity = _FakeAffinityManager()

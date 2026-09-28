@@ -137,7 +137,7 @@ class SimpleWakeWord:
         except Exception as e:
             logging.debug(f"재캘리브레이션 실패: {e}")
 
-    def listen_for_wake_word(self, source, detection_allowed=None):
+    def listen_for_wake_word(self, source, detection_allowed=None, interrupt_event=None):
         """웨이크워드 대기 — 첫 호출 시 캘리브레이션, 이후 즉시 청취"""
         if self.should_stop:
             return False
@@ -153,7 +153,17 @@ class SimpleWakeWord:
                     "웨이크워드 캘리브레이션 완료 (energy_threshold=%.1f)",
                     self.recognizer.energy_threshold,
                 )
-            audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=2)
+            original_stream = None
+            if interrupt_event is not None:
+                original_stream = source.stream
+                source.stream = _WakeListenStream(original_stream, interrupt_event)
+            try:
+                audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=2)
+            finally:
+                if original_stream is not None:
+                    source.stream = original_stream
+            if interrupt_event is not None and interrupt_event.is_set():
+                return False
             if not should_transcribe_wake_audio(audio, self.recognizer.energy_threshold):
                 logging.debug("[WakeWord] 길이/에너지 게이트에서 오디오 구간을 제외했습니다")
                 return False
@@ -226,3 +236,17 @@ class SimpleWakeWord:
     def flush_pending_settings(self) -> None:
         """종료 시 대기 중인 임계값을 저장한다."""
         self._flush_pending_energy_threshold(force=True)
+
+
+class _WakeListenStream:
+    def __init__(self, stream, interrupt_event):
+        self._stream = stream
+        self._interrupt_event = interrupt_event
+
+    def read(self, size):
+        if self._interrupt_event.is_set():
+            raise sr.WaitTimeoutError("웨이크워드 듣기가 취소되었습니다.")
+        audio = self._stream.read(size)
+        if self._interrupt_event.is_set():
+            raise sr.WaitTimeoutError("웨이크워드 듣기가 취소되었습니다.")
+        return audio

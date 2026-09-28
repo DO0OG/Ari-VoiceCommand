@@ -23,6 +23,7 @@ from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
     GREETING_INTERVAL
 )
+from core.config_manager import ConfigManager
 
 _RNG = secrets.SystemRandom()
 _BUBBLE_HISTORY_LOCK = threading.Lock()
@@ -173,6 +174,13 @@ class CharacterWidget(QWidget):
         self._drag_start_global_pos = QPoint()
         self._drag_moved = False
         self._suppress_release_click = False
+        self._voice_press_eligible = False
+        self._voice_press_long = False
+        self._character_ptt_active = False
+        self._listen_press_timer = QTimer(self)
+        self._listen_press_timer.setSingleShot(True)
+        self._listen_press_timer.setInterval(350)
+        self._listen_press_timer.timeout.connect(self._begin_character_push_to_talk)
         self.current_animation = "idle"
         self._activity_away = False
         self._activity_locked = False
@@ -1075,6 +1083,17 @@ class CharacterWidget(QWidget):
                 return
             self._last_click = now
 
+            self._voice_press_eligible = self.voice_thread is not None
+            self._voice_press_long = False
+            self._character_ptt_active = False
+            self._listen_press_timer.stop()
+            if (
+                self._voice_press_eligible
+                and ConfigManager.get("voice_activation_mode", "push_to_talk")
+                == "push_to_talk"
+            ):
+                self._listen_press_timer.start()
+
             self.dragging = True
             self._is_landing = False # 드래그 시 착지 플래그 초기화
             self._drag_start_global_pos = event.globalPos()
@@ -1105,6 +1124,11 @@ class CharacterWidget(QWidget):
             moved_delta = event.globalPos() - self._drag_start_global_pos
             if abs(moved_delta.x()) >= 3 or abs(moved_delta.y()) >= 3:
                 self._drag_moved = True
+                self._voice_press_eligible = False
+                self._listen_press_timer.stop()
+                if self._character_ptt_active and self.voice_thread is not None:
+                    self.voice_thread.release_listening()
+                    self._character_ptt_active = False
 
             # 목표 위치 계산 (Lerp 제거, 즉시 이동)
             nx = event.globalPos().x() - self.offset.x()
@@ -1136,6 +1160,23 @@ class CharacterWidget(QWidget):
     def mouseReleaseEvent(self, event):
         """마우스 릴리즈"""
         if event.button() == Qt.LeftButton:
+            should_activate_voice = (
+                self.dragging
+                and not self._drag_moved
+                and not self._suppress_release_click
+            )
+            self._listen_press_timer.stop()
+            if self._character_ptt_active and self.voice_thread is not None:
+                self.voice_thread.release_listening()
+            elif (
+                should_activate_voice
+                and not self._voice_press_long
+                and self.voice_thread is not None
+            ):
+                self.voice_thread.request_listening()
+            self._voice_press_eligible = False
+            self._character_ptt_active = False
+
             affinity_mgr = getattr(self, "_affinity_manager", None)
             on_level_up = getattr(self, "_affinity_on_level_up", None)
             should_reward_click = self.dragging and not self._drag_moved and not self._suppress_release_click
@@ -1280,7 +1321,7 @@ class CharacterWidget(QWidget):
     def open_settings(self):
         """설정 창 열기"""
         from ui.settings_dialog import SettingsDialog, should_apply_microphone
-        dialog = SettingsDialog()
+        dialog = SettingsDialog(self)
         if dialog.exec():
             if should_apply_microphone(dialog, self):
                 self.apply_microphone_settings()
@@ -1293,6 +1334,25 @@ class CharacterWidget(QWidget):
                     apply_live_theme(character_widget=self)
                 except Exception as e:
                     logging.error(f"실시간 테마 반영 실패: {e}")
+
+    def _begin_character_push_to_talk(self):
+        if not self._voice_press_eligible or self.voice_thread is None:
+            return
+        self._voice_press_long = True
+        self._character_ptt_active = self.voice_thread.request_listening(
+            push_to_talk=True
+        )
+
+    def refresh_voice_input_settings(self):
+        """음성 설정을 실행 중인 입력 경로에 적용한다."""
+        try:
+            if self.voice_thread is not None:
+                self.voice_thread.refresh_voice_settings()
+            hotkey_filter = getattr(self, "voice_hotkey_filter", None)
+            if hotkey_filter is not None:
+                hotkey_filter.configure()
+        except (AttributeError, OSError, RuntimeError, ValueError) as exc:
+            logging.warning("음성 입력 설정 적용 실패: %s", exc)
 
     def refresh_theme(self):
         """테마 변경 후 캐릭터 관련 UI를 갱신한다."""
@@ -1595,6 +1655,10 @@ class CharacterWidget(QWidget):
 
     def cleanup(self):
         """정리"""
+        if self._listen_press_timer:
+            self._listen_press_timer.stop()
+        if self._character_ptt_active and self.voice_thread is not None:
+            self.voice_thread.release_listening()
         if self.animation_timer:
             self.animation_timer.stop()
         if self.behavior_timer:

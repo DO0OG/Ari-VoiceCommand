@@ -66,6 +66,11 @@ class VoiceRecognitionThread(QThread):
         self._microphone_wakeup = threading.Event()
         self._microphone_request_pending = False
         self._pending_microphone = None
+        self._voice_wakeup = threading.Event()
+        self._voice_activation_lock = threading.Lock()
+        self._pending_voice_activation = None
+        self._active_voice_activation = None
+        self._command_listening = False
         self._microphone_active = False
         self._microphone_probed = False
         self._voice_setup_failed = False
@@ -102,6 +107,62 @@ class VoiceRecognitionThread(QThread):
             if not self._microphone_active:
                 self._set_microphone_status(None)
             self._microphone_wakeup.set()
+
+    def request_listening(self, push_to_talk=False) -> bool:
+        """음성 입력 시작을 대기 루프에 전달한다."""
+        if (
+            not self.running
+            or self.microphone is None
+            or not self._microphone_active
+            or self._voice_setup_failed
+        ):
+            return False
+        with self._voice_activation_lock:
+            if (
+                self._pending_voice_activation
+                or self._active_voice_activation
+                or self._command_listening
+            ):
+                return False
+            self._pending_voice_activation = {
+                "released": threading.Event() if push_to_talk else None,
+            }
+            self._voice_wakeup.set()
+        return True
+
+    def release_listening(self) -> None:
+        """push-to-talk 입력 종료를 전달한다."""
+        with self._voice_activation_lock:
+            request = self._active_voice_activation or self._pending_voice_activation
+            if request and request["released"] is not None:
+                request["released"].set()
+
+    def refresh_voice_settings(self) -> None:
+        """음성 설정 변경을 대기 루프에 알린다."""
+        self._voice_wakeup.set()
+
+    def _take_voice_activation(self):
+        with self._voice_activation_lock:
+            request = self._pending_voice_activation
+            self._pending_voice_activation = None
+            self._voice_wakeup.clear()
+            if request is not None:
+                self._active_voice_activation = request
+                self._command_listening = True
+            return request
+
+    def _finish_voice_activation(self) -> None:
+        with self._voice_activation_lock:
+            self._active_voice_activation = None
+            self._command_listening = False
+
+    def _discard_pending_voice_activation(self) -> None:
+        with self._voice_activation_lock:
+            request = self._pending_voice_activation
+            self._pending_voice_activation = None
+            self._voice_wakeup.clear()
+        if request and request["released"] is not None:
+            request["released"].set()
 
     def claim_microphone_unavailable_notification(self) -> bool:
         """Return true once when the UI should show the missing-microphone notice."""
@@ -158,10 +219,12 @@ class VoiceRecognitionThread(QThread):
         from VoiceCommand import SharedMicrophone, get_microphone_index_helper
 
         previous_microphone = self.microphone
+        wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
         try:
             microphone_index = get_microphone_index_helper(microphone_name)
             microphone = SharedMicrophone(device_index=microphone_index)
-            self._probe_microphone(microphone)
+            if wake_word_enabled:
+                self._probe_microphone(microphone)
         except Exception as exc:
             if previous_microphone is None:
                 self._disable_microphone(exc, "설정한 마이크를 사용할 수 없습니다")
@@ -174,23 +237,27 @@ class VoiceRecognitionThread(QThread):
             self.selected_microphone = microphone_name
             self.microphone_index = microphone_index
             self._microphone_active = True
-        self._microphone_probed = True
+        self._microphone_probed = wake_word_enabled
         self._voice_setup_failed = False
         self._set_microphone_status(True)
 
-    def _initialize_voice_recognition(self) -> bool:
-        if self.wake_detector is not None:
+    def _initialize_voice_recognition(self, initialize_wake_detector=True) -> bool:
+        if self.speech_recognizer is not None and (
+            not initialize_wake_detector or self.wake_detector is not None
+        ):
             return True
         try:
-            self.speech_recognizer = sr.Recognizer()
-            self._apply_recognizer_settings()
-            from audio.simple_wake import SimpleWakeWord
+            if self.speech_recognizer is None:
+                self.speech_recognizer = sr.Recognizer()
+                self._apply_recognizer_settings()
+            if initialize_wake_detector and self.wake_detector is None:
+                from audio.simple_wake import SimpleWakeWord
 
-            self.wake_detector = SimpleWakeWord(
-                wake_words=ConfigManager.get("wake_words", WAKE_WORDS)
-            )
-            self._stt = getattr(self.wake_detector, "_stt", None)
-            self._stt_signature = getattr(self.wake_detector, "_provider_signature", None)
+                self.wake_detector = SimpleWakeWord(
+                    wake_words=ConfigManager.get("wake_words", WAKE_WORDS)
+                )
+                self._stt = getattr(self.wake_detector, "_stt", None)
+                self._stt_signature = getattr(self.wake_detector, "_provider_signature", None)
             self._refresh_stt_provider()
             return True
         except Exception as exc:
@@ -237,6 +304,14 @@ class VoiceRecognitionThread(QThread):
                     self._microphone_wakeup.wait()
                     continue
 
+                wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
+                if not wake_word_enabled:
+                    self._voice_wakeup.wait()
+                    request = self._take_voice_activation()
+                    if request is not None:
+                        self._listen_for_manual_activation(request)
+                    continue
+
                 if not self._microphone_probed:
                     try:
                         self._probe_microphone(self.microphone)
@@ -258,6 +333,10 @@ class VoiceRecognitionThread(QThread):
                     logging.warning("음성 인식 설정을 적용하지 못했습니다: %s", exc, exc_info=True)
                     continue
                 from VoiceCommand import is_session_lock_blocked, should_pause_wake_detection
+                request = self._take_voice_activation()
+                if request is not None:
+                    self._listen_for_manual_activation(request)
+                    continue
                 if should_pause_wake_detection():
                     time.sleep(0.05)
                     continue
@@ -267,6 +346,7 @@ class VoiceRecognitionThread(QThread):
                         detected = self.wake_detector.listen_for_wake_word(
                             source,
                             detection_allowed=lambda: not should_pause_wake_detection(),
+                            interrupt_event=self._voice_wakeup,
                         )
                 except (OSError, RuntimeError, AssertionError, AttributeError, ValueError) as exc:
                     self._disable_microphone(exc, "마이크 입력 중 오류가 발생했습니다")
@@ -277,6 +357,10 @@ class VoiceRecognitionThread(QThread):
                     continue
 
                 try:
+                    request = self._take_voice_activation()
+                    if request is not None:
+                        self._listen_for_manual_activation(request)
+                        continue
                     if detected and is_session_lock_blocked():
                         time.sleep(0.05)
                         continue
@@ -305,11 +389,49 @@ class VoiceRecognitionThread(QThread):
             self.cleanup()
 
     def handle_wake_word(self):
+        from VoiceCommand import is_session_lock_blocked, tts_wrapper
+
+        if is_session_lock_blocked():
+            return
+        with self._voice_activation_lock:
+            if self._command_listening:
+                return
+            self._command_listening = True
+
         logging.info("웨이크 워드 감지됨!")
+
+        try:
+            response = _RNG.choice(get_wake_responses())
+            tts_wrapper(response)
+
+            # TTS 재생 완료 대기 (유동적 대기)
+            try:
+                from VoiceCommand import is_tts_playing
+                _wait_for_tts_playback_completion(is_tts_playing)
+                # 재생이 끝난 후 음성 인식 시작 전 아주 짧은 여유
+                time.sleep(0.2)
+            except Exception as e:
+                logging.error("TTS 대기 중 오류: %s", e)
+                time.sleep(0.5)
+
+            self._discard_pending_voice_activation()
+            if is_session_lock_blocked():
+                return
+            self._listen_for_command()
+        finally:
+            with self._voice_activation_lock:
+                self._command_listening = False
+
+        if is_session_lock_blocked():
+            return
+        # 대화 후 재캘리브레이션
+        from VoiceCommand import wake_detector_recalibrate_helper
+        with self._microphone_source() as source:
+            wake_detector_recalibrate_helper(self.wake_detector, source)
+
+    def _listen_for_command(self, push_to_talk_released=None):
         from VoiceCommand import (
-            tts_wrapper,
             recognize_speech_helper,
-            wake_detector_recalibrate_helper,
             set_listening_indicator,
             _show_tts_bubble,
             is_session_lock_blocked,
@@ -317,24 +439,9 @@ class VoiceRecognitionThread(QThread):
 
         if is_session_lock_blocked():
             return
-        
-        response = _RNG.choice(get_wake_responses())
-        tts_wrapper(response)
-        
-        # TTS 재생 완료 대기 (유동적 대기)
-        try:
-            from VoiceCommand import is_tts_playing
-            _wait_for_tts_playback_completion(is_tts_playing)
-            
-            # 재생이 끝난 후 음성 인시 시작 전 아주 짧은 여유
-            time.sleep(0.2)
-        except Exception as e:
-            logging.error("TTS 대기 중 오류: %s", e)
-            time.sleep(0.5)
-
-        if is_session_lock_blocked():
-            return
-        
+        with self._voice_activation_lock:
+            started_here = not self._command_listening
+            self._command_listening = True
         set_listening_indicator(True)
         self.listening_state_changed.emit(True)
         duplicate_notice = None
@@ -347,22 +454,50 @@ class VoiceRecognitionThread(QThread):
                     stt_provider=self._stt,
                     previous_texts=self._last_texts,
                     continue_check=lambda: not is_session_lock_blocked(),
+                    push_to_talk_released=push_to_talk_released,
                 )
         finally:
             set_listening_indicator(False)
             self.listening_state_changed.emit(False)
+            if started_here:
+                with self._voice_activation_lock:
+                    self._command_listening = False
         if duplicate_notice:
             _show_tts_bubble(
                 duplicate_notice,
                 duration=SPEECH_REPEAT_NOTICE_DURATION_MS,
             )
 
-        if is_session_lock_blocked():
-            return
-        
-        # 대화 후 재캘리브레이션
-        with self._microphone_source() as source:
-            wake_detector_recalibrate_helper(self.wake_detector, source)
+    def _listen_for_manual_activation(self, request):
+        from VoiceCommand import (
+            is_session_lock_blocked,
+            is_tts_playing,
+            wake_detector_recalibrate_helper,
+        )
+
+        try:
+            if is_session_lock_blocked():
+                logging.info("잠금 상태에서 음성 입력 시작을 무시합니다.")
+                return
+            if is_tts_playing():
+                logging.info("TTS 재생 중 음성 입력 시작을 무시합니다.")
+                return
+            wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
+            if not self._initialize_voice_recognition(wake_word_enabled):
+                return
+            self._apply_recognizer_settings()
+            self._refresh_stt_provider()
+            self._listen_for_command(request["released"])
+            self._microphone_probed = True
+            if wake_word_enabled and self.wake_detector is not None:
+                with self._microphone_source() as source:
+                    wake_detector_recalibrate_helper(self.wake_detector, source)
+        except (OSError, RuntimeError, AssertionError, AttributeError, ValueError) as exc:
+            self._disable_microphone(exc, "음성 입력 중 마이크 오류가 발생했습니다")
+        except Exception as exc:
+            logging.error("단축키·클릭 음성 입력 실패: %s", exc, exc_info=True)
+        finally:
+            self._finish_voice_activation()
 
     def cleanup(self):
         if hasattr(self, 'wake_detector'):
@@ -374,6 +509,8 @@ class VoiceRecognitionThread(QThread):
     def stop(self):
         self.running = False
         self._microphone_wakeup.set()
+        self.release_listening()
+        self._voice_wakeup.set()
         if getattr(self, 'wake_detector', None) is not None:
             self.wake_detector.should_stop = True
         self.wait(2000)

@@ -1,7 +1,9 @@
 import math
 import struct
+import threading
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import speech_recognition as sr
 
@@ -115,6 +117,38 @@ class SimpleWakeWordTests(unittest.TestCase):
             self.assertTrue(detector.listen_for_wake_word(object()))
 
         self.assertEqual(detector.stt_calls_per_hour, 1)
+
+    def test_interrupt_discards_current_wake_audio_before_stt(self):
+        detector = self._make_detector()
+        detector._calibrated = True
+        interrupt_event = threading.Event()
+        interrupt_event.set()
+        original_stream = Mock()
+        source = SimpleNamespace(stream=original_stream)
+
+        with (
+            patch(
+                "audio.simple_wake.ConfigManager.load_settings",
+                return_value={"wake_words": ["아리야"], "stt_provider": "google"},
+            ),
+            patch.object(
+                detector.recognizer,
+                "listen",
+                side_effect=lambda observed_source, **_kwargs: (
+                    observed_source.stream.read(1024)
+                ),
+            ),
+            patch.object(detector, "_transcribe") as transcribe,
+        ):
+            self.assertFalse(
+                detector.listen_for_wake_word(
+                    source,
+                    interrupt_event=interrupt_event,
+                )
+            )
+
+        self.assertIs(source.stream, original_stream)
+        transcribe.assert_not_called()
 
     def test_stt_call_count_expires_outside_the_rolling_hour(self):
         detector = self._make_detector()
