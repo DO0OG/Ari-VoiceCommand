@@ -27,6 +27,8 @@ class RPGenerator:
 
     def build_system_prompt(self, base_prompt: str) -> str:
         """캐릭터 설정을 시스템 프롬프트에 녹여서 반환."""
+        from i18n.translator import _
+
         try:
             from i18n.translator import get_language
             lang = get_language()
@@ -71,6 +73,9 @@ class RPGenerator:
         verbosity_map = _VERBOSITY_INSTRUCTION.get(lang, _VERBOSITY_INSTRUCTION["ko"])
         parts.append(verbosity_map.get(self.response_verbosity, verbosity_map["concise"]))
         parts.append(get_emotion_instruction(lang))
+        parts.append(_(
+            "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
+        ))
         return "\n\n".join(part for part in parts if part)
 
     def generate(self, text: str) -> str:

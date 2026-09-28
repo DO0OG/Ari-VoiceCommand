@@ -3388,3 +3388,31 @@ msgstr "이 사실이 언급된 대화 기록도 삭제"
 
 msgid "Edge/OpenAI/ElevenLabs 감정 조절"
 msgstr "Edge/OpenAI/ElevenLabs 감정 조절"
+
+msgid ""
+"[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
+"시각{time} · 칭찬24h {praise}회"
+msgstr ""
+"[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
+"시각{time} · 칭찬24h {praise}회"
+
+msgid " · 전체 화면: {fullscreen}"
+msgstr " · 전체 화면: {fullscreen}"
+
+msgid "{minutes}분"
+msgstr "{minutes}분"
+
+msgid "{hours}시간"
+msgstr "{hours}시간"
+
+msgid "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
+msgstr "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
+
+msgid "없음"
+msgstr "없음"
+
+msgid "예"
+msgstr "예"
+
+msgid "아니요"
+msgstr "아니요"

@@ -87,6 +87,10 @@ class MemoryManager:
             get_user_profile_engine().update(user_msg, command_type=last_command, success=True)
         except Exception as e:
             logging.warning("프로파일 업데이트 실패: %s", e)
+        try:
+            self.context_manager.record_interaction(user_msg)
+        except (AttributeError, OSError, TypeError, ValueError) as e:
+            logging.warning("상황 정보 기록 실패: %s", e)
 
     def _is_persistent_fact(self, key: str) -> bool:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""

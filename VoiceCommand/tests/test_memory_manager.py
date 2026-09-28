@@ -2,13 +2,54 @@ import tempfile
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from memory.memory_manager import MemoryManager
 from memory.user_context import UserContextManager
 
 
 class MemoryManagerTests(unittest.TestCase):
+    def test_process_interaction_records_situation_after_conversation_save(self):
+        events = []
+        fake_context = Mock()
+        fake_context.context = {"last_commands": []}
+        fake_context.extract_topics.return_value = []
+        fake_context.record_interaction.side_effect = lambda message: events.append(
+            ("situation", message)
+        )
+        fake_index = Mock()
+        fake_profile = Mock()
+
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        with patch(
+            "memory.memory_manager.add_conversation",
+            side_effect=lambda user, response: events.append(("saved", user, response)),
+        ), patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
+            "memory.memory_manager.get_user_profile_engine", return_value=fake_profile
+        ):
+            manager.process_interaction("Great job", "Done")
+
+        self.assertEqual(events[0], ("saved", "Great job", "Done"))
+        self.assertEqual(events[1], ("situation", "Great job"))
+        fake_context.record_interaction.assert_called_once_with("Great job")
+
+    def test_process_interaction_counts_when_conversation_save_fails(self):
+        fake_context = Mock()
+        fake_context.context = {"last_commands": []}
+        fake_context.extract_topics.return_value = []
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        with patch(
+            "memory.memory_manager.add_conversation",
+            side_effect=OSError("disk full"),
+        ), patch(
+            "memory.memory_manager.get_memory_index", return_value=Mock()
+        ), patch("memory.memory_manager.get_user_profile_engine", return_value=Mock()):
+            manager.process_interaction("hello", "hi")
+
+        fake_context.record_interaction.assert_called_once_with("hello")
+
     def test_get_top_facts_prompt_uses_highest_confidence_facts(self):
         fake_context = SimpleNamespace(
             context={

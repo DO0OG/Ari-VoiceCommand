@@ -12,6 +12,7 @@ import mimetypes
 import os
 import re
 import threading
+from datetime import datetime
 from typing import Callable, List, Any
 from urllib.parse import urlsplit
 
@@ -639,9 +640,13 @@ class LLMProvider:
         *,
         provider: str | None = None,
         model: str | None = None,
+        situation_signature: str = "",
     ) -> str:
+        cache_message = user_message
+        if situation_signature:
+            cache_message = f"{user_message}\0{situation_signature}"
         return build_response_cache_key(
-            user_message,
+            cache_message,
             provider=provider or self.provider,
             model=model or self.model,
             system_prompt=self.system_prompt,
@@ -737,18 +742,32 @@ class LLMProvider:
             if not model:
                 logging.warning("[LLMProvider] 모델 미설정: provider=%s", provider)
                 return self._missing_model_response(provider)
+            situation_prompt = self._build_situation_prompt()
             cache_key = self._build_cache_key(
                 user_message,
                 include_context,
                 provider=provider,
                 model=model,
+                situation_signature=situation_prompt,
             )
             cached = self._response_cache.get(cache_key) if self._should_cache(user_message) else None
             if cached:
+                if save_history:
+                    from memory.user_context import get_context_manager
+                    get_context_manager().record_interaction(user_message)
                 if stream_callback:
                     self._emit_stream_text(cached, stream_callback)
                 return cached
-            messages = [{"role": "system", "content": system_override or self._build_system(include_context, user_message=user_message)}]
+            system_content = (
+                self._build_system(
+                    include_context,
+                    user_message=user_message,
+                    situation_prompt=situation_prompt,
+                )
+                if not system_override
+                else self._append_situation_prompt(system_override, situation_prompt)
+            )
+            messages = [{"role": "system", "content": system_content}]
             messages.extend(self._history_for_context())
             messages.append({"role": "user", "content": user_message})
             if save_history:
@@ -803,7 +822,15 @@ class LLMProvider:
                 return self._missing_model_response(provider), []
             self.add_to_history("user", user_message)
             skill_ctx = self._get_skill_context(user_message)
-            messages = [{"role": "system", "content": self._build_system(include_context, user_message=user_message)}]
+            situation_prompt = self._build_situation_prompt()
+            messages = [{
+                "role": "system",
+                "content": self._build_system(
+                    include_context,
+                    user_message=user_message,
+                    situation_prompt=situation_prompt,
+                ),
+            }]
             messages.extend(self._history_for_context())
             
             request_ctx = self._analyze_request(user_message)
@@ -966,6 +993,7 @@ class LLMProvider:
         full_text = ""
         tool_calls: list = []
         try:
+            messages = self._with_situation_prompt(messages)
             if provider == "anthropic":
                 system = ""
                 anthropic_messages = messages
@@ -1082,7 +1110,8 @@ class LLMProvider:
             with open(raw, "rb") as f:
                 return base64.b64encode(f.read()).decode("ascii"), media_type
         if raw.startswith("data:"):
-            header, _, data = raw.partition(",")
+            partitioned = raw.partition(",")
+            header, data = partitioned[0], partitioned[2]
             media = header[5:].split(";")[0]
             return data, media or media_type
         return raw, media_type
@@ -1507,7 +1536,107 @@ class LLMProvider:
                 return ""
         return ""
 
-    def _build_system(self, include_context=False, user_message=""):
+    def _build_situation_prompt(self) -> str:
+        now = datetime.now()
+        metrics = {
+            "last_interaction_elapsed_minutes": None,
+            "today_interaction_count": 0,
+            "continuous_use_minutes": 0,
+            "local_time": now.strftime("%H:%M"),
+            "recent_praise_count": 0,
+        }
+        try:
+            from memory.user_context import get_context_manager
+            metrics = get_context_manager().get_situation_metrics()
+        except (AttributeError, ImportError, OSError, TypeError, ValueError) as exc:
+            logging.debug("[LLMProvider] 상황 메타데이터 조회 실패: %s", exc)
+
+        try:
+            from core.window_inspector import get_foreground_fullscreen
+            fullscreen = get_foreground_fullscreen()
+        except (
+            AttributeError,
+            ImportError,
+            OSError,
+            OverflowError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            logging.debug("[LLMProvider] 전체 화면 상태 조회 실패: %s", exc)
+            fullscreen = None
+
+        elapsed_minutes = metrics.get("last_interaction_elapsed_minutes")
+        elapsed_value = (
+            _("없음")
+            if elapsed_minutes is None
+            else self._format_situation_duration(elapsed_minutes)
+        )
+        template = _("[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · 시각{time} · 칭찬24h {praise}회")
+        prompt = template.format(
+            elapsed=elapsed_value,
+            today=self._format_situation_count(
+                metrics.get("today_interaction_count", 0)
+            ),
+            continuous=self._format_situation_duration(
+                metrics.get("continuous_use_minutes", 0)
+            ),
+            time=str(metrics.get("local_time", now.strftime("%H:%M")))[:5],
+            praise=self._format_situation_count(
+                metrics.get("recent_praise_count", 0)
+            ),
+        )
+        if fullscreen is True:
+            prompt += _(" · 전체 화면: {fullscreen}").format(fullscreen=_("예"))
+        elif fullscreen is False:
+            prompt += _(" · 전체 화면: {fullscreen}").format(fullscreen=_("아니요"))
+        return prompt
+
+    @staticmethod
+    def _format_situation_count(value: Any) -> str:
+        try:
+            count = max(0, int(value))
+        except (OverflowError, TypeError, ValueError):
+            return "0"
+        return "999+" if count > 999 else str(count)
+
+    @staticmethod
+    def _format_situation_duration(value: Any) -> str:
+        try:
+            minutes = max(0, int(value))
+        except (OverflowError, TypeError, ValueError):
+            minutes = 0
+        if minutes >= 60:
+            hours = minutes // 60
+            return _(
+                "{hours}시간", hours="999+" if hours > 999 else hours
+            )
+        return _("{minutes}분", minutes=min(minutes, 999))
+
+    @staticmethod
+    def _append_situation_prompt(system_prompt: str, situation_prompt: str) -> str:
+        prompt = str(system_prompt or "").rstrip()
+        situation = str(situation_prompt or "").strip()
+        if not situation or situation in prompt or any(
+            line.startswith(("[상황] ", "[Situation] ", "[状況] "))
+            for line in prompt.splitlines()
+        ):
+            return prompt
+        return f"{prompt}\n\n{situation}" if prompt else situation
+
+    def _with_situation_prompt(self, messages: list[dict]) -> list[dict]:
+        situation_prompt = self._build_situation_prompt()
+        prepared = [dict(message) for message in messages]
+        for index, message in enumerate(prepared):
+            if message.get("role") == "system":
+                prepared[index]["content"] = self._append_situation_prompt(
+                    str(message.get("content", "")), situation_prompt
+                )
+                break
+        else:
+            prepared.insert(0, {"role": "system", "content": situation_prompt})
+        return prepared
+
+    def _build_system(self, include_context=False, user_message="", situation_prompt=None):
         try:
             from i18n.translator import get_language
             lang = get_language()
@@ -1569,6 +1698,13 @@ class LLMProvider:
         skill_ctx = self._get_skill_context(user_message)
         if skill_ctx.get("prompt"):
             parts.append(skill_ctx["prompt"])
+        situation = (
+            situation_prompt
+            if situation_prompt is not None
+            else self._build_situation_prompt()
+        )
+        if situation:
+            parts.append(situation)
         if include_context and time_prompt:
             parts.append(time_prompt)
         return "\n\n".join(part for part in parts if part)

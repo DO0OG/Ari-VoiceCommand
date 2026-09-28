@@ -31,6 +31,13 @@ _SUMMARY_FACT_LIMIT = 10
 _SUMMARY_TOPIC_LIMIT = 5
 _DEFAULT_FACT_TTL_DAYS = 180
 _MAX_FACT_HISTORY = 8
+_SITUATION_IDLE_TIMEOUT = timedelta(minutes=30)
+
+_PRAISE_MARKERS = (
+    "잘했", "잘하네", "최고", "대단", "똑똑", "멋져", "고마워", "고맙", "감사해",
+    "great", "good job", "well done", "amazing", "excellent", "brilliant", "awesome",
+    "thank you", "thanks", "すごい", "ありがとう", "よくでき", "えらい", "最高", "上手",
+)
 
 
 def _context_locked(method):
@@ -89,7 +96,8 @@ class UserContextManager:
             "time_patterns": {},
             "preferences": {},
             "last_commands": [],
-            "conversation_topics": {}
+            "conversation_topics": {},
+            "situation": {},
         })
 
     def _normalize_context(self, data):
@@ -117,6 +125,7 @@ class UserContextManager:
         context["command_frequency"] = self._limit_frequency_map(context.get("command_frequency", {}))
         context["command_sequences"] = self._limit_sequences(context.get("command_sequences", {}))
         context["conversation_topics"] = self._limit_frequency_map(context.get("conversation_topics", {}), max_items=_MAX_TOPIC_COUNT)
+        context["situation"] = self._normalize_situation(context.get("situation", {}))
         return context
 
     def _default_context_structure(self):
@@ -125,6 +134,7 @@ class UserContextManager:
             "facts": {}, "fact_history": {}, "command_frequency": {}, "command_sequences": {},
             "time_patterns": {}, "preferences": {}, "last_commands": [], "conversation_topics": {},
             "pending_bio": [],
+            "situation": {},
         }
 
     def _normalize_pending_bio(self, pending):
@@ -144,6 +154,132 @@ class UserContextManager:
             normalized.append({"field": field, "value": value})
             seen.add(candidate)
         return normalized[-_MAX_PENDING_BIO:]
+
+    def _normalize_situation(self, raw):
+        data = raw if isinstance(raw, dict) else {}
+        praise_timestamps = []
+        raw_praise_timestamps = data.get("praise_timestamps", [])
+        if not isinstance(raw_praise_timestamps, list):
+            raw_praise_timestamps = []
+        for value in raw_praise_timestamps:
+            timestamp = self._parse_situation_timestamp(value)
+            if timestamp is not None:
+                praise_timestamps.append(timestamp.isoformat())
+        try:
+            today_count = max(0, int(data.get("today_interaction_count", 0)))
+        except (TypeError, ValueError, OverflowError):
+            today_count = 0
+        today = data.get("today_date", "")
+        if not isinstance(today, str):
+            today = ""
+        return {
+            "last_interaction_at": self._normalized_timestamp(data.get("last_interaction_at")),
+            "session_started_at": self._normalized_timestamp(data.get("session_started_at")),
+            "today_date": today,
+            "today_interaction_count": today_count,
+            "praise_timestamps": praise_timestamps,
+        }
+
+    @staticmethod
+    def _parse_situation_timestamp(value):
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone().replace(tzinfo=None)
+        return parsed
+
+    def _normalized_timestamp(self, value):
+        parsed = self._parse_situation_timestamp(value)
+        return parsed.isoformat() if parsed is not None else ""
+
+    @_context_locked
+    def record_interaction(self, user_message: str, now: Optional[datetime] = None) -> None:
+        """상황 정보에 대화 시각과 횟수만 기록한다."""
+        current = now or datetime.now()
+        situation = self.context.setdefault("situation", self._normalize_situation({}))
+        last_interaction = self._parse_situation_timestamp(situation.get("last_interaction_at"))
+        session_started = self._parse_situation_timestamp(situation.get("session_started_at"))
+        if (
+            last_interaction is None
+            or current - last_interaction > _SITUATION_IDLE_TIMEOUT
+            or session_started is None
+        ):
+            session_started = current
+
+        today = current.date().isoformat()
+        if situation.get("today_date") != today:
+            situation["today_date"] = today
+            situation["today_interaction_count"] = 0
+        situation["today_interaction_count"] = max(
+            0, int(situation.get("today_interaction_count", 0))
+        ) + 1
+        situation["last_interaction_at"] = current.isoformat()
+        situation["session_started_at"] = session_started.isoformat()
+
+        cutoff = current - timedelta(hours=24)
+        stored_praise_timestamps = situation.get("praise_timestamps", [])
+        if not isinstance(stored_praise_timestamps, list):
+            stored_praise_timestamps = []
+        praise_timestamps = [
+            stamp for stamp in stored_praise_timestamps
+            if (parsed := self._parse_situation_timestamp(stamp)) is not None
+            and cutoff <= parsed <= current
+        ]
+        if self._contains_praise(user_message):
+            praise_timestamps.append(current.isoformat())
+        situation["praise_timestamps"] = praise_timestamps
+        self.save_context()
+
+    @_context_locked
+    def get_situation_metrics(self, now: Optional[datetime] = None) -> Dict[str, Any]:
+        """원문 없이 계산한 상황 정보를 반환한다."""
+        current = now or datetime.now()
+        situation = self.context.setdefault("situation", self._normalize_situation({}))
+        today = current.date().isoformat()
+        today_count = (
+            int(situation.get("today_interaction_count", 0))
+            if situation.get("today_date") == today
+            else 0
+        )
+
+        last_interaction = self._parse_situation_timestamp(situation.get("last_interaction_at"))
+        session_started = self._parse_situation_timestamp(situation.get("session_started_at"))
+        elapsed_seconds = None
+        continuous_minutes = 0
+        if last_interaction is not None:
+            elapsed = current - last_interaction
+            elapsed_seconds = max(0, int(elapsed.total_seconds()))
+            if elapsed <= _SITUATION_IDLE_TIMEOUT and session_started is not None:
+                continuous_seconds = (current - session_started).total_seconds()
+                continuous_minutes = max(0, int(continuous_seconds // 60))
+
+        cutoff = current - timedelta(hours=24)
+        recent_praise_count = 0
+        stored_praise_timestamps = situation.get("praise_timestamps", [])
+        if not isinstance(stored_praise_timestamps, list):
+            stored_praise_timestamps = []
+        for stamp in stored_praise_timestamps:
+            parsed = self._parse_situation_timestamp(stamp)
+            if parsed is not None and cutoff <= parsed <= current:
+                recent_praise_count += 1
+        return {
+            "last_interaction_elapsed_minutes": (
+                None if elapsed_seconds is None else elapsed_seconds // 60
+            ),
+            "today_interaction_count": today_count,
+            "continuous_use_minutes": continuous_minutes,
+            "local_time": current.strftime("%H:%M"),
+            "recent_praise_count": recent_praise_count,
+        }
+
+    @staticmethod
+    def _contains_praise(user_message: str) -> bool:
+        text = str(user_message or "").casefold()
+        return any(marker.casefold() in text for marker in _PRAISE_MARKERS)
 
     @_context_locked
     def save_context(self):
