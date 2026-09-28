@@ -214,6 +214,7 @@ class LLMProviderTests(unittest.TestCase):
         provider._response_cache = Mock()
         provider._response_cache.get.return_value = "cached answer"
         context = Mock()
+        memory_manager = Mock()
         with (
             patch.object(
                 provider,
@@ -224,12 +225,16 @@ class LLMProviderTests(unittest.TestCase):
             patch.object(provider, "_build_situation_prompt", return_value="[Situation]"),
             patch.object(provider, "_build_cache_key", return_value="cache-key"),
             patch("memory.user_context.get_context_manager", return_value=context),
+            patch("memory.memory_manager.get_memory_manager", return_value=memory_manager),
             patch.object(provider, "_stream_or_chat_completion") as completion,
         ):
             result = provider.chat("repeat this", include_context=False)
 
         self.assertEqual(result, "cached answer")
         context.record_interaction.assert_called_once_with("repeat this")
+        memory_manager.start_fact_suggestion_extraction.assert_called_once_with(
+            "repeat this", provider.extract_memory_suggestions
+        )
         completion.assert_not_called()
 
     def test_situation_prompt_stays_within_the_50_token_budget(self):

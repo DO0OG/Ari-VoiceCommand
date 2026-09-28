@@ -279,6 +279,13 @@ class _LLMSettingsPage(QWidget):
             _("분석/계획과 실행/수정 요청을 구분해 역할별 제공자·모델 설정을 우선 사용합니다.")
         )
         llm_vbox.addWidget(self.llm_router_checkbox)
+        self.fact_suggestions_checkbox = QCheckBox(
+            _("사용자 발화에서 기억 제안 추출")
+        )
+        self.fact_suggestions_checkbox.setChecked(
+            bool(self._settings.get("fact_extraction_suggestions_enabled", True))
+        )
+        llm_vbox.addWidget(self.fact_suggestions_checkbox)
 
         llm_vbox.addWidget(QLabel(_("플래너 제공자 (선택):")))
         self._role_provider_combos["llm_planner_provider"] = self._make_role_provider_combo(
@@ -301,6 +308,25 @@ class _LLMSettingsPage(QWidget):
         self.llm_execution_model_input = QLineEdit(self._settings.get("llm_execution_model", ""))
         self.llm_execution_model_input.setPlaceholderText(_("비워두면 기본 모델과 동일"))
         llm_vbox.addWidget(self.llm_execution_model_input)
+
+        llm_vbox.addWidget(QLabel(_("기억 추출 제공자 (선택):")))
+        self._role_provider_combos["llm_memory_extractor_provider"] = (
+            self._make_role_provider_combo(
+                self._settings.get("llm_memory_extractor_provider", "")
+            )
+        )
+        llm_vbox.addWidget(
+            self._role_provider_combos["llm_memory_extractor_provider"]
+        )
+
+        llm_vbox.addWidget(QLabel(_("기억 추출 모델 (선택):")))
+        self.llm_memory_extractor_model_input = QLineEdit(
+            self._settings.get("llm_memory_extractor_model", "")
+        )
+        self.llm_memory_extractor_model_input.setPlaceholderText(
+            _("비워두면 실행 모델과 동일")
+        )
+        llm_vbox.addWidget(self.llm_memory_extractor_model_input)
 
         vbox.addWidget(llm_group)
 
@@ -470,8 +496,10 @@ class _LLMSettingsPage(QWidget):
                 combo.setCurrentIndex(combo.findData(""))
                 if combo_key == "llm_planner_provider":
                     self.llm_planner_model_input.clear()
-                else:
+                elif combo_key == "llm_execution_provider":
                     self.llm_execution_model_input.clear()
+                else:
+                    self.llm_memory_extractor_model_input.clear()
         self._refresh_custom_provider_list()
         self._refresh_provider_combos()
 
@@ -702,10 +730,15 @@ class _LLMSettingsPage(QWidget):
             "llm_provider": self.llm_provider_combo.currentData(),
             "llm_model": self.llm_model_input.text().strip(),
             "llm_router_enabled": self.llm_router_checkbox.isChecked(),
+            "fact_extraction_suggestions_enabled": self.fact_suggestions_checkbox.isChecked(),
             "llm_planner_provider": self._role_provider_combos["llm_planner_provider"].currentData(),
             "llm_planner_model": self.llm_planner_model_input.text().strip(),
             "llm_execution_provider": self._role_provider_combos["llm_execution_provider"].currentData(),
             "llm_execution_model": self.llm_execution_model_input.text().strip(),
+            "llm_memory_extractor_provider": self._role_provider_combos[
+                "llm_memory_extractor_provider"
+            ].currentData(),
+            "llm_memory_extractor_model": self.llm_memory_extractor_model_input.text().strip(),
             "ollama_base_url": self.ollama_url_input.text().strip() or "http://localhost:11434/v1",
             "custom_llm_providers": custom_providers,
             **llm_keys,

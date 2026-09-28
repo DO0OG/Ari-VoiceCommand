@@ -43,6 +43,8 @@ class CustomLlmStorageTests(unittest.TestCase):
             "llm_planner_model": "planner-model",
             "llm_execution_provider": "custom_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
             "llm_execution_model": "missing-execution-model",
+            "llm_memory_extractor_provider": "custom_dddddddddddddddddddddddddddddddd",
+            "llm_memory_extractor_model": "missing-extractor-model",
         }
         normalize_custom_provider_settings(settings)
         self.assertEqual(settings["llm_provider"], "groq")
@@ -50,6 +52,8 @@ class CustomLlmStorageTests(unittest.TestCase):
         self.assertEqual(settings["llm_planner_provider"], _PROVIDER)
         self.assertEqual(settings["llm_execution_provider"], "")
         self.assertEqual(settings["llm_execution_model"], "")
+        self.assertEqual(settings["llm_memory_extractor_provider"], "")
+        self.assertEqual(settings["llm_memory_extractor_model"], "")
 
     def test_custom_key_is_encrypted_and_never_written_in_public_settings(self):
         settings = {
