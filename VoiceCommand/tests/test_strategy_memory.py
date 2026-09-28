@@ -3,13 +3,36 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import numpy as np
 
 from agent.strategy_memory import StrategyMemory
 
 
 class StrategyMemoryTests(unittest.TestCase):
+    def setUp(self):
+        self.embedder = Mock()
+        self.embedder.model_id = "test/local-model"
+        self.embedder.dim = 3
+        self.embedder.status = "ready"
+        self.embedder.progress = 1.0
+        self.embedder.wait_until_ready.return_value = True
+        self.embedder.embed.side_effect = lambda _text: np.array(
+            [1.0, 0.0, 0.0], dtype=np.float32
+        )
+
+        embedder_patch = patch("agent.embedder.get_embedder", return_value=self.embedder)
+        timer_patch = patch("agent.strategy_memory.threading.Timer")
+        self.worker_factory = Mock()
+        worker_patch = patch("agent.strategy_memory.threading.Thread", self.worker_factory)
+        embedder_patch.start()
+        timer_patch.start()
+        worker_patch.start()
+        self.addCleanup(embedder_patch.stop)
+        self.addCleanup(timer_patch.stop)
+        self.addCleanup(worker_patch.stop)
+
     def test_legacy_records_without_goal_tokens_are_normalized(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "strategy.json")
@@ -77,6 +100,127 @@ class StrategyMemoryTests(unittest.TestCase):
             self.assertTrue(results)
             self.assertEqual(results[0].goal_summary, "브라우저 다운로드 자동화")
 
+    def test_embedding_files_store_float16_vectors_and_metadata_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "strategy.json")
+            memory = StrategyMemory(filepath=path)
+            memory.record("first goal", [], True)
+            self.assertTrue(memory._embedding_valid)
+            memory.record("second goal", [], True)
+            memory.flush()
+
+            with open(path, "r", encoding="utf-8") as handle:
+                serialized = handle.read()
+            payload = json.loads(serialized)
+            vectors = np.load(os.path.join(tmp, "strategy_embeddings.npy"))
+
+            self.assertIsInstance(payload, dict)
+            self.assertTrue({
+                "embedding_model_id",
+                "dim",
+                "record_ids",
+                "embedding_sha256",
+                "records",
+            }.issubset(payload))
+            self.assertEqual(payload["embedding_model_id"], self.embedder.model_id)
+            self.assertEqual(payload["dim"], self.embedder.dim)
+            self.assertIs(payload["embedding_complete"], True)
+            self.assertEqual(len(payload["record_ids"]), 2)
+            self.assertEqual(len(payload["embedding_sha256"]), 64)
+            self.assertEqual(len(payload["records"]), 2)
+            self.assertTrue(all("embedding" not in record for record in payload["records"]))
+            self.assertNotIn(": ", serialized)
+            self.assertEqual(vectors.dtype, np.float16)
+            self.assertEqual(vectors.shape, (2, self.embedder.dim))
+
+    def test_legacy_list_format_is_read_and_saved_in_split_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "strategy.json")
+            legacy_record = {
+                "goal_summary": "legacy goal",
+                "tags": [],
+                "goal_tokens": ["legacy"],
+                "steps_desc": [],
+                "success": True,
+                "error_summary": "",
+                "failure_kind": "",
+                "workflow_hints": [],
+                "duration_ms": 0,
+                "timestamp": "2026-03-24T00:00:00",
+                "embedding": [1.0, 0.0, 0.0],
+            }
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump([legacy_record], handle)
+
+            memory = StrategyMemory(filepath=path)
+            self.assertEqual(memory.count(), 1)
+            self.assertIn("legacy goal", memory.get_relevant_context("legacy goal"))
+            memory.flush()
+
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+
+            self.assertIsInstance(payload, dict)
+            self.assertEqual(payload["records"][0]["goal_summary"], "legacy goal")
+            self.assertNotIn("embedding", payload["records"][0])
+            self.assertTrue(os.path.exists(os.path.join(tmp, "strategy_embeddings.npy")))
+            vectors = np.load(os.path.join(tmp, "strategy_embeddings.npy"))
+            np.testing.assert_array_equal(vectors[0], [1.0, 0.0, 0.0])
+
+    def test_record_id_mismatch_disables_vectors_and_schedules_reembedding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "strategy.json")
+            memory = StrategyMemory(filepath=path)
+            memory.record("candidate wording", [], True)
+            memory.flush()
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            payload["record_ids"] = ["stale-id"]
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle)
+
+            self.worker_factory.reset_mock()
+            loaded = StrategyMemory(filepath=path)
+
+            self.assertFalse(loaded._embedding_valid)
+            self.worker_factory.assert_called_once()
+            with patch.object(loaded, "_extract_tags", return_value=[]), patch.object(
+                loaded, "_extract_tokens", return_value={"candidate"}
+            ), patch.object(
+                loaded,
+                "_extract_ngrams",
+                side_effect=lambda text: {"query-gram"}
+                if text == "paraphrase"
+                else {"record-gram"},
+            ):
+                self.assertEqual(
+                    loaded.search_similar_records("paraphrase"), [loaded._records[0]]
+                )
+
+    def test_semantic_candidate_surfaces_when_lexical_score_is_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "strategy.json")
+            memory = StrategyMemory(filepath=path)
+            memory.record("candidate wording", [], True)
+            record = memory._records[0]
+            record.goal_tokens = ["candidate"]
+            memory.flush()
+            memory = StrategyMemory(filepath=path)
+            record = memory._records[0]
+
+            def ngrams(text):
+                return {"query-gram"} if text == "paraphrased request" else {"record-gram"}
+
+            with patch.object(memory, "_extract_tags", return_value=[]), patch.object(
+                memory, "_extract_tokens", return_value={"paraphrase"}
+            ), patch.object(memory, "_extract_ngrams", side_effect=ngrams):
+                self.assertEqual(memory._token_similarity({"paraphrase"}, {"candidate"}), 0.0)
+                self.assertEqual(memory._ngram_similarity({"query-gram"}, {"record-gram"}), 0.0)
+
+                results = memory.search_similar_records("paraphrased request", limit=2)
+
+            self.assertIn(record, results)
+
     def test_lesson_lookup_stats_and_repeated_failures_are_available(self):
         # get_stats()는 record() 시점과 조회 시점 각각에서 datetime.now()를 다시
         # 호출한다. 실제 시계를 쓰면 두 시점 사이의 실행 지연(특히 느린 CI
@@ -121,7 +265,7 @@ class StrategyMemoryTests(unittest.TestCase):
             self.assertTrue(os.path.exists(path))
             with open(path, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
-            self.assertEqual(len(payload), 1)
+            self.assertEqual(len(payload["records"]), 1)
 
 
 if __name__ == "__main__":

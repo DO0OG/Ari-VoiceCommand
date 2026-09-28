@@ -50,6 +50,7 @@ DEFAULT_SETTINGS = {
     "local_decision_direct_execution": False,
     "local_decision_settings_version": 2,
     "vision_enabled": True,
+    "embedding_remote_enabled": False,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
     "tts_mode": "fish",            # fish | local | openai_tts | elevenlabs | edge

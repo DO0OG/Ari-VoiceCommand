@@ -24,6 +24,7 @@
   "local_decision_direct_execution": false,
   "local_decision_settings_version": 2,
   "vision_enabled": true,
+  "embedding_remote_enabled": false,
   "max_context_tokens": 8000,
   "tts_mode": "fish",
   "fish_api_key": "",
