@@ -47,7 +47,7 @@ VoiceCommand/plugins
 |----|------|
 | `context.register_menu_action(label, callback)` | 트레이·캐릭터 우클릭 메뉴에 항목 추가 (공유 QMenu) |
 | `context.register_command(BaseCommand 인스턴스)` | 음성 명령 동적 등록 |
-| `context.register_tool(schema, handler)` | LLM tool calling 스키마·핸들러 확장 |
+| `context.register_tool(schema, handler, intents=None)` | LLM 도구 스키마·핸들러 확장 |
 | `context.register_character_pack(name, directory, activate=False)` | 플러그인 ZIP/폴더 안의 캐릭터 이미지 세트 등록 |
 | `context.run_sandboxed(code, timeout=15)` | 서브프로세스 격리 실행 |
 | `context.set_character_menu_enabled(bool)` | 캐릭터 우클릭 메뉴 표시 여부 제어 (플러그인 언로드 시 자동 복원) |
@@ -185,11 +185,14 @@ def _handle_greet(args: dict):
 
 def register(context):
     if callable(getattr(context, "register_tool", None)):
-        context.register_tool(_TOOL_SCHEMA, _handle_greet)
+        context.register_tool(_TOOL_SCHEMA, _handle_greet, intents=["conversation"])
 ```
 
 - 핸들러 시그니처: `(args: dict) -> Optional[str]`
 - `str`을 반환하면 TTS로 읽어 주고, `None`을 반환하면 아무 일도 하지 않습니다.
+- `intents`는 `conversation`, `memory`, `web`, `file`, `vision`, `automation`, `schedule` 중
+  도구를 사용할 intent 목록입니다. 생략한 도구는 `conversation`에서 제외되고 다른 intent에서는
+  기존처럼 포함됩니다.
 - 내장 도구 이름(예: `play_youtube`, `set_timer`)과 충돌하면 등록을 거부합니다.
 
 ### 6-4. 샌드박스 실행

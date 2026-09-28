@@ -80,6 +80,7 @@ class LLMProvider:
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
         self._plugin_tools: list = []
+        self._plugin_tool_intents: dict[str, set[str]] = {}
         self._response_cache = ResponseCache.from_config()
         from core.rp_generator import RPGenerator
         self.rp_generator = RPGenerator()
@@ -247,12 +248,20 @@ class LLMProvider:
 
     def get_available_tools(self):
         """OpenAI-호환 function calling 스키마"""
-        return build_available_tools(self._plugin_tools)
+        plugin_tools = sorted(
+            self._plugin_tools,
+            key=lambda tool: str((tool.get("function") or {}).get("name", "")),
+        )
+        return build_available_tools(plugin_tools)
 
     def get_available_functions(self):
         return [t["function"] for t in self.get_available_tools()]
 
-    def register_plugin_tool(self, schema: dict) -> None:
+    def register_plugin_tool(
+        self,
+        schema: dict,
+        intents: list[str] | None = None,
+    ) -> None:
         """플러그인 도구 스키마를 등록한다."""
         tool_name = str(schema.get("function", {}).get("name", "") or "")
         self._plugin_tools = [
@@ -260,12 +269,21 @@ class LLMProvider:
             if tool.get("function", {}).get("name", "") != tool_name
         ]
         self._plugin_tools.append(schema)
+        if intents is None:
+            self._plugin_tool_intents.pop(tool_name, None)
+        else:
+            self._plugin_tool_intents[tool_name] = {
+                normalized
+                for intent in intents
+                if (normalized := str(intent).strip().lower())
+            }
 
     def unregister_plugin_tool(self, tool_name: str) -> None:
         self._plugin_tools = [
             tool for tool in self._plugin_tools
             if tool.get("function", {}).get("name", "") != tool_name
         ]
+        self._plugin_tool_intents.pop(tool_name, None)
 
     # ── 대화 ───────────────────────────────────────────────────────────────────
 
@@ -616,6 +634,8 @@ class LLMProvider:
                     model_override=model,
                     client_override=client,
                     stream_callback=stream_callback,
+                    tools=tools,
+                    tool_choice=tool_choice,
                 )
 
             response = self._create_completion_with_fallback(
@@ -880,15 +900,45 @@ class LLMProvider:
             self._log_provider_exception(logging.error, "feed_tool_result 오류", provider, e)
             return self._error_response(e) if self._is_custom_provider(provider) else f"도구 결과 처리 실패: {e}"
 
-    def _anthropic_chat(self, user_message, include_context, use_tools, model_override="", client_override=None, stream_callback=None):
+    def _anthropic_chat(
+        self,
+        user_message,
+        include_context,
+        use_tools,
+        model_override="",
+        client_override=None,
+        stream_callback=None,
+        tools=None,
+        tool_choice="auto",
+    ):
         model = model_override or self.model
         client = client_override or self.client
         try:
             system = self._build_system(include_context, user_message=user_message)
             messages = self._history_for_context()
-            kwargs = {"model": model, "max_tokens": 1000, "system": system, "messages": messages}
+            kwargs = {
+                "model": model,
+                "max_tokens": self._estimate_max_tokens(user_message) + 200,
+                "system": system,
+                "messages": messages,
+            }
             if use_tools:
-                kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"]["description"], "input_schema": t["function"]["parameters"]} for t in self.get_available_tools()]
+                if tools is None:
+                    request_ctx = self._analyze_request(user_message)
+                    tools, tool_choice = self._select_tools_for_request(request_ctx)
+                kwargs["tools"] = [{
+                    "name": tool["function"]["name"],
+                    "description": tool["function"]["description"],
+                    "input_schema": tool["function"]["parameters"],
+                } for tool in tools]
+                if tool_choice == "required":
+                    kwargs["tool_choice"] = {"type": "any"}
+                elif isinstance(tool_choice, dict):
+                    name = tool_choice.get("function", {}).get("name", "")
+                    if name:
+                        kwargs["tool_choice"] = {"type": "tool", "name": name}
+                else:
+                    kwargs["tool_choice"] = {"type": "auto"}
             
             resp = client.messages.create(**kwargs)
             tool_calls, text_parts = [], []
@@ -1027,37 +1077,60 @@ class LLMProvider:
     def _select_tools_for_request(self, ctx: dict, required_tool_names: set[str] | None = None):
         required_tool_names = set(required_tool_names or set())
         tools = self.get_available_tools()
+        intent = str(ctx.get("intent", "conversation") or "conversation").strip().lower()
         if ctx.get("preferred_tool"):
-            filtered = [t for t in tools if t["function"]["name"] == ctx["preferred_tool"]]
+            preferred_name = ctx["preferred_tool"]
+            filtered = [
+                tool
+                for tool in tools
+                if tool["function"]["name"] == preferred_name
+                and (
+                    preferred_name in _CORE_TOOL_NAMES
+                    or self._plugin_tool_is_allowed_for_intent(preferred_name, intent)
+                )
+            ]
             if required_tool_names:
                 filtered.extend(
-                    tool
-                    for tool in tools
+                    tool for tool in tools
                     if tool["function"]["name"] in required_tool_names
-                    and tool["function"]["name"] != ctx["preferred_tool"]
+                    and tool["function"]["name"] != preferred_name
+                    and (
+                        tool["function"]["name"] in _CORE_TOOL_NAMES
+                        or self._plugin_tool_is_allowed_for_intent(
+                            tool["function"]["name"], intent
+                        )
+                    )
                 )
             if filtered:
-                return filtered, {"type": "function", "function": {"name": ctx["preferred_tool"]}}
+                if any(tool["function"]["name"] == preferred_name for tool in filtered):
+                    return filtered, {
+                        "type": "function",
+                        "function": {"name": preferred_name},
+                    }
 
-        allowed_names = _TOOL_NAMES_BY_INTENT.get(ctx.get("intent", "conversation"))
-        if allowed_names:
-            allowed_names = set(allowed_names) | required_tool_names
-            filtered = []
-            for tool in tools:
-                name = tool["function"]["name"]
-                if name not in _CORE_TOOL_NAMES or name in allowed_names:
+        allowed_names = _TOOL_NAMES_BY_INTENT.get(intent)
+        filtered = []
+        for tool in tools:
+            name = tool["function"]["name"]
+            if name in _CORE_TOOL_NAMES:
+                if allowed_names is None:
+                    if not required_tool_names or name in required_tool_names:
+                        filtered.append(tool)
+                elif name in allowed_names or name in required_tool_names:
                     filtered.append(tool)
-            if filtered:
-                tools = filtered
-        elif required_tool_names:
-            filtered = []
-            for tool in tools:
-                name = tool["function"]["name"]
-                if name not in _CORE_TOOL_NAMES or name in required_tool_names:
-                    filtered.append(tool)
-            if filtered:
-                tools = filtered
+            elif name in required_tool_names or self._plugin_tool_is_allowed_for_intent(
+                name, intent
+            ):
+                filtered.append(tool)
+        if filtered:
+            tools = filtered
         return tools, "required" if ctx.get("force_tool") else "auto"
+
+    def _plugin_tool_is_allowed_for_intent(self, tool_name: str, intent: str) -> bool:
+        intents = self._plugin_tool_intents.get(tool_name)
+        if intents is None:
+            return intent != "conversation"
+        return intent in intents
 
     def _normalize_tool_arguments(self, name, args, user_msg):
         n = dict(args or {})
@@ -1188,6 +1261,10 @@ class LLMProvider:
         }
         parts: List[str] = []
         base_prompt = self.system_prompt or _BASE_PROMPT.get(lang, _BASE_PROMPT["ko"])
+        parts.append(self.rp_generator.build_system_prompt(base_prompt))
+        parts.append(_get_tool_instruction())
+        parts.append(_LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"]))
+        time_prompt = ""
         if include_context:
             try:
                 from memory.user_profile_engine import get_user_profile_engine
@@ -1205,26 +1282,30 @@ class LLMProvider:
             except Exception as e:
                 logging.debug("[LLM] 사실 주입 실패: %s", e)
             try:
+                from memory.memory_manager import get_memory_manager
+                memory_manager = get_memory_manager()
+                context_prompt = memory_manager.get_full_context_prompt(
+                    include_profile=False,
+                    include_facts=False,
+                    include_time=False,
+                )
+                if context_prompt:
+                    parts.append(f"[대화 컨텍스트]\n{context_prompt}")
+                time_prompt = memory_manager.get_current_time_prompt()
+            except Exception as e:
+                logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
+            try:
                 from memory.knowledge_base import get_knowledge_base
                 kb_prompt = get_knowledge_base().prompt_for(user_message, top_k=3)
                 if kb_prompt:
                     parts.append(kb_prompt)
             except Exception as e:
                 logging.debug("[LLM] 지식 베이스 주입 실패: %s", e)
-        parts.append(self.rp_generator.build_system_prompt(base_prompt))
-        if include_context:
-            try:
-                from memory.memory_manager import get_memory_manager
-                context_prompt = get_memory_manager().get_full_context_prompt()
-                if context_prompt:
-                    parts.append(f"[대화 컨텍스트]\n{context_prompt}")
-            except Exception as e:
-                logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
-        parts.append(_get_tool_instruction())
         skill_ctx = self._get_skill_context(user_message)
         if skill_ctx.get("prompt"):
             parts.append(skill_ctx["prompt"])
-        parts.append(_LANG_INSTRUCTION.get(lang, _LANG_INSTRUCTION["ko"]))
+        if include_context and time_prompt:
+            parts.append(time_prompt)
         return "\n\n".join(part for part in parts if part)
 
     def _clean_response(self, text):

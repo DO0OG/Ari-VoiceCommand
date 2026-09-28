@@ -37,7 +37,10 @@ _COMPATIBLE_API_VERSIONS = {"1.0"}
 MenuActionCallback = Callable[[], None]
 MenuRegistrar = Callable[[str, MenuActionCallback], object]
 CommandRegistrar = Callable[[object], object]
-ToolRegistrar = Callable[[dict[str, object], Callable[[dict[str, object]], Optional[str]]], object]
+ToolHandler = Callable[[dict[str, object]], Optional[str]]
+ToolRegistrar = Callable[
+    [dict[str, object], ToolHandler, Optional[List[str]]], object
+]
 CharacterPackRegistrar = Callable[[str, object], object]
 SandboxRunner = Callable[[str, int], object]
 CharacterMenuToggle = Callable[[bool], object]
@@ -529,10 +532,17 @@ class PluginManager:
             plugin.registered_commands.append(command)
             return result
 
-        def _register_tool(schema, handler):
+        def _register_tool(
+            schema: dict[str, object],
+            handler: ToolHandler,
+            intents: Optional[List[str]] = None,
+        ):
             if not context.register_tool:
                 return None
-            result = context.register_tool(schema, handler)
+            if intents is None:
+                result = context.register_tool(schema, handler)
+            else:
+                result = context.register_tool(schema, handler, intents)
             tool_name = str(schema.get("function", {}).get("name", "") or "")
             if tool_name:
                 plugin.registered_tools.append(tool_name)

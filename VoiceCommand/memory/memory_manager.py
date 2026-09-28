@@ -96,28 +96,39 @@ class MemoryManager:
         except Exception as e:
             logging.warning("응답 태그 파싱 실패: %s", e)
 
-    def get_full_context_prompt(self) -> str:
+    def get_full_context_prompt(
+        self,
+        include_profile: bool = True,
+        include_facts: bool = True,
+        include_time: bool = True,
+    ) -> str:
         """LLM에 전달할 전체 컨텍스트 요약 생성"""
         parts = []
-        try:
-            profile = get_user_profile_engine().get_prompt_injection()
-            if profile:
-                parts.append(profile)
-        except Exception as e:
-            logging.error("프로파일 요약 실패: %s", e)
-        facts_prompt = self.get_top_facts_prompt()
-        if facts_prompt:
-            parts.append(facts_prompt)
+        if include_profile:
+            try:
+                profile = get_user_profile_engine().get_prompt_injection()
+                if profile:
+                    parts.append(profile)
+            except Exception as e:
+                logging.error("프로파일 요약 실패: %s", e)
+        if include_facts:
+            facts_prompt = self.get_top_facts_prompt()
+            if facts_prompt:
+                parts.append(facts_prompt)
         try:
             summary = self.context_manager.get_context_summary()
             if summary:
                 parts.append(summary)
         except Exception as e:
             logging.error("컨텍스트 요약 실패: %s", e)
-        now = datetime.now()
-        time_info = f"현재 시간: {now.strftime('%Y-%m-%d %H:%M:%S')}"
-        parts.insert(0, time_info)
+        if include_time:
+            parts.insert(0, self.get_current_time_prompt())
         return "\n\n".join(part for part in parts if part)
+
+    def get_current_time_prompt(self) -> str:
+        """LLM에 전달할 현재 시각을 분 단위로 반환한다."""
+        now = datetime.now()
+        return f"현재 시간: {now.strftime('%Y-%m-%d %H:%M')}"
 
     def get_memory_prompt(self) -> str:
         """레거시 호출부 호환용 컨텍스트 프롬프트 반환."""
