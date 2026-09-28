@@ -49,6 +49,8 @@ class LLMProvider:
                  planner_model="", execution_model="",
                  planner_provider="", execution_provider="",
                  planner_api_key="", execution_api_key="",
+                 memory_extractor_provider="", memory_extractor_model="",
+                 memory_extractor_api_key="",
                  system_prompt="", personality="", scenario="", history_instruction="",
                  response_verbosity="concise", router_enabled=False,
                  provider_configs=None, personality_examples_en="", personality_examples_ja=""):
@@ -71,6 +73,14 @@ class LLMProvider:
 
         self.planner_model = planner_model.strip() or role_model_default(self.planner_provider)
         self.execution_model = execution_model.strip() or role_model_default(self.execution_provider)
+        self.memory_extractor_provider = (
+            memory_extractor_provider.strip() or self.execution_provider
+        )
+        self.memory_extractor_model = memory_extractor_model.strip() or (
+            self.execution_model
+            if self.memory_extractor_provider == self.execution_provider
+            else role_model_default(self.memory_extractor_provider)
+        )
         self.system_prompt = system_prompt
         self.personality = personality
         self.scenario = scenario
@@ -83,6 +93,7 @@ class LLMProvider:
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
+        self.memory_extractor_client = None
         self._plugin_tools: list = []
         self._plugin_tool_intents: dict[str, set[str]] = {}
         self._response_cache = ResponseCache.from_config()
@@ -124,6 +135,17 @@ class LLMProvider:
             )
             if self.execution_client:
                 logging.info("실행 클라이언트 초기화 완료 (%s / %s)", self.execution_provider, self.execution_model)
+        if self.memory_extractor_provider not in {provider, self.execution_provider} and (
+            memory_extractor_api_key
+            or not self.provider_configs.get(self.memory_extractor_provider, {}).get(
+                "requires_api_key", True
+            )
+        ):
+            self.memory_extractor_client = self._make_client(
+                self.memory_extractor_provider,
+                memory_extractor_api_key,
+                role="execution",
+            )
 
     # ── 초기화 ─────────────────────────────────────────────────────────────────
 
@@ -680,6 +702,19 @@ class LLMProvider:
             provider = self.execution_provider
             model = self.execution_model
             client = self.execution_client or (self.client if provider == self.provider else None)
+        elif role == "memory_extractor":
+            provider = self.memory_extractor_provider
+            model = self.memory_extractor_model
+            if provider == self.execution_provider:
+                client = self.execution_client or (
+                    self.client if provider == self.provider else None
+                )
+            else:
+                client = self.memory_extractor_client or (
+                    self.client if provider == self.provider else None
+                )
+            if not client:
+                return self._get_role_target("execution")
         else:
             provider = self.provider
             model = self.model
@@ -690,6 +725,52 @@ class LLMProvider:
 
         logging.warning("[LLMRouter] %s 역할 클라이언트가 없어 기본 모델로 폴백합니다.", role)
         return self.client, self.provider, self.model
+
+    def extract_memory_suggestions(self, user_message: str) -> str:
+        """사용자 발화에서 기억 후보 JSON을 반환한다."""
+        client, provider, model = self._get_role_target("memory_extractor")
+        if not client or not model:
+            raise RuntimeError("기억 추출 모델이 설정되지 않았습니다.")
+        instructions = (
+            "Extract only personal facts, preferences, and profile details explicitly stated "
+            "in the user utterance. Return one JSON object with keys facts, preferences, bio. "
+            "Every item must include evidence copied exactly from the utterance, no more than "
+            "60 characters. Use facts [{key,value,kind,evidence,confidence}], where kind is "
+            "stable, state, or plan. Use preferences [{category,value,evidence}] and bio "
+            "[{field,value,evidence}], where field is name, location, interests, or memos. "
+            "Use empty arrays when there is no supported item. Do not infer or add explanations."
+        )
+        if provider == "anthropic":
+            response = client.messages.create(
+                model=model,
+                system=instructions,
+                max_tokens=700,
+                temperature=0,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            blocks = self._response_field(response, "content", []) or []
+            return "".join(
+                str(self._response_field(block, "text", ""))
+                for block in blocks
+                if self._response_field(block, "text", "")
+            )
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0,
+            max_tokens=700,
+            extra_body=self._reasoning_extra_body(provider),
+        )
+        choices = self._response_field(response, "choices", []) or []
+        if not choices:
+            return ""
+        message = self._response_field(choices[0], "message", {}) or {}
+        content = self._response_field(message, "content", "")
+        return content if isinstance(content, str) else ""
 
     def get_role_fallback_targets(self, preferred_role: str = "default") -> list[tuple[Any, str, str]]:
         role_order = {
@@ -759,6 +840,10 @@ class LLMProvider:
                 if save_history:
                     from memory.user_context import get_context_manager
                     get_context_manager().record_interaction(user_message)
+                    from memory.memory_manager import get_memory_manager
+                    get_memory_manager().start_fact_suggestion_extraction(
+                        user_message, self.extract_memory_suggestions
+                    )
                 if stream_callback:
                     self._emit_stream_text(cached, stream_callback)
                 return cached
@@ -799,7 +884,11 @@ class LLMProvider:
             if save_history:
                 from memory.memory_manager import get_memory_manager
                 memory_manager = get_memory_manager()
-                memory_manager.process_interaction(user_message, raw_msg)
+                memory_manager.process_interaction(
+                    user_message,
+                    raw_msg,
+                    memory_extractor=self.extract_memory_suggestions,
+                )
                 raw_msg = memory_manager.clean_response(raw_msg)
             msg = self._clean_response(raw_msg)
             if save_history:
@@ -963,6 +1052,7 @@ class LLMProvider:
                 user_message,
                 raw_msg,
                 contains_tool_result=bool(tool_calls),
+                memory_extractor=self.extract_memory_suggestions,
             )
             if self._is_structured_response(raw_msg):
                 msg = raw_msg.strip()
@@ -1757,6 +1847,11 @@ def get_llm_provider() -> LLMProvider:
                 provider = select_provider("llm_provider", "llm_model", "groq")
                 planner_provider = select_provider("llm_planner_provider", "llm_planner_model", provider)
                 execution_provider = select_provider("llm_execution_provider", "llm_execution_model", provider)
+                memory_extractor_provider = select_provider(
+                    "llm_memory_extractor_provider",
+                    "llm_memory_extractor_model",
+                    execution_provider,
+                )
 
                 def provider_key(selected):
                     if selected == "ollama":
@@ -1769,6 +1864,11 @@ def get_llm_provider() -> LLMProvider:
                 api_key = provider_key(provider)
                 planner_api_key = provider_key(planner_provider) if planner_provider != provider else ""
                 execution_api_key = provider_key(execution_provider) if execution_provider != provider else ""
+                memory_extractor_api_key = (
+                    provider_key(memory_extractor_provider)
+                    if memory_extractor_provider not in {provider, execution_provider}
+                    else ""
+                )
                 model = s.get("llm_model", "") or ""
                 if not model and provider not in _PROVIDER_CONFIG:
                     model = provider_configs[provider].get("default_model", "") or ""
@@ -1783,6 +1883,13 @@ def get_llm_provider() -> LLMProvider:
 
                 planner_model = role_model("llm_planner_model", planner_provider)
                 execution_model = role_model("llm_execution_model", execution_provider)
+                memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
+                if memory_extractor_provider != execution_provider and not memory_extractor_model:
+                    memory_extractor_model = (
+                        model
+                        if memory_extractor_provider == provider
+                        else provider_configs[memory_extractor_provider].get("default_model", "")
+                    )
 
                 _instance = LLMProvider(
                     provider=provider, api_key=api_key,
@@ -1793,6 +1900,9 @@ def get_llm_provider() -> LLMProvider:
                     execution_provider=execution_provider if execution_provider != provider else "",
                     planner_api_key=planner_api_key,
                     execution_api_key=execution_api_key,
+                    memory_extractor_provider=memory_extractor_provider,
+                    memory_extractor_model=memory_extractor_model,
+                    memory_extractor_api_key=memory_extractor_api_key,
                     system_prompt=s.get("system_prompt", ""),
                     personality=s.get("personality", ""),
                     scenario=s.get("scenario", ""),

@@ -10,6 +10,7 @@ FloatingPanel 기반 클래스를 사용해 구조를 공유한다.
 """
 import html
 import logging
+import sqlite3
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from i18n.translator import _
+from memory.fact_suggestions import get_fact_suggestion_store
 from ui.common import (
     FloatingPanel, clear_layout, create_input_field,
     create_section_label, create_muted_label, show_temp_status,
@@ -163,7 +165,7 @@ class _BioTab(QWidget):
             row.addWidget(pending_label, 1)
             approve_btn = QPushButton(_("승인"))
             approve_btn.clicked.connect(
-                lambda _=False, target=field, candidate=value:
+                lambda checked=False, target=field, candidate=value:
                 self._approve_pending_bio(target, candidate)
             )
             row.addWidget(approve_btn)
@@ -261,6 +263,119 @@ class _FactsTab(QWidget):
         if dialog.exec() == QMessageBox.Yes and self._ctx.delete_fact(
             key, delete_conversations=delete_conversations.isChecked()
         ):
+            self._populate()
+
+    def refresh(self) -> None:
+        self._populate()
+
+
+# ── 탭: 기억 제안 ─────────────────────────────────────────────────────────────
+
+class _SuggestionsTab(QWidget):
+    def __init__(self, ctx_manager, parent=None):
+        super().__init__(parent)
+        self._ctx = ctx_manager
+        try:
+            self._store = get_fact_suggestion_store()
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logger.warning("기억 제안을 불러오지 못했습니다: %s", exc)
+            self._store = None
+        self._build()
+
+    def _build(self) -> None:
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(SCROLLBAR_THIN_STYLE)
+        self._container = QWidget()
+        self._inner = QVBoxLayout(self._container)
+        self._inner.setAlignment(Qt.AlignTop)
+        self._inner.setSpacing(6)
+        self._inner.setContentsMargins(12, 10, 12, 10)
+        scroll.setWidget(self._container)
+        lay.addWidget(scroll)
+        self._populate()
+
+    def _populate(self) -> None:
+        clear_layout(self._inner)
+        if not self._store:
+            self._inner.addWidget(create_muted_label(_("제안을 불러오지 못했습니다.")))
+            return
+
+        stats = self._store.get_stats()
+        approved = stats["approved"]
+        rejected = stats["rejected"]
+        total = approved + rejected
+        if total:
+            rate = round(approved * 100 / total)
+            summary = _("승인률 {rate}% ({approved}/{total})").format(
+                rate=rate, approved=approved, total=total
+            )
+        else:
+            summary = _("승인·거절 기록 없음")
+        self._inner.addWidget(create_muted_label(summary))
+
+        suggestions = self._store.get_suggestions()
+        if not suggestions:
+            self._inner.addWidget(create_muted_label(_("저장된 제안이 없습니다.")))
+            return
+        for suggestion in reversed(suggestions):
+            self._add_suggestion(suggestion)
+
+    def _add_suggestion(self, suggestion: dict) -> None:
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame {{ background: {COLOR_BG_WHITE}; border-radius: 8px; "
+            "border: 1px solid #eee; }}"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 8, 10, 8)
+        heading = (
+            _("선호: {key} = {value}")
+            if suggestion["type"] == "preference"
+            else _("사실: {key} = {value}")
+        )
+        title = QLabel(heading.format(**suggestion))
+        title.setTextFormat(Qt.PlainText)
+        title.setWordWrap(True)
+        layout.addWidget(title)
+        evidence = QLabel(_("근거: {evidence}").format(evidence=suggestion["evidence"]))
+        evidence.setTextFormat(Qt.PlainText)
+        evidence.setWordWrap(True)
+        evidence.setStyleSheet(f"color: {COLOR_MUTED};")
+        layout.addWidget(evidence)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        approve_btn = QPushButton(_("승인"))
+        approve_btn.clicked.connect(
+            lambda checked=False, item_id=suggestion["id"]: self._approve(item_id)
+        )
+        reject_btn = QPushButton(_("거절"))
+        reject_btn.clicked.connect(
+            lambda checked=False, item_id=suggestion["id"]: self._reject(item_id)
+        )
+        actions.addWidget(approve_btn)
+        actions.addWidget(reject_btn)
+        layout.addLayout(actions)
+        self._inner.addWidget(card)
+
+    def _approve(self, suggestion_id: str) -> None:
+        if not self._store or not self._ctx:
+            return
+        try:
+            from memory.memory_manager import get_memory_manager
+
+            manager = get_memory_manager()
+            if manager.approve_fact_suggestion(suggestion_id, self._ctx):
+                self._populate()
+        except (OSError, RuntimeError, TypeError, ValueError, sqlite3.Error) as exc:
+            logger.warning("기억 제안을 승인하지 못했습니다: %s", exc)
+
+    def _reject(self, suggestion_id: str) -> None:
+        if self._store and self._store.resolve(suggestion_id, approved=False):
             self._populate()
 
     def refresh(self) -> None:
@@ -367,10 +482,12 @@ class MemoryPanel(FloatingPanel):
 
         self._bio_tab   = _BioTab(self._ctx)
         self._facts_tab = _FactsTab(self._ctx)
+        self._suggestions_tab = _SuggestionsTab(self._ctx)
         self._stats_tab = _StatsTab(self._ctx)
 
         tabs.addTab(self._bio_tab,   _("기본 정보"))
         tabs.addTab(self._facts_tab, _("사실 (Facts)"))
+        tabs.addTab(self._suggestions_tab, _("제안"))
         tabs.addTab(self._stats_tab, _("통계"))
 
         self.content_layout.addWidget(tabs)
@@ -379,6 +496,7 @@ class MemoryPanel(FloatingPanel):
         """외부에서 데이터 갱신 요청 시 호출."""
         self._bio_tab.refresh()
         self._facts_tab.refresh()
+        self._suggestions_tab.refresh()
 
     def show_near(self, x: int, y: int) -> None:
         super().show_near(x, y)

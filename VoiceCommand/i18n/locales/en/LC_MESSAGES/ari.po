@@ -3628,3 +3628,42 @@ msgstr "Embeddings unavailable. Using lexical scores only."
 
 msgid "로컬 임베딩 모델: 다운로드 대기"
 msgstr "Local embedding model: waiting to download"
+
+msgid "사용자 발화에서 기억 제안 추출"
+msgstr "Extract memory suggestions from user messages"
+
+msgid "기억 추출 제공자 (선택):"
+msgstr "Memory extraction provider (optional):"
+
+msgid "기억 추출 모델 (선택):"
+msgstr "Memory extraction model (optional):"
+
+msgid "비워두면 실행 모델과 동일"
+msgstr "Leave blank to use the execution model"
+
+msgid "제안"
+msgstr "Suggestions"
+
+msgid "제안을 불러오지 못했습니다."
+msgstr "Unable to load suggestions."
+
+msgid "승인률 {rate}% ({approved}/{total})"
+msgstr "Approval rate: {rate}% ({approved}/{total})"
+
+msgid "승인·거절 기록 없음"
+msgstr "No approval or rejection history."
+
+msgid "저장된 제안이 없습니다."
+msgstr "No pending suggestions."
+
+msgid "선호: {key} = {value}"
+msgstr "Preference: {key} = {value}"
+
+msgid "사실: {key} = {value}"
+msgstr "Fact: {key} = {value}"
+
+msgid "근거: {evidence}"
+msgstr "Evidence: {evidence}"
+
+msgid "거절"
+msgstr "Reject"

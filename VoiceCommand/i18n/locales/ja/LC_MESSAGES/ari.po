@@ -3626,3 +3626,42 @@ msgstr "埋め込みを使用できません。語彙スコアのみを使用し
 
 msgid "로컬 임베딩 모델: 다운로드 대기"
 msgstr "ローカル埋め込みモデル: ダウンロード待ち"
+
+msgid "사용자 발화에서 기억 제안 추출"
+msgstr "ユーザーの発話から記憶の候補を抽出"
+
+msgid "기억 추출 제공자 (선택):"
+msgstr "記憶抽出のプロバイダー（任意）:"
+
+msgid "기억 추출 모델 (선택):"
+msgstr "記憶抽出モデル（任意）:"
+
+msgid "비워두면 실행 모델과 동일"
+msgstr "空欄の場合は実行モデルを使用"
+
+msgid "제안"
+msgstr "提案"
+
+msgid "제안을 불러오지 못했습니다."
+msgstr "提案を読み込めませんでした。"
+
+msgid "승인률 {rate}% ({approved}/{total})"
+msgstr "承認率 {rate}%（{approved}/{total}）"
+
+msgid "승인·거절 기록 없음"
+msgstr "承認・却下の記録はありません。"
+
+msgid "저장된 제안이 없습니다."
+msgstr "保留中の提案はありません。"
+
+msgid "선호: {key} = {value}"
+msgstr "好み: {key} = {value}"
+
+msgid "사실: {key} = {value}"
+msgstr "事実: {key} = {value}"
+
+msgid "근거: {evidence}"
+msgstr "根拠: {evidence}"
+
+msgid "거절"
+msgstr "却下"

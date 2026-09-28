@@ -3626,3 +3626,42 @@ msgstr "임베딩을 사용할 수 없습니다. 어휘 점수만 사용합니�
 
 msgid "로컬 임베딩 모델: 다운로드 대기"
 msgstr "로컬 임베딩 모델: 다운로드 대기"
+
+msgid "사용자 발화에서 기억 제안 추출"
+msgstr "사용자 발화에서 기억 제안 추출"
+
+msgid "기억 추출 제공자 (선택):"
+msgstr "기억 추출 제공자 (선택):"
+
+msgid "기억 추출 모델 (선택):"
+msgstr "기억 추출 모델 (선택):"
+
+msgid "비워두면 실행 모델과 동일"
+msgstr "비워두면 실행 모델과 동일"
+
+msgid "제안"
+msgstr "제안"
+
+msgid "제안을 불러오지 못했습니다."
+msgstr "제안을 불러오지 못했습니다."
+
+msgid "승인률 {rate}% ({approved}/{total})"
+msgstr "승인률 {rate}% ({approved}/{total})"
+
+msgid "승인·거절 기록 없음"
+msgstr "승인·거절 기록 없음"
+
+msgid "저장된 제안이 없습니다."
+msgstr "저장된 제안이 없습니다."
+
+msgid "선호: {key} = {value}"
+msgstr "선호: {key} = {value}"
+
+msgid "사실: {key} = {value}"
+msgstr "사실: {key} = {value}"
+
+msgid "근거: {evidence}"
+msgstr "근거: {evidence}"
+
+msgid "거절"
+msgstr "거절"

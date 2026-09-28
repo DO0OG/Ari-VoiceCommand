@@ -14,6 +14,7 @@ _source_weight_lock = threading.Lock()
 
 SOURCE_WEIGHTS: dict[str, float] = {
     "user": 1.0,
+    "user_utterance": 0.9,
     "assistant": 0.7,
     "learned": 0.5,
     "inferred": 0.4,

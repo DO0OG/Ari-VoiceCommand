@@ -2,16 +2,22 @@
 기억 관리자 (단기 및 장기 기억 통합)
 """
 import heapq
+import json
 import logging
+import math
 import re
 import threading
 import unicodedata
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
+from commands.memory_command import is_memory_command
+from core.config_manager import ConfigManager
+from memory.fact_suggestions import get_fact_suggestion_store
 from memory.user_context import get_context_manager
 from memory.conversation_history import add_conversation
 from memory.memory_index import get_memory_index
 from memory.user_profile_engine import get_user_profile_engine
+from memory.sensitive_patterns import is_sensitive_memory_text
 
 # 정규식 캐싱
 _RE_FACT = re.compile(r'\[FACT:\s*([^=]+)=([^\]]+)\]')
@@ -19,6 +25,16 @@ _RE_BIO = re.compile(r'\[BIO:\s*([^=]+)=([^\]]+)\]')
 _RE_PREF = re.compile(r'\[PREF:\s*([^=]+)=([^\]]+)\]')
 _RE_TAGS = re.compile(r'\[(FACT|BIO|PREF|CMD):[^\]]+\]')
 _RE_WHITESPACE = re.compile(r'\s+')
+_MIN_EXTRACTION_LENGTH = 12
+_RE_FACT_EXTRACTION_TRIGGER = re.compile(
+    r"\b(?:i(?:['’]m| am)?|my|mine)\b|나는|내가|저는|제가|저의|나의|내 취미|제 취미|"
+    r"私(?:は|が|の|も)|僕(?:は|が|の|も)|俺(?:は|が|の)|自分(?:は|が|の)|"
+    r"\b(?:like|love|prefer|dislike|hate|want|plan|planning|going to|would like)\b|"
+    r"좋아하|싫어하|선호|취향|원하|하고 싶|하고싶|계획|예정|앞으로|"
+    r"好き|嫌い|好む|希望|予定|計画|したい|つもり",
+    re.IGNORECASE,
+)
+_BIO_FIELDS = {"name", "location", "interests", "memos"}
 
 # FACT로 저장하면 안 되는 일시적/task-specific 키워드
 _EPHEMERAL_FACT_KEYS = {
@@ -54,6 +70,7 @@ class MemoryManager:
         user_msg: str,
         ai_response: str,
         contains_tool_result: bool = False,
+        memory_extractor: Optional[Callable[[str], str]] = None,
     ) -> None:
         """대화 상호작용 기록 및 정보 추출"""
         timestamp = datetime.now().isoformat()
@@ -91,6 +108,214 @@ class MemoryManager:
             self.context_manager.record_interaction(user_msg)
         except (AttributeError, OSError, TypeError, ValueError) as e:
             logging.warning("상황 정보 기록 실패: %s", e)
+        self.start_fact_suggestion_extraction(user_msg, memory_extractor)
+
+    def start_fact_suggestion_extraction(
+        self,
+        user_message: str,
+        memory_extractor: Optional[Callable[[str], str]],
+    ) -> None:
+        message = str(user_message or "").strip()
+        if not memory_extractor:
+            return
+        if is_memory_command(message):
+            return
+        if len(message) < _MIN_EXTRACTION_LENGTH:
+            return
+        if not _RE_FACT_EXTRACTION_TRIGGER.search(message):
+            return
+        if is_sensitive_memory_text(message):
+            return
+        try:
+            if not ConfigManager.get("fact_extraction_suggestions_enabled", True):
+                return
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("기억 제안 설정을 읽지 못했습니다: %s", exc)
+            return
+
+        worker = threading.Thread(
+            target=self._extract_fact_suggestions,
+            args=(message, memory_extractor),
+            name="fact-suggestion-extractor",
+            daemon=True,
+        )
+        try:
+            worker.start()
+        except RuntimeError as exc:
+            logging.warning("기억 제안 작업을 시작하지 못했습니다: %s", exc)
+
+    def _extract_fact_suggestions(
+        self,
+        user_message: str,
+        memory_extractor: Callable[[str], str],
+    ) -> None:
+        try:
+            raw_result = memory_extractor(user_message)
+        except Exception as exc:
+            logging.warning("기억 제안 추출 호출 실패: %s", type(exc).__name__)
+            return
+        try:
+            payload = json.loads(raw_result)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            logging.warning("기억 제안 JSON을 읽지 못했습니다: %s", exc)
+            return
+        if not isinstance(payload, dict):
+            return
+
+        suggestions = []
+        facts = payload.get("facts", [])
+        if isinstance(facts, list):
+            for item in facts:
+                candidate = self._fact_suggestion(item, user_message)
+                if candidate:
+                    suggestions.append(candidate)
+        preferences = payload.get("preferences", [])
+        if isinstance(preferences, list):
+            for item in preferences:
+                candidate = self._preference_suggestion(item, user_message)
+                if candidate:
+                    suggestions.append(candidate)
+        bio_items = payload.get("bio", [])
+        if isinstance(bio_items, list):
+            for item in bio_items:
+                self._queue_bio_suggestion(item, user_message)
+        if suggestions:
+            try:
+                get_fact_suggestion_store().add_suggestions(suggestions)
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.warning("기억 제안을 저장하지 못했습니다: %s", exc)
+
+    @staticmethod
+    def _valid_evidence(item: object, user_message: str) -> str:
+        if not isinstance(item, dict):
+            return ""
+        evidence = item.get("evidence")
+        if not isinstance(evidence, str):
+            return ""
+        evidence = evidence.strip()
+        if not evidence or len(evidence) > 60 or evidence not in user_message:
+            return ""
+        return evidence
+
+    def _fact_suggestion(self, item: object, user_message: str) -> dict | None:
+        evidence = self._valid_evidence(item, user_message)
+        if not evidence:
+            return None
+        key = item.get("key") if isinstance(item, dict) else None
+        value = item.get("value") if isinstance(item, dict) else None
+        kind = item.get("kind") if isinstance(item, dict) else None
+        if not isinstance(key, str) or not isinstance(value, str):
+            return None
+        key = key.strip()
+        value = value.strip()
+        if (
+            not key
+            or not value
+            or not isinstance(kind, str)
+            or kind not in {"stable", "state", "plan"}
+        ):
+            return None
+        if is_sensitive_memory_text(f"{key} {value} {evidence}"):
+            return None
+        try:
+            confidence = float(item.get("confidence"))
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            return None
+        return {
+            "type": "fact",
+            "key": key,
+            "value": value,
+            "kind": kind,
+            "evidence": evidence,
+            "confidence": confidence,
+        }
+
+    def _preference_suggestion(self, item: object, user_message: str) -> dict | None:
+        evidence = self._valid_evidence(item, user_message)
+        if not evidence:
+            return None
+        category = item.get("category") if isinstance(item, dict) else None
+        value = item.get("value") if isinstance(item, dict) else None
+        if not isinstance(category, str) or not isinstance(value, str):
+            return None
+        category = category.strip()
+        value = value.strip()
+        if not category or not value:
+            return None
+        if is_sensitive_memory_text(f"{category} {value} {evidence}"):
+            return None
+        return {
+            "type": "preference",
+            "key": category,
+            "value": value,
+            "kind": "",
+            "evidence": evidence,
+            "confidence": 0.8,
+        }
+
+    def _queue_bio_suggestion(self, item: object, user_message: str) -> None:
+        evidence = self._valid_evidence(item, user_message)
+        if not evidence or not isinstance(item, dict):
+            return
+        field = item.get("field")
+        value = item.get("value")
+        if not isinstance(field, str) or not isinstance(value, str):
+            return
+        field = field.strip()
+        value = value.strip()
+        if field not in _BIO_FIELDS or not value:
+            return
+        if is_sensitive_memory_text(f"{field} {value} {evidence}"):
+            return
+        self.context_manager.request_bio_update(field, value, user_message="")
+
+    def approve_fact_suggestion(
+        self,
+        suggestion_id: str,
+        context_manager=None,
+    ) -> bool:
+        """승인된 기억 제안을 기존 저장소와 검색 색인에 반영한다."""
+        store = get_fact_suggestion_store()
+        suggestion = store.get_suggestion(suggestion_id)
+        if not suggestion:
+            return False
+        context = context_manager or self.context_manager
+        if suggestion["type"] == "fact":
+            existing = context.context.get("facts", {}).get(suggestion["key"])
+            already_saved = (
+                isinstance(existing, dict)
+                and existing.get("value") == suggestion["value"]
+                and existing.get("source") == "user_utterance"
+            )
+            if not already_saved:
+                ttl_days = {"state": 1, "plan": 30, "stable": 180}[
+                    suggestion["kind"]
+                ]
+                if not context.record_fact(
+                    suggestion["key"],
+                    suggestion["value"],
+                    source="user_utterance",
+                    confidence=suggestion["confidence"],
+                    ttl_days=ttl_days,
+                    force=True,
+                ):
+                    return False
+            index_key = suggestion["key"]
+        else:
+            preferences = context.context.setdefault("preferences", {})
+            values = preferences.setdefault(suggestion["key"], {})
+            if not values.get(suggestion["value"]):
+                context.record_preference(suggestion["key"], suggestion["value"])
+            index_key = f"선호: {suggestion['key']}"
+
+        get_memory_index().index_fact(
+            index_key,
+            suggestion["value"],
+            suggestion["confidence"],
+        )
+        return store.resolve(suggestion_id, approved=True) is not None
 
     def _is_persistent_fact(self, key: str) -> bool:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""

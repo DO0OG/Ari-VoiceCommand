@@ -89,6 +89,7 @@ def normalize_custom_provider_settings(settings: dict[str, object]) -> None:
         ("llm_provider", "llm_model", "groq"),
         ("llm_planner_provider", "llm_planner_model", ""),
         ("llm_execution_provider", "llm_execution_model", ""),
+        ("llm_memory_extractor_provider", "llm_memory_extractor_model", ""),
     ):
         provider = settings.get(provider_key)
         if isinstance(provider, str) and provider.startswith("custom_") and provider not in providers:

@@ -31,6 +31,9 @@ DEFAULT_SETTINGS = {
     "llm_planner_model": "",
     "llm_execution_provider": "",  # 비워두면 기본 제공자와 동일
     "llm_execution_model": "",
+    "llm_memory_extractor_provider": "",
+    "llm_memory_extractor_model": "",
+    "fact_extraction_suggestions_enabled": True,
     "groq_api_key": _UNSET_CREDENTIAL,
     "openai_api_key": _UNSET_CREDENTIAL,
     "anthropic_api_key": _UNSET_CREDENTIAL,

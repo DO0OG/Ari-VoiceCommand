@@ -6,6 +6,7 @@ import re
 
 from commands.base_command import BaseCommand
 from i18n.translator import _
+from memory.sensitive_patterns import SENSITIVE_PATTERNS as _SENSITIVE_PATTERNS
 
 
 _REMEMBER_PATTERNS = (
@@ -41,10 +42,9 @@ _EMPTY_REMEMBER_ALIASES = {
     "remember this", "remember that", "remember this for me",
     "これ覚えておいて", "これを覚えておいて", "覚えておいて",
 }
-_SENSITIVE_PATTERNS = (
-    re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)"),
-    re.compile(r"(?<!\d)\d{6}-[1-8]\d{6}(?!\d)"),
-    re.compile(r"(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)"),
+_MEMORY_COMMAND_PHRASES = (
+    "자주 하는 작업", "저번에 내가", "내 스킬 목록", "스킬 목록",
+    "이 스킬 삭제", "메모리 정리", "나에 대해 뭐 알아", "나에 대해 뭘 알아",
 )
 
 
@@ -73,6 +73,13 @@ def _parse_explicit_command(text: str) -> tuple[str, str] | None:
     return None
 
 
+def is_memory_command(text: str) -> bool:
+    """메모리 명령 턴인지 확인한다."""
+    return bool(_parse_explicit_command(text)) or any(
+        phrase in text for phrase in _MEMORY_COMMAND_PHRASES
+    )
+
+
 class MemoryCommand(BaseCommand):
     priority = 45
 
@@ -80,13 +87,7 @@ class MemoryCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
-        if _parse_explicit_command(text):
-            return True
-        patterns = (
-            "자주 하는 작업", "저번에 내가", "내 스킬 목록", "스킬 목록",
-            "이 스킬 삭제", "메모리 정리", "나에 대해 뭐 알아", "나에 대해 뭘 알아",
-        )
-        return any(pattern in text for pattern in patterns)
+        return is_memory_command(text)
 
     def execute(self, text: str) -> None:
         explicit = _parse_explicit_command(text)

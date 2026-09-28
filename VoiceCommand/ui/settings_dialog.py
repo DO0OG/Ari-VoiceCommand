@@ -59,6 +59,7 @@ class SettingsDialog(QDialog):
         "llm_provider", "llm_model",
         "llm_planner_provider", "llm_planner_model",
         "llm_execution_provider", "llm_execution_model",
+        "llm_memory_extractor_provider", "llm_memory_extractor_model",
         "ollama_base_url", "custom_llm_providers",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
