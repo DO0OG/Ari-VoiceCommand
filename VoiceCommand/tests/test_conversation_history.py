@@ -30,7 +30,10 @@ class ConversationHistoryTests(unittest.TestCase):
             history = self._make_history(tmp)
             history.add("안녕", "반가워요")
             history.add("날씨 알려줘", "맑아요", skill_used="korea-weather", data_source="web_search", lang="ko")
-            time.sleep(0.12)
+            # 고정 시간 대신 지연 저장 스레드가 끝날 때까지 기다린다.
+            timer = history._save_timer
+            self.assertIsNotNone(timer)
+            timer.join(timeout=5.0)
 
             with open(history.file_path, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
