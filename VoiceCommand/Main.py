@@ -18,6 +18,8 @@ if _worker_exit_code is None and len(sys.argv) == 3 and sys.argv[1] == "--bundle
 if _worker_exit_code is not None:
     raise SystemExit(_worker_exit_code)
 
+from core.single_instance import ensure_single_instance, start_single_instance_server
+
 import os
 import logging
 import faulthandler
@@ -333,6 +335,15 @@ def main():
     plugin_flush_timer = None
     mcp_server_thread = None
     telegram_bridge = None
+
+    def _show_character():
+        if character is not None:
+            character.show()
+            character.raise_()
+
+    if not ensure_single_instance(sys.argv):
+        return
+
     try:
         setup_logging()
         icon_path = _resolve_icon_path(log_missing=True)
@@ -348,6 +359,7 @@ def main():
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DO0OG.Ari")
         app = QApplication(sys.argv)
+        start_single_instance_server(_show_character)
         if icon_path:
             app.setWindowIcon(QIcon(icon_path))
 

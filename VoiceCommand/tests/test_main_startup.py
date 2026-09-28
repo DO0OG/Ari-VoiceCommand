@@ -59,10 +59,18 @@ class MainStartupTests(unittest.TestCase):
         class FakeCharacter:
             def __init__(self):
                 self.messages = []
+                self.show_count = 0
+                self.raise_count = 0
                 instances["character"] = self
 
             def say(self, text):
                 self.messages.append(text)
+
+            def show(self):
+                self.show_count += 1
+
+            def raise_(self):
+                self.raise_count += 1
 
             def cleanup(self):
                 pass
@@ -91,11 +99,15 @@ class MainStartupTests(unittest.TestCase):
                 pass
 
         logger = Mock()
+        ensure_single_instance = Mock(return_value=True)
+        start_single_instance_server = Mock()
         namespace = {
             "sys": SimpleNamespace(argv=[], platform="linux"),
             "os": os,
             "logging": logger,
             "datetime": datetime,
+            "ensure_single_instance": ensure_single_instance,
+            "start_single_instance_server": start_single_instance_server,
             "QApplication": FakeApp,
             "QSystemTrayIcon": SimpleNamespace(isSystemTrayAvailable=lambda: False),
             "QIcon": Mock(),
@@ -137,6 +149,8 @@ class MainStartupTests(unittest.TestCase):
             main()
 
         self.assertIn("app", instances)
+        ensure_single_instance.assert_called_once()
+        start_single_instance_server.assert_called_once()
         self.assertEqual(instances["app"].exec_count, 1)
         self.assertEqual(
             instances["character"].messages,
@@ -144,6 +158,30 @@ class MainStartupTests(unittest.TestCase):
         )
         self.assertIs(instances["character"].voice_thread, instances["voice_thread"])
         self.assertTrue(instances["voice_thread"].notification_claimed)
+        start_single_instance_server.call_args.args[0]()
+        self.assertEqual(instances["character"].show_count, 1)
+        self.assertEqual(instances["character"].raise_count, 1)
+
+    def test_duplicate_instance_returns_before_creating_qt_app(self):
+        ensure_single_instance = Mock(return_value=False)
+        setup_logging = Mock()
+        flush_runtime_state = Mock()
+        main = _load_main_function(
+            "main",
+            {
+                "sys": SimpleNamespace(argv=["Main.py"]),
+                "ensure_single_instance": ensure_single_instance,
+                "setup_logging": setup_logging,
+                "flush_runtime_state": flush_runtime_state,
+                "logging": Mock(),
+            },
+        )
+
+        main()
+
+        ensure_single_instance.assert_called_once()
+        setup_logging.assert_not_called()
+        flush_runtime_state.assert_not_called()
 
     def test_logging_permission_failure_keeps_console_free_startup(self):
         handlers = []
