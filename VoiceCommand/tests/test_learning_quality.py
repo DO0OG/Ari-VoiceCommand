@@ -1,6 +1,8 @@
+import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -75,8 +77,14 @@ class LearningQualityTests(unittest.TestCase):
             metrics = LearningMetrics(filepath=os.path.join(tmp, "learning_metrics.json"))
             metrics.record("SkillLibrary", activated=True, success=True)
             metrics.record("SkillLibrary", activated=True, success=False)
-            metrics.record("SkillLibrary", activated=False, success=False)
-            metrics.record("SkillLibrary", activated=False, success=True)
+            metrics.record(
+                "SkillLibrary", activated=False, success=False,
+                holdout=True, eligible=True,
+            )
+            metrics.record(
+                "SkillLibrary", activated=False, success=True,
+                holdout=True, eligible=True,
+            )
             metrics.record_counter("new_skills_created", count=2)
             metrics.record_counter("python_compiled_skills", count=1)
             metrics.record_llm_call("ReflectionEngine", estimated_tokens=120)
@@ -96,19 +104,152 @@ class LearningQualityTests(unittest.TestCase):
             self.assertEqual(summary["estimated_tokens"], 120)
             self.assertEqual(summary["components"][0]["name"], "SkillLibrary")
 
-    def test_learning_metrics_should_activate_uses_sample_size_and_negative_lift(self):
+    def test_learning_metrics_uses_random_holdout_and_wilson_interval(self):
         with tempfile.TemporaryDirectory() as tmp:
-            metrics = LearningMetrics(filepath=os.path.join(tmp, "learning_metrics.json"))
+            random_values = iter([0.5, 0.5, 0.05])
+            metrics = LearningMetrics(
+                filepath=os.path.join(tmp, "learning_metrics.json"),
+                random_func=lambda: next(random_values),
+            )
+            no_data_trial = {}
+            self.assertFalse(
+                metrics.should_activate(
+                    "EpisodeMemory", eligible=False, trials=no_data_trial
+                )
+            )
+            self.assertEqual(no_data_trial, {})
 
             for _ in range(9):
-                metrics.record("EpisodeMemory", activated=True, success=False)
-            self.assertTrue(metrics.should_activate("EpisodeMemory"))
+                metrics.record(
+                    "EpisodeMemory", activated=True, success=False,
+                    eligible=True,
+                )
+                metrics.record(
+                    "EpisodeMemory", activated=False, success=True,
+                    holdout=True, eligible=True,
+                )
 
-            for _ in range(11):
-                metrics.record("GoalPredictor", activated=True, success=False)
-                metrics.record("GoalPredictor", activated=False, success=True)
+            state = next(
+                row for row in metrics.get_component_diagnostics()
+                if row["name"] == "EpisodeMemory"
+            )
+            self.assertEqual(state["state"], "pending")
+            first_trial = {}
+            self.assertTrue(
+                metrics.should_activate("EpisodeMemory", trials=first_trial)
+            )
+            self.assertFalse(first_trial["EpisodeMemory"]["holdout"])
 
-            self.assertFalse(metrics.should_activate("GoalPredictor"))
+            metrics.record(
+                "EpisodeMemory", activated=True, success=False, eligible=True
+            )
+            metrics.record(
+                "EpisodeMemory", activated=False, success=True,
+                holdout=True, eligible=True,
+            )
+            state = next(
+                row for row in metrics.get_component_diagnostics()
+                if row["name"] == "EpisodeMemory"
+            )
+            self.assertEqual(state["state"], "disabled")
+            self.assertLess(state["lift_upper"], 0)
+
+            holdout_trial = {}
+            self.assertFalse(
+                metrics.should_activate("EpisodeMemory", trials=holdout_trial)
+            )
+            self.assertTrue(holdout_trial["EpisodeMemory"]["holdout"])
+            exploration_trial = {}
+            self.assertTrue(
+                metrics.should_activate("EpisodeMemory", trials=exploration_trial)
+            )
+            self.assertFalse(exploration_trial["EpisodeMemory"]["holdout"])
+
+    def test_learning_metrics_keeps_legacy_data_out_of_randomized_lift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            filepath = os.path.join(tmp, "learning_metrics.json")
+            day = datetime.now().date().isoformat()
+            with open(filepath, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "components": {
+                        "SkillLibrary": {
+                            "name": "SkillLibrary",
+                            "activated_count": 2,
+                            "success_with": 1,
+                            "total_with": 2,
+                            "success_without": 1,
+                            "total_without": 3,
+                        }
+                    },
+                    "daily_components": {
+                        day: {
+                            "SkillLibrary": {
+                                "success_with": 1,
+                                "total_with": 2,
+                                "success_without": 1,
+                                "total_without": 3,
+                            }
+                        }
+                    },
+                }, handle)
+
+            metrics = LearningMetrics(filepath=filepath)
+            component = metrics.get_component("SkillLibrary")
+            state = next(
+                row for row in metrics.get_component_diagnostics()
+                if row["name"] == "SkillLibrary"
+            )
+
+            self.assertFalse(component.holdout)
+            self.assertEqual(component.total_with, 2)
+            self.assertEqual(component.trial_total_with, 0)
+            self.assertEqual(component.trial_success_with, 0)
+            self.assertEqual(component.trial_total_holdout, 0)
+            self.assertFalse(
+                metrics._daily_components[day]["SkillLibrary"]["holdout"]
+            )
+            self.assertEqual(state["state"], "pending")
+            self.assertEqual(state["applied_samples"], 0)
+            self.assertEqual(state["holdout_samples"], 0)
+
+    def test_eligible_non_holdout_assignment_counts_as_applied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = LearningMetrics(filepath=os.path.join(tmp, "metrics.json"))
+            metrics.record(
+                "StrategyMemory",
+                activated=False,
+                success=True,
+                holdout=False,
+                eligible=True,
+            )
+
+            component = metrics.get_component("StrategyMemory")
+
+            self.assertEqual(component.trial_total_with, 1)
+            self.assertEqual(component.trial_success_with, 1)
+            self.assertEqual(component.trial_total_holdout, 0)
+
+    def test_learning_metrics_only_uses_the_recent_sixty_days(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = LearningMetrics(filepath=os.path.join(tmp, "metrics.json"))
+            old_day = (datetime.now().date() - timedelta(days=60)).isoformat()
+            metrics._daily_components[old_day] = {
+                "EpisodeMemory": {
+                    "trial_total_with": 20,
+                    "trial_success_with": 0,
+                    "trial_total_holdout": 20,
+                    "trial_success_holdout": 20,
+                }
+            }
+
+            state = next(
+                row for row in metrics.get_component_diagnostics()
+                if row["name"] == "EpisodeMemory"
+            )
+
+            self.assertEqual(state["state"], "pending")
+            self.assertEqual(state["applied_samples"], 0)
+            self.assertEqual(state["holdout_samples"], 0)
 
     def test_regression_guard_warns_only_when_drop_and_sample_are_large_enough(self):
         guard = RegressionGuard()

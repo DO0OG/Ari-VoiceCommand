@@ -3334,3 +3334,12 @@ msgstr "Version: {version} · Commit: {commit}"
 
 msgid "같은 명령을 방금 들어서 무시했어요."
 msgstr "I ignored that command because I just heard it."
+
+msgid "판정 보류(표본 부족)"
+msgstr "Pending judgment (insufficient samples)"
+
+msgid "학습 기여도 진단"
+msgstr "Learning contribution diagnostics"
+
+msgid "{component}: {status}"
+msgstr "{component}: {status}"

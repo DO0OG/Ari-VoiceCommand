@@ -3334,3 +3334,12 @@ msgstr "버전 {version} · 커밋 {commit}"
 
 msgid "같은 명령을 방금 들어서 무시했어요."
 msgstr "같은 명령을 방금 들어서 무시했어요."
+
+msgid "판정 보류(표본 부족)"
+msgstr "판정 보류(표본 부족)"
+
+msgid "학습 기여도 진단"
+msgstr "학습 기여도 진단"
+
+msgid "{component}: {status}"
+msgstr "{component}: {status}"

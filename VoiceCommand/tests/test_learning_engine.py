@@ -9,6 +9,34 @@ from agent.learning_engine import LearningEngine
 
 
 class LearningEngineTests(unittest.TestCase):
+    def test_record_learning_metrics_preserves_holdout_trial_state(self):
+        records = {}
+
+        def record(name, **values):
+            records[name] = values
+
+        metrics = SimpleNamespace(record=record)
+        run_result = SimpleNamespace(
+            achieved=True,
+            learning_components={"EpisodeMemory": False},
+            learning_component_trials={
+                "EpisodeMemory": {"eligible": True, "holdout": True}
+            },
+        )
+
+        with patch("agent.learning_metrics.get_learning_metrics", return_value=metrics):
+            LearningEngine(lambda goal: False).record_learning_metrics(run_result)
+
+        self.assertEqual(
+            records["EpisodeMemory"],
+            {
+                "activated": False,
+                "success": True,
+                "holdout": True,
+                "eligible": True,
+            },
+        )
+
     def test_wrong_open_target_is_never_recorded_as_success(self):
         from agent.real_verifier import RealVerifier
 
