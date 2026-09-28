@@ -552,3 +552,15 @@ def build_available_tools(plugin_tools: list[dict]) -> list[dict]:
     tools = deepcopy(CORE_TOOL_SCHEMAS)
     tools.extend(deepcopy(plugin_tools))
     return tools
+
+
+TOOL_FOLLOWUP_POLICIES = {
+    "set_timer": "none",
+    "cancel_timer": "none",
+    "adjust_volume": "none",
+    "launch_app": "none",
+    "close_app": "none",
+    "focus_window": "none",
+    "take_screenshot": "none",
+    "get_weather": "auto",
+}

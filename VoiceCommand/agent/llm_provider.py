@@ -1288,6 +1288,35 @@ class LLMProvider:
             self._log_provider_exception(logging.error, "feed_tool_result 오류", provider, e)
             return self._error_response(e) if self._is_custom_provider(provider) else f"도구 결과 처리 실패: {e}"
 
+    def record_tool_result(self, tool_calls: list, results: list, response: str) -> None:
+        """호출 없이 도구 결과와 로컬 응답을 대화 이력에 기록한다."""
+        if not tool_calls or len(tool_calls) != len(results):
+            raise ValueError("Every tool call must have exactly one result")
+
+        history = self._history_snapshot()
+        previous = history[-1] if history else {}
+        content = previous.get("content", [])
+        blocks = (
+            [block for block in content if block.get("type") == "tool_use"]
+            if isinstance(content, list)
+            else []
+        )
+        if blocks:
+            expected = [
+                {"id": call["id"], "name": call["name"], "input": call.get("arguments", {})}
+                for call in tool_calls
+            ]
+            actual = [{key: block[key] for key in ("id", "name", "input")} for block in blocks]
+            if previous.get("role") != "assistant" or actual != expected:
+                raise ValueError("Tool results do not match the preceding assistant tool-use turn")
+            result_content = [
+                {"type": "tool_result", "tool_use_id": call["id"], "content": str(result)}
+                for call, result in zip(tool_calls, results)
+            ]
+            self.add_to_history("user", result_content)
+        if response:
+            self.add_to_history("assistant", response)
+
     def _anthropic_chat(
         self,
         user_message,

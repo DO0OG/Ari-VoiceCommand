@@ -45,7 +45,7 @@ class TimerManager:
         self.tts_callback = tts_callback or (lambda x: logging.info(x))
         self._order_counter = 0
 
-    def set_timer(self, minutes: float, name: str = "") -> str:
+    def set_timer(self, minutes: float, name: str = "", *, announce: bool = True) -> str:
         with self._lock:
             auto_named = not (name or "").strip()
             normalized_name = (name or "").strip() or self._auto_name()
@@ -71,34 +71,42 @@ class TimerManager:
             )
             self._timers[normalized_name] = entry
 
-        if auto_named:
-            self.tts_callback(_("{label} 타이머를 설정했습니다.", label=label))
-        else:
-            self.tts_callback(_("'{name}' 타이머를 설정했습니다. ({label})", name=normalized_name, label=label))
+        if announce:
+            if auto_named:
+                self.tts_callback(_("{label} 타이머를 설정했습니다.", label=label))
+            else:
+                message = _("'{name}' 타이머를 설정했습니다. ({label})").format(
+                    name=normalized_name,
+                    label=label,
+                )
+                self.tts_callback(message)
         logging.info("타이머 설정: %s (%s)", normalized_name, label)
         return normalized_name
 
     def cancel(self):
         self.cancel_timer()
 
-    def cancel_timer(self, name: str = "") -> bool:
+    def cancel_timer(self, name: str = "", *, announce: bool = True) -> bool:
         with self._lock:
             target_name = (name or "").strip()
             if not target_name:
                 if not self._timers:
-                    self.tts_callback(_("현재 실행 중인 타이머가 없습니다."))
+                    if announce:
+                        self.tts_callback(_("현재 실행 중인 타이머가 없습니다."))
                     return False
                 target_name = max(self._timers, key=lambda key: self._timers[key].order)
             entry = self._timers.pop(target_name, None)
             if entry is None:
-                self.tts_callback(_("'{name}' 타이머를 찾지 못했습니다.", name=target_name))
+                if announce:
+                    self.tts_callback(_("'{name}' 타이머를 찾지 못했습니다.", name=target_name))
                 return False
             entry.cancel()
 
-        if entry.auto_named:
-            self.tts_callback(_("타이머가 취소되었습니다."))
-        else:
-            self.tts_callback(_("'{name}' 타이머를 취소했습니다.", name=target_name))
+        if announce:
+            if entry.auto_named:
+                self.tts_callback(_("타이머가 취소되었습니다."))
+            else:
+                self.tts_callback(_("'{name}' 타이머를 취소했습니다.", name=target_name))
         return True
 
     def get_remaining_time(self):

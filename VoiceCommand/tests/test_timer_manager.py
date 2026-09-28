@@ -50,6 +50,19 @@ class TimerManagerTests(unittest.TestCase):
         self.assertFalse(timers[1].cancelled)
         self.assertEqual(len(manager.list_timers()), 1)
 
+    def test_timer_actions_can_return_without_speaking(self):
+        messages = []
+        with patch(
+            "services.timer_manager.threading.Timer",
+            side_effect=lambda delay, cb: _FakeTimer(delay, cb),
+        ):
+            manager = TimerManager(tts_callback=messages.append)
+            manager.set_timer(1, announce=False)
+            cancelled = manager.cancel_timer(announce=False)
+
+        self.assertTrue(cancelled)
+        self.assertEqual(messages, [])
+
     def test_cancel_timer_without_name_cancels_latest_timer(self):
         with patch("services.timer_manager.threading.Timer", side_effect=lambda delay, cb: _FakeTimer(delay, cb)):
             manager = TimerManager(tts_callback=lambda message: None)

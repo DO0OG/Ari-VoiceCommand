@@ -38,6 +38,21 @@ msgstr "{count} apps are running: {apps}"
 msgid "스크린샷을 저장했습니다: {path}"
 msgstr "Screenshot saved: {path}"
 
+msgid "요청을 처리했습니다."
+msgstr "I've taken care of that."
+
+msgid "앱을 실행했습니다."
+msgstr "I launched the app."
+
+msgid "앱을 종료했습니다."
+msgstr "I closed the app."
+
+msgid "창을 활성화했습니다."
+msgstr "I focused the window."
+
+msgid "날씨를 확인했습니다. {result}"
+msgstr "I checked the weather. {result}"
+
 msgid "게임 모드 ON. GPU 메모리 해제했습니다."
 msgstr "Game Mode ON. GPU memory released."
 

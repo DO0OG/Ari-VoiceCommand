@@ -19,6 +19,7 @@ from agent.assistant_text_utils import (
 )
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
+from agent.tool_schemas import TOOL_FOLLOWUP_POLICIES
 from i18n.translator import _, get_language
 
 
@@ -258,16 +259,28 @@ class AICommand(FastPathMixin, BaseCommand):
             self.tts_wrapper(_("타이머 시간을 말씀해 주세요."))
             return None
         try:
-            timer_manager.set_timer(total_minutes, name=name)
+            timer_manager.set_timer(total_minutes, name=name, announce=False)
         except ValueError as exc:
             return str(exc)
-        return None
+        label = timer_manager.format_duration_label(total_minutes)
+        if name:
+            return _("'{name}' 타이머를 설정했습니다. ({label})").format(
+                name=name,
+                label=label,
+            )
+        return _("{label} 타이머를 설정했습니다.").format(label=label)
 
     def _handle_cancel_timer(self, args: dict) -> Optional[str]:
         from core.VoiceCommand import timer_manager
 
-        timer_manager.cancel_timer(name=str(args.get("name", "") or ""))
-        return None
+        name = str(args.get("name", "") or "")
+        if not timer_manager.cancel_timer(name=name, announce=False):
+            if name.strip():
+                return _("'{name}' 타이머를 찾지 못했습니다.").format(name=name.strip())
+            return _("현재 실행 중인 타이머가 없습니다.")
+        if name.strip():
+            return _("'{name}' 타이머를 취소했습니다.").format(name=name.strip())
+        return _("타이머가 취소되었습니다.")
 
     def _handle_get_weather(self, args: dict) -> Optional[str]:
         try:
@@ -1113,6 +1126,79 @@ class AICommand(FastPathMixin, BaseCommand):
         if cleaned:
             self.tts_wrapper(cleaned)
 
+    def _user_requests_interpretation(self, text: str) -> bool:
+        # ponytail: 표현 키워드 판별, 누락 시 요청 분류기로 보강
+        normalized = (text or "").casefold()
+        phrases = (
+            "설명", "해석", "의미", "무슨 뜻", "자세히", "구체적으로", "왜", "어떻게",
+            "explain", "interpret", "describe", "elaborate", "meaning", "what does", "why", "how",
+            "説明", "解説", "詳しく", "解釈", "意味", "なぜ", "どういう", "どうやって",
+        )
+        return any(phrase in normalized for phrase in phrases)
+
+    def _has_usable_local_tool_result(self, tool_name: str, result: object) -> bool:
+        if result is None or result is False:
+            return False
+        result_text = str(result).strip()
+        if not result_text or result_text.casefold() in {"false", "null", "none", "{}", "[]"}:
+            return False
+        # ponytail: 오류 키워드 판별, 누락 시 도구별 결과 표식으로 보강
+        failure_markers = (
+            "오류", "실패", "찾지 못", "찾을 수 없", "할 수 없", "없습니다", "지원하지 않",
+            "최대", "error", "failed", "failure", "not found", "unable", "cannot", "could not",
+            "maximum", "exceeds", "limit", "失敗", "エラー", "見つかりません", "できません",
+            "ありません", "上限",
+        )
+        lowered = result_text.casefold()
+        if any(marker in lowered for marker in failure_markers):
+            return False
+        if tool_name in {"close_app", "focus_window"}:
+            try:
+                payload = json.loads(result_text)
+            except json.JSONDecodeError:
+                return False
+            if not isinstance(payload, dict):
+                return False
+            if tool_name == "close_app":
+                count = payload.get("count")
+                return isinstance(count, int) and not isinstance(count, bool) and count > 0
+            return payload.get("focused") is True
+        return True
+
+    def _should_skip_tool_followup(
+        self,
+        text: str,
+        tool_calls: List[dict],
+        results: List[Optional[str]],
+    ) -> bool:
+        if len(tool_calls) != 1 or len(results) != 1:
+            return False
+        if self._user_requests_interpretation(text):
+            return False
+        tool_name = str(tool_calls[0].get("name", "") or "")
+        policy = TOOL_FOLLOWUP_POLICIES.get(tool_name, "summarize")
+        return policy in {"none", "auto"} and self._has_usable_local_tool_result(
+            tool_name,
+            results[0],
+        )
+
+    def _build_local_tool_response(self, tool_name: str, result: object, has_preface: bool) -> str:
+        if has_preface and tool_name != "get_weather":
+            return _("요청을 처리했습니다.")
+        if tool_name in {"set_timer", "cancel_timer", "adjust_volume"}:
+            return str(result).strip()
+        if tool_name == "launch_app":
+            return _("앱을 실행했습니다.")
+        if tool_name == "close_app":
+            return _("앱을 종료했습니다.")
+        if tool_name == "focus_window":
+            return _("창을 활성화했습니다.")
+        if tool_name == "take_screenshot":
+            return _("스크린샷을 저장했습니다: {path}").format(path=str(result))
+        if tool_name == "get_weather":
+            return _("날씨를 확인했습니다. {result}").format(result=str(result).strip())
+        return ""
+
     def _get_skill_context(self, text: str) -> dict:
         try:
             from agent.skill_manager import get_skill_manager
@@ -1578,7 +1664,8 @@ class AICommand(FastPathMixin, BaseCommand):
                 if tool_calls:
                     data_source = self._infer_data_source_from_tool_calls(tool_calls)
                     # 도구 호출 전 자연스러운 안내 문장만 선행 출력
-                    if response and self._should_emit_preface_response(response):
+                    has_preface = bool(response and self._should_emit_preface_response(response))
+                    if has_preface:
                         self._emit_user_message(response)
 
                     results = self._execute_tool_calls(tool_calls, tool_result_callback=tool_result_callback)
@@ -1586,7 +1673,34 @@ class AICommand(FastPathMixin, BaseCommand):
                     non_none = [r for r in results if r is not None]
                     followup = None
                     has_agent_task = any(tc.get("name") == "run_agent_task" for tc in tool_calls)
-                    if non_none and hasattr(self.ai_assistant, 'feed_tool_result') and not has_agent_task:
+                    skip_followup = self._should_skip_tool_followup(text, tool_calls, results)
+                    if skip_followup:
+                        from core.config_manager import ConfigManager
+                        skip_followup = (
+                            ConfigManager.get("tool_followup_policy_enabled", True) is not False
+                        )
+                    if skip_followup:
+                        tool_name = str(tool_calls[0].get("name", "") or "")
+                        local_response = self._build_local_tool_response(
+                            tool_name,
+                            results[0],
+                            has_preface,
+                        )
+                        recorder = getattr(self.ai_assistant, "record_tool_result", None)
+                        if callable(recorder):
+                            try:
+                                recorder(tool_calls, results, local_response)
+                            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                                logging.warning("로컬 도구 결과 기록 실패: %s", exc)
+                        if stream_callback:
+                            stream_callback(local_response)
+                        self._emit_user_message(local_response)
+                        response = local_response
+                    elif (
+                        non_none
+                        and hasattr(self.ai_assistant, 'feed_tool_result')
+                        and not has_agent_task
+                    ):
                         followup = self._run_agentic_followup(
                             text,
                             tool_calls,
@@ -1596,7 +1710,7 @@ class AICommand(FastPathMixin, BaseCommand):
                     if followup:
                         self._emit_user_message(followup)
                         response = followup
-                    elif non_none:
+                    elif non_none and not skip_followup:
                         rendered_results = [str(result) for result in non_none]
                         for result in rendered_results:
                             self._emit_user_message(result)

@@ -623,6 +623,32 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("실패", provider.feed_tool_result("read", calls, ["data"]))
         provider.client.messages.create.assert_not_called()
 
+    def test_local_tool_response_records_anthropic_result_without_request(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        calls = [{"id": "call-1", "name": "launch_app", "arguments": {"name": "메모장"}}]
+        provider.add_to_history("user", "메모장을 열어줘")
+        provider.add_to_history("assistant", [{
+            "type": "tool_use",
+            "id": "call-1",
+            "name": "launch_app",
+            "input": {"name": "메모장"},
+        }])
+
+        provider.record_tool_result(calls, ["메모장"], "앱을 실행했습니다.")
+
+        history = provider._history_snapshot()
+        self.assertEqual(history[-2], {
+            "role": "user",
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": "call-1",
+                "content": "메모장",
+            }],
+        })
+        self.assertEqual(history[-1], {"role": "assistant", "content": "앱을 실행했습니다."})
+        provider.client.messages.create.assert_not_called()
+
     def test_anthropic_feed_failure_is_reported_and_retry_keeps_one_result_turn(self):
         provider = LLMProvider(provider="anthropic", model="test")
         provider.client = Mock()
