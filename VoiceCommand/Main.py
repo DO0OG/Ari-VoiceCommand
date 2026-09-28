@@ -90,7 +90,7 @@ from core.VoiceCommand import (
 )
 
 from core.core_manager import AriCore
-from core.app_version import record_last_run_version
+from core.app_version import is_release_build, record_last_run_version
 from ui.tray_icon import SystemTrayIcon
 from core.plugin_loader import PluginContext, get_plugin_manager
 from commands.ai_command import AICommand
@@ -341,6 +341,7 @@ def main():
     plugin_hot_reload_enabled = False
     mcp_server_thread = None
     telegram_bridge = None
+    update_checker = None
 
     def _show_character():
         if character is not None:
@@ -474,6 +475,27 @@ def main():
             # 캐릭터 우클릭 메뉴를 트레이 메뉴와 공유 (플러그인 액션 포함)
             character.set_tray_menu(tray_icon.menu)
 
+        if is_release_build():
+            from core.VoiceCommand import is_game_mode, is_tts_playing
+            from core.update_checker import UpdateChecker
+
+            def _is_update_notice_busy() -> bool:
+                command_thread = getattr(ari_core, "command_thread", None)
+                return is_tts_playing() or bool(
+                    getattr(command_thread, "is_processing", False)
+                )
+
+            update_checker = UpdateChecker(
+                tray_icon,
+                character,
+                is_busy=_is_update_notice_busy,
+                is_game_mode=is_game_mode,
+            )
+            if tray_icon:
+                tray_icon.set_update_checker(update_checker)
+            update_checker.notify_installed_update()
+            update_checker.start()
+
         # 언어 핫로드 콜백 등록 — 설정에서 언어 변경 시 UI 즉시 갱신
         _tray_ref = tray_icon
         _text_ref = text_interface
@@ -573,6 +595,8 @@ def main():
         logging.error("예외 발생: %s", e, exc_info=True)
     finally:
         logging.info("=== 앱 종료 시작 ===")
+        if update_checker:
+            update_checker.stop()
         flush_runtime_state()
         if text_interface:
             text_interface.cleanup()

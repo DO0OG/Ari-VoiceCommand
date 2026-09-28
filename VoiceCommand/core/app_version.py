@@ -117,7 +117,17 @@ def record_last_run_version() -> bool:
 
     if not isinstance(state, dict):
         return False
-    state["last_run_version"] = get_version()
+    previous_version = state.get("last_run_version")
+    if not isinstance(previous_version, str):
+        previous_version = None
+    current_version = get_version()
+    state["last_run_version"] = current_version
+    if (
+        previous_version
+        and previous_version != current_version
+        and is_release_build()
+    ):
+        state["installed_update_pending"] = current_version
     temp_path = f"{path}.tmp"
     try:
         with open(temp_path, "w", encoding="utf-8") as handle:

@@ -3,18 +3,21 @@
 각 탭의 세부 구현은 settings_llm_page / settings_tts_page / settings_plugin_page 에 위임한다.
 """
 import logging
+from html import escape
+from urllib.parse import urlsplit
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
-    QComboBox, QGroupBox, QWidget,
+    QComboBox, QGroupBox, QWidget, QCheckBox,
     QTabWidget, QMessageBox, QFrame, QSlider,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-from core.app_version import get_build_info
+from core.app_version import compare_versions, get_build_info
 from core.config_manager import ConfigManager
+from core.update_checker import get_update_status
 from core.custom_llm_providers import is_custom_secret_key
 from i18n.translator import _, set_language, get_language
 from ui.theme import (
@@ -68,12 +71,13 @@ class SettingsDialog(QDialog):
     }
     AGENT_KEYS = {"agent_timeout_seconds", "agent_dashboard_enabled", "audit_log_enabled", "mcp_server_enabled"}
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, update_checker=None):
         super().__init__(parent)
         self.setWindowTitle(_("아리 설정"))
         self.setMinimumWidth(600)
         self.setMinimumHeight(550)
         self.settings = ConfigManager.load_settings()
+        self.update_checker = update_checker
         self.original_settings = dict(self.settings)
         self.changed_keys: set = set()
         self._editor_dialog: ThemeEditorDialog | None = None
@@ -111,6 +115,9 @@ class SettingsDialog(QDialog):
         # 6. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
         self.tabs.addTab(self._plugin_page, _("확장"))
+
+        self._update_page = self._create_update_tab()
+        self.tabs.addTab(self._update_page, _("정보·업데이트"))
 
         build_info = get_build_info()
         commit = build_info["commit"][:7] or "—"
@@ -332,6 +339,108 @@ class SettingsDialog(QDialog):
 
         vbox.addStretch()
         return widget
+
+    def _create_update_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        self.update_check_enabled = QCheckBox(_("새 버전을 자동으로 확인합니다"))
+        update_enabled = self.settings.get("update_check_enabled", True)
+        self.update_check_enabled.setChecked(
+            update_enabled if isinstance(update_enabled, bool) else True
+        )
+        self.update_check_enabled.setEnabled(self.update_checker is not None)
+        layout.addWidget(self.update_check_enabled)
+        network_notice = QLabel(
+            _("자동 확인은 GitHub에서 버전 정보만 받고, 개인 식별 정보는 보내지 않습니다.")
+        )
+        network_notice.setWordWrap(True)
+        layout.addWidget(network_notice)
+
+        self.update_status_label = QLabel()
+        self.update_status_label.setWordWrap(True)
+        layout.addWidget(self.update_status_label)
+
+        self.update_notes_link = QLabel()
+        layout.addWidget(self.update_notes_link)
+
+        buttons = QHBoxLayout()
+        self.check_updates_button = QPushButton(_("지금 확인"))
+        self.check_updates_button.setEnabled(self.update_checker is not None)
+        self.check_updates_button.clicked.connect(self._check_updates_now)
+        buttons.addWidget(self.check_updates_button)
+
+        self.skip_update_button = QPushButton(_("이 버전 건너뛰기"))
+        self.skip_update_button.clicked.connect(self._skip_update_version)
+        buttons.addWidget(self.skip_update_button)
+        buttons.addStretch()
+        layout.addLayout(buttons)
+        layout.addStretch()
+        self._refresh_update_status(get_update_status())
+        if self.update_checker is not None:
+            self.update_checker.status_changed.connect(self._refresh_update_status)
+        return widget
+
+    def _refresh_update_status(self, status=None):
+        if not isinstance(status, dict):
+            status = get_update_status()
+        build_info = get_build_info()
+        pending_version = status.get("pending_version")
+        if isinstance(pending_version, str) and pending_version:
+            minimum = status.get("pending_min_updatable_from")
+            if (
+                isinstance(minimum, str)
+                and compare_versions(build_info["version"], minimum) < 0
+            ):
+                message = _("Ari {version}은 직접 설치해야 합니다.")
+            else:
+                message = _("Ari {version} 업데이트를 사용할 수 있습니다.")
+            self.update_status_label.setText(message.format(version=pending_version))
+        elif status.get("skipped_version"):
+            self.update_status_label.setText(_("이 버전을 건너뛰었습니다."))
+        elif status.get("last_checked_at"):
+            self.update_status_label.setText(_("새 업데이트가 없습니다."))
+        else:
+            self.update_status_label.setText(_("아직 업데이트 확인 기록이 없습니다."))
+        self.skip_update_button.setEnabled(
+            self.update_checker is not None
+            and isinstance(pending_version, str)
+            and bool(pending_version)
+        )
+
+        notes_url = status.get("pending_notes_url")
+        if not isinstance(notes_url, str) or not notes_url:
+            if build_info.get("channel") in {"stable", "beta"}:
+                notes_url = (
+                    "https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v"
+                    f"{build_info['version']}"
+                )
+        try:
+            parsed_notes_url = urlsplit(notes_url) if isinstance(notes_url, str) else None
+        except ValueError:
+            parsed_notes_url = None
+        if (
+            parsed_notes_url is not None
+            and parsed_notes_url.scheme == "https"
+            and parsed_notes_url.netloc == "github.com"
+            and not parsed_notes_url.query
+            and not parsed_notes_url.fragment
+        ):
+            self.update_notes_link.setText(
+                f'<a href="{escape(notes_url, quote=True)}">{_("변경 사항")}</a>'
+            )
+            self.update_notes_link.setOpenExternalLinks(True)
+        else:
+            self.update_notes_link.clear()
+
+    def _check_updates_now(self):
+        if self.update_checker is not None:
+            self.update_status_label.setText(_("새 버전을 확인하고 있습니다."))
+            self.update_checker.check_now()
+
+    def _skip_update_version(self):
+        if self.update_checker is not None:
+            self.update_checker.skip_pending_version()
+            self._refresh_update_status()
 
     # ── 캐릭터 표시 설정 ──────────────────────────────────────────────────────
 
@@ -567,6 +676,7 @@ class SettingsDialog(QDialog):
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),
             "language": self.lang_combo.currentData(),
+            "update_check_enabled": self.update_check_enabled.isChecked(),
         }
 
         # LLM / TTS 값을 각 페이지에서 수집
@@ -583,6 +693,9 @@ class SettingsDialog(QDialog):
             self.changed_keys = set()
             QMessageBox.warning(self, _("settings.save_failed"), _("settings.secret_save_failed"))
             return
+
+        if "update_check_enabled" in self.changed_keys and self.update_checker:
+            self.update_checker.settings_changed()
 
         if self.character_settings_changed():
             self._apply_character_display(
