@@ -41,6 +41,239 @@ class LLMProviderTests(unittest.TestCase):
         provider.client = Mock()
         return provider
 
+    def test_system_prompt_ends_with_situation_even_without_general_context(self):
+        provider = LLMProvider(model="test")
+        metrics = {
+            "last_interaction_elapsed_minutes": 4,
+            "today_interaction_count": 2,
+            "continuous_use_minutes": 9,
+            "local_time": "14:25",
+            "recent_praise_count": 1,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        translate = lambda message, **values: message.format(**values) if values else message
+        with patch("i18n.translator._", side_effect=translate), \
+             patch("memory.user_context.get_context_manager", return_value=context), \
+             patch("core.window_inspector.get_foreground_fullscreen", return_value=None), \
+             patch.object(provider, "_get_skill_context", return_value={}):
+            prompt = provider._build_system(include_context=False, user_message="private request")
+
+        situation = prompt.rsplit("\n\n", 1)[-1]
+        self.assertIn("[상황]", situation)
+        self.assertIn("4분", situation)
+        self.assertIn("오늘2회", situation)
+        self.assertIn("연속9분", situation)
+        self.assertIn("14:25", situation)
+        self.assertIn(
+            "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요.",
+            prompt,
+        )
+        self.assertNotIn("전체 화면", situation)
+        self.assertNotIn("private request", situation)
+        self.assertTrue(prompt.endswith(situation))
+
+    def test_situation_block_formats_elapsed_hours_and_stays_private(self):
+        provider = LLMProvider()
+        metrics = {
+            "last_interaction_elapsed_minutes": 180,
+            "today_interaction_count": 12,
+            "continuous_use_minutes": 300,
+            "local_time": "23:40",
+            "recent_praise_count": 2,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        translate = lambda message, **values: message.format(**values) if values else message
+        with (
+            patch("i18n.translator._", side_effect=translate),
+            patch("memory.user_context.get_context_manager", return_value=context),
+            patch("core.window_inspector.get_foreground_fullscreen", return_value=False),
+        ):
+            situation = provider._build_situation_prompt()
+
+        self.assertIn("3시간", situation)
+        self.assertIn("오늘12회", situation)
+        self.assertIn("5시간", situation)
+        self.assertIn("23:40", situation)
+        self.assertIn("2회", situation)
+        self.assertIn("전체 화면: 아니요", situation)
+        self.assertNotIn("private", situation)
+        self.assertLessEqual(len(situation), 120)
+
+    def test_static_answer_cache_key_changes_with_situation_metadata(self):
+        provider = LLMProvider(provider="openai", model="test")
+        provider.client = Mock()
+        with (
+            patch.object(
+                provider,
+                "_resolve_route",
+                return_value=(provider.client, "openai", "test"),
+            ),
+            patch.object(provider, "_should_cache", return_value=True),
+            patch.object(
+                provider,
+                "_build_situation_prompt",
+                side_effect=("[Situation] 1", "[Situation] 2", "[Situation] 2"),
+            ),
+            patch.object(
+                provider,
+                "_stream_or_chat_completion",
+                side_effect=("first", "second"),
+            ) as completion,
+            patch.object(provider, "_get_skill_context", return_value={}),
+        ):
+            first = provider.chat("what is Ari?", include_context=False, save_history=False)
+            second = provider.chat("what is Ari?", include_context=False, save_history=False)
+            third = provider.chat("what is Ari?", include_context=False, save_history=False)
+
+        self.assertEqual((first, second, third), ("first", "second", "second"))
+        self.assertEqual(completion.call_count, 2)
+
+    def test_cached_answer_records_completed_interaction(self):
+        provider = LLMProvider(provider="openai", model="test")
+        provider.client = Mock()
+        provider._response_cache = Mock()
+        provider._response_cache.get.return_value = "cached answer"
+        context = Mock()
+        with (
+            patch.object(
+                provider,
+                "_resolve_route",
+                return_value=(provider.client, "openai", "test"),
+            ),
+            patch.object(provider, "_should_cache", return_value=True),
+            patch.object(provider, "_build_situation_prompt", return_value="[Situation]"),
+            patch.object(provider, "_build_cache_key", return_value="cache-key"),
+            patch("memory.user_context.get_context_manager", return_value=context),
+            patch.object(provider, "_stream_or_chat_completion") as completion,
+        ):
+            result = provider.chat("repeat this", include_context=False)
+
+        self.assertEqual(result, "cached answer")
+        context.record_interaction.assert_called_once_with("repeat this")
+        completion.assert_not_called()
+
+    def test_situation_prompt_stays_within_the_50_token_budget(self):
+        provider = LLMProvider()
+        metrics = {
+            "last_interaction_elapsed_minutes": 1000000,
+            "today_interaction_count": 1000000,
+            "continuous_use_minutes": 1000000,
+            "local_time": "14:25:59",
+            "recent_praise_count": 1000000,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        translate = lambda message, **values: message.format(**values) if values else message
+        with (
+            patch("i18n.translator._", side_effect=translate),
+            patch("memory.user_context.get_context_manager", return_value=context),
+            patch("core.window_inspector.get_foreground_fullscreen", return_value=False),
+        ):
+            prompt = provider._build_situation_prompt()
+
+        self.assertLessEqual(len(prompt), 120)
+        self.assertEqual(prompt.count("999+"), 4)
+        self.assertIn("14:25", prompt)
+
+    def test_translated_situation_blocks_stay_within_character_limit(self):
+        provider = LLMProvider()
+        metrics = {
+            "last_interaction_elapsed_minutes": 1000000,
+            "today_interaction_count": 1000000,
+            "continuous_use_minutes": 1000000,
+            "local_time": "23:59",
+            "recent_praise_count": 1000000,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        block_message = (
+            "[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
+            "시각{time} · 칭찬24h {praise}회"
+        )
+        translations = {
+            "ko": {},
+            "en": {
+                block_message: (
+                    "[Situation] Last {elapsed} · Today {today} chats · "
+                    "Use {continuous} · Time {time} · Praise24h {praise}"
+                ),
+                " · 전체 화면: {fullscreen}": " · Fullscreen: {fullscreen}",
+                "{minutes}분": "{minutes}m",
+                "{hours}시간": "{hours}h",
+                "없음": "None",
+                "예": "Yes",
+                "아니요": "No",
+            },
+            "ja": {
+                block_message: (
+                    "[状況] 前回 {elapsed} · 今日 {today}回 · "
+                    "連続 {continuous} · 時刻 {time} · 称賛24h {praise}回"
+                ),
+                " · 전체 화면: {fullscreen}": " · 全画面: {fullscreen}",
+                "{minutes}분": "{minutes}分",
+                "{hours}시간": "{hours}時間",
+                "없음": "なし",
+                "예": "はい",
+                "아니요": "いいえ",
+            },
+        }
+        for language, catalogue in translations.items():
+            def translate(message, **values):
+                translated = catalogue.get(message, message)
+                return translated.format(**values) if values else translated
+
+            with self.subTest(language=language), patch(
+                "agent.llm_provider._", side_effect=translate
+            ), patch("memory.user_context.get_context_manager", return_value=context), patch(
+                "core.window_inspector.get_foreground_fullscreen", return_value=True
+            ):
+                situation = provider._build_situation_prompt()
+
+            self.assertLessEqual(len(situation), 120)
+            if language == "en":
+                self.assertTrue(situation.startswith("[Situation]"))
+            elif language == "ja":
+                self.assertTrue(situation.startswith("[状況]"))
+
+    def test_rp_prompt_localizes_situation_guidance(self):
+        provider = LLMProvider()
+        instruction = (
+            "Use the situation block to guide your tone, but do not repeat its "
+            "contents verbatim."
+        )
+        with patch("i18n.translator.get_language", return_value="en"), patch(
+            "i18n.translator._", return_value=instruction
+        ):
+            prompt = provider.rp_generator.build_system_prompt("You are Ari.")
+
+        self.assertIn(instruction, prompt)
+
+    def test_system_override_also_ends_with_situation(self):
+        provider = LLMProvider(provider="openai", model="test")
+        provider.client = Mock()
+        with (
+            patch.object(
+                provider,
+                "_resolve_route",
+                return_value=(provider.client, "openai", "test"),
+            ),
+            patch.object(provider, "_should_cache", return_value=False),
+            patch.object(provider, "_build_situation_prompt", return_value="[Situation]"),
+            patch.object(
+                provider,
+                "_stream_or_chat_completion",
+                return_value="ok",
+            ) as completion,
+        ):
+            response = provider.chat(
+                "do this",
+                include_context=False,
+                system_override="special system",
+                save_history=False,
+            )
+
+        sent_system = completion.call_args.kwargs["messages"][0]["content"]
+        self.assertEqual(response, "ok")
+        self.assertEqual(sent_system, "special system\n\n[Situation]")
+
     def test_application_request_sends_available_controls_to_completion(self):
         provider = LLMProvider(model="test")
         provider.client = Mock()
@@ -54,7 +287,7 @@ class LLMProviderTests(unittest.TestCase):
              patch("memory.memory_manager.get_memory_manager") as memory:
             memory.return_value.clean_response.side_effect = lambda value: value
             for goal in ("네이버 웨일 열어줘", "디스코드 켜줘"):
-                _, calls = provider.chat_with_tools(goal)
+                calls = provider.chat_with_tools(goal)[1]
                 request = provider.client.chat.completions.create.call_args.kwargs
                 names = {item["function"]["name"] for item in request["tools"]}
                 self.assertIn("launch_app", names)
@@ -104,7 +337,7 @@ class LLMProviderTests(unittest.TestCase):
         ]
         provider.add_to_history("user", "read files")
         with patch.object(provider, "_build_system", return_value="system"):
-            _, calls = provider._anthropic_chat("read files", False, True)
+            calls = provider._anthropic_chat("read files", False, True)[1]
             self.assertEqual(provider._history_snapshot()[-1]["content"], [vars(b) for b in original])
             self.assertEqual(provider.feed_tool_result("read files", calls, ["a data", "b data"]), "done")
         messages = provider.client.messages.create.call_args.kwargs["messages"]
@@ -312,8 +545,8 @@ class LLMProviderTests(unittest.TestCase):
         provider.add_to_history("assistant", [{"type": "tool_use", "id": "c", "name": "read_file", "input": {}}])
         calls = [{"id": "c", "name": "read_file", "arguments": {}}]
         with patch.object(provider, "_build_system", return_value="system"):
-            for _ in range(2):
-                self.assertIn("request failed", provider.feed_tool_result("read", calls, ["data"]))
+            for expected in ("request failed", "request failed"):
+                self.assertIn(expected, provider.feed_tool_result("read", calls, ["data"]))
         self.assertEqual(len(provider._history_snapshot()), 2)
 
     def test_provider_does_not_apply_code_default_model(self):
@@ -476,7 +709,7 @@ class LLMProviderTests(unittest.TestCase):
         targets = provider.get_role_fallback_targets("planner")
 
         self.assertEqual(
-            [(selected_provider, selected_model) for _, selected_provider, selected_model in targets],
+            [(target[1], target[2]) for target in targets],
             [
                 ("gemini", "selected-planner-model"),
                 ("nvidia_nim", "selected-base-model"),
@@ -612,9 +845,9 @@ class LLMProviderTests(unittest.TestCase):
             else:
                 provider.register_plugin_tool(schema, intents=intents)
 
-        conversation, _ = provider._select_tools_for_request(
+        conversation = provider._select_tools_for_request(
             {"intent": "conversation", "force_tool": False}
-        )
+        )[0]
         conversation_names = [tool["function"]["name"] for tool in conversation]
         plugin_names = [name for name in conversation_names if name.startswith("plugin_")]
 
@@ -623,19 +856,19 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("plugin_conversation", conversation_names)
         self.assertEqual(plugin_names, sorted(plugin_names))
 
-        automation, _ = provider._select_tools_for_request(
+        automation = provider._select_tools_for_request(
             {"intent": "automation", "force_tool": False}
-        )
+        )[0]
         automation_names = {tool["function"]["name"] for tool in automation}
 
         self.assertIn("plugin_unscoped", automation_names)
         self.assertIn("plugin_automation", automation_names)
         self.assertNotIn("plugin_conversation", automation_names)
 
-        other, _ = provider._select_tools_for_request(
+        other = provider._select_tools_for_request(
             {"intent": "other", "force_tool": False},
             required_tool_names={"get_current_time"},
-        )
+        )[0]
         other_names = {tool["function"]["name"] for tool in other}
 
         self.assertEqual(other_names, {"get_current_time", "plugin_unscoped"})

@@ -112,6 +112,63 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertIn("음악:로파이", prefs)
             self.assertIn("weather", suggestions)
 
+    def test_situation_metadata_resets_daily_and_after_idle_without_saving_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            manager = UserContextManager(context_file=path)
+            start = datetime(2026, 9, 29, 9, 0)
+            manager.record_interaction("You did great, Ari", now=start)
+
+            active = manager.get_situation_metrics(now=start + timedelta(minutes=20))
+            self.assertEqual(active["today_interaction_count"], 1)
+            self.assertEqual(active["continuous_use_minutes"], 20)
+            self.assertEqual(active["last_interaction_elapsed_minutes"], 20)
+            self.assertEqual(active["recent_praise_count"], 1)
+
+            follow_up = start + timedelta(minutes=20)
+            manager.record_interaction("ordinary request", now=follow_up)
+            active = manager.get_situation_metrics(now=start + timedelta(minutes=25))
+            self.assertEqual(active["today_interaction_count"], 2)
+            self.assertEqual(active["continuous_use_minutes"], 25)
+            self.assertEqual(active["last_interaction_elapsed_minutes"], 5)
+
+            idle = manager.get_situation_metrics(now=start + timedelta(minutes=51))
+            self.assertEqual(idle["continuous_use_minutes"], 0)
+            self.assertEqual(idle["last_interaction_elapsed_minutes"], 31)
+
+            next_day = start + timedelta(days=1, minutes=1)
+            manager.record_interaction("ordinary request", now=next_day)
+            next_day_metrics = manager.get_situation_metrics(now=next_day)
+            self.assertEqual(next_day_metrics["today_interaction_count"], 1)
+            self.assertEqual(next_day_metrics["recent_praise_count"], 0)
+            self.assertEqual(next_day_metrics["continuous_use_minutes"], 0)
+            self.assertEqual(
+                set(manager.context["situation"]),
+                {
+                    "last_interaction_at",
+                    "session_started_at",
+                    "today_date",
+                    "today_interaction_count",
+                    "praise_timestamps",
+                },
+            )
+            with open(path, encoding="utf-8") as handle:
+                saved_context = handle.read()
+            self.assertNotIn("You did great, Ari", saved_context)
+
+    def test_praise_markers_cover_korean_english_and_japanese(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            start = datetime(2026, 9, 29, 9, 0)
+            for minute, message in enumerate(("잘했어", "great job", "ありがとう")):
+                manager.record_interaction(message, now=start + timedelta(minutes=minute))
+
+            metrics = manager.get_situation_metrics(now=start + timedelta(minutes=3))
+
+        self.assertEqual(metrics["recent_praise_count"], 3)
+
     def test_update_bio_replaces_list_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager = UserContextManager(

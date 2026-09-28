@@ -3388,3 +3388,31 @@ msgstr "この事実に言及している会話履歴も削除"
 
 msgid "Edge/OpenAI/ElevenLabs 감정 조절"
 msgstr "Edge/OpenAI/ElevenLabs の感情調整"
+
+msgid ""
+"[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
+"시각{time} · 칭찬24h {praise}회"
+msgstr ""
+"[状況] 前回 {elapsed} · 今日 {today}回 · "
+"連続 {continuous} · 時刻 {time} · 称賛24h {praise}回"
+
+msgid " · 전체 화면: {fullscreen}"
+msgstr " · 全画面: {fullscreen}"
+
+msgid "{minutes}분"
+msgstr "{minutes}分"
+
+msgid "{hours}시간"
+msgstr "{hours}時間"
+
+msgid "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
+msgstr "状況ブロックを参考に口調を調整し、内容をそのまま言及しないでください。"
+
+msgid "없음"
+msgstr "なし"
+
+msgid "예"
+msgstr "はい"
+
+msgid "아니요"
+msgstr "いいえ"
