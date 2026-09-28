@@ -1,5 +1,4 @@
 import os
-import sqlite3
 import tempfile
 import types
 import unittest
@@ -45,7 +44,7 @@ class MemoryIndexTests(unittest.TestCase):
         self.assertTrue(self.index.search('"Ari"'))
 
     def test_migration_preserves_legacy_rows_and_sets_user_version(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with self.index._connect() as conn:
             conn.execute("DROP TABLE memory_entries")
             conn.execute(
                 "CREATE VIRTUAL TABLE memory_entries "
@@ -65,7 +64,7 @@ class MemoryIndexTests(unittest.TestCase):
         migrated = MemoryIndex(self.db_path)
 
         self.assertTrue(migrated.search("프로젝트"))
-        with sqlite3.connect(self.db_path) as conn:
+        with self.index._connect() as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
             columns = {
                 row[1] for row in conn.execute("PRAGMA table_info(memory_entries)")
@@ -82,7 +81,7 @@ class MemoryIndexTests(unittest.TestCase):
         for confidence in range(10):
             self.index.index_fact("favorite_drink", "coffee", confidence / 10)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.index._connect() as conn:
             count = conn.execute(
                 "SELECT count(*) FROM memory_entries "
                 "WHERE entry_type='fact' AND ref_key='fact:favorite_drink'"
@@ -96,7 +95,7 @@ class MemoryIndexTests(unittest.TestCase):
 
         self.assertEqual(self.index.delete_fact("favorite_drink"), 1)
         self.assertEqual(self.index.delete_conversations_containing("coffee"), 1)
-        with sqlite3.connect(self.db_path) as conn:
+        with self.index._connect() as conn:
             rows = conn.execute(
                 "SELECT entry_type, content FROM memory_entries"
             ).fetchall()
@@ -110,7 +109,7 @@ class MemoryIndexTests(unittest.TestCase):
         self.index.index_fact("keep", "fact", 0.7)
 
         self.assertEqual(self.index.prune_conversations_older_than(180), 1)
-        with sqlite3.connect(self.db_path) as conn:
+        with self.index._connect() as conn:
             rows = conn.execute(
                 "SELECT entry_type, content FROM memory_entries ORDER BY timestamp"
             ).fetchall()

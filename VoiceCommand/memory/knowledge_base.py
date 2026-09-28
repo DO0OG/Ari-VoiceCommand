@@ -7,8 +7,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterator
 
 from memory.fts_utils import build_fts_query
 
@@ -43,8 +44,15 @@ class KnowledgeBase:
         self._has_entries: bool | None = None
         self._ensure_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        # sqlite3 연결의 with 문은 커밋만 하므로 연결은 따로 닫는다.
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _ensure_db(self) -> None:
         with self._connect() as conn:

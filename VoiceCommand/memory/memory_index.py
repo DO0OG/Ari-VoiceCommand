@@ -4,9 +4,10 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List
+from typing import Iterator, List
 
 from memory.fts_utils import build_fts_query, split_fts_tokens
 
@@ -35,8 +36,15 @@ class MemoryIndex:
         self._supports_trigram = False
         self._ensure_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        # sqlite3 연결의 with 문은 커밋만 하므로 연결은 따로 닫는다.
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _ensure_db(self) -> None:
         with self._lock, self._connect() as conn:
