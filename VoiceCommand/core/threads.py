@@ -353,6 +353,7 @@ class VoiceRecognitionThread(QThread):
         if hasattr(self, 'wake_detector'):
             if self.wake_detector is not None:
                 self.wake_detector.should_stop = True
+                self.wake_detector.flush_pending_settings()
         self.microphone = None
 
     def stop(self):

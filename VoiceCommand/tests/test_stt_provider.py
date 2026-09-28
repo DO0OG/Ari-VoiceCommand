@@ -135,6 +135,7 @@ class STTProviderTests(unittest.TestCase):
         )
         wake._stt = unhealthy
         wake._calibrated = True
+        wake._configured_energy_threshold = None
 
         with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
             with patch("audio.simple_wake.create_stt_provider", return_value=healthy):
