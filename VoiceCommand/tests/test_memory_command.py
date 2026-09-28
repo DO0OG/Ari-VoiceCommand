@@ -50,13 +50,13 @@ class MemoryCommandTests(unittest.TestCase):
         self.assertEqual(spoken, ["기억했어요: tea"])
 
     def test_remember_rejects_card_resident_id_and_ssn_numbers(self):
-        sensitive_values = (
-            "카드 4111 1111 1111 1111",
-            "주민번호 900101-1234567",
-            "SSN 123-45-6789",
+        sensitive_commands = (
+            "기억해: 카드 4111 1111 1111 1111",
+            "기억해: 주민번호 900101-1234567",
+            "기억해: SSN 123-45-6789",
         )
-        for value in sensitive_values:
-            with self.subTest(value=value):
+        for text in sensitive_commands:
+            with self.subTest(text=text):
                 context = Mock()
                 memory_index = Mock()
                 spoken = []
@@ -66,7 +66,7 @@ class MemoryCommandTests(unittest.TestCase):
                 ), patch(
                     "memory.memory_index.get_memory_index", return_value=memory_index
                 ):
-                    command.execute(f"기억해: {value}")
+                    command.execute(text)
 
                 context.record_fact.assert_not_called()
                 memory_index.index_fact.assert_not_called()
