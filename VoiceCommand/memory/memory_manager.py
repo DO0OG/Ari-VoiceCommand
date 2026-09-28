@@ -114,8 +114,10 @@ class MemoryManager:
                 k = key.strip()
                 if self._is_persistent_fact(k):
                     logging.info("사실 기억함: %s = %s", k, value.strip())
-                    self.context_manager.record_fact(k, value.strip(), source="assistant_tag", confidence=0.75)
-                    get_memory_index().index_fact(k, value.strip(), 0.75)
+                    if self.context_manager.record_fact(
+                        k, value.strip(), source="assistant_tag", confidence=0.75
+                    ):
+                        get_memory_index().index_fact(k, value.strip(), 0.75)
                 else:
                     logging.info("[MemoryManager] 일시적 FACT 무시 (비저장): %s=%s", k, value.strip())
 
@@ -183,7 +185,7 @@ class MemoryManager:
         for key, fact in top_facts:
             value = fact.get("value", "")
             if value:
-                lines.append(f"- {key}: {value}")
+                lines.append(f"- {value}" if key == value else f"- {key}: {value}")
         return "\n".join(lines)
 
     def clean_response(self, response: str) -> str:

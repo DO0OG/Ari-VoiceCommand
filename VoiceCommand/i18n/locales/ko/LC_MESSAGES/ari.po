@@ -3467,3 +3467,42 @@ msgstr "빠른 로컬 명령 처리를 사용할 수 있습니다."
 
 msgid "자동 확인은 GitHub에서 버전 정보만 받고, 개인 식별 정보는 보내지 않습니다."
 msgstr "자동 확인은 GitHub에서 버전 정보만 받고, 개인 식별 정보는 보내지 않습니다."
+
+msgid "무엇을 기억할까요?"
+msgstr "무엇을 기억할까요?"
+
+msgid "민감 정보는 저장하지 않아요."
+msgstr "민감 정보는 저장하지 않아요."
+
+msgid "기억을 저장하지 못했어요."
+msgstr "기억을 저장하지 못했어요."
+
+msgid "기억했어요: {value}"
+msgstr "기억했어요: {value}"
+
+msgid "무엇을 잊을까요?"
+msgstr "무엇을 잊을까요?"
+
+msgid "잊을 기억이 없어요."
+msgstr "잊을 기억이 없어요."
+
+msgid "기억을 삭제하지 못했어요."
+msgstr "기억을 삭제하지 못했어요."
+
+msgid "여러 기억이 있어요: {items}. 어떤 기억인지 골라 주세요."
+msgstr "여러 기억이 있어요: {items}. 어떤 기억인지 골라 주세요."
+
+msgid "기억 삭제"
+msgstr "기억 삭제"
+
+msgid "기억한 내용을 삭제합니다."
+msgstr "기억한 내용을 삭제합니다."
+
+msgid "기억 삭제: {fact}"
+msgstr "기억 삭제: {fact}"
+
+msgid "삭제를 취소했어요."
+msgstr "삭제를 취소했어요."
+
+msgid "기억을 잊었어요: {key}"
+msgstr "기억을 잊었어요: {key}"

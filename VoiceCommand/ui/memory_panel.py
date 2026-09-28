@@ -8,6 +8,7 @@ FloatingPanel 기반 클래스를 사용해 구조를 공유한다.
   사실       — 저장된 Facts 목록 (신뢰도·만료일·삭제)
   통계       — 명령 빈도·선호도·대화 주제 시각화
 """
+import html
 import logging
 
 from PySide6.QtCore import Qt, Signal
@@ -51,12 +52,15 @@ class FactRow(QFrame):
         conf  = int(entry.get("confidence", 0) * 100)
         exp   = entry.get("expires_at", "")[:10] if entry.get("expires_at") else "∞"
 
-        key_lbl = QLabel(f"<b>{key}</b>")
-        key_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
-        key_lbl.setMinimumWidth(110)
-        lay.addWidget(key_lbl)
+        if str(key) != str(value):
+            key_lbl = QLabel(f"<b>{html.escape(str(key))}</b>")
+            key_lbl.setTextFormat(Qt.RichText)
+            key_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
+            key_lbl.setMinimumWidth(110)
+            lay.addWidget(key_lbl)
 
         val_lbl = QLabel(str(value)[:50])
+        val_lbl.setTextFormat(Qt.PlainText)
         val_lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
         val_lbl.setStyleSheet("color: #333;")
         lay.addWidget(val_lbl, 1)
