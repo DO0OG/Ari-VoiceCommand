@@ -3343,3 +3343,27 @@ msgstr "Learning contribution diagnostics"
 
 msgid "{component}: {status}"
 msgstr "{component}: {status}"
+
+msgid "플러그인 승인"
+msgstr "Plugin approval"
+
+msgid "새 플러그인 '{name}'을 켤까요?"
+msgstr "Enable the new plugin '{name}'?"
+
+msgid "플러그인 로드가 거부되었습니다."
+msgstr "Plugin loading was declined."
+
+msgid "플러그인 파일이 승인 후 변경되었습니다."
+msgstr "The plugin file changed after approval."
+
+msgid "개발자 설정"
+msgstr "Developer settings"
+
+msgid "플러그인 핫 리로드 사용"
+msgstr "Enable plugin hot reload"
+
+msgid "다음 앱 시작 때 적용됩니다."
+msgstr "Applied the next time the app starts."
+
+msgid "설치된 플러그인을 찾지 못했습니다."
+msgstr "The installed plugin could not be found."

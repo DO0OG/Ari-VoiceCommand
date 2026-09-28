@@ -22,11 +22,17 @@ class _FakeAssistant:
 
 class _TempPluginManager(PluginManager):
     def __init__(self, plugin_dir: str):
-        super().__init__()
         self._plugin_dir = plugin_dir
+        super().__init__()
 
     def plugin_dir(self) -> str:
         return self._plugin_dir
+
+    def _trusted_plugins_path(self) -> str:
+        return os.path.join(self._plugin_dir, "plugin_trust.json")
+
+    def _confirm_plugin_load(self, _plugin_name: str) -> bool:
+        return True
 
 
 class _DummyCommand(BaseCommand):

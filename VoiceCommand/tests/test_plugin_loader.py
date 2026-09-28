@@ -1,24 +1,157 @@
+import hashlib
+import json
 import os
 import tempfile
 import threading
 import time
 import unittest
 import zipfile
+from unittest.mock import Mock, patch
 
 
 from core.plugin_loader import PluginContext, PluginManager
+from i18n.translator import _
 
 
 class _TempPluginManager(PluginManager):
     def __init__(self, plugin_dir: str):
-        super().__init__()
         self._plugin_dir = plugin_dir
+        self._trust_path = os.path.join(plugin_dir, "plugin_trust.json")
+        super().__init__()
 
     def plugin_dir(self) -> str:
         return self._plugin_dir
 
+    def _trusted_plugins_path(self) -> str:
+        return self._trust_path
+
+    def _confirm_plugin_load(self, _plugin_name: str) -> bool:
+        return True
+
 
 class PluginLoaderTests(unittest.TestCase):
+    def test_rejected_plugin_is_not_executed_or_asked_again_this_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "rejected_plugin.py")
+            marker_path = os.path.join(tmp, "executed.txt")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    f"open({marker_path!r}, 'w').write('ran')\n"
+                    "PLUGIN_INFO = {'name': 'rejected'}\n"
+                )
+
+            manager = _TempPluginManager(tmp)
+            confirm = Mock(return_value=False)
+            context = PluginContext(confirm_plugin_load=confirm)
+
+            first = manager.load_plugins(context)[0]
+            second = manager.load_plugins(context)[0]
+
+            self.assertFalse(first.loaded)
+            self.assertFalse(second.loaded)
+            self.assertEqual(first.error, _("플러그인 로드가 거부되었습니다."))
+            self.assertFalse(os.path.exists(marker_path))
+            confirm.assert_called_once_with("rejected_plugin")
+
+    def test_trusted_hash_persists_and_changed_file_requires_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "versioned_plugin.py")
+            source = "PLUGIN_INFO = {'name': 'versioned'}\n"
+            with open(plugin_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(source)
+
+            first_manager = _TempPluginManager(tmp)
+            first_approval = Mock(return_value=True)
+            first = first_manager.load_plugins(
+                PluginContext(confirm_plugin_load=first_approval)
+            )[0]
+            self.assertTrue(first.loaded)
+            first_approval.assert_called_once_with("versioned_plugin")
+
+            with open(first_manager._trusted_plugins_path(), "r", encoding="utf-8") as handle:
+                stored = json.load(handle)
+            self.assertEqual(
+                stored["versioned_plugin.py"],
+                hashlib.sha256(source.encode("utf-8")).hexdigest(),
+            )
+
+            trusted_manager = _TempPluginManager(tmp)
+            no_prompt = Mock(return_value=False)
+            trusted = trusted_manager.load_plugins(
+                PluginContext(confirm_plugin_load=no_prompt)
+            )[0]
+            self.assertTrue(trusted.loaded)
+            no_prompt.assert_not_called()
+
+            changed_source = source + "# updated\n"
+            with open(plugin_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(changed_source)
+            changed_manager = _TempPluginManager(tmp)
+            changed_approval = Mock(return_value=True)
+            changed = changed_manager.load_plugins(
+                PluginContext(confirm_plugin_load=changed_approval)
+            )[0]
+            self.assertTrue(changed.loaded)
+            changed_approval.assert_called_once_with("versioned_plugin")
+
+    def test_matching_bundled_plugin_is_trusted_without_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = os.path.join(tmp, "runtime")
+            bundle_dir = os.path.join(tmp, "bundle")
+            os.makedirs(runtime_dir)
+            os.makedirs(bundle_dir)
+            source = "PLUGIN_INFO = {'name': 'bundled'}\n"
+            plugin_path = os.path.join(runtime_dir, "bundled_plugin.py")
+            bundle_path = os.path.join(bundle_dir, "bundled_plugin.py")
+            for path in (plugin_path, bundle_path):
+                with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                    handle.write(source)
+
+            manager = _TempPluginManager(runtime_dir)
+            confirm = Mock(return_value=False)
+            with patch(
+                "core.resource_manager.ResourceManager.get_bundle_path",
+                return_value=bundle_dir,
+            ):
+                plugin = manager.load_plugins(
+                    PluginContext(confirm_plugin_load=confirm)
+                )[0]
+
+            self.assertTrue(plugin.loaded)
+            confirm.assert_not_called()
+            with open(manager._trusted_plugins_path(), "r", encoding="utf-8") as handle:
+                stored = json.load(handle)
+            self.assertEqual(
+                stored["bundled_plugin.py"],
+                hashlib.sha256(source.encode("utf-8")).hexdigest(),
+            )
+
+    def test_different_bundled_plugin_hash_requires_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_dir = os.path.join(tmp, "runtime")
+            bundle_dir = os.path.join(tmp, "bundle")
+            os.makedirs(runtime_dir)
+            os.makedirs(bundle_dir)
+            plugin_path = os.path.join(runtime_dir, "modified_plugin.py")
+            bundle_path = os.path.join(bundle_dir, "modified_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("PLUGIN_INFO = {'name': 'modified'}\n")
+            with open(bundle_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("PLUGIN_INFO = {'name': 'bundled'}\n")
+
+            manager = _TempPluginManager(runtime_dir)
+            confirm = Mock(return_value=True)
+            with patch(
+                "core.resource_manager.ResourceManager.get_bundle_path",
+                return_value=bundle_dir,
+            ):
+                plugin = manager.load_plugins(
+                    PluginContext(confirm_plugin_load=confirm)
+                )[0]
+
+            self.assertTrue(plugin.loaded)
+            confirm.assert_called_once_with("modified_plugin")
+
     def test_discover_and_load_plugin(self):
         with tempfile.TemporaryDirectory() as tmp:
             plugin_path = os.path.join(tmp, "hello_plugin.py")

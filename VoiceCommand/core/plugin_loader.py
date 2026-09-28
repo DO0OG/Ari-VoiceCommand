@@ -28,6 +28,8 @@ from types import FunctionType
 from types import ModuleType
 from typing import Callable, Dict, List, Optional, Tuple, cast
 
+from core.atomic_io import write_json_atomic
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,7 @@ CharacterMenuToggle = Callable[[bool], object]
 PluginEventHandler = Callable[[dict], None]
 PluginEventEmitter = Callable[[str, dict], None]
 PluginEventSubscriber = Callable[[str, PluginEventHandler], Callable[[], None]]
+PluginLoadApprover = Callable[[str], bool]
 
 
 def _get_unregister_character_pack(widget: object) -> Optional[Callable[[str], None]]:
@@ -70,6 +73,7 @@ class PluginContext:
     set_character_menu_enabled: Optional[CharacterMenuToggle] = None  # callable(bool) — 캐릭터 우클릭 메뉴 표시 여부 제어
     emit_event: Optional[PluginEventEmitter] = None
     subscribe_event: Optional[PluginEventSubscriber] = None
+    confirm_plugin_load: Optional[PluginLoadApprover] = None
 
 
 @dataclass
@@ -139,6 +143,118 @@ class PluginManager:
         self._modules: Dict[str, ModuleType] = {}
         self._context: Optional[PluginContext] = None
         self._event_bus = _PluginEventBus()
+        self._trusted_plugin_hashes = self._read_trusted_plugin_hashes()
+        self._rejected_plugin_hashes: set[tuple[str, str]] = set()
+
+    def _trusted_plugins_path(self) -> str:
+        from core.resource_manager import ResourceManager
+        return ResourceManager.get_runtime_path("plugin_trust.json")
+
+    def _read_trusted_plugin_hashes(self) -> dict[str, str]:
+        try:
+            with open(self._trusted_plugins_path(), "r", encoding="utf-8") as handle:
+                stored = json.load(handle)
+        except FileNotFoundError:
+            return {}
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            logger.warning("플러그인 신뢰 목록을 읽지 못했습니다: %s", exc)
+            return {}
+
+        if not isinstance(stored, dict):
+            logger.warning("플러그인 신뢰 목록 형식이 올바르지 않습니다.")
+            return {}
+        return {
+            name: digest.lower()
+            for name, digest in stored.items()
+            if isinstance(name, str)
+            and os.path.basename(name) == name
+            and "/" not in name
+            and "\\" not in name
+            and isinstance(digest, str)
+            and len(digest) == 64
+            and all(char in "0123456789abcdefABCDEF" for char in digest)
+        }
+
+    def _save_trusted_plugin_hashes(self) -> None:
+        path = self._trusted_plugins_path()
+        write_json_atomic(
+            path,
+            self._trusted_plugin_hashes,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _plugin_sha256(path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _confirm_plugin_load(self, _plugin_name: str) -> bool:
+        return False
+
+    def trust_plugin(self, path: str) -> bool:
+        """사용자가 설치에 동의한 플러그인의 현재 해시를 신뢰 목록에 저장한다."""
+        with self._load_lock:
+            filename = os.path.basename(path)
+            try:
+                digest = self._plugin_sha256(path)
+            except OSError as exc:
+                logger.warning("플러그인 해시를 읽지 못했습니다 (%s): %s", filename, exc)
+                return False
+            self._trusted_plugin_hashes[filename] = digest
+            self._rejected_plugin_hashes.discard((filename, digest))
+            try:
+                self._save_trusted_plugin_hashes()
+            except OSError as exc:
+                logger.warning("플러그인 신뢰 목록을 저장하지 못했습니다: %s", exc)
+                return False
+            return True
+
+    def _approve_plugin_load(
+        self, plugin: PluginInfo, context: PluginContext
+    ) -> str | None:
+        filename = os.path.basename(plugin.path)
+        digest = self._plugin_sha256(plugin.path)
+        if self._trusted_plugin_hashes.get(filename) == digest:
+            return digest
+
+        key = (filename, digest)
+        try:
+            from core.resource_manager import ResourceManager
+
+            bundle_path = os.path.join(
+                ResourceManager.get_bundle_path("plugins"), filename
+            )
+            if self._plugin_sha256(bundle_path) == digest:
+                self._trusted_plugin_hashes[filename] = digest
+                self._rejected_plugin_hashes.discard(key)
+                try:
+                    self._save_trusted_plugin_hashes()
+                except OSError as exc:
+                    logger.warning("플러그인 신뢰 목록을 저장하지 못했습니다: %s", exc)
+                return digest
+        except (ImportError, AttributeError, OSError) as exc:
+            logger.debug("번들 플러그인 비교 생략 (%s): %s", filename, exc)
+
+        if key in self._rejected_plugin_hashes:
+            return None
+
+        approver = context.confirm_plugin_load or self._confirm_plugin_load
+        if not approver(plugin.name):
+            self._rejected_plugin_hashes.add(key)
+            return None
+
+        if self._plugin_sha256(plugin.path) != digest:
+            raise RuntimeError(_("플러그인 파일이 승인 후 변경되었습니다."))
+        self._trusted_plugin_hashes[filename] = digest
+        try:
+            self._save_trusted_plugin_hashes()
+        except OSError as exc:
+            logger.warning("플러그인 신뢰 목록을 저장하지 못했습니다: %s", exc)
+        return digest
 
     def plugin_dir(self) -> str:
         try:
@@ -422,10 +538,13 @@ class PluginManager:
             ]
 
     def _load_single_plugin(self, plugin: PluginInfo, context: PluginContext) -> PluginInfo:
+        approved_digest = self._approve_plugin_load(plugin, context)
+        if approved_digest is None:
+            raise RuntimeError(_("플러그인 로드가 거부되었습니다."))
         module_name = f"ari_user_plugin_{plugin.name}"
         module_path, sys_path_entry = self._resolve_load_target(plugin)
         if plugin.runtime_path:
-            for dirpath, _, filenames in os.walk(plugin.runtime_path):
+            for dirpath, _dirnames, filenames in os.walk(plugin.runtime_path):
                 for fname in filenames:
                     if fname.endswith(".py"):
                         self._inspect_python_source(os.path.join(dirpath, fname))
@@ -438,6 +557,8 @@ class PluginManager:
         if sys_path_entry and sys_path_entry not in sys.path:
             sys.path.insert(0, sys_path_entry)
             plugin.sys_path_entry = sys_path_entry
+        if self._plugin_sha256(plugin.path) != approved_digest:
+            raise RuntimeError(_("플러그인 파일이 승인 후 변경되었습니다."))
         spec.loader.exec_module(module)
         self._modules[plugin.name] = module
 

@@ -67,6 +67,8 @@ class MarketplaceClientTests(unittest.TestCase):
                 return self._payload
 
         with tempfile.TemporaryDirectory() as temp_dir:
+            manager = mock.Mock()
+            manager.trust_plugin.return_value = True
             with mock.patch.object(
                 marketplace_client,
                 "_post",
@@ -78,11 +80,23 @@ class MarketplaceClientTests(unittest.TestCase):
                 },
             ):
                 with mock.patch("core.marketplace_client.urllib.request.urlopen", return_value=_FakeResponse(archive_bytes)):
-                    with mock.patch("core.marketplace_client.get_plugin_manager", side_effect=Exception("unused"), create=True):
-                        self.assertTrue(marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir))
+                    with mock.patch(
+                        "core.plugin_loader.get_plugin_manager",
+                        return_value=manager,
+                    ):
+                        self.assertTrue(marketplace_client.install_plugin(
+                            "plugin-123",
+                            plugin_dir=temp_dir,
+                            load_after_install=False,
+                            trust_after_install=True,
+                        ))
 
             self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.zip")))
             self.assertFalse(os.path.exists(os.path.join(temp_dir, "main.py")))
+            manager.trust_plugin.assert_called_once_with(
+                os.path.join(temp_dir, "sample_plugin.zip")
+            )
+            manager.load_plugin.assert_not_called()
 
     def test_install_plugin_falls_back_to_fetch_plugin_when_install_response_is_old(self):
         archive_bytes = self._build_archive_bytes()
@@ -116,7 +130,11 @@ class MarketplaceClientTests(unittest.TestCase):
                     },
                 ):
                     with mock.patch("core.marketplace_client.urllib.request.urlopen", return_value=_FakeResponse(archive_bytes)):
-                        self.assertTrue(marketplace_client.install_plugin("plugin-123", plugin_dir=temp_dir))
+                        self.assertTrue(marketplace_client.install_plugin(
+                            "plugin-123",
+                            plugin_dir=temp_dir,
+                            load_after_install=False,
+                        ))
 
             self.assertTrue(os.path.exists(os.path.join(temp_dir, "sample_plugin.zip")))
 

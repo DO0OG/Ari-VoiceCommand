@@ -3343,3 +3343,27 @@ msgstr "学習への貢献度の診断"
 
 msgid "{component}: {status}"
 msgstr "{component}: {status}"
+
+msgid "플러그인 승인"
+msgstr "プラグインの承認"
+
+msgid "새 플러그인 '{name}'을 켤까요?"
+msgstr "新しいプラグイン「{name}」を有効にしますか？"
+
+msgid "플러그인 로드가 거부되었습니다."
+msgstr "プラグインの読み込みは拒否されました。"
+
+msgid "플러그인 파일이 승인 후 변경되었습니다."
+msgstr "承認後にプラグインファイルが変更されました。"
+
+msgid "개발자 설정"
+msgstr "開発者設定"
+
+msgid "플러그인 핫 리로드 사용"
+msgstr "プラグインのホットリロードを有効にする"
+
+msgid "다음 앱 시작 때 적용됩니다."
+msgstr "次回のアプリ起動時に適用されます。"
+
+msgid "설치된 플러그인을 찾지 못했습니다."
+msgstr "インストール済みのプラグインが見つかりません。"

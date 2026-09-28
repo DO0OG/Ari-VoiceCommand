@@ -27,15 +27,21 @@ class MarketplaceFetchThread(QThread):
 class MarketplaceInstallThread(QThread):
     done = Signal(bool, str)
 
-    def __init__(self, plugin_id: str):
+    def __init__(self, plugin_id: str, plugin_dir: str | None = None):
         super().__init__()
         self.plugin_id = plugin_id
+        self.plugin_dir = plugin_dir
 
     def run(self):
         try:
             from core.marketplace_client import install_plugin
 
-            ok = install_plugin(self.plugin_id)
+            ok = install_plugin(
+                self.plugin_id,
+                plugin_dir=self.plugin_dir,
+                load_after_install=False,
+                trust_after_install=True,
+            )
             if ok:
                 self.done.emit(True, _("플러그인 설치가 완료되었습니다."))
             else:

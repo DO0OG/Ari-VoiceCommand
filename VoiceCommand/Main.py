@@ -76,7 +76,7 @@ except Exception as _embedder_preload_exc:
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtCore import QEventLoop, QThread, Qt, QTimer
 
 from assistant.ai_assistant import get_ai_assistant
 from ui.character_widget import CharacterWidget
@@ -338,6 +338,7 @@ def main():
     plugin_manager = None
     plugin_watcher = None
     plugin_flush_timer = None
+    plugin_hot_reload_enabled = False
     mcp_server_thread = None
     telegram_bridge = None
 
@@ -404,6 +405,9 @@ def main():
 
         try:
             from core.config_manager import ConfigManager
+            plugin_hot_reload_enabled = bool(
+                ConfigManager.get("plugin_hot_reload_enabled", False)
+            )
             if bool(ConfigManager.get("mcp_server_enabled", False)):
                 from agent.mcp_server import start_mcp_server_background
                 mcp_server_thread = start_mcp_server_background(
@@ -502,6 +506,26 @@ def main():
             get_llm_provider().register_plugin_tool(schema, intents=intents)
             ai_command.register_plugin_tool_handler(tool_name, handler)
 
+        def _confirm_plugin_load(plugin_name: str) -> bool:
+            if QThread.currentThread() != app.thread():
+                logging.error("플러그인 승인 요청이 Qt 메인 스레드 밖에서 발생했습니다.")
+                return False
+            timer_active = bool(plugin_flush_timer and plugin_flush_timer.isActive())
+            if timer_active:
+                plugin_flush_timer.stop()
+            try:
+                result = QMessageBox.question(
+                    app.activeWindow(),
+                    _("플러그인 승인"),
+                    _("새 플러그인 '{name}'을 켤까요?").format(name=plugin_name),
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+            finally:
+                if timer_active:
+                    plugin_flush_timer.start(1000)
+            return result == QMessageBox.Yes
+
         try:
             plugin_manager = get_plugin_manager()
             if cmd_registry and hasattr(cmd_registry, "set_event_emitter"):
@@ -517,6 +541,7 @@ def main():
                     register_tool=_register_tool_for_plugin,
                     register_character_pack=character.register_character_pack if character else None,
                     set_character_menu_enabled=character.set_context_menu_enabled if character else None,
+                    confirm_plugin_load=_confirm_plugin_load,
                 )
             )
             logging.info("플러그인 로드 완료: %d개", len(plugin_manager.list_plugins()))
@@ -524,7 +549,7 @@ def main():
             plugin_manager = None
             logging.error("플러그인 초기화 실패; 플러그인을 사용할 수 없습니다: %s", exc)
 
-        if plugin_manager is not None:
+        if plugin_manager is not None and plugin_hot_reload_enabled:
             try:
                 from core.plugin_watcher import PluginWatcher
 
@@ -535,6 +560,8 @@ def main():
                 plugin_flush_timer.start(1000)
             except Exception as exc:
                 logging.error("플러그인 감시 시작 실패: %s", exc)
+        elif plugin_manager is not None:
+            logging.info("플러그인 핫 리로드 꺼짐")
 
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용

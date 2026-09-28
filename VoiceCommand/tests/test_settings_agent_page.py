@@ -51,6 +51,14 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
         self.assertIn("EpisodeMemory: 판정 보류(표본 부족)", page.learning_metrics_status.text())
         self.assertIn("GoalPredictor: 활성화", page.learning_metrics_status.text())
 
+    def test_plugin_hot_reload_is_disabled_by_default_and_can_be_enabled(self):
+        page = _AgentSettingsPage({})
+        self.assertIs(page.get_values()["plugin_hot_reload_enabled"], False)
+
+        page.plugin_hot_reload_checkbox.setChecked(True)
+
+        self.assertIs(page.get_values()["plugin_hot_reload_enabled"], True)
+
 
 if __name__ == "__main__":
     unittest.main()
