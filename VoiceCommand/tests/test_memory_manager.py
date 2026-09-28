@@ -50,6 +50,16 @@ class MemoryManagerTests(unittest.TestCase):
 
         fake_context.record_interaction.assert_called_once_with("hello")
 
+    def test_free_form_fact_is_not_duplicated_in_prompt(self):
+        fake_context = SimpleNamespace(
+            context={"facts": {"I like tea": {"value": "I like tea", "confidence": 1.0}}},
+            extract_topics=lambda user_msg, ai_response: [],
+        )
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+
+        self.assertEqual(manager.get_top_facts_prompt(), "[기억하고 있는 사실]\n- I like tea")
+
     def test_get_top_facts_prompt_uses_highest_confidence_facts(self):
         fake_context = SimpleNamespace(
             context={

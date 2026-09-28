@@ -1,8 +1,76 @@
 """메모리 관련 음성 명령."""
 from __future__ import annotations
 
+import html
+import re
+
 from commands.base_command import BaseCommand
 from i18n.translator import _
+
+
+_REMEMBER_PATTERNS = (
+    re.compile(r"\s*이거\s*기억해\s*둬(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*기억해(?:\s*줘)?(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*remember\s+this(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*remember\s+that(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*remember(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*これ(?:を)?覚えておいて(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)"),
+    re.compile(r"\s*覚えておいて(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)"),
+    re.compile(r"\s*覚えて(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)"),
+)
+_FORGET_PREFIX_PATTERNS = (
+    re.compile(r"\s*잊어(?:\s*줘)?(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*forget\s+about(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*forget(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)", re.I),
+    re.compile(r"\s*忘れて(?:\s*[:：]\s*(.*)|\s+(.*)|\s*)"),
+)
+_FORGET_SUFFIX_PATTERNS = (
+    re.compile(r"\s*(.+?)\s*(?:은|는|이|가|을|를)?\s*잊어(?:\s*줘)?\s*", re.I),
+    re.compile(r"\s*(.+?)\s*(?:のこと(?:を|は)?|を)?\s*忘れて\s*"),
+)
+_RECENT_FORGET_ALIASES = {
+    "방금 거 잊어", "방금 거 잊어줘", "방금 것 잊어", "방금 기억 잊어",
+    "마지막 기억 잊어줘", "forget that", "forget this", "forget it",
+    "forget that memory",
+    "forget the last thing", "forget the last one", "forget my last memory",
+    "forget the latest memory", "forget last thing", "forget the most recent thing",
+    "今のを忘れて", "さっきのを忘れて", "直前の記憶を忘れて", "最後の記憶を忘れて",
+}
+_EMPTY_REMEMBER_ALIASES = {
+    "이거 기억해 둬", "이거 기억해둬", "기억해 둬", "기억해둬",
+    "remember this", "remember that", "remember this for me",
+    "これ覚えておいて", "これを覚えておいて", "覚えておいて",
+}
+_SENSITIVE_PATTERNS = (
+    re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)"),
+    re.compile(r"(?<!\d)\d{6}-[1-8]\d{6}(?!\d)"),
+    re.compile(r"(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)"),
+)
+
+
+def _parse_explicit_command(text: str) -> tuple[str, str] | None:
+    normalized = text.strip().rstrip(" .!?。！？").casefold()
+    if normalized in _EMPTY_REMEMBER_ALIASES:
+        return "remember", ""
+
+    for pattern in _REMEMBER_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match:
+            return "remember", (match.group(1) or match.group(2) or "").strip()
+
+    if normalized in _RECENT_FORGET_ALIASES:
+        return "forget_recent", ""
+
+    for pattern in _FORGET_PREFIX_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match:
+            return "forget", (match.group(1) or match.group(2) or "").strip()
+
+    for pattern in _FORGET_SUFFIX_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match:
+            return "forget", match.group(1).strip()
+    return None
 
 
 class MemoryCommand(BaseCommand):
@@ -12,6 +80,8 @@ class MemoryCommand(BaseCommand):
         self.tts_wrapper = tts_func
 
     def matches(self, text: str) -> bool:
+        if _parse_explicit_command(text):
+            return True
         patterns = (
             "자주 하는 작업", "저번에 내가", "내 스킬 목록", "스킬 목록",
             "이 스킬 삭제", "메모리 정리", "나에 대해 뭐 알아", "나에 대해 뭘 알아",
@@ -19,6 +89,15 @@ class MemoryCommand(BaseCommand):
         return any(pattern in text for pattern in patterns)
 
     def execute(self, text: str) -> None:
+        explicit = _parse_explicit_command(text)
+        if explicit:
+            action, content = explicit
+            if action == "remember":
+                self._remember(content)
+            else:
+                self._forget(content, recent=action == "forget_recent")
+            return
+
         if "자주 하는 작업" in text:
             from memory.user_profile_engine import get_user_profile_engine
             goals = get_user_profile_engine().get_profile().frequent_goals[:3]
@@ -74,4 +153,109 @@ class MemoryCommand(BaseCommand):
             profile = get_user_profile_engine().get_prompt_injection()
             facts = get_memory_manager().get_top_facts_prompt(3)
             self.tts_wrapper(f"{profile} {facts}".strip())
+
+    def _remember(self, content: str) -> None:
+        if not content:
+            from memory.conversation_history import get_conversation_history
+
+            recent = get_conversation_history().get_recent(1)
+            content = str(recent[-1].get("user", "")).strip() if recent else ""
+            if not content:
+                self.tts_wrapper(_("무엇을 기억할까요?"))
+                return
+        if any(pattern.search(content) for pattern in _SENSITIVE_PATTERNS):
+            self.tts_wrapper(_("민감 정보는 저장하지 않아요."))
+            return
+
+        key, value = content, content
+        for separator in ("=", "＝"):
+            if separator in content:
+                candidate_key, candidate_value = content.split(separator, 1)
+                if candidate_key.strip() and candidate_value.strip():
+                    key, value = candidate_key.strip(), candidate_value.strip()
+                break
+
+        from memory.user_context import get_context_manager
+        from memory.memory_index import get_memory_index
+
+        context = get_context_manager()
+        if not context.record_fact(
+            key, value, source="user", confidence=1.0, ttl_days=0, force=True
+        ):
+            self.tts_wrapper(_("기억을 저장하지 못했어요."))
+            return
+        get_memory_index().index_fact(key, value, 1.0)
+        self.tts_wrapper(_("기억했어요: {value}", value=value))
+
+    def _forget(self, content: str, recent: bool = False) -> None:
+        if not content and not recent:
+            self.tts_wrapper(_("무엇을 잊을까요?"))
+            return
+
+        from memory.user_context import get_context_manager
+
+        context = get_context_manager()
+        facts = context.get_facts_snapshot()
+        if recent:
+            matches = list(facts.items())
+            matches.sort(
+                key=lambda item: str(item[1].get("updated_at", "")), reverse=True
+            )
+            candidates = matches[:1]
+        else:
+            query = content.strip().rstrip(" .!?。！？,，:：;；").strip().casefold()
+            if not query:
+                self.tts_wrapper(_("무엇을 잊을까요?"))
+                return
+            exact = [
+                (key, fact)
+                for key, fact in facts.items()
+                if query == str(key).casefold()
+                or query == str(fact.get("value", "")).casefold()
+            ]
+            candidates = exact or [
+                (key, fact)
+                for key, fact in facts.items()
+                if query in str(key).casefold()
+                or query in str(fact.get("value", "")).casefold()
+            ]
+
+        if not candidates:
+            self.tts_wrapper(_("잊을 기억이 없어요."))
+            return
+        if len(candidates) > 1:
+            self.tts_wrapper(
+                _(
+                    "여러 기억이 있어요: {items}. 어떤 기억인지 골라 주세요.",
+                    items=", ".join(
+                        f"{key}: {fact.get('value', '')}" for key, fact in candidates
+                    ),
+                )
+            )
+            return
+
+        key, fact = candidates[0]
+        display = html.escape(f"{key}: {fact.get('value', '')}")
+        try:
+            from agent.confirmation_manager import get_confirmation_manager
+            from agent.safety_checker import DangerLevel, SafetyReport
+
+            report = SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                matched_patterns=[_("기억 삭제")],
+                summary=_("기억한 내용을 삭제합니다."),
+                category="memory",
+            )
+            confirmed = get_confirmation_manager().request_confirmation(
+                _("기억 삭제: {fact}", fact=display), report, self.tts_wrapper
+            )
+        except (ImportError, RuntimeError):
+            confirmed = False
+        if not confirmed:
+            self.tts_wrapper(_("삭제를 취소했어요."))
+            return
+        if context.delete_fact(key, expected_value=str(fact.get("value", ""))):
+            self.tts_wrapper(_("기억을 잊었어요: {key}", key=key))
+        else:
+            self.tts_wrapper(_("기억을 삭제하지 못했어요."))
 

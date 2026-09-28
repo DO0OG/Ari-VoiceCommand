@@ -7,6 +7,7 @@ import os
 import logging
 import re
 import threading
+from copy import deepcopy
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import List, Dict, Any, Optional
@@ -282,12 +283,14 @@ class UserContextManager:
         return any(marker.casefold() in text for marker in _PRAISE_MARKERS)
 
     @_context_locked
-    def save_context(self):
+    def save_context(self) -> bool:
         try:
             payload = json.dumps(self.context, ensure_ascii=False, indent=2)
             write_text_atomic(self.context_file, payload)
+            return True
         except (OSError, TypeError, ValueError) as exc:
             logger.error("컨텍스트 저장 실패: %s", exc)
+            return False
 
     # ── 지능형 사실 관리 (Phase 3.1) ──────────────────────────────────────────
 
@@ -299,7 +302,8 @@ class UserContextManager:
         source: str = "assistant",
         confidence: float = 0.7,
         ttl_days: int = _DEFAULT_FACT_TTL_DAYS,
-    ):
+        force: bool = False,
+    ) -> bool:
         """사용자에 대한 사실 기록 및 충돌 해소."""
         from memory.trust_engine import (
             compute_reinforcement,
@@ -309,9 +313,14 @@ class UserContextManager:
         )
 
         facts = self.context["facts"]
-        history_bucket = self.context.setdefault("fact_history", {}).setdefault(key, [])
+        fact_history = self.context.setdefault("fact_history", {})
+        had_previous_history = key in fact_history
+        history_bucket = fact_history.setdefault(key, [])
         now = datetime.now()
         existing = facts.get(key)
+        had_previous_fact = key in facts
+        previous_fact = deepcopy(existing) if had_previous_fact else None
+        previous_history = list(history_bucket)
 
         if existing:
             ex_value = existing.get("value", "")
@@ -320,7 +329,17 @@ class UserContextManager:
             ex_reinforce = int(existing.get("reinforcement_count", 0))
             ex_conflict = int(existing.get("conflict_count", 0))
 
-            if ex_value == value:
+            if force:
+                sw = SOURCE_WEIGHTS.get(source, DEFAULT_SOURCE_WEIGHT)
+                initial_confidence = min(float(confidence) * sw + 0.1, 1.0)
+                existing["value"] = value
+                existing["source"] = source
+                existing["confidence"] = round(initial_confidence, 2)
+                existing["conflict_count"] = 0
+                existing["reinforcement_count"] = 0
+                existing["conflict_values"] = []
+                existing["last_conflict_at"] = ""
+            elif ex_value == value:
                 result = compute_reinforcement(ex_confidence, source, ex_reinforce)
                 existing["confidence"] = round(result.new_confidence, 2)
                 existing["reinforcement_count"] = ex_reinforce + 1
@@ -371,26 +390,61 @@ class UserContextManager:
             "conflicted_with": existing.get("value", "") if existing and existing.get("value") != value else "",
         })
         self.context["fact_history"][key] = history_bucket[-_MAX_FACT_HISTORY:]
-        self.save_context()
+        if not self.save_context():
+            if had_previous_fact:
+                facts[key] = previous_fact
+            else:
+                facts.pop(key, None)
+            if had_previous_history:
+                fact_history[key] = previous_history
+            else:
+                fact_history.pop(key, None)
+            return False
+        return True
 
     @_context_locked
-    def delete_fact(self, key: str, delete_conversations: bool = False) -> bool:
+    def get_facts_snapshot(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            key: dict(fact)
+            for key, fact in self.context.get("facts", {}).items()
+            if isinstance(fact, dict)
+        }
+
+    @_context_locked
+    def delete_fact(
+        self,
+        key: str,
+        delete_conversations: bool = False,
+        expected_value: Optional[str] = None,
+    ) -> bool:
         facts = self.context.get("facts", {})
         if key not in facts:
+            return False
+        fact = facts[key]
+        if expected_value is not None and fact.get("value", "") != expected_value:
             return False
         from memory.memory_index import get_memory_index
 
         index = get_memory_index()
         index.delete_fact(key)
         if delete_conversations:
-            value = str(facts[key].get("value", ""))
+            value = str(fact.get("value", ""))
             if value:
                 from memory.conversation_history import get_conversation_history
 
                 get_conversation_history().delete_containing(value)
                 index.delete_conversations_containing(value)
-        del facts[key]
-        self.save_context()
+        facts.pop(key)
+        fact_history = self.context.get("fact_history", {})
+        old_history = fact_history.pop(key, None)
+        if not self.save_context():
+            facts[key] = fact
+            if old_history is not None:
+                fact_history[key] = old_history
+            index.index_fact(
+                key, str(fact.get("value", "")), float(fact.get("confidence", 0.7))
+            )
+            return False
         return True
 
     @_context_locked

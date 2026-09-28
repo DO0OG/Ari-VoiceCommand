@@ -69,6 +69,10 @@ class UserContextManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "user_context.json")
             manager = UserContextManager(context_file=path)
+            index_patcher = patch("memory.memory_index.get_memory_index")
+            memory_index = index_patcher.start()
+            self.addCleanup(index_patcher.stop)
+            memory_index.return_value.delete_fact.return_value = True
             barrier = threading.Barrier(4)
             errors = []
 
@@ -264,6 +268,111 @@ class UserContextManagerTests(unittest.TestCase):
 
             self.assertEqual(fact["base_confidence"], fact["confidence"])
             self.assertTrue(fact["updated_at"])
+
+    def test_force_record_replaces_a_conflicting_user_fact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.record_fact("favorite_drink", "coffee", source="user", ttl_days=0)
+
+            manager.record_fact(
+                "favorite_drink", "tea", source="user", confidence=1.0,
+                ttl_days=0, force=True,
+            )
+
+            fact = manager.context["facts"]["favorite_drink"]
+            self.assertEqual(fact["value"], "tea")
+            self.assertEqual(fact["source"], "user")
+            self.assertEqual(fact["confidence"], 1.0)
+
+    def test_failed_fact_save_restores_previous_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.record_fact("favorite_drink", "coffee", source="user", ttl_days=0)
+
+            with patch(
+                "memory.user_context.write_text_atomic",
+                side_effect=OSError("disk full"),
+            ):
+                self.assertFalse(
+                    manager.record_fact(
+                        "favorite_drink", "tea", source="user", confidence=1.0,
+                        ttl_days=0, force=True,
+                    )
+                )
+
+            self.assertEqual(
+                manager.context["facts"]["favorite_drink"]["value"], "coffee"
+            )
+            self.assertEqual(
+                manager.context["fact_history"]["favorite_drink"][-1]["value"],
+                "coffee",
+            )
+
+    def test_fact_snapshot_is_detached_from_later_updates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.record_fact("favorite_drink", "coffee")
+
+            snapshot = manager.get_facts_snapshot()
+            manager.record_fact("favorite_drink", "tea", force=True)
+
+            self.assertEqual(snapshot["favorite_drink"]["value"], "coffee")
+
+    def test_delete_fact_removes_history_and_fts_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.record_fact("favorite_drink", "coffee", source="user")
+            manager.context["fact_history"]["favorite_drink"] = [{"value": "coffee"}]
+
+            with patch("memory.memory_index.get_memory_index") as get_index:
+                get_index.return_value.delete_fact.return_value = True
+                self.assertTrue(manager.delete_fact("favorite_drink"))
+
+            get_index.return_value.delete_fact.assert_called_once_with("favorite_drink")
+            self.assertNotIn("favorite_drink", manager.context["facts"])
+            self.assertNotIn("favorite_drink", manager.context["fact_history"])
+
+    def test_delete_fact_rejects_stale_confirmation_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.record_fact("favorite_drink", "coffee", source="user")
+
+            with patch("memory.memory_index.get_memory_index") as get_index:
+                self.assertFalse(
+                    manager.delete_fact("favorite_drink", expected_value="tea")
+                )
+
+            get_index.assert_not_called()
+            self.assertIn("favorite_drink", manager.context["facts"])
+
+    def test_delete_fact_restores_memory_when_context_save_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            manager = UserContextManager(context_file=path)
+            manager.record_fact("favorite_drink", "coffee", source="user")
+
+            with patch("memory.memory_index.get_memory_index") as get_index:
+                get_index.return_value.delete_fact.return_value = True
+                with patch(
+                    "memory.user_context.write_text_atomic",
+                    side_effect=OSError("disk full"),
+                ):
+                    self.assertFalse(manager.delete_fact("favorite_drink"))
+
+            self.assertEqual(
+                manager.context["facts"]["favorite_drink"]["value"], "coffee"
+            )
+            get_index.return_value.index_fact.assert_called_once()
 
     def test_default_fact_survives_180_day_decay(self):
         with tempfile.TemporaryDirectory() as tmp:
