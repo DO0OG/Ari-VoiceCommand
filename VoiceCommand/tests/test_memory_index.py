@@ -77,6 +77,26 @@ class MemoryIndexTests(unittest.TestCase):
         self.assertEqual(row, (17, "내 프로젝트는 Ari야"))
         self.assertEqual(migrated.delete_fact("favorite_drink"), 1)
 
+    def test_like_fallback_escapes_wildcards_and_matches_any_token(self):
+        self.index._supports_trigram = False
+        self.index.index_conversation(
+            "literal 100%_complete", "", "2026-09-29T10:00:00"
+        )
+        self.index.index_conversation("beta result", "", "2026-09-29T10:01:00")
+        self.index.index_conversation(
+            "literal 100X_complete", "", "2026-09-29T10:02:00"
+        )
+
+        results = self.index.search("100%_complete beta")
+
+        self.assertEqual(
+            [result.content for result in results],
+            [
+                "사용자: beta result\n아리: ",
+                "사용자: literal 100%_complete\n아리: ",
+            ],
+        )
+
     def test_indexing_same_fact_ten_times_keeps_one_row(self):
         for confidence in range(10):
             self.index.index_fact("favorite_drink", "coffee", confidence / 10)

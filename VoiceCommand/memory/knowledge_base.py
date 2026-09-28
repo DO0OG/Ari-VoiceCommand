@@ -119,15 +119,16 @@ class KnowledgeBase:
                 ).fetchall()
             except sqlite3.Error as exc:
                 log.debug("[KnowledgeBase] FTS 조회 실패, LIKE 폴백: %s", exc)
-                like = f"%{text}%"
                 rows = conn.execute(
                     """
                     SELECT id, entity, relation, value, confidence, source, created_at, updated_at, 0.0
                     FROM knowledge
-                    WHERE entity LIKE ? OR relation LIKE ? OR value LIKE ?
+                    WHERE entity LIKE '%' || ? || '%'
+                       OR relation LIKE '%' || ? || '%'
+                       OR value LIKE '%' || ? || '%'
                     ORDER BY updated_at DESC LIMIT ?
                     """,
-                    (like, like, like, int(top_k)),
+                    (text, text, text, int(top_k)),
                 ).fetchall()
         return [
             {

@@ -7,6 +7,17 @@ from memory.knowledge_base import KnowledgeBase
 
 
 class KnowledgeBaseCacheTests(unittest.TestCase):
+    def test_query_uses_like_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kb = KnowledgeBase(os.path.join(tmp, "knowledge.db"))
+            kb.upsert("user", "likes", "black tea")
+            with kb._connect() as conn:
+                conn.execute("DROP TABLE knowledge_fts")
+
+            results = kb.query("black")
+
+        self.assertEqual(results[0]["value"], "black tea")
+
     def test_empty_prompt_caches_row_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             kb = KnowledgeBase(os.path.join(tmp, "knowledge.db"))

@@ -14,6 +14,22 @@ from memory.fts_utils import build_fts_query, split_fts_tokens
 _SCHEMA_VERSION = 1
 _TRIGRAM_MIN_VERSION = (3, 34, 0)
 _ENTRY_COLUMNS = {"content", "entry_type", "timestamp", "ref_key"}
+_SEARCH_LIKE_SQL = (
+    "SELECT entry_type, content, timestamp, 0.0 FROM memory_entries WHERE "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
+    "content LIKE '%' || ? || '%' ESCAPE '\\' "
+    "ORDER BY timestamp DESC LIMIT ?"
+)
 
 
 @dataclass
@@ -56,7 +72,7 @@ class MemoryIndex:
             ).fetchone()
             version = int(conn.execute("PRAGMA user_version").fetchone()[0])
             if row is None:
-                self._create_entries_table(conn, "memory_entries")
+                self._create_entries_table(conn)
             else:
                 schema = str(row[0] or "").lower()
                 columns = {
@@ -74,7 +90,7 @@ class MemoryIndex:
                 else:
                     self._fts5_available = "using fts5" in schema
             if version <= _SCHEMA_VERSION:
-                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+                conn.execute("PRAGMA user_version = 1")
 
     def _probe_fts5(self, conn: sqlite3.Connection) -> bool:
         try:
@@ -104,12 +120,12 @@ class MemoryIndex:
         except sqlite3.Error:
             return False
 
-    def _create_entries_table(self, conn: sqlite3.Connection, name: str) -> None:
+    def _create_entries_table(self, conn: sqlite3.Connection) -> None:
         if self._fts5_available:
             if self._supports_trigram:
                 try:
                     conn.execute(
-                        f"CREATE VIRTUAL TABLE {name} USING fts5("
+                        "CREATE VIRTUAL TABLE memory_entries USING fts5("
                         "content, entry_type UNINDEXED, timestamp UNINDEXED, "
                         "ref_key UNINDEXED, tokenize='trigram')"
                     )
@@ -119,7 +135,7 @@ class MemoryIndex:
                     self._supports_trigram = False
             try:
                 conn.execute(
-                    f"CREATE VIRTUAL TABLE {name} USING fts5("
+                    "CREATE VIRTUAL TABLE memory_entries USING fts5("
                     "content, entry_type UNINDEXED, timestamp UNINDEXED, "
                     "ref_key UNINDEXED)"
                 )
@@ -128,35 +144,32 @@ class MemoryIndex:
                 logging.debug("[MemoryIndex] FTS5 생성 실패: %s", exc)
                 self._fts5_available = False
         conn.execute(
-            f"CREATE TABLE {name} ("
+            "CREATE TABLE memory_entries ("
             "content TEXT NOT NULL, entry_type TEXT NOT NULL, "
             "timestamp TEXT NOT NULL, ref_key TEXT NOT NULL DEFAULT '')"
         )
 
     def _migrate_entries_table(self, conn: sqlite3.Connection) -> None:
-        temp_name = "_memory_entries_migration"
-        conn.execute(f"DROP TABLE IF EXISTS {temp_name}")
-        self._create_entries_table(conn, temp_name)
         old_columns = {
             str(column[1])
             for column in conn.execute("PRAGMA table_info(memory_entries)")
         }
-        source_columns = [
-            column
-            for column in ("entry_type", "content", "timestamp", "ref_key")
-            if column in old_columns
-        ]
+        migrated_rows = []
         if {"entry_type", "content", "timestamp"}.issubset(old_columns):
-            selected = ", ".join(source_columns)
-            rows = conn.execute(
-                f"SELECT rowid, {selected} FROM memory_entries"
-            ).fetchall()
-            positions = {column: source_columns.index(column) + 1 for column in source_columns}
-            migrated_rows = []
+            if "ref_key" in old_columns:
+                rows = conn.execute(
+                    "SELECT rowid, entry_type, content, timestamp, ref_key "
+                    "FROM memory_entries"
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT rowid, entry_type, content, timestamp, NULL AS ref_key "
+                    "FROM memory_entries"
+                ).fetchall()
             for row in rows:
-                entry_type = str(row[positions["entry_type"]] or "")
-                content = str(row[positions["content"]] or "")
-                ref_key = row[positions["ref_key"]] if "ref_key" in positions else ""
+                entry_type = str(row[1] or "")
+                content = str(row[2] or "")
+                ref_key = row[4] or ""
                 if entry_type == "fact" and not ref_key:
                     legacy_key, separator, _ = content.partition(": ")
                     if separator and legacy_key:
@@ -166,18 +179,18 @@ class MemoryIndex:
                         row[0],
                         content,
                         entry_type,
-                        row[positions["timestamp"]],
+                        row[3],
                         ref_key,
                     )
                 )
-            conn.executemany(
-                f"INSERT INTO {temp_name}"
-                "(rowid, content, entry_type, timestamp, ref_key) "
-                "VALUES (?, ?, ?, ?, ?)",
-                migrated_rows,
-            )
         conn.execute("DROP TABLE memory_entries")
-        conn.execute(f"ALTER TABLE {temp_name} RENAME TO memory_entries")
+        self._create_entries_table(conn)
+        conn.executemany(
+            "INSERT INTO memory_entries"
+            "(rowid, content, entry_type, timestamp, ref_key) "
+            "VALUES (?, ?, ?, ?, ?)",
+            migrated_rows,
+        )
         row = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='memory_entries'"
         ).fetchone()
@@ -303,12 +316,11 @@ class MemoryIndex:
         tokens: list[str],
         limit: int,
     ) -> list[tuple[str, str, str, float]]:
-        conditions = " OR ".join("content LIKE ? ESCAPE '\\'" for _ in tokens)
-        patterns = [f"%{self._escape_like(token)}%" for token in tokens]
+        patterns = tuple(self._escape_like(token) for token in tokens)
+        parameters = patterns + (None,) * (12 - len(patterns)) + (limit,)
         rows = conn.execute(
-            "SELECT entry_type, content, timestamp, 0.0 FROM memory_entries WHERE "
-            f"{conditions} ORDER BY timestamp DESC LIMIT ?",
-            (*patterns, limit),
+            _SEARCH_LIKE_SQL,
+            parameters,
         ).fetchall()
         return rows
 
