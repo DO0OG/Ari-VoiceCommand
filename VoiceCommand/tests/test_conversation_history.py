@@ -4,10 +4,12 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 
 from memory.conversation_history import ConversationHistory
+from memory.memory_consolidator import MemoryConsolidator
 
 
 class ConversationHistoryTests(unittest.TestCase):
@@ -167,6 +169,77 @@ class ConversationHistoryTests(unittest.TestCase):
         self.assertEqual(len(history.active), 2)
         self.assertEqual(history.active[0]["user"], "둘 질문")
         self.assertEqual(history.summaries, ["요약:첫 질문"])
+
+    def test_corrupt_history_is_backed_up_and_starts_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "conversation_history.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("{broken")
+            history = self._make_history(tmp)
+
+            history.load()
+
+            self.assertEqual(history.active, [])
+            self.assertEqual(history.summaries, [])
+            backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tmp, backups[0]), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "{broken")
+
+    def test_compaction_and_compression_do_not_duplicate_or_drop_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history = self._make_history(tmp)
+            history.MAX_ACTIVE = 2
+            history.COMPRESS_UNIT = 1
+            timestamp = (datetime.now() - timedelta(days=30)).isoformat()
+            history.active = [
+                {"timestamp": timestamp, "user": "one", "ai": "reply"},
+                {"timestamp": timestamp, "user": "two", "ai": "reply"},
+                {"timestamp": timestamp, "user": "three", "ai": "reply"},
+            ]
+            worker_started = threading.Event()
+            compaction_started = threading.Event()
+            release_worker = threading.Event()
+            release_compaction = threading.Event()
+
+            def slow_summary(items):
+                if threading.current_thread().name == "ConversationHistoryCompress":
+                    worker_started.set()
+                    release_worker.wait(timeout=5)
+                    return f"worker:{items[0]['user']}"
+                compaction_started.set()
+                release_compaction.wait(timeout=5)
+                names = ",".join(item["user"] for item in items)
+                return f"compact:{names}"
+
+            history._summarize_chunk = slow_summary
+            with history._lock:
+                history._compress_oldest()
+            worker = history._compression_thread
+            self.assertTrue(worker_started.wait(timeout=2))
+            compacted = []
+            with patch(
+                "memory.conversation_history.get_conversation_history",
+                return_value=history,
+            ):
+                compactor = threading.Thread(
+                    target=lambda: compacted.append(
+                        MemoryConsolidator().summarize_old_conversations(days_ago=14)
+                    ),
+                    name="MemoryConsolidator",
+                )
+                compactor.start()
+                self.assertTrue(compaction_started.wait(timeout=2))
+
+                release_compaction.set()
+                compactor.join(timeout=5)
+                release_worker.set()
+                worker.join(timeout=5)
+                history.flush()
+
+            self.assertEqual(compacted, [3])
+            self.assertEqual(history.active, [])
+            self.assertEqual(history.summaries, ["compact:one,two,three"])
 
 
 if __name__ == "__main__":

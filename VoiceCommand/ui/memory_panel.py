@@ -139,9 +139,8 @@ class _BioTab(QWidget):
                 self._ctx.update_bio(key, inp.text().strip())
             interests = [s.strip() for s in self._interests.text().split(",") if s.strip()]
             memos     = [s.strip() for s in self._memos.text().split(",") if s.strip()]
-            self._ctx.context["user_bio"]["interests"] = interests
-            self._ctx.context["user_bio"]["memos"]     = memos
-            self._ctx.save_context()
+            self._ctx.update_bio("interests", interests)
+            self._ctx.update_bio("memos", memos)
             show_temp_status(self._status, _("✅ 저장 완료"))
         except Exception as e:
             show_temp_status(self._status, _("⚠️ 저장 실패: {error}").format(error=e))
@@ -190,9 +189,7 @@ class _FactsTab(QWidget):
             self._inner.addWidget(row)
 
     def _delete_fact(self, key: str) -> None:
-        if self._ctx and key in self._ctx.context.get("facts", {}):
-            del self._ctx.context["facts"][key]
-            self._ctx.save_context()
+        if self._ctx and self._ctx.delete_fact(key):
             self._populate()
 
     def refresh(self) -> None:

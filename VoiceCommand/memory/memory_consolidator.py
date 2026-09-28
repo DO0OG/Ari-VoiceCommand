@@ -1,9 +1,7 @@
 """메모리 정리 및 압축."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 import threading
-
 
 class MemoryConsolidator:
     def consolidate_facts(self):
@@ -21,27 +19,7 @@ class MemoryConsolidator:
     def summarize_old_conversations(self, days_ago: int = 14):
         from memory.conversation_history import get_conversation_history
         history = get_conversation_history()
-        cutoff = datetime.now() - timedelta(days=days_ago)
-        remaining = []
-        old_items = []
-        for item in history.active:
-            try:
-                timestamp = datetime.fromisoformat(item.get("timestamp", ""))
-            except Exception:
-                remaining.append(item)
-                continue
-            if timestamp < cutoff:
-                old_items.append(item)
-            else:
-                remaining.append(item)
-        if old_items:
-            summary = history._summarize_chunk(old_items)
-            if summary:
-                history.summaries.append(summary)
-                history.summaries = history.summaries[-history.MAX_SUMMARIES:]
-        history.active = remaining[-history.MAX_ACTIVE:]
-        history.save()
-        return len(old_items)
+        return history.compact_older_than(days_ago, history._summarize_chunk)
 
     def collect_insights(self):
         from agent.episode_memory import get_episode_memory
