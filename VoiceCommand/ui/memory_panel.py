@@ -13,8 +13,8 @@ import logging
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from i18n.translator import _
@@ -129,7 +129,53 @@ class _BioTab(QWidget):
         self._status.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
         self._status.setStyleSheet(f"color: {COLOR_MUTED};")
         lay.addWidget(self._status)
+
+        self._pending_title = create_section_label(_("확인 대기 중인 정보"))
+        lay.addWidget(self._pending_title)
+        self._pending_layout = QVBoxLayout()
+        self._pending_layout.setSpacing(6)
+        lay.addLayout(self._pending_layout)
+        self._refresh_pending_bio()
         lay.addStretch()
+
+    def _refresh_pending_bio(self) -> None:
+        clear_layout(self._pending_layout)
+        pending = self._ctx.context.get("pending_bio", []) if self._ctx else []
+        self._pending_title.setVisible(bool(pending))
+        for item in pending:
+            field = item["field"]
+            value = item["value"]
+            field_label = {
+                "name": _("이름"),
+                "location": _("위치"),
+                "interests": _("관심사"),
+                "memos": _("메모"),
+            }.get(field, field)
+            row = QHBoxLayout()
+            pending_label = QLabel(
+                _("{field}: {value}").format(field=field_label, value=value)
+            )
+            pending_label.setTextFormat(Qt.PlainText)
+            row.addWidget(pending_label, 1)
+            approve_btn = QPushButton(_("승인"))
+            approve_btn.clicked.connect(
+                lambda _=False, target=field, candidate=value:
+                self._approve_pending_bio(target, candidate)
+            )
+            row.addWidget(approve_btn)
+            self._pending_layout.addLayout(row)
+
+    def _approve_pending_bio(self, field: str, value: str) -> None:
+        if not self._ctx or not self._ctx.approve_pending_bio(field, value):
+            return
+        bio = self._ctx.context.get("user_bio", {})
+        if field in self._fields:
+            self._fields[field].setText(str(bio.get(field, "")))
+        elif field == "interests":
+            self._interests.setText(", ".join(bio.get(field, [])))
+        elif field == "memos":
+            self._memos.setText(", ".join(bio.get(field, [])))
+        self._refresh_pending_bio()
 
     def _save(self) -> None:
         if not self._ctx:
@@ -141,9 +187,13 @@ class _BioTab(QWidget):
             memos     = [s.strip() for s in self._memos.text().split(",") if s.strip()]
             self._ctx.update_bio("interests", interests)
             self._ctx.update_bio("memos", memos)
+            self._refresh_pending_bio()
             show_temp_status(self._status, _("✅ 저장 완료"))
         except Exception as e:
             show_temp_status(self._status, _("⚠️ 저장 실패: {error}").format(error=e))
+
+    def refresh(self) -> None:
+        self._refresh_pending_bio()
 
 
 # ── 탭: 사실 (Facts) ─────────────────────────────────────────────────────────
@@ -189,7 +239,24 @@ class _FactsTab(QWidget):
             self._inner.addWidget(row)
 
     def _delete_fact(self, key: str) -> None:
-        if self._ctx and self._ctx.delete_fact(key):
+        if not self._ctx:
+            return
+        dialog = QMessageBox(
+            QMessageBox.Question,
+            _("사실 삭제"),
+            _("'{key}' 사실을 삭제할까요?").format(key=key),
+            QMessageBox.Yes | QMessageBox.No,
+            self,
+        )
+        dialog.setTextFormat(Qt.PlainText)
+        dialog.setDefaultButton(QMessageBox.No)
+        delete_conversations = QCheckBox(
+            _("이 사실이 언급된 대화 기록도 삭제"), dialog
+        )
+        dialog.setCheckBox(delete_conversations)
+        if dialog.exec() == QMessageBox.Yes and self._ctx.delete_fact(
+            key, delete_conversations=delete_conversations.isChecked()
+        ):
             self._populate()
 
     def refresh(self) -> None:
@@ -306,6 +373,7 @@ class MemoryPanel(FloatingPanel):
 
     def refresh(self) -> None:
         """외부에서 데이터 갱신 요청 시 호출."""
+        self._bio_tab.refresh()
         self._facts_tab.refresh()
 
     def show_near(self, x: int, y: int) -> None:

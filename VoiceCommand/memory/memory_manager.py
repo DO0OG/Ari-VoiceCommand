@@ -5,6 +5,7 @@ import heapq
 import logging
 import re
 import threading
+import unicodedata
 from datetime import datetime
 from typing import Optional
 from memory.user_context import get_context_manager
@@ -21,9 +22,20 @@ _RE_WHITESPACE = re.compile(r'\s+')
 
 # FACT로 저장하면 안 되는 일시적/task-specific 키워드
 _EPHEMERAL_FACT_KEYS = {
-    '오늘', '현재', '지금', '요청', '작업', '귀가', '출근', '퇴근',
-    '기분', '시간', '위치', '장소', '날씨', '상태', '결과', '내용',
-    '실행', '완료', '목표', '명령', '수행', '처리',
+    "ko": {
+        "오늘", "현재", "지금", "요청", "작업", "귀가", "출근", "퇴근",
+        "기분", "시간", "위치", "장소", "날씨", "상태", "결과", "내용",
+        "실행", "완료", "목표", "명령", "수행", "처리",
+    },
+    "en": {
+        "today", "current", "now", "request", "task", "commute", "mood",
+        "time", "location", "place", "weather", "status", "result", "content",
+        "run", "complete", "goal", "command", "execution", "process",
+    },
+    "ja": {
+        "今日", "現在", "今", "依頼", "作業", "気分", "時間", "場所", "天気",
+        "状態", "結果", "内容", "実行", "完了", "目標", "命令", "処理",
+    },
 }
 _TOPIC_BLOCKLIST = {
     "있어", "그냥", "정도", "이번엔", "저거", "이거", "그거", "응답", "대화",
@@ -37,7 +49,12 @@ class MemoryManager:
         self.context_manager = get_context_manager()
         logging.info("MemoryManager 초기화 완료")
 
-    def process_interaction(self, user_msg: str, ai_response: str) -> None:
+    def process_interaction(
+        self,
+        user_msg: str,
+        ai_response: str,
+        contains_tool_result: bool = False,
+    ) -> None:
         """대화 상호작용 기록 및 정보 추출"""
         timestamp = datetime.now().isoformat()
         try:
@@ -49,7 +66,11 @@ class MemoryManager:
         except Exception as e:
             logging.warning("대화 인덱싱 실패: %s", e)
         try:
-            self._extract_info_from_response(ai_response)
+            self._extract_info_from_response(
+                ai_response,
+                user_message=user_msg,
+                contains_tool_result=contains_tool_result,
+            )
         except Exception as e:
             logging.warning("응답 정보 추출 실패: %s", e)
         try:
@@ -69,10 +90,20 @@ class MemoryManager:
 
     def _is_persistent_fact(self, key: str) -> bool:
         """지속성 있는 사실인지 확인. 일시적 상태나 task 요청 관련 키는 False."""
-        return not any(kw in key for kw in _EPHEMERAL_FACT_KEYS)
+        normalized = unicodedata.normalize("NFKC", key).strip().casefold()
+        normalized = _RE_WHITESPACE.sub(" ", normalized)
+        return not any(normalized in keys for keys in _EPHEMERAL_FACT_KEYS.values())
 
-    def _extract_info_from_response(self, response: str) -> None:
+    def _extract_info_from_response(
+        self,
+        response: str,
+        user_message: str = "",
+        contains_tool_result: bool = False,
+    ) -> None:
         """AI 응답에서 [FACT: ...], [BIO: ...], [PREF: ...] 태그 추출 및 저장"""
+        if contains_tool_result:
+            logging.info("도구 결과가 포함된 응답의 기억 태그를 건너뜁니다.")
+            return
         try:
             # 사실 추출: [FACT: key=value] — 지속성 있는 사실만 저장
             for key, value in _RE_FACT.findall(response):
@@ -86,8 +117,9 @@ class MemoryManager:
 
             # 기본 정보 추출: [BIO: field=value]
             for field, value in _RE_BIO.findall(response):
-                logging.info("바이오 업데이트: %s = %s", field.strip(), value.strip())
-                self.context_manager.update_bio(field.strip(), value.strip())
+                self.context_manager.request_bio_update(
+                    field.strip(), value.strip(), user_message=user_message
+                )
 
             # 선호도 추출: [PREF: category=value]
             for cat, val in _RE_PREF.findall(response):

@@ -928,7 +928,11 @@ class LLMProvider:
             
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
-            memory_manager.process_interaction(user_message, raw_msg)
+            memory_manager.process_interaction(
+                user_message,
+                raw_msg,
+                contains_tool_result=bool(tool_calls),
+            )
             if self._is_structured_response(raw_msg):
                 msg = raw_msg.strip()
             else:

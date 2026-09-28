@@ -57,6 +57,37 @@ class ConversationHistory:
                 self._compress_oldest()
             self._schedule_save()
 
+    def delete_containing(self, text: str) -> int:
+        """특정 문구가 포함된 대화와 요약을 삭제한다."""
+        needle = str(text or "").strip().casefold()
+        if not needle:
+            return 0
+        with self._lock:
+            remaining = []
+            deleted = 0
+            for item in self.active:
+                if isinstance(item, dict):
+                    content = " ".join(
+                        str(item.get(field, "") or "") for field in ("user", "ai")
+                    )
+                else:
+                    content = str(item or "")
+                if needle in content.casefold():
+                    deleted += 1
+                else:
+                    remaining.append(item)
+            summaries = []
+            for summary in self.summaries:
+                if needle in str(summary or "").casefold():
+                    deleted += 1
+                else:
+                    summaries.append(summary)
+            if deleted:
+                self.active = remaining
+                self.summaries = summaries
+                self.save()
+            return deleted
+
     def _compress_oldest(self):
         if len(self.active) <= self.MAX_ACTIVE:
             return

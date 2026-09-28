@@ -3367,3 +3367,21 @@ msgstr "다음 앱 시작 때 적용됩니다."
 
 msgid "설치된 플러그인을 찾지 못했습니다."
 msgstr "설치된 플러그인을 찾지 못했습니다."
+
+msgid "확인 대기 중인 정보"
+msgstr "확인 대기 중인 정보"
+
+msgid "{field}: {value}"
+msgstr "{field}: {value}"
+
+msgid "승인"
+msgstr "승인"
+
+msgid "사실 삭제"
+msgstr "사실 삭제"
+
+msgid "'{key}' 사실을 삭제할까요?"
+msgstr "'{key}' 사실을 삭제할까요?"
+
+msgid "이 사실이 언급된 대화 기록도 삭제"
+msgstr "이 사실이 언급된 대화 기록도 삭제"

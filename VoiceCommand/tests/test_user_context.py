@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 
 from memory.user_context import UserContextManager
+from memory.memory_index import MemoryIndex
 
 
 class UserContextManagerTests(unittest.TestCase):
@@ -122,6 +123,60 @@ class UserContextManagerTests(unittest.TestCase):
 
             self.assertEqual(manager.context["user_bio"]["interests"], ["books", "music"])
             self.assertEqual(manager.context["user_bio"]["memos"], [])
+
+    def test_bio_change_waits_for_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            manager = UserContextManager(
+                context_file=path
+            )
+            manager.update_bio("name", "Min")
+
+            applied = manager.request_bio_update("name", "Mina", "날씨 알려줘")
+            reloaded = UserContextManager(context_file=path)
+
+            self.assertFalse(applied)
+            self.assertEqual(manager.context["user_bio"]["name"], "Min")
+            self.assertEqual(
+                reloaded.context["pending_bio"],
+                [{"field": "name", "value": "Mina"}],
+            )
+            self.assertTrue(manager.approve_pending_bio("name", "Mina"))
+            self.assertEqual(manager.context["user_bio"]["name"], "Mina")
+            self.assertEqual(manager.context["pending_bio"], [])
+
+    def test_repeated_bio_value_confirms_pending_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.update_bio("name", "Min")
+            manager.request_bio_update("name", "Mina", "오늘 날씨 알려줘")
+
+            applied = manager.request_bio_update("name", "Mina", "내 이름은 Mina야")
+
+            self.assertTrue(applied)
+            self.assertEqual(manager.context["user_bio"]["name"], "Mina")
+            self.assertEqual(manager.context["pending_bio"], [])
+
+    def test_delete_fact_removes_fts_fact_and_optional_conversations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            manager.record_fact("favorite_drink", "coffee", source="user")
+            index.index_fact("favorite_drink", "coffee", 0.8)
+            index.index_conversation("I like coffee", "Noted", datetime.now().isoformat())
+
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.conversation_history.get_conversation_history"
+            ) as get_history:
+                self.assertTrue(manager.delete_fact("favorite_drink", True))
+
+            get_history.return_value.delete_containing.assert_called_once_with("coffee")
+            self.assertFalse(index.search("favorite_drink"))
+            self.assertFalse(index.search("coffee"))
 
     def test_fact_conflicts_and_topic_recommendations_are_available(self):
         with tempfile.TemporaryDirectory() as tmp:

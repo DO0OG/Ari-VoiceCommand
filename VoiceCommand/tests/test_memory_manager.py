@@ -1,9 +1,11 @@
+import tempfile
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from memory.memory_manager import MemoryManager
+from memory.user_context import UserContextManager
 
 
 class MemoryManagerTests(unittest.TestCase):
@@ -83,6 +85,53 @@ class MemoryManagerTests(unittest.TestCase):
                     )
 
         self.assertEqual(prompt, "요약")
+
+    def test_ephemeral_fact_keys_match_whole_normalized_keys(self):
+        manager = MemoryManager.__new__(MemoryManager)
+
+        self.assertFalse(manager._is_persistent_fact(" CURRENT "))
+        self.assertFalse(manager._is_persistent_fact("今日"))
+        self.assertTrue(manager._is_persistent_fact("수면시간"))
+        self.assertTrue(manager._is_persistent_fact("작업환경"))
+
+    def test_tool_result_turn_does_not_apply_bio_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context = UserContextManager(
+                context_file=f"{tmp}/user_context.json"
+            )
+            context.update_bio("name", "Min")
+            manager = MemoryManager.__new__(MemoryManager)
+            manager.context_manager = context
+
+            manager._extract_info_from_response(
+                "[BIO: name=Mina]",
+                user_message="웹에서 이름을 찾아줘",
+                contains_tool_result=True,
+            )
+
+            self.assertEqual(context.context["user_bio"]["name"], "Min")
+            self.assertEqual(context.context["pending_bio"], [])
+
+    def test_bio_tags_wait_for_user_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context = UserContextManager(
+                context_file=f"{tmp}/user_context.json"
+            )
+            context.update_bio("name", "Min")
+            manager = MemoryManager.__new__(MemoryManager)
+            manager.context_manager = context
+
+            manager._extract_info_from_response(
+                "[BIO: name=Mina]", user_message="다른 질문"
+            )
+            self.assertEqual(context.context["user_bio"]["name"], "Min")
+            self.assertEqual(len(context.context["pending_bio"]), 1)
+
+            manager._extract_info_from_response(
+                "[BIO: name=Mina]", user_message="내 이름은 Mina야"
+            )
+            self.assertEqual(context.context["user_bio"]["name"], "Mina")
+            self.assertEqual(context.context["pending_bio"], [])
 
 
 if __name__ == "__main__":

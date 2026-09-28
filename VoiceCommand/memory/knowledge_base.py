@@ -10,6 +10,8 @@ import threading
 from datetime import datetime
 from typing import Any
 
+from memory.fts_utils import build_fts_query
+
 log = logging.getLogger(__name__)
 
 _CREATE_KNOWLEDGE_TABLE_SQL = """
@@ -38,6 +40,7 @@ class KnowledgeBase:
             db_path = ResourceManager.get_runtime_path("knowledge_base.db")
         self.db_path = db_path
         self._lock = threading.RLock()
+        self._has_entries: bool | None = None
         self._ensure_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -85,13 +88,14 @@ class KnowledgeBase:
                 "INSERT INTO knowledge_fts(rowid, entity, relation, value) VALUES (?, ?, ?, ?)",
                 (knowledge_id, entity, relation, value),
             )
+            self._has_entries = True
             return knowledge_id
 
     def query(self, text: str, top_k: int = 5) -> list[dict[str, Any]]:
         text = str(text or "").strip()
         if not text:
             return []
-        safe_query = self._fts_query(text)
+        safe_query = build_fts_query(text)
         with self._lock, self._connect() as conn:
             try:
                 rows = conn.execute(
@@ -133,6 +137,8 @@ class KnowledgeBase:
         ]
 
     def prompt_for(self, text: str, top_k: int = 3) -> str:
+        if not str(text or "").strip() or not self._has_knowledge():
+            return ""
         facts = self.query(text, top_k=top_k)
         if not facts:
             return ""
@@ -162,13 +168,17 @@ class KnowledgeBase:
                 break
         return facts
 
-    @staticmethod
-    def _fts_query(text: str) -> str:
-        tokens = [token.strip('"\'`.,:;()[]{}') for token in text.split()]
-        tokens = [token for token in tokens if token]
-        if not tokens:
-            return '""'
-        return " OR ".join(f'"{token}"' for token in tokens[:12])
+    def _has_knowledge(self) -> bool:
+        if self._has_entries is not None:
+            return bool(self._has_entries)
+        with self._lock:
+            if self._has_entries is None:
+                with self._connect() as conn:
+                    row = conn.execute(
+                        "SELECT EXISTS(SELECT 1 FROM knowledge LIMIT 1)"
+                    ).fetchone()
+                self._has_entries = bool(row and row[0])
+            return self._has_entries
 
 
 _instance: KnowledgeBase | None = None

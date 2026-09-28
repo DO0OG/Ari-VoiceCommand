@@ -3367,3 +3367,21 @@ msgstr "次回のアプリ起動時に適用されます。"
 
 msgid "설치된 플러그인을 찾지 못했습니다."
 msgstr "インストール済みのプラグインが見つかりません。"
+
+msgid "확인 대기 중인 정보"
+msgstr "確認待ちの情報"
+
+msgid "{field}: {value}"
+msgstr "{field}: {value}"
+
+msgid "승인"
+msgstr "承認"
+
+msgid "사실 삭제"
+msgstr "事実を削除"
+
+msgid "'{key}' 사실을 삭제할까요?"
+msgstr "事実「{key}」を削除しますか？"
+
+msgid "이 사실이 언급된 대화 기록도 삭제"
+msgstr "この事実に言及している会話履歴も削除"
