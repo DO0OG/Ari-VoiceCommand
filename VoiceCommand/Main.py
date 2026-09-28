@@ -66,11 +66,14 @@ if sys.stderr is not None:
 
 # Qt보다 먼저 torch와 onnxruntime을 불러 Windows DLL 초기화 경합을 피한다.
 # Qt가 먼저 올라오면 onnxruntime DLL 초기화가 실패해 로컬 임베더를 쓸 수 없다.
-for _native_module in ("torch", "onnxruntime"):
-    try:
-        importlib.import_module(_native_module)
-    except (ImportError, OSError, RuntimeError) as exc:
-        logging.debug("%s 사전 로드 생략: %s", _native_module, exc)
+try:
+    importlib.import_module("torch")
+except (ImportError, OSError, RuntimeError) as exc:
+    logging.debug("torch 사전 로드 생략: %s", exc)
+try:
+    importlib.import_module("onnxruntime")
+except (ImportError, OSError, RuntimeError) as exc:
+    logging.debug("onnxruntime 사전 로드 생략: %s", exc)
 
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
