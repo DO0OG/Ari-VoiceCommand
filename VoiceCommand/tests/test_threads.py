@@ -1,5 +1,6 @@
 import unittest
 import threading
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 
@@ -75,6 +76,38 @@ class TTSThreadTests(unittest.TestCase):
 
 
 class VoiceRecognitionThreadTests(unittest.TestCase):
+    def test_duplicate_notice_is_shown_after_listening_cleanup(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        thread._microphone_source = lambda: nullcontext(object())
+        thread.speech_recognizer = object()
+        thread._stt = object()
+        events = []
+
+        with (
+            patch("VoiceCommand.tts_wrapper"),
+            patch("VoiceCommand.recognize_speech_helper", return_value="repeat notice"),
+            patch("VoiceCommand.wake_detector_recalibrate_helper"),
+            patch("VoiceCommand.set_listening_indicator", side_effect=lambda active: (
+                events.append(("listening", active))
+            )),
+            patch("VoiceCommand._show_tts_bubble", side_effect=lambda text, duration=0: (
+                events.append(("bubble", text, duration))
+            )),
+            patch("core.threads._wait_for_tts_playback_completion"),
+            patch("core.threads.time.sleep"),
+        ):
+            thread.handle_wake_word()
+
+        self.assertEqual(
+            events,
+            [
+                ("listening", True),
+                ("listening", False),
+                ("bubble", "repeat notice", 2000),
+            ],
+        )
+
     def test_missing_microphone_waits_without_polling_and_stops(self):
         waiting = threading.Event()
         original_wait = threading.Event.wait

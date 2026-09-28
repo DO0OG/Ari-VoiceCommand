@@ -13,7 +13,9 @@ from queue import Queue
 from PySide6.QtCore import QThread, Signal
 from audio.audio_manager import _audio_lock
 from core.constants import (
-    WAKE_WORDS, get_wake_responses
+    SPEECH_REPEAT_NOTICE_DURATION_MS,
+    WAKE_WORDS,
+    get_wake_responses,
 )
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
@@ -305,6 +307,7 @@ class VoiceRecognitionThread(QThread):
             recognize_speech_helper,
             wake_detector_recalibrate_helper,
             set_listening_indicator,
+            _show_tts_bubble,
         )
         
         response = _RNG.choice(get_wake_responses())
@@ -323,9 +326,10 @@ class VoiceRecognitionThread(QThread):
         
         set_listening_indicator(True)
         self.listening_state_changed.emit(True)
+        duplicate_notice = None
         try:
             with self._microphone_source() as source:
-                recognize_speech_helper(
+                duplicate_notice = recognize_speech_helper(
                     self.speech_recognizer,
                     source,
                     self.result,
@@ -335,6 +339,11 @@ class VoiceRecognitionThread(QThread):
         finally:
             set_listening_indicator(False)
             self.listening_state_changed.emit(False)
+        if duplicate_notice:
+            _show_tts_bubble(
+                duplicate_notice,
+                duration=SPEECH_REPEAT_NOTICE_DURATION_MS,
+            )
         
         # 대화 후 재캘리브레이션
         with self._microphone_source() as source:
