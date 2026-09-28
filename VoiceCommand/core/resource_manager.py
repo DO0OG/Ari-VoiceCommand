@@ -212,6 +212,8 @@ class ResourceManager:
         if not os.path.isfile(source):
             return False
         try:
+            # copy2가 수정 시각까지 복사하므로 이전 비교 결과 캐시를 쓰지 않는다.
+            filecmp.clear_cache()
             if os.path.isfile(destination) and filecmp.cmp(source, destination, shallow=False):
                 return False
             os.makedirs(os.path.dirname(destination), exist_ok=True)

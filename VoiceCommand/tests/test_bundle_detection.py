@@ -68,6 +68,9 @@ class BundledResourceRefreshTests(unittest.TestCase):
             self._write(os.path.join(bundle, "images", "idle1.png"), b"bundled-image")
             self._write(os.path.join(app_data, "icon.png"), b"old-icon")
             self._write(os.path.join(app_data, "images", "idle1.png"), b"user-image")
+            # 크기와 수정 시각이 같아도 내용 비교로 판단해야 한다.
+            for path in (os.path.join(bundle, "icon.png"), os.path.join(app_data, "icon.png")):
+                os.utime(path, (1_700_000_000, 1_700_000_000))
 
             manager = resource_manager.ResourceManager
             bundle_icon = os.path.join(bundle, "icon.png")
