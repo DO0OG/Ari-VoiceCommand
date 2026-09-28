@@ -5,7 +5,7 @@ import threading
 import time
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from memory.conversation_history import ConversationHistory
@@ -243,6 +243,35 @@ class ConversationHistoryTests(unittest.TestCase):
             self.assertEqual(compacted, [3])
             self.assertEqual(history.active, [])
             self.assertEqual(history.summaries, ["compact:one,two,three"])
+
+    def test_consolidation_prunes_indexed_conversations_after_180_days(self):
+        with patch(
+            "memory.conversation_history.get_conversation_history",
+            return_value=Mock(),
+        ), patch("memory.memory_index.get_memory_index") as get_index:
+            MemoryConsolidator().summarize_old_conversations(days_ago=14)
+
+        get_index.return_value.prune_conversations_older_than.assert_called_once_with(180)
+
+    def test_delete_containing_removes_active_and_summary_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history = self._make_history(tmp)
+            history.active = [
+                {"user": "coffee please", "ai": "Okay"},
+                {"user": "tea please", "ai": "Coffee is popular"},
+                {"user": "water", "ai": "Sure"},
+            ]
+            history.summaries = ["Coffee and tea", "Weather discussion"]
+
+            deleted = history.delete_containing("COFFEE")
+
+            self.assertEqual(deleted, 3)
+            self.assertEqual(history.active, [{"user": "water", "ai": "Sure"}])
+            self.assertEqual(history.summaries, ["Weather discussion"])
+            with open(history.file_path, encoding="utf-8") as handle:
+                saved = json.load(handle)
+            self.assertEqual(saved["active"], history.active)
+            self.assertEqual(saved["summaries"], history.summaries)
 
 
 if __name__ == "__main__":

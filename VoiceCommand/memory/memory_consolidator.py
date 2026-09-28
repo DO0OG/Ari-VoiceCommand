@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import threading
 
+_CONVERSATION_INDEX_RETENTION_DAYS = 180
+
+
 class MemoryConsolidator:
     def consolidate_facts(self):
         from memory.user_context import get_context_manager
@@ -18,8 +21,14 @@ class MemoryConsolidator:
 
     def summarize_old_conversations(self, days_ago: int = 14):
         from memory.conversation_history import get_conversation_history
+        from memory.memory_index import get_memory_index
+
         history = get_conversation_history()
-        return history.compact_older_than(days_ago, history._summarize_chunk)
+        compacted = history.compact_older_than(days_ago, history._summarize_chunk)
+        get_memory_index().prune_conversations_older_than(
+            _CONVERSATION_INDEX_RETENTION_DAYS
+        )
+        return compacted
 
     def collect_insights(self):
         from agent.episode_memory import get_episode_memory

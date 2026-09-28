@@ -7,8 +7,11 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterator
+
+from memory.fts_utils import build_fts_query
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +33,8 @@ _CREATE_KNOWLEDGE_FTS_SQL = (
     "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(entity, relation, value)"
 )
 
+_HAS_KNOWLEDGE_SQL = "SELECT EXISTS(SELECT 1 FROM knowledge LIMIT 1)"
+
 
 class KnowledgeBase:
     def __init__(self, db_path: str | None = None):
@@ -38,10 +43,18 @@ class KnowledgeBase:
             db_path = ResourceManager.get_runtime_path("knowledge_base.db")
         self.db_path = db_path
         self._lock = threading.RLock()
+        self._has_entries: bool | None = None
         self._ensure_db()
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        # sqlite3 연결의 with 문은 커밋만 하므로 연결은 따로 닫는다.
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _ensure_db(self) -> None:
         with self._connect() as conn:
@@ -85,13 +98,14 @@ class KnowledgeBase:
                 "INSERT INTO knowledge_fts(rowid, entity, relation, value) VALUES (?, ?, ?, ?)",
                 (knowledge_id, entity, relation, value),
             )
+            self._has_entries = True
             return knowledge_id
 
     def query(self, text: str, top_k: int = 5) -> list[dict[str, Any]]:
         text = str(text or "").strip()
         if not text:
             return []
-        safe_query = self._fts_query(text)
+        safe_query = build_fts_query(text)
         with self._lock, self._connect() as conn:
             try:
                 rows = conn.execute(
@@ -107,15 +121,16 @@ class KnowledgeBase:
                 ).fetchall()
             except sqlite3.Error as exc:
                 log.debug("[KnowledgeBase] FTS 조회 실패, LIKE 폴백: %s", exc)
-                like = f"%{text}%"
                 rows = conn.execute(
                     """
                     SELECT id, entity, relation, value, confidence, source, created_at, updated_at, 0.0
                     FROM knowledge
-                    WHERE entity LIKE ? OR relation LIKE ? OR value LIKE ?
+                    WHERE entity LIKE '%' || ? || '%'
+                       OR relation LIKE '%' || ? || '%'
+                       OR value LIKE '%' || ? || '%'
                     ORDER BY updated_at DESC LIMIT ?
                     """,
-                    (like, like, like, int(top_k)),
+                    (text, text, text, int(top_k)),
                 ).fetchall()
         return [
             {
@@ -133,6 +148,8 @@ class KnowledgeBase:
         ]
 
     def prompt_for(self, text: str, top_k: int = 3) -> str:
+        if not str(text or "").strip() or not self._has_knowledge():
+            return ""
         facts = self.query(text, top_k=top_k)
         if not facts:
             return ""
@@ -162,13 +179,15 @@ class KnowledgeBase:
                 break
         return facts
 
-    @staticmethod
-    def _fts_query(text: str) -> str:
-        tokens = [token.strip('"\'`.,:;()[]{}') for token in text.split()]
-        tokens = [token for token in tokens if token]
-        if not tokens:
-            return '""'
-        return " OR ".join(f'"{token}"' for token in tokens[:12])
+    def _has_knowledge(self) -> bool:
+        if self._has_entries is not None:
+            return bool(self._has_entries)
+        with self._lock:
+            if self._has_entries is None:
+                with self._connect() as conn:
+                    row = conn.execute(_HAS_KNOWLEDGE_SQL).fetchone()
+                self._has_entries = bool(row and row[0])
+            return self._has_entries
 
 
 _instance: KnowledgeBase | None = None

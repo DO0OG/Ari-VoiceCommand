@@ -58,6 +58,11 @@ class LLMProviderTests(unittest.TestCase):
                 request = provider.client.chat.completions.create.call_args.kwargs
                 names = {item["function"]["name"] for item in request["tools"]}
                 self.assertIn("launch_app", names)
+                self.assertTrue(
+                    memory.return_value.process_interaction.call_args.kwargs[
+                        "contains_tool_result"
+                    ]
+                )
         request = provider.client.chat.completions.create.call_args.kwargs
         names = {item["function"]["name"] for item in request["tools"]}
         self.assertTrue({"launch_app", "close_app", "get_running_apps", "focus_window"} <= names)

@@ -25,6 +25,7 @@ _MAX_COMMAND_FREQ = 100
 _MAX_SEQUENCE_ROOTS = 100
 _MAX_SEQUENCE_EDGES = 20
 _MAX_BIO_LIST_ITEMS = 30
+_MAX_PENDING_BIO = 20
 _MAX_TOPIC_COUNT = 50
 _SUMMARY_FACT_LIMIT = 10
 _SUMMARY_TOPIC_LIMIT = 5
@@ -111,6 +112,7 @@ class UserContextManager:
                 facts[key] = normalized
         context["facts"] = self._limit_facts(facts)
         context["fact_history"] = self._normalize_fact_history(context.get("fact_history", {}))
+        context["pending_bio"] = self._normalize_pending_bio(context.get("pending_bio", []))
 
         context["command_frequency"] = self._limit_frequency_map(context.get("command_frequency", {}))
         context["command_sequences"] = self._limit_sequences(context.get("command_sequences", {}))
@@ -122,7 +124,26 @@ class UserContextManager:
             "user_bio": {"name": "사용자", "location": "", "interests": [], "memos": []},
             "facts": {}, "fact_history": {}, "command_frequency": {}, "command_sequences": {},
             "time_patterns": {}, "preferences": {}, "last_commands": [], "conversation_topics": {},
+            "pending_bio": [],
         }
+
+    def _normalize_pending_bio(self, pending):
+        if not isinstance(pending, list):
+            return []
+        allowed = {"name", "location", "interests", "memos"}
+        normalized = []
+        seen = set()
+        for item in pending:
+            if not isinstance(item, dict):
+                continue
+            field = str(item.get("field", "")).strip()
+            value = str(item.get("value", "")).strip()
+            candidate = (field, value)
+            if field not in allowed or not value or candidate in seen:
+                continue
+            normalized.append({"field": field, "value": value})
+            seen.add(candidate)
+        return normalized[-_MAX_PENDING_BIO:]
 
     @_context_locked
     def save_context(self):
@@ -217,18 +238,78 @@ class UserContextManager:
         self.save_context()
 
     @_context_locked
-    def delete_fact(self, key: str) -> bool:
+    def delete_fact(self, key: str, delete_conversations: bool = False) -> bool:
         facts = self.context.get("facts", {})
         if key not in facts:
             return False
+        from memory.memory_index import get_memory_index
+
+        index = get_memory_index()
+        index.delete_fact(key)
+        if delete_conversations:
+            value = str(facts[key].get("value", ""))
+            if value:
+                from memory.conversation_history import get_conversation_history
+
+                get_conversation_history().delete_containing(value)
+                index.delete_conversations_containing(value)
         del facts[key]
         self.save_context()
+        return True
+
+    @_context_locked
+    def request_bio_update(self, field: str, value: str, user_message: str = "") -> bool:
+        field = str(field or "").strip()
+        value = str(value or "").strip()
+        if field not in self.context["user_bio"] or not value:
+            return False
+
+        current = self.context["user_bio"][field]
+        already_known = value in current if isinstance(current, list) else value == current
+        if already_known:
+            pending = self.context["pending_bio"]
+            filtered = [
+                item for item in pending
+                if (item["field"], item["value"]) != (field, value)
+            ]
+            if filtered != pending:
+                self.context["pending_bio"] = filtered
+                self.save_context()
+            return True
+
+        if value.casefold() in str(user_message or "").casefold():
+            self.context["pending_bio"] = [
+                item for item in self.context["pending_bio"]
+                if (item["field"], item["value"]) != (field, value)
+            ]
+            self.update_bio(field, value)
+            return True
+
+        candidate = {"field": field, "value": value}
+        if candidate not in self.context["pending_bio"]:
+            self.context["pending_bio"].append(candidate)
+            self.context["pending_bio"] = self.context["pending_bio"][-_MAX_PENDING_BIO:]
+            self.save_context()
+        return False
+
+    @_context_locked
+    def approve_pending_bio(self, field: str, value: str) -> bool:
+        pending = self.context.get("pending_bio", [])
+        candidate = {"field": field, "value": value}
+        if candidate not in pending:
+            return False
+        self.context["pending_bio"] = [item for item in pending if item != candidate]
+        self.update_bio(field, value)
         return True
 
     @_context_locked
     def update_bio(self, field, value):
         """기본 정보 업데이트 (이름, 관심사 등)"""
         if field in self.context["user_bio"]:
+            self.context["pending_bio"] = [
+                item for item in self.context.get("pending_bio", [])
+                if item["field"] != field
+            ]
             if isinstance(self.context["user_bio"][field], list):
                 if isinstance(value, list):
                     self.context["user_bio"][field] = self._dedupe_recent(
