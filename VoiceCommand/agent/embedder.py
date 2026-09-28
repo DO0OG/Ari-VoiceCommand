@@ -157,7 +157,7 @@ class Embedder:
 
     def _load_local_model(self) -> None:
         try:
-            from huggingface_hub import hf_hub_download
+            hf_hub_download = importlib.import_module("huggingface_hub").hf_hub_download
             from tqdm.auto import tqdm
 
             embedder = self
