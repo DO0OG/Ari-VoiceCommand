@@ -251,6 +251,12 @@ def initialize_tts():
         except (AttributeError, RuntimeError, TypeError) as exc:
             logging.debug("TTS 시그널 연결 실패: %s", exc)
 
+    cache_warmup = getattr(
+        _state.fish_tts, "schedule_fixed_message_cache_warmup", None
+    )
+    if callable(cache_warmup):
+        cache_warmup(is_idle=lambda: not is_tts_playing())
+
     _state.rp_gen = RPGenerator()
     _state.rp_gen.set_config(
         personality=settings.get("personality", ""),

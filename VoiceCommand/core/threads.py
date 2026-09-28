@@ -376,6 +376,8 @@ class TTSThread(QThread):
         super().__init__()
         self.queue = Queue(maxsize=self._MAX_QUEUE_SIZE)
         self.is_processing = False
+        self._shutdown_requested = False
+        self._shutdown_lock = threading.Lock()
 
     def _collect_batch(self, first_text):
         texts = []
@@ -429,7 +431,7 @@ class TTSThread(QThread):
 
                 try:
                     from VoiceCommand import text_to_speech
-                    if batch_text:
+                    if batch_text and not self._shutdown_requested:
                         text_to_speech(batch_text)
                 finally:
                     for _ in range(task_count):
@@ -449,12 +451,46 @@ class TTSThread(QThread):
     def speak(self, text):
         if not text:
             return False
-        try:
-            self.queue.put_nowait(text)
-            return True
-        except queue.Full:
-            logging.warning("TTSThread 큐가 가득 차서 마지막 요청을 폐기했습니다.")
-            return False
+        with self._shutdown_lock:
+            if self._shutdown_requested:
+                return False
+            try:
+                self.queue.put_nowait(text)
+                return True
+            except queue.Full:
+                logging.warning("TTSThread 큐가 가득 차서 마지막 요청을 폐기했습니다.")
+                return False
+
+    def stop(self):
+        with self._shutdown_lock:
+            if self._shutdown_requested:
+                return
+            self._shutdown_requested = True
+
+            try:
+                from VoiceCommand import _state
+
+                provider_stop = getattr(_state.fish_tts, "stop", None)
+                if callable(provider_stop):
+                    provider_stop()
+            except (
+                AttributeError,
+                ImportError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                logging.debug("현재 TTS 재생 중지 생략: %s", exc)
+
+            while True:
+                try:
+                    self.queue.get_nowait()
+                except queue.Empty:
+                    break
+                else:
+                    self.queue.task_done()
+            self.queue.put_nowait(None)
 
 
 # ───────────────────────────────────────────────────────────────────────────

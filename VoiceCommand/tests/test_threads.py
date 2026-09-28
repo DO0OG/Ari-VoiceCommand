@@ -1,8 +1,10 @@
 import unittest
 import threading
+import sys
 from contextlib import nullcontext
+from queue import Empty
+from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
-
 
 from core.threads import (
     CommandExecutionThread,
@@ -37,6 +39,25 @@ class TTSThreadTests(unittest.TestCase):
         self.assertEqual(combined, "안내 멘트입니다.")
         self.assertEqual(task_count, 2)
         self.assertTrue(stop_requested)
+
+    def test_stop_interrupts_provider_discards_pending_text_and_rejects_new_text(self):
+        provider = MagicMock()
+        thread = TTSThread()
+        thread.queue.put_nowait("pending speech")
+        voice_command_module = ModuleType("VoiceCommand")
+        voice_command_module._state = SimpleNamespace(fish_tts=provider)
+
+        with patch.dict(
+            sys.modules, {"VoiceCommand": voice_command_module}
+        ):
+            thread.stop()
+
+            provider.stop.assert_called_once_with()
+            self.assertIsNone(thread.queue.get_nowait())
+            thread.queue.task_done()
+            with self.assertRaises(Empty):
+                thread.queue.get_nowait()
+            self.assertFalse(thread.speak("late speech"))
 
     def test_wait_for_tts_playback_completion_uses_backoff(self):
         checks = iter([True, True, True, False])

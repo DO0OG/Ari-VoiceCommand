@@ -174,7 +174,7 @@ class AriCore(QObject):
 
         # Step 3: TTS 스레드 중지
         logging.info("Step 3/6: TTS 스레드 중지")
-        self.tts_thread.queue.put(None)
+        self.tts_thread.stop()
         if not self.tts_thread.wait(5000):
             logging.warning("TTS 스레드 타임아웃")
 

@@ -20,6 +20,8 @@ _TTS_SIGNATURE_KEYS = (
     "elevenlabs_model_id",
     "edge_tts_voice",
     "edge_tts_rate",
+    "tts_sentence_timeout_seconds",
+    "tts_cache_max_bytes",
 )
 
 
@@ -103,6 +105,8 @@ def create_tts_provider(settings=None):
         provider = EdgeTTS(
             voice=settings.get("edge_tts_voice", "ko-KR-SunHiNeural"),
             rate=settings.get("edge_tts_rate", "+0%"),
+            synthesis_timeout_seconds=settings.get("tts_sentence_timeout_seconds", 10),
+            cache_max_bytes=settings.get("tts_cache_max_bytes", 50 * 1024 * 1024),
         )
         logging.info("Edge TTS 초기화 완료")
         return provider, "edge"

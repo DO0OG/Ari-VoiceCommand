@@ -1,18 +1,23 @@
 """
 Microsoft Edge TTS 제공자 — 무료, API 키 불필요
-edge-tts 패키지 사용: pip install edge-tts
+문장 단위로 합성하고, 앞 문장을 재생하는 동안 다음 문장을 합성한다.
 Fish Audio / CosyVoice3와 동일한 인터페이스: speak() / playback_finished / cleanup()
 """
+
 import asyncio
 import logging
+import math
+import queue
+import re
+import threading
 import time
 
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio
+from tts.tts_cache import DEFAULT_MAX_BYTES, DiskTTSAudioCache, build_tts_cache_key
 
-# 지원 한국어 보이스 (edge-tts --list-voices 참고)
 KO_VOICES = [
     ("ko-KR-SunHiNeural", "SunHi (여성, 기본)"),
     ("ko-KR-InJoonNeural", "InJoon (남성)"),
@@ -20,78 +25,156 @@ KO_VOICES = [
 ]
 DEFAULT_VOICE = "ko-KR-SunHiNeural"
 _SAMPLE_RATE = 22050
+_SENTENCE_TIMEOUT_SECONDS = 10.0
+_PCM_CHUNK_BYTES = _SAMPLE_RATE // 10 * 2
+_SENTENCE_ENDINGS = frozenset(".!?。！？…")
+_CLOSING_PUNCTUATION = frozenset("\"'”’»』」】）)]}〉》")
+_COMMON_ABBREVIATIONS = frozenset(
+    {"dr.", "e.g.", "i.e.", "jr.", "mr.", "mrs.", "ms.", "prof.", "sr.", "u.s.", "vs."}
+)
+
+
+def _is_cjk_or_hangul(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0x3040 <= codepoint <= 0x30FF
+        or 0x3400 <= codepoint <= 0x9FFF
+        or 0xAC00 <= codepoint <= 0xD7AF
+    )
+
+
+def _is_abbreviation_period(text: str, period_index: int) -> bool:
+    if text[period_index] != ".":
+        return False
+    if (
+        period_index > 0
+        and period_index + 1 < len(text)
+        and text[period_index - 1].isdigit()
+        and text[period_index + 1].isdigit()
+    ):
+        return True
+    match = re.search(r"(?:^|\s)([A-Za-z](?:[A-Za-z.]*)?)$", text[: period_index + 1])
+    return bool(match and match.group(1).casefold() in _COMMON_ABBREVIATIONS)
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split spoken text into sentence-sized chunks while preserving punctuation."""
+    text = str(text or "").strip()
+    if not text:
+        return []
+
+    sentences = []
+    start = 0
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "\n":
+            sentence = text[start:index].strip()
+            if sentence:
+                sentences.append(sentence)
+            start = index + 1
+            while start < len(text) and text[start].isspace():
+                start += 1
+            index = start
+            continue
+
+        if character not in _SENTENCE_ENDINGS or _is_abbreviation_period(text, index):
+            index += 1
+            continue
+
+        end = index + 1
+        while end < len(text) and (
+            text[end] in _SENTENCE_ENDINGS or text[end] in _CLOSING_PUNCTUATION
+        ):
+            end += 1
+        next_character = end
+        while next_character < len(text) and text[next_character].isspace():
+            next_character += 1
+
+        if (
+            next_character == len(text)
+            or next_character > end
+            or _is_cjk_or_hangul(text[next_character])
+        ):
+            sentence = text[start:end].strip()
+            if sentence:
+                sentences.append(sentence)
+            start = next_character
+            index = start
+        else:
+            index = end
+
+    remainder = text[start:].strip()
+    if remainder:
+        sentences.append(remainder)
+    return sentences
 
 
 class EdgeTTS(QObject):
     playback_finished = Signal()
 
-    def __init__(self, voice=DEFAULT_VOICE, rate="+0%", volume="+0%"):
+    def __init__(
+        self,
+        voice=DEFAULT_VOICE,
+        rate="+0%",
+        volume="+0%",
+        synthesis_timeout_seconds=_SENTENCE_TIMEOUT_SECONDS,
+        cache_max_bytes=DEFAULT_MAX_BYTES,
+        audio_cache=None,
+    ):
         super().__init__()
         self.voice = voice
-        self.rate = rate    # 말하기 속도: "+10%" 빠름, "-10%" 느림
+        self.rate = rate
         self.volume = volume
+        try:
+            timeout = float(synthesis_timeout_seconds)
+        except (TypeError, ValueError):
+            timeout = _SENTENCE_TIMEOUT_SECONDS
+        if not math.isfinite(timeout):
+            timeout = _SENTENCE_TIMEOUT_SECONDS
+        self.synthesis_timeout_seconds = max(0.1, timeout)
         self.is_playing = False
+        try:
+            cache_limit = int(cache_max_bytes)
+        except (OverflowError, TypeError, ValueError):
+            cache_limit = DEFAULT_MAX_BYTES
+        self._audio_cache = (
+            audio_cache
+            if audio_cache is not None
+            else DiskTTSAudioCache(max_bytes=cache_limit)
+        )
+        self._state_lock = threading.Lock()
+        self._active_stop_event = None
+        self._playback_thread = None
+        self._speak_finished = threading.Event()
+        self._speak_finished.set()
+        self._closed = False
+        self._cache_warmup_idle_check = None
+        self._cache_warmup_cancel = threading.Event()
+        self._language_change_callback = self._on_language_changed
+        self._language_callback_registered = False
         logging.info("Edge TTS 초기화 완료 (voice=%s)", voice)
 
-    def speak(self, text: str, emotion: str = "평온") -> bool:
-        if not text:
-            return False
+    @staticmethod
+    def _fixed_message_texts() -> frozenset[str]:
+        from commands.ai_fast_path import FastPathMixin
+        from core.constants import get_wake_responses
+        from i18n.translator import gettext_func
 
-        try:
-            import edge_tts  # noqa: F401
-        except ImportError:
-            logging.error("edge-tts 패키지가 필요합니다: pip install edge-tts")
-            return False
+        fast_path_messages = (
+            gettext_func(message)
+            for message in FastPathMixin._FAST_PATH_MESSAGES.values()
+        )
+        return frozenset((*get_wake_responses(), *fast_path_messages))
 
-        try:
-            self.is_playing = True
-            t0 = time.time()
-
-            # asyncio 이벤트 루프로 비동기 합성 실행
-            loop = asyncio.new_event_loop()
-            try:
-                audio_data = loop.run_until_complete(self._synthesize(text))
-            finally:
-                loop.close()
-
-            if not audio_data:
-                logging.warning("Edge TTS: 오디오 데이터 없음")
-                self.is_playing = False
-                self.playback_finished.emit()
-                return False
-
-            logging.info("[TTS] Edge TTS 수신: %.2fs, %s bytes", time.time() - t0, f"{len(audio_data):,}")
-
-            # Decode MP3 to PCM with bundled PyAV codecs.
-            from audio.mp3_decoder import decode_mp3_to_pcm
-            pcm = decode_mp3_to_pcm(audio_data, _SAMPLE_RATE)
-
-            from audio.audio_manager import get_output_device_index
-            stream = GlobalAudio.open_stream(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=_SAMPLE_RATE,
-                output=True,
-                output_device_index=get_output_device_index(),
-            )
-            try:
-                stream.write(pcm)
-            finally:
-                GlobalAudio.close_stream(stream)
-
-            logging.info("[TTS] Edge TTS 전체 완료: %.2fs", time.time() - t0)
-            self.is_playing = False
-            self.playback_finished.emit()
-            return True
-
-        except Exception as e:
-            logging.error("Edge TTS speak 오류: %s", e)
-            self.is_playing = False
-            self.playback_finished.emit()
-            return False
+    def _cache_key(self, text: str, emotion: str, language: str) -> str:
+        return build_tts_cache_key(
+            "edge", self.voice, self.rate, self.volume, emotion, language, text
+        )
 
     async def _synthesize(self, text: str) -> bytes:
         import edge_tts
+
         communicate = edge_tts.Communicate(
             text, self.voice, rate=self.rate, volume=self.volume
         )
@@ -101,7 +184,343 @@ class EdgeTTS(QObject):
                 chunks.append(item["data"])
         return b"".join(chunks) if chunks else b""
 
+    @staticmethod
+    async def _wait_for_stop(stop_event: threading.Event) -> None:
+        while not stop_event.is_set():
+            await asyncio.sleep(0.05)
+
+    async def _synthesize_with_timeout(self, text, stop_event):
+        synthesis = asyncio.create_task(self._synthesize(text))
+        stop_watcher = asyncio.create_task(self._wait_for_stop(stop_event))
+        try:
+            done, _pending = await asyncio.wait(
+                (synthesis, stop_watcher),
+                timeout=self.synthesis_timeout_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stop_watcher in done and stop_event.is_set():
+                return None
+            if synthesis in done:
+                return synthesis.result()
+            raise asyncio.TimeoutError
+        finally:
+            for task in (synthesis, stop_watcher):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(synthesis, stop_watcher, return_exceptions=True)
+
+    def _synthesize_pcm(
+        self,
+        loop,
+        text: str,
+        emotion: str,
+        cacheable_messages: frozenset[str],
+        language: str,
+        stop_event: threading.Event,
+    ) -> bytes | None:
+        if stop_event.is_set():
+            return None
+
+        cacheable = text in cacheable_messages
+        cache_key = self._cache_key(text, emotion, language) if cacheable else None
+        if cache_key is not None:
+            cached_pcm = self._audio_cache.get(cache_key)
+            if cached_pcm is not None:
+                logging.debug("Edge TTS 고정 문구 캐시 적중")
+                return cached_pcm
+
+        audio_data = loop.run_until_complete(
+            self._synthesize_with_timeout(text, stop_event)
+        )
+        if not audio_data or stop_event.is_set():
+            return None
+
+        from audio.mp3_decoder import decode_mp3_to_pcm
+
+        pcm = decode_mp3_to_pcm(audio_data, _SAMPLE_RATE)
+        if cache_key is not None and pcm and not stop_event.is_set():
+            self._audio_cache.put(cache_key, pcm)
+        return pcm
+
+    @staticmethod
+    def _put_synthesis_result(result_queue, result, stop_event) -> bool:
+        while not stop_event.is_set():
+            try:
+                result_queue.put(result, timeout=0.05)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def _synthesize_sentences(
+        self,
+        sentences: list[str],
+        emotion: str,
+        cacheable_messages: frozenset[str],
+        language: str,
+        stop_event: threading.Event,
+        result_queue,
+    ) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            for index, sentence in enumerate(sentences, start=1):
+                if stop_event.is_set():
+                    break
+                try:
+                    pcm = self._synthesize_pcm(
+                        loop,
+                        sentence,
+                        emotion,
+                        cacheable_messages,
+                        language,
+                        stop_event,
+                    )
+                except asyncio.TimeoutError:
+                    logging.warning(
+                        "Edge TTS 문장 합성 타임아웃 (%d/%d)", index, len(sentences)
+                    )
+                    continue
+                except Exception as exc:
+                    logging.warning(
+                        "Edge TTS 문장 합성 실패 (%d/%d): %s",
+                        index,
+                        len(sentences),
+                        type(exc).__name__,
+                    )
+                    continue
+
+                if pcm and not self._put_synthesis_result(
+                    result_queue, pcm, stop_event
+                ):
+                    break
+        finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+            self._put_synthesis_result(result_queue, None, stop_event)
+
+    @staticmethod
+    def _write_pcm_chunks(stream, pcm: bytes, stop_event: threading.Event) -> bool:
+        for offset in range(0, len(pcm), _PCM_CHUNK_BYTES):
+            if stop_event.is_set():
+                return False
+            stream.write(pcm[offset : offset + _PCM_CHUNK_BYTES])
+        return bool(pcm) and not stop_event.is_set()
+
+    def _create_output_stream(self):
+        from audio.audio_manager import get_output_device_index
+
+        return GlobalAudio.open_stream(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=_SAMPLE_RATE,
+            output=True,
+            output_device_index=get_output_device_index(),
+        )
+
+    def speak(self, text: str, emotion: str = "평온") -> bool:
+        sentences = split_sentences(text)
+        if not sentences:
+            return False
+
+        stop_event = threading.Event()
+        with self._state_lock:
+            if self._closed:
+                return False
+            self._active_stop_event = stop_event
+            self._playback_thread = threading.current_thread()
+            self.is_playing = True
+            self._speak_finished.clear()
+            self._cache_warmup_cancel.set()
+
+        started_at = time.monotonic()
+        result_queue = queue.Queue(maxsize=1)
+        try:
+            from i18n.translator import get_language
+
+            language = get_language()
+            cacheable_messages = self._fixed_message_texts()
+        except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("Edge TTS 문구 캐시 준비 실패: %s", exc)
+            language = "ko"
+            cacheable_messages = frozenset()
+
+        producer = threading.Thread(
+            target=self._synthesize_sentences,
+            args=(
+                sentences,
+                emotion,
+                cacheable_messages,
+                language,
+                stop_event,
+                result_queue,
+            ),
+            name="EdgeTTS-Synthesis",
+            daemon=True,
+        )
+        producer.start()
+
+        stream = None
+        played_audio = False
+        success = True
+        try:
+            while not stop_event.is_set():
+                try:
+                    pcm = result_queue.get(timeout=0.1)
+                except queue.Empty:
+                    if not producer.is_alive():
+                        break
+                    continue
+                if pcm is None:
+                    break
+                if stream is None:
+                    stream = self._create_output_stream()
+                if not self._write_pcm_chunks(stream, pcm, stop_event):
+                    success = False
+                    break
+                played_audio = True
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.error("Edge TTS 오디오 재생 실패: %s", exc)
+            success = False
+        finally:
+            if stop_event.is_set():
+                success = False
+            if not success:
+                stop_event.set()
+            if stream is not None:
+                GlobalAudio.close_stream(stream)
+            if producer.is_alive():
+                producer.join(timeout=0.2)
+            stop_event.set()
+            with self._state_lock:
+                if self._active_stop_event is stop_event:
+                    self._active_stop_event = None
+                self._playback_thread = None
+                self.is_playing = False
+                self._speak_finished.set()
+            self.playback_finished.emit()
+
+        if played_audio and success:
+            logging.info(
+                "[TTS] Edge TTS 전체 완료: %.2fs, %d문장",
+                time.monotonic() - started_at,
+                len(sentences),
+            )
+            self._restart_cache_warmup()
+            return True
+
+        self._restart_cache_warmup()
+        return False
+
+    def schedule_fixed_message_cache_warmup(self, is_idle=None) -> None:
+        if self._closed:
+            return
+        if not self._language_callback_registered:
+            from i18n.translator import on_language_changed
+
+            on_language_changed(self._language_change_callback)
+            self._language_callback_registered = True
+        if is_idle is not None:
+            self._cache_warmup_idle_check = is_idle
+        if self._cache_warmup_idle_check is None:
+            self._cache_warmup_idle_check = lambda: not self.is_playing
+        self._cache_warmup_cancel.set()
+        cancel_event = threading.Event()
+        self._cache_warmup_cancel = cancel_event
+        worker = threading.Thread(
+            target=self._warm_fixed_message_cache,
+            args=(cancel_event, self._cache_warmup_idle_check),
+            name="EdgeTTS-CacheWarmup",
+            daemon=True,
+        )
+        worker.start()
+
+    def _restart_cache_warmup(self) -> None:
+        if self._cache_warmup_idle_check is not None and not self._closed:
+            self.schedule_fixed_message_cache_warmup(
+                self._cache_warmup_idle_check
+            )
+
+    def _on_language_changed(self) -> None:
+        self._restart_cache_warmup()
+
+    def _warm_fixed_message_cache(self, cancel_event, is_idle) -> None:
+        if cancel_event.wait(2.0):
+            return
+        while not cancel_event.is_set():
+            try:
+                if is_idle():
+                    break
+            except (AttributeError, RuntimeError, TypeError):
+                if not self.is_playing:
+                    break
+            cancel_event.wait(0.25)
+        if cancel_event.is_set():
+            return
+
+        from i18n.translator import get_language
+
+        language = get_language()
+        messages = self._fixed_message_texts()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            for message in messages:
+                if cancel_event.is_set() or self._closed:
+                    break
+                while not cancel_event.is_set() and not self._closed:
+                    try:
+                        if is_idle():
+                            break
+                    except (AttributeError, RuntimeError, TypeError):
+                        if not self.is_playing:
+                            break
+                    cancel_event.wait(0.25)
+                if cancel_event.is_set() or self._closed:
+                    break
+                key = self._cache_key(message, "평온", language)
+                if self._audio_cache.get(key) is not None:
+                    continue
+                try:
+                    self._synthesize_pcm(
+                        loop,
+                        message,
+                        "평온",
+                        messages,
+                        language,
+                        cancel_event,
+                    )
+                except asyncio.TimeoutError:
+                    logging.debug("Edge TTS 고정 문구 캐시 사전 합성 시간 초과")
+                except Exception as exc:
+                    logging.debug("Edge TTS 고정 문구 캐시 사전 합성 실패: %s", exc)
+        finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
+    def stop(self) -> None:
+        with self._state_lock:
+            stop_event = self._active_stop_event
+        if stop_event is not None:
+            stop_event.set()
+
     def cleanup(self):
-        """재생 상태를 정리한다."""
+        with self._state_lock:
+            self._closed = True
+            stop_event = self._active_stop_event
+        self._cache_warmup_cancel.set()
+        if self._language_callback_registered:
+            from i18n.translator import remove_language_changed_callback
+
+            remove_language_changed_callback(self._language_change_callback)
+        if stop_event is not None:
+            stop_event.set()
+            if threading.current_thread() is not self._playback_thread:
+                self._speak_finished.wait(timeout=2.0)
         # 전역 PyAudio 인스턴스는 AriCore.cleanup()의 GlobalAudio.terminate()에서만 종료한다.
-        self.is_playing = False
