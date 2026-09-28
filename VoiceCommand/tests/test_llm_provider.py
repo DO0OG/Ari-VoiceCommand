@@ -376,6 +376,99 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(tool_choice, {"type": "function", "function": {"name": "mcp_call"}})
         self.assertEqual(tool_names, {"mcp_call"})
 
+    def test_plugin_tools_are_filtered_by_declared_intent(self):
+        provider = LLMProvider()
+        schemas = (
+            ("plugin_unscoped", None),
+            ("plugin_automation", ["automation"]),
+            ("plugin_conversation", ["conversation"]),
+            ("plugin_zeta", ["conversation"]),
+            ("plugin_alpha", ["conversation"]),
+        )
+        for name, intents in schemas:
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": name,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+            if intents is None:
+                provider.register_plugin_tool(schema)
+            else:
+                provider.register_plugin_tool(schema, intents=intents)
+
+        conversation, _ = provider._select_tools_for_request(
+            {"intent": "conversation", "force_tool": False}
+        )
+        conversation_names = [tool["function"]["name"] for tool in conversation]
+        plugin_names = [name for name in conversation_names if name.startswith("plugin_")]
+
+        self.assertNotIn("plugin_unscoped", conversation_names)
+        self.assertNotIn("plugin_automation", conversation_names)
+        self.assertIn("plugin_conversation", conversation_names)
+        self.assertEqual(plugin_names, sorted(plugin_names))
+
+        automation, _ = provider._select_tools_for_request(
+            {"intent": "automation", "force_tool": False}
+        )
+        automation_names = {tool["function"]["name"] for tool in automation}
+
+        self.assertIn("plugin_unscoped", automation_names)
+        self.assertIn("plugin_automation", automation_names)
+        self.assertNotIn("plugin_conversation", automation_names)
+
+        other, _ = provider._select_tools_for_request(
+            {"intent": "other", "force_tool": False},
+            required_tool_names={"get_current_time"},
+        )
+        other_names = {tool["function"]["name"] for tool in other}
+
+        self.assertEqual(other_names, {"get_current_time", "plugin_unscoped"})
+
+    def test_anthropic_tool_request_uses_selected_tools_and_estimated_budget(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        provider.client.messages.create.return_value = SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="done")]
+        )
+        provider.register_plugin_tool({
+            "type": "function",
+            "function": {
+                "name": "plugin_unscoped",
+                "description": "plugin helper",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        })
+        provider.register_plugin_tool({
+            "type": "function",
+            "function": {
+                "name": "plugin_conversation",
+                "description": "plugin helper",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }, intents=["conversation"])
+
+        with patch.object(provider, "_build_system", return_value="system"), \
+             patch.object(provider, "_get_skill_context", return_value={}), \
+             patch.object(provider, "_analyze_request", return_value={
+                 "intent": "conversation",
+                 "force_tool": False,
+                 "preferred_tool": None,
+             }):
+            provider.chat_with_tools("hello")
+
+        request = provider.client.messages.create.call_args.kwargs
+        tool_names = {tool["name"] for tool in request["tools"]}
+
+        self.assertIn("plugin_conversation", tool_names)
+        self.assertNotIn("plugin_unscoped", tool_names)
+        self.assertEqual(
+            request["max_tokens"],
+            provider._estimate_max_tokens("hello") + 200,
+        )
+
     def test_select_tools_for_request_prefers_web_search_when_forced(self):
         provider = LLMProvider()
 
@@ -455,6 +548,58 @@ class LLMProviderTests(unittest.TestCase):
 
         self.assertIn("[사용 가능한 스킬]", system_prompt)
         self.assertIn("쿠팡 MCP 스킬", system_prompt)
+
+    def test_build_system_keeps_static_prefix_and_injects_profile_once(self):
+        provider = LLMProvider()
+        manager = Mock()
+        manager.get_top_facts_prompt.return_value = "사실 블록"
+        manager.get_full_context_prompt.return_value = "요약 블록"
+        manager.get_current_time_prompt.return_value = "시간 블록"
+        profile = Mock()
+        profile.get_prompt_injection.return_value = "프로필 블록"
+        knowledge_base = Mock()
+        knowledge_base.prompt_for.return_value = "지식 베이스 블록"
+
+        with patch.object(
+            provider.rp_generator,
+            "build_system_prompt",
+            return_value="페르소나",
+        ), patch("agent.llm_provider._get_tool_instruction", return_value="도구 지침"), \
+             patch("i18n.translator.get_language", return_value="ko"), \
+             patch("memory.user_profile_engine.get_user_profile_engine", return_value=profile), \
+             patch("memory.memory_manager.get_memory_manager", return_value=manager), \
+             patch("memory.knowledge_base.get_knowledge_base", return_value=knowledge_base), \
+             patch.object(provider, "_get_skill_context", return_value={"prompt": "스킬 블록"}):
+            first = provider._build_system(include_context=True, user_message="첫 요청")
+            second = provider._build_system(include_context=True, user_message="둘째 요청")
+
+        static_prefix = "\n\n".join((
+            "페르소나",
+            "도구 지침",
+            "항상 한국어로 응답하세요.",
+        ))
+        expected_order = (
+            "페르소나",
+            "도구 지침",
+            "항상 한국어로 응답하세요.",
+            "프로필 블록",
+            "사실 블록",
+            "요약 블록",
+            "지식 베이스 블록",
+            "스킬 블록",
+            "시간 블록",
+        )
+        for prompt in (first, second):
+            positions = [prompt.index(item) for item in expected_order]
+            self.assertEqual(positions, sorted(positions))
+            self.assertTrue(prompt.startswith(static_prefix))
+            self.assertEqual(prompt.count("프로필 블록"), 1)
+            self.assertEqual(prompt.count("사실 블록"), 1)
+        manager.get_full_context_prompt.assert_called_with(
+            include_profile=False,
+            include_facts=False,
+            include_time=False,
+        )
 
     def test_register_plugin_tool_updates_available_tools_without_mutating_core_tools(self):
         provider = LLMProvider()

@@ -492,14 +492,14 @@ def main():
         except Exception as exc:
             logging.debug("Telegram bridge startup skipped: %s", exc)
 
-        def _register_tool_for_plugin(schema: dict, handler) -> None:
+        def _register_tool_for_plugin(schema: dict, handler, intents=None) -> None:
             tool_name = str(schema.get("function", {}).get("name", "") or "")
             if not tool_name or ai_command is None:
                 return
             if tool_name in ai_command._dispatch:
                 logging.warning("[PluginLoader] 중복 도구 등록 거부: %s", tool_name)
                 return
-            get_llm_provider().register_plugin_tool(schema)
+            get_llm_provider().register_plugin_tool(schema, intents=intents)
             ai_command.register_plugin_tool_handler(tool_name, handler)
 
         try:

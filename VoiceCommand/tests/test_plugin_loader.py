@@ -69,6 +69,35 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertEqual(registry.commands, [])
             self.assertEqual(removed_tools, ["hello_tool"])
 
+    def test_register_tool_forwards_declared_intents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "intent_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "PLUGIN_INFO = {'name': 'intent_plugin', 'api_version': '1.0'}\n"
+                    "def register(context):\n"
+                    "    def make_schema(name):\n"
+                    "        return {'type': 'function', 'function': {'name': name, "
+                    "'description': 'd', 'parameters': {'type': 'object', 'properties': {}}}}\n"
+                    "    context.register_tool(make_schema('legacy_tool'), lambda args: 'ok')\n"
+                    "    context.register_tool(make_schema('conversation_tool'), "
+                    "lambda args: 'ok', intents=['conversation'])\n"
+                    "    return {}\n"
+                )
+
+            registered_intents = []
+
+            def _register_tool(schema, handler, intents=None):
+                registered_intents.append(intents)
+
+            manager = _TempPluginManager(tmp)
+            plugin = manager.load_plugins(
+                PluginContext(register_tool=_register_tool)
+            )[0]
+
+            self.assertTrue(plugin.loaded)
+            self.assertEqual(registered_intents, [None, ["conversation"]])
+
     def test_load_plugin_replaces_existing_registered_menu_action(self):
         with tempfile.TemporaryDirectory() as tmp:
             plugin_path = os.path.join(tmp, "hello_plugin.py")
