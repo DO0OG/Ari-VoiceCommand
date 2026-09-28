@@ -233,11 +233,14 @@ class LLMProviderTests(unittest.TestCase):
         provider = self._stream_provider()
         fallback_client = Mock()
 
-        def timeout_stream():
-            raise TimeoutError("read timed out")
-            yield {}
+        class TimeoutStream:
+            def __iter__(self):
+                return self
 
-        provider.client.chat.completions.create.return_value = timeout_stream()
+            def __next__(self):
+                raise TimeoutError("read timed out")
+
+        provider.client.chat.completions.create.return_value = TimeoutStream()
         fallback_client.chat.completions.create.return_value = [
             {"choices": [{"delta": {"content": "fallback"}}]},
         ]
@@ -263,11 +266,14 @@ class LLMProviderTests(unittest.TestCase):
         provider.provider_configs["custom-timeout"] = {"requires_api_key": False}
         fallback_client = Mock()
 
-        def timeout_stream():
-            raise TimeoutError("read timed out")
-            yield {}
+        class TimeoutStream:
+            def __iter__(self):
+                return self
 
-        provider.client.chat.completions.create.return_value = timeout_stream()
+            def __next__(self):
+                raise TimeoutError("read timed out")
+
+        provider.client.chat.completions.create.return_value = TimeoutStream()
         fallback_client.chat.completions.create.return_value = [
             {"choices": [{"delta": {"content": "fallback"}}]},
         ]
