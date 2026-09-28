@@ -38,6 +38,7 @@ _MAX_MANIFEST_BYTES = 64 * 1024
 _CONNECT_TIMEOUT_SECONDS = 5
 _TOTAL_TIMEOUT_SECONDS = 10
 _CHECK_INTERVAL_SECONDS = 24 * 60 * 60
+_RNG = random.SystemRandom()
 _RUNTIME_STATE_LOCK = threading.RLock()
 _VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 _UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -367,21 +368,21 @@ def _initial_check_delay() -> int:
     try:
         state = _read_runtime_state()[1]
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
-        return random.randint(60, 120)
+        return _RNG.randint(60, 120)
     last_attempt = state.get("last_check_attempt_at")
     if not isinstance(last_attempt, str):
-        return random.randint(60, 120)
+        return _RNG.randint(60, 120)
     try:
         attempted_at = datetime.strptime(last_attempt, "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=timezone.utc
         )
     except ValueError:
-        return random.randint(60, 120)
+        return _RNG.randint(60, 120)
     failures = state.get("update_check_failures", 0)
     failures = failures if isinstance(failures, int) and not isinstance(failures, bool) else 0
     due_at = attempted_at.timestamp() + _next_check_delay(failures)
     remaining = due_at - time.time()
-    return int(remaining) if remaining > 0 else random.randint(60, 120)
+    return int(remaining) if remaining > 0 else _RNG.randint(60, 120)
 
 
 class UpdateChecker(QObject):
