@@ -3334,3 +3334,12 @@ msgstr "バージョン {version} · コミット {commit}"
 
 msgid "같은 명령을 방금 들어서 무시했어요."
 msgstr "同じコマンドを聞いたばかりなので無視しました。"
+
+msgid "판정 보류(표본 부족)"
+msgstr "判定保留（サンプル不足）"
+
+msgid "학습 기여도 진단"
+msgstr "学習への貢献度の診断"
+
+msgid "{component}: {status}"
+msgstr "{component}: {status}"

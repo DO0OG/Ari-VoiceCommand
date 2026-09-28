@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from agent.learning_metrics import get_learning_metrics
 from i18n.translator import _
 
 
@@ -88,9 +89,36 @@ class _AgentSettingsPage(QWidget):
         box.addWidget(self.image_provider)
 
         layout.addWidget(group)
+        layout.addWidget(self._build_learning_metrics_group())
         layout.addWidget(self._build_local_decision_group(settings))
         layout.addStretch(1)
         self._update_timeout_label(self.timeout_slider.value())
+
+    def _build_learning_metrics_group(self) -> QGroupBox:
+        group = QGroupBox(_("학습 기여도 진단"))
+        box = QVBoxLayout(group)
+        self.learning_metrics_status = QLabel("")
+        self.learning_metrics_status.setWordWrap(True)
+        box.addWidget(self.learning_metrics_status)
+        self._refresh_learning_metrics_status()
+        return group
+
+    def _refresh_learning_metrics_status(self) -> None:
+        labels = {
+            "pending": _("판정 보류(표본 부족)"),
+            "disabled": _("비활성화"),
+            "active": _("활성화"),
+        }
+        rows = get_learning_metrics().get_component_diagnostics()
+        self.learning_metrics_status.setText(
+            "\n".join(
+                _("{component}: {status}").format(
+                    component=row["name"],
+                    status=labels[row["state"]],
+                )
+                for row in rows
+            )
+        )
 
     def _build_local_decision_group(self, settings: dict) -> QGroupBox:
         group = QGroupBox(_("빠른 로컬 처리"))

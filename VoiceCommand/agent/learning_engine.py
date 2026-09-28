@@ -86,11 +86,17 @@ class LearningEngine:
                 "ReflectionEngine",
             )
             usage = dict(run_result.learning_components or {})
+            trials = dict(
+                getattr(run_result, "learning_component_trials", {}) or {}
+            )
             for name in component_names:
+                trial = trials.get(name, {})
                 metrics.record(
                     name,
                     activated=bool(usage.get(name, False)),
                     success=bool(run_result.achieved),
+                    holdout=bool(trial.get("holdout", False)),
+                    eligible=bool(trial.get("eligible", usage.get(name, False))),
                 )
         except Exception as exc:
             logger.debug("[LearningEngine] learning metrics 기록 실패: %s", exc)

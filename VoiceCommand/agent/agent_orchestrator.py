@@ -43,6 +43,7 @@ class AgentRunResult:
     learning_components: Dict[str, bool] = field(default_factory=dict)
     # 단계는 모두 성공했지만 상태를 확인할 수단이 없었다. 다시 실행하면 동작이 중복된다.
     verification_unavailable: bool = False
+    learning_component_trials: Dict[str, Dict[str, bool]] = field(default_factory=dict)
 
     def all_exec_results(self) -> List[ExecutionResult]:
         return [sr.exec_result for sr in self.step_results]
@@ -244,7 +245,12 @@ class AgentOrchestrator:
         try:
             timeout_seconds = self.default_timeout if timeout is None else float(timeout)
             deadline = start_time + max(0.1, timeout_seconds)
-            shared_context = {} if _checkpoint or self._interrupt_requested.is_set() else self._build_shared_context(goal)
+            component_trials: Dict[str, Dict[str, bool]] = {}
+            shared_context = (
+                {}
+                if _checkpoint or self._interrupt_requested.is_set()
+                else self._build_shared_context(goal, component_trials)
+            )
             if self._is_timeout_exceeded(deadline):
                 return AgentRunResult(goal=goal, achieved=False, summary=_("실행 시간 초과"))
             run_result = self._run_loop(
@@ -252,6 +258,7 @@ class AgentOrchestrator:
                 shared_context=shared_context,
                 deadline=deadline,
                 checkpoint=_checkpoint,
+                component_trials=component_trials,
             )
             if self._interrupt_requested.is_set():
                 run_result.achieved = False
@@ -265,26 +272,30 @@ class AgentOrchestrator:
                 and not self._is_timeout_exceeded(deadline)
                 and not self._interrupt_requested.is_set()
             ):
-                reflection = self._learn.reflect_on_failure(goal, run_result)
-                run_result.learning_components["ReflectionEngine"] = True
-                lesson = getattr(reflection, "lesson", "") or ""
-                if lesson and not self._interrupt_requested.is_set():
-                    run_result.summary += _("\n(교훈: {lesson})").format(lesson=lesson)
-                    retry_context = {
-                        "reflection_insight": lesson,
-                        "avoid_patterns": " | ".join(
-                            getattr(reflection, "avoid_patterns", [])[:3]
-                        ),
-                    }
-                    retry_result = self._run_loop(
-                        goal,
-                        reflection_context=retry_context,
-                        shared_context=shared_context,
-                        deadline=deadline,
-                    )
-                    if retry_result.achieved or retry_result.verification_unavailable:
-                        retry_result.learning_components["ReflectionEngine"] = True
-                        run_result = retry_result
+                if self._should_activate_component(
+                    "ReflectionEngine", component_trials
+                ):
+                    reflection = self._learn.reflect_on_failure(goal, run_result)
+                    run_result.learning_components["ReflectionEngine"] = True
+                    lesson = getattr(reflection, "lesson", "") or ""
+                    if lesson and not self._interrupt_requested.is_set():
+                        run_result.summary += _("\n(교훈: {lesson})").format(lesson=lesson)
+                        retry_context = {
+                            "reflection_insight": lesson,
+                            "avoid_patterns": " | ".join(
+                                getattr(reflection, "avoid_patterns", [])[:3]
+                            ),
+                        }
+                        retry_result = self._run_loop(
+                            goal,
+                            reflection_context=retry_context,
+                            shared_context=shared_context,
+                            deadline=deadline,
+                            component_trials=component_trials,
+                        )
+                        if retry_result.achieved or retry_result.verification_unavailable:
+                            retry_result.learning_components["ReflectionEngine"] = True
+                            run_result = retry_result
             elif not self._interrupt_requested.is_set():
                 self._learn.schedule_reflection(
                     goal,
@@ -399,9 +410,15 @@ class AgentOrchestrator:
         shared_context: Optional[Dict[str, str]] = None,
         deadline: Optional[float] = None,
         checkpoint: Optional[Dict] = None,
+        component_trials: Optional[Dict[str, Dict[str, bool]]] = None,
     ) -> AgentRunResult:
         """실제 Plan-Execute-Verify 루프"""
-        run_result = AgentRunResult(goal=goal)
+        run_result = AgentRunResult(
+            goal=goal,
+            learning_component_trials=(
+                component_trials if component_trials is not None else {}
+            ),
+        )
         context: Dict[str, str] = {"goal": goal}
         learning_components: Dict[str, bool] = {}
 
@@ -446,11 +463,12 @@ class AgentOrchestrator:
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
         else:
             skill_result = self._run_with_skill_if_available(
-                goal, context, learning_components
+                goal, context, learning_components, component_trials
             )
             if skill_result is not None:
                 self._merge_learning_components(learning_components, skill_result.learning_components)
                 skill_result.learning_components = learning_components
+                skill_result.learning_component_trials = run_result.learning_component_trials
                 return skill_result
 
         difficulty = self._estimate_goal_difficulty(goal)
@@ -480,7 +498,11 @@ class AgentOrchestrator:
                     ).strip()
             restoring = resume_plan
             prior_results = resumed_results if restoring else []
-            steps = saved_steps if restoring else self.planner.decompose(goal, context)
+            steps = saved_steps if restoring else self.planner.decompose(
+                goal,
+                context,
+                component_trials=component_trials,
+            )
             resume_plan = False
             if self._is_timeout_exceeded(deadline):
                 run_result.summary = _("실행 시간 초과")
@@ -605,44 +627,53 @@ class AgentOrchestrator:
         run_result.learning_components = learning_components
         return run_result
 
-    def _build_shared_context(self, goal: str) -> Dict[str, str]:
+    def _build_shared_context(
+        self,
+        goal: str,
+        component_trials: Optional[Dict[str, Dict[str, bool]]] = None,
+    ) -> Dict[str, str]:
         """루프 진입 전 1회만 실행해야 하는 고비용 검색을 수행한다."""
         from agent.learning_metrics import get_learning_metrics
 
         metrics = get_learning_metrics()
         additions: Dict[str, str] = {}
-        should_activate = getattr(metrics, "should_activate", lambda *args, **kwargs: True)
 
-        if should_activate("EpisodeMemory"):
-            try:
-                from agent.episode_memory import get_episode_memory
+        try:
+            from agent.episode_memory import get_episode_memory
 
-                summary = get_episode_memory().get_recent_summary(goal=goal, limit=3)
-                if summary:
-                    additions["recent_goal_episodes"] = summary[:600]
-            except Exception as exc:
-                logger.debug("[Orchestrator] episode memory 생략: %s", exc)
+            summary = get_episode_memory().get_recent_summary(goal=goal, limit=3)
+            if metrics.should_activate(
+                "EpisodeMemory",
+                eligible=bool(summary),
+                trials=component_trials,
+            ):
+                additions["recent_goal_episodes"] = summary[:600]
+        except Exception as exc:
+            logger.debug("[Orchestrator] episode memory 생략: %s", exc)
 
-        if should_activate("GoalPredictor"):
-            try:
-                from agent.goal_predictor import get_goal_predictor
+        try:
+            from agent.goal_predictor import get_goal_predictor
 
-                prediction = get_goal_predictor().warn_if_high_risk(goal)
-                if prediction.warning:
-                    additions["goal_risk_warning"] = prediction.warning[:300]
-                    if prediction.risk_factors:
-                        additions["goal_risk_factors"] = (
-                            " | ".join(prediction.risk_factors[:3])[:300]
-                        )
-                    self._emit_progress(
-                        "risk_warning",
-                        warning=prediction.warning,
-                        sample_size=prediction.sample_size,
-                        success_rate=prediction.estimated_success_rate,
+            prediction = get_goal_predictor().warn_if_high_risk(goal)
+            if metrics.should_activate(
+                "GoalPredictor",
+                eligible=bool(prediction.warning),
+                trials=component_trials,
+            ):
+                additions["goal_risk_warning"] = prediction.warning[:300]
+                if prediction.risk_factors:
+                    additions["goal_risk_factors"] = (
+                        " | ".join(prediction.risk_factors[:3])[:300]
                     )
-                    self._say(f"[진지] {prediction.warning}")
-            except Exception as exc:
-                logger.debug("[Orchestrator] goal predictor 생략: %s", exc)
+                self._emit_progress(
+                    "risk_warning",
+                    warning=prediction.warning,
+                    sample_size=prediction.sample_size,
+                    success_rate=prediction.estimated_success_rate,
+                )
+                self._say(f"[진지] {prediction.warning}")
+        except Exception as exc:
+            logger.debug("[Orchestrator] goal predictor 생략: %s", exc)
 
         return additions
 
@@ -709,11 +740,27 @@ class AgentOrchestrator:
         except Exception:
             return False
 
+    def _should_activate_component(
+        self,
+        name: str,
+        component_trials: Optional[Dict[str, Dict[str, bool]]],
+    ) -> bool:
+        if component_trials is None:
+            return True
+        from agent.learning_metrics import get_learning_metrics
+
+        return get_learning_metrics().should_activate(
+            name,
+            eligible=True,
+            trials=component_trials,
+        )
+
     def _run_with_skill_if_available(
         self,
         goal: str,
         context: Dict[str, str],
         learning_components: Dict[str, bool],
+        component_trials: Optional[Dict[str, Dict[str, bool]]] = None,
     ) -> Optional[AgentRunResult]:
         if self._interrupt_requested.is_set():
             return None
@@ -721,6 +768,10 @@ class AgentOrchestrator:
             from agent.skill_library import get_skill_library
             skill = get_skill_library().get_applicable_skill(goal)
             if not skill:
+                return None
+            if not self._should_activate_component(
+                "SkillLibrary", component_trials
+            ):
                 return None
             learning_components["SkillLibrary"] = True
 

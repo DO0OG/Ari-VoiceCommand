@@ -475,6 +475,8 @@ class AgentIntegrationTests(unittest.TestCase):
 
     def test_run_uses_reflection_engine_instead_of_planner_reflect(self):
         orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        orchestrator._build_shared_context = lambda goal, trials: {}
+        orchestrator._should_activate_component = lambda name, trials: True
         failed_result = AgentRunResult(
             goal="브라우저 다운로드 자동화",
             achieved=False,
@@ -520,6 +522,8 @@ class AgentIntegrationTests(unittest.TestCase):
 
     def test_run_uses_retry_result_when_reflection_retry_succeeds(self):
         orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        orchestrator._build_shared_context = lambda goal, trials: {}
+        orchestrator._should_activate_component = lambda name, trials: True
         failed_result = AgentRunResult(
             goal="브라우저 다운로드 자동화",
             achieved=False,
@@ -562,7 +566,10 @@ class AgentIntegrationTests(unittest.TestCase):
                 "SkillLibrary": False,
             },
         )
-        fake_metrics = SimpleNamespace(record=lambda *args, **kwargs: None)
+        fake_metrics = SimpleNamespace(
+            record=lambda *args, **kwargs: None,
+            should_activate=lambda *args, **kwargs: kwargs.get("eligible", True),
+        )
 
         with patch.object(orchestrator, "_run_loop", return_value=run_result):
             with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
@@ -591,22 +598,43 @@ class AgentIntegrationTests(unittest.TestCase):
             step_results=[],
         )
         shared_context = {"goal_risk_warning": "주의"}
+        fake_metrics = SimpleNamespace(
+            should_activate=lambda *args, **kwargs: True
+        )
 
         with patch.object(orchestrator, "_build_shared_context", return_value=shared_context):
             with patch.object(orchestrator, "_run_loop", side_effect=[failed_result, retry_result]) as run_loop:
-                with patch.object(
-                    orchestrator._learn,
-                    "reflect_on_failure",
-                    return_value=SimpleNamespace(
-                        lesson="버튼 탐색 순서를 조정하세요.",
-                        root_cause="timeout",
-                        avoid_patterns=["무한 대기"],
-                    ),
+                with patch(
+                    "agent.learning_metrics.get_learning_metrics",
+                    return_value=fake_metrics,
                 ):
-                    with patch.object(orchestrator._learn, "schedule_post_run_update", return_value=None):
-                        with patch.object(orchestrator._learn, "record_learning_metrics", return_value=None):
-                            with patch.object(orchestrator, "_record_strategy", return_value=None):
-                                result = orchestrator.run("브라우저 다운로드 자동화")
+                    with patch.object(
+                        orchestrator._learn,
+                        "reflect_on_failure",
+                        return_value=SimpleNamespace(
+                            lesson="버튼 탐색 순서를 조정하세요.",
+                            root_cause="timeout",
+                            avoid_patterns=["무한 대기"],
+                        ),
+                    ):
+                        with patch.object(
+                            orchestrator._learn,
+                            "schedule_post_run_update",
+                            return_value=None,
+                        ):
+                            with patch.object(
+                                orchestrator._learn,
+                                "record_learning_metrics",
+                                return_value=None,
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "_record_strategy",
+                                    return_value=None,
+                                ):
+                                    result = orchestrator.run(
+                                        "브라우저 다운로드 자동화"
+                                    )
 
         self.assertTrue(result.achieved)
         self.assertIs(run_loop.call_args_list[0].kwargs["shared_context"], shared_context)

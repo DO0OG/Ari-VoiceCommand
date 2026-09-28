@@ -1,5 +1,7 @@
 import os
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -32,6 +34,22 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
         page.local_decision_checkbox.setChecked(False)
         self.assertEqual(page.get_values()["local_decision_mode"], "off")
         self.assertIs(page.get_values()["local_decision_direct_execution"], False)
+
+    def test_learning_diagnostics_show_insufficient_samples(self):
+        metrics = SimpleNamespace(
+            get_component_diagnostics=lambda: [
+                {"name": "EpisodeMemory", "state": "pending"},
+                {"name": "GoalPredictor", "state": "active"},
+            ]
+        )
+        with patch(
+            "ui.settings_agent_page.get_learning_metrics", return_value=metrics
+        ):
+            with patch("ui.settings_agent_page._", side_effect=lambda value: value):
+                page = _AgentSettingsPage({})
+
+        self.assertIn("EpisodeMemory: 판정 보류(표본 부족)", page.learning_metrics_status.text())
+        self.assertIn("GoalPredictor: 활성화", page.learning_metrics_status.text())
 
 
 if __name__ == "__main__":

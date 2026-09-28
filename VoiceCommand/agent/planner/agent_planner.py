@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import List, Optional, Dict
 
 from agent.execution_analysis import is_read_only_step_content
+from agent.learning_metrics import get_learning_metrics
 from agent.planner_json_utils import (
     extract_balanced,
     extract_partial_object,
@@ -149,7 +150,12 @@ class AgentPlanner(TemplatePlansMixin):
 
     # ── 공개 API ──────────────────────────────────────────────────────────────
 
-    def decompose(self, goal: str, context: Dict[str, str] = None) -> List[ActionStep]:
+    def decompose(
+        self,
+        goal: str,
+        context: Dict[str, str] = None,
+        component_trials: Optional[Dict[str, Dict[str, bool]]] = None,
+    ) -> List[ActionStep]:
         """목표를 실행 단계 목록으로 분해 (planner_model 사용)"""
         from agent.dag_builder import extract_resources, build_dag, assign_parallel_groups, annotate_steps
         from agent.few_shot_injector import get_few_shot_injector
@@ -160,6 +166,17 @@ class AgentPlanner(TemplatePlansMixin):
             "FewShot": False,
             "PlannerFeedback": False,
         }
+
+        def _should_activate(name: str, eligible: bool) -> bool:
+            if not eligible:
+                return False
+            if component_trials is None:
+                return True
+            return get_learning_metrics().should_activate(
+                name,
+                eligible=True,
+                trials=component_trials,
+            )
 
         def _annotate(steps: List[ActionStep]) -> List[ActionStep]:
             for step in steps:
@@ -180,36 +197,27 @@ class AgentPlanner(TemplatePlansMixin):
         if is_dev_goal:
             ctx_block = self._fmt_developer_context(context, goal=goal)
             failure_hints = self._get_failure_hints(goal)
-            if failure_hints:
+            if _should_activate("StrategyMemory", bool(failure_hints)):
                 signals["StrategyMemory"] = True
                 ctx_block = "## 최근 실패 힌트\n" + failure_hints + "\n" + ctx_block
         else:
             feedback_loop = get_planner_feedback_loop()
             feedback_tags = feedback_loop.infer_tags(goal=goal)
-            strategy_ctx = ""
-            try:
-                from agent.learning_metrics import get_learning_metrics
-
-                metrics = get_learning_metrics()
-                should_activate = getattr(metrics, "should_activate", lambda *args, **kwargs: True)
-                if should_activate("StrategyMemory"):
-                    strategy_ctx = self._get_strategy_context(goal)
-            except Exception:
-                strategy_ctx = self._get_strategy_context(goal)
+            strategy_ctx = self._get_strategy_context(goal)
             episode_failure_patterns = self._get_episode_failure_patterns(goal)
             ctx_block = self._fmt_context(context)
-            if strategy_ctx:
+            if _should_activate("StrategyMemory", bool(strategy_ctx)):
                 signals["StrategyMemory"] = True
                 ctx_block = strategy_ctx + "\n" + ctx_block
-            if episode_failure_patterns:
+            if _should_activate("EpisodeMemory", bool(episode_failure_patterns)):
                 signals["EpisodeMemory"] = True
                 ctx_block = "## 반복 실패 패턴\n" + episode_failure_patterns + "\n" + ctx_block
             few_shot = get_few_shot_injector().get_examples(goal)
-            if few_shot:
+            if _should_activate("FewShot", bool(few_shot)):
                 signals["FewShot"] = True
                 ctx_block = few_shot + "\n" + ctx_block
             feedback_hints = feedback_loop.get_hints(goal, feedback_tags)
-            if feedback_hints:
+            if _should_activate("PlannerFeedback", bool(feedback_hints)):
                 signals["PlannerFeedback"] = True
                 ctx_block = feedback_hints + "\n" + ctx_block
 

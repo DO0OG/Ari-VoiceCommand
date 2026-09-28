@@ -25,6 +25,7 @@ class InterruptResumeTests(unittest.TestCase):
         orchestrator._verify_engine = Mock()
         orchestrator._verify_engine.verify.return_value = (True, "done")
         orchestrator._build_shared_context = Mock(return_value={})
+        orchestrator._should_activate_component = Mock(return_value=True)
         orchestrator._should_prefer_template_over_skill = Mock(return_value=True)
         orchestrator._estimate_goal_difficulty = Mock(return_value=0)
         orchestrator._prevalidate_steps = Mock(return_value=[])
