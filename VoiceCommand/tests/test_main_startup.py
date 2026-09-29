@@ -211,6 +211,25 @@ class MainStartupTests(unittest.TestCase):
         )
         self.assertLess(dispatch_line, gui_import_line)
 
+    def test_native_preload_is_before_qt_imports(self):
+        tree = ast.parse(MAIN_PATH.read_text(encoding="utf-8"))
+        preload_line = next(
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and getattr(node.func, "attr", None) == "import_module"
+            and node.args
+            and getattr(node.args[0], "value", None) == "onnxruntime"
+        )
+        qt_import_lines = [
+            node.lineno
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith(("PySide6", "core.single_instance"))
+        ]
+        self.assertTrue(qt_import_lines)
+        self.assertLess(preload_line, min(qt_import_lines))
+
     def test_logging_permission_failure_keeps_console_free_startup(self):
         handlers = []
 

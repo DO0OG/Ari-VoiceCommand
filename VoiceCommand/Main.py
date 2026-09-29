@@ -23,8 +23,6 @@ if _worker_exit_code is None:
 if _worker_exit_code is not None:
     raise SystemExit(_worker_exit_code)
 
-from core.single_instance import ensure_single_instance, start_single_instance_server
-
 import os
 import logging
 import faulthandler
@@ -75,6 +73,8 @@ try:
 except (ImportError, OSError, RuntimeError) as exc:
     logging.debug("onnxruntime 사전 로드 생략: %s", exc)
 
+# single_instance는 PySide6.QtNetwork를 불러오므로 반드시 사전 로드 뒤에 둔다.
+from core.single_instance import ensure_single_instance, start_single_instance_server
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox, QProgressDialog
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QEventLoop, QThread, Qt, QTimer
