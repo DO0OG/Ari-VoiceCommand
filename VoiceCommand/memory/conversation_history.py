@@ -279,6 +279,28 @@ class ConversationHistory:
         with self._lock:
             return self.active[-n:]
 
+    def mark_last_response_interrupted(
+        self,
+        expected_response: str,
+        interrupted_response: str,
+    ) -> bool:
+        """마지막 응답을 중단된 지점으로 갱신한다."""
+        expected = str(expected_response or "").strip()
+        replacement = str(interrupted_response or "").strip()
+        if not replacement:
+            return False
+        with self._lock:
+            for entry in reversed(self.active):
+                if not isinstance(entry, dict):
+                    continue
+                response = str(entry.get("ai", "") or "")
+                if expected and expected not in response:
+                    continue
+                entry["ai"] = replacement
+                self._schedule_save()
+                return True
+        return False
+
     def _is_internal_entry(self, user_msg: str, ai_response: str) -> bool:
         del ai_response
         normalized = (user_msg or "").strip()

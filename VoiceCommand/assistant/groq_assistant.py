@@ -40,26 +40,57 @@ class GroqAssistant:
         logging.info(f"[GroqAssistant] 레거시 execute_function 호출: {function_name}")
         return ""
 
-    def chat_with_tools(self, user_message, include_context=True, stream_callback=None):
+    def chat_with_tools(
+        self,
+        user_message,
+        include_context=True,
+        stream_callback=None,
+        cancel_event=None,
+    ):
         return self._provider.chat_with_tools(
             user_message,
             include_context=include_context,
             stream_callback=stream_callback,
+            cancel_event=cancel_event,
         )
 
-    def chat(self, user_message, include_context=True, stream_callback=None):
+    def chat(
+        self,
+        user_message,
+        include_context=True,
+        stream_callback=None,
+        cancel_event=None,
+    ):
         return self._provider.chat(
             user_message,
             include_context=include_context,
             stream_callback=stream_callback,
+            cancel_event=cancel_event,
         )
 
-    def feed_tool_result(self, original_msg, tool_calls, results, stream_callback=None):
+    def feed_tool_result(
+        self,
+        original_msg,
+        tool_calls,
+        results,
+        stream_callback=None,
+        cancel_event=None,
+    ):
         return self._provider.feed_tool_result(
             original_msg,
             tool_calls,
             results,
             stream_callback=stream_callback,
+            cancel_event=cancel_event,
+        )
+
+    def stop_stream(self):
+        return self._provider.stop_stream()
+
+    def mark_last_response_interrupted(self, expected_response, interrupted_response):
+        return self._provider.mark_last_response_interrupted(
+            expected_response,
+            interrupted_response,
         )
 
     def record_tool_result(self, tool_calls, results, response):

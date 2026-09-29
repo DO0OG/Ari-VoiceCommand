@@ -15,8 +15,9 @@ import time
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
-from audio.audio_manager import GlobalAudio
+from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
+from tts.pcm_playback import write_pcm_chunks
 from tts.tts_cache import DEFAULT_MAX_BYTES, DiskTTSAudioCache, build_tts_cache_key
 
 KO_VOICES = [
@@ -27,7 +28,6 @@ KO_VOICES = [
 DEFAULT_VOICE = "ko-KR-SunHiNeural"
 _SAMPLE_RATE = 22050
 _SENTENCE_TIMEOUT_SECONDS = 10.0
-_PCM_CHUNK_BYTES = _SAMPLE_RATE // 10 * 2
 _SENTENCE_ENDINGS = frozenset(".!?。！？…")
 _CLOSING_PUNCTUATION = frozenset("\"'”’»』」】）)]}〉》")
 _COMMON_ABBREVIATIONS = frozenset(
@@ -326,11 +326,7 @@ class EdgeTTS(QObject):
 
     @staticmethod
     def _write_pcm_chunks(stream, pcm: bytes, stop_event: threading.Event) -> bool:
-        for offset in range(0, len(pcm), _PCM_CHUNK_BYTES):
-            if stop_event.is_set():
-                return False
-            stream.write(pcm[offset : offset + _PCM_CHUNK_BYTES])
-        return bool(pcm) and not stop_event.is_set()
+        return write_pcm_chunks(stream, pcm, stop_event, _SAMPLE_RATE)
 
     def _create_output_stream(self):
         from audio.audio_manager import get_output_device_index
@@ -343,12 +339,17 @@ class EdgeTTS(QObject):
             output_device_index=get_output_device_index(),
         )
 
-    def speak(self, text: str, emotion: str = "평온") -> bool:
+    def speak(
+        self,
+        text: str,
+        emotion: str = "평온",
+        stop_event: threading.Event | None = None,
+    ) -> bool:
         sentences = split_sentences(text)
         if not sentences:
             return False
 
-        stop_event = threading.Event()
+        stop_event = stop_event or threading.Event()
         with self._state_lock:
             if self._closed:
                 return False
@@ -413,7 +414,8 @@ class EdgeTTS(QObject):
             if not success:
                 stop_event.set()
             if stream is not None:
-                GlobalAudio.close_stream(stream)
+                with get_audio_output_lock():
+                    GlobalAudio.close_stream(stream)
             if producer.is_alive():
                 producer.join(timeout=0.2)
             stop_event.set()

@@ -5,6 +5,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ja\n"
 
+msgid "말하기 중단"
+msgstr "読み上げを停止"
+
+msgid "(응답 중단)"
+msgstr "(応答を中断)"
+
 msgid "아리 설정"
 msgstr "Ariの設定"
 

@@ -489,6 +489,7 @@ class CharacterWidgetHelperTests(unittest.TestCase):
         widget.voice_thread = MagicMock()
 
         with (
+            patch("VoiceCommand.is_tts_playing", return_value=False),
             patch("ui.character_widget.ConfigManager.get", return_value="toggle"),
             patch.object(widget, "_update_current_screen"),
         ):
@@ -496,6 +497,22 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(150, 150)))
 
         widget.voice_thread.request_listening.assert_called_once_with()
+        widget.voice_thread.release_listening.assert_not_called()
+
+    def test_character_click_stops_active_speech_without_starting_listening(self):
+        widget = self._make_widget()
+        widget.voice_thread = MagicMock()
+
+        with (
+            patch("VoiceCommand.is_tts_playing", return_value=True),
+            patch("VoiceCommand.stop_speaking") as stop_speaking,
+            patch.object(widget, "_update_current_screen"),
+        ):
+            widget.mousePressEvent(_FakeMouseEvent(QPoint(150, 150)))
+            widget.mouseReleaseEvent(_FakeMouseEvent(QPoint(150, 150)))
+
+        stop_speaking.assert_called_once_with()
+        widget.voice_thread.request_listening.assert_not_called()
         widget.voice_thread.release_listening.assert_not_called()
 
     def test_character_long_press_uses_push_to_talk_until_release(self):

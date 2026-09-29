@@ -5,6 +5,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ko\n"
 
+msgid "말하기 중단"
+msgstr "말하기 중단"
+
+msgid "(응답 중단)"
+msgstr "(응답 중단)"
+
 msgid "아리 설정"
 msgstr "아리 설정"
 

@@ -177,6 +177,7 @@ class CharacterWidget(QWidget):
         self._voice_press_eligible = False
         self._voice_press_long = False
         self._character_ptt_active = False
+        self._voice_press_stop_speaking = False
         self._listen_press_timer = QTimer(self)
         self._listen_press_timer.setSingleShot(True)
         self._listen_press_timer.setInterval(350)
@@ -1099,7 +1100,17 @@ class CharacterWidget(QWidget):
                 return
             self._last_click = now
 
-            self._voice_press_eligible = self.voice_thread is not None
+            self._voice_press_stop_speaking = False
+            if self.voice_thread is not None:
+                try:
+                    from VoiceCommand import is_tts_playing
+                    self._voice_press_stop_speaking = is_tts_playing()
+                except (ImportError, AttributeError, RuntimeError) as exc:
+                    logging.debug("TTS 재생 상태 확인 생략: %s", exc)
+            self._voice_press_eligible = (
+                self.voice_thread is not None
+                and not self._voice_press_stop_speaking
+            )
             self._voice_press_long = False
             self._character_ptt_active = False
             self._listen_press_timer.stop()
@@ -1189,9 +1200,14 @@ class CharacterWidget(QWidget):
                 and not self._voice_press_long
                 and self.voice_thread is not None
             ):
-                self.voice_thread.request_listening()
+                if self._voice_press_stop_speaking:
+                    from VoiceCommand import stop_speaking
+                    stop_speaking()
+                else:
+                    self.voice_thread.request_listening()
             self._voice_press_eligible = False
             self._character_ptt_active = False
+            self._voice_press_stop_speaking = False
 
             affinity_mgr = getattr(self, "_affinity_manager", None)
             on_level_up = getattr(self, "_affinity_on_level_up", None)

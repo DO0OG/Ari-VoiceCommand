@@ -88,6 +88,9 @@ class LLMProvider:
         self.router_enabled = bool(router_enabled)
         self.conversation_history = []
         self._history_lock = threading.RLock()
+        self._active_stream_lock = threading.Lock()
+        self._active_stream = None
+        self._active_stream_cancel_event = None
         self.max_history = 10
         self.max_context_tokens = self._load_int_setting("max_context_tokens", 8000)
         self._tool_streaming_support: dict[str, bool] = {}
@@ -364,6 +367,60 @@ class LLMProvider:
             while self.conversation_history and self._is_tool_result_message(self.conversation_history[0]):
                 self.conversation_history.pop(0)
 
+    def mark_last_response_interrupted(
+        self,
+        expected_response: str,
+        interrupted_response: str,
+    ) -> bool:
+        """LLM 문맥의 마지막 응답을 중단된 내용으로 바꾼다."""
+        expected = str(expected_response or "").strip()
+        replacement = str(interrupted_response or "").strip()
+        if not replacement:
+            return False
+        with self._history_lock:
+            for message in reversed(self.conversation_history):
+                if message.get("role") != "assistant":
+                    continue
+                response = message.get("content")
+                if not isinstance(response, str):
+                    continue
+                if expected and expected not in response:
+                    continue
+                message["content"] = replacement
+                return True
+            self.conversation_history.append(
+                {"role": "assistant", "content": replacement}
+            )
+            return True
+
+    def _set_active_stream(self, stream, cancel_event) -> None:
+        with self._active_stream_lock:
+            self._active_stream = stream
+            self._active_stream_cancel_event = cancel_event
+
+    def _clear_active_stream(self, stream) -> None:
+        with self._active_stream_lock:
+            if self._active_stream is stream:
+                self._active_stream = None
+                self._active_stream_cancel_event = None
+
+    def stop_stream(self) -> bool:
+        """활성 LLM 스트림을 닫는다."""
+        with self._active_stream_lock:
+            stream = self._active_stream
+            cancel_event = self._active_stream_cancel_event
+        if stream is None:
+            return False
+        if cancel_event is not None:
+            cancel_event.set()
+        close = getattr(stream, "close", None)
+        if callable(close):
+            try:
+                close()
+            except (OSError, RuntimeError, TypeError, ValueError, httpx.HTTPError) as exc:
+                logging.debug("LLM 스트림 닫기 생략: %s", exc)
+        return True
+
     @staticmethod
     def _is_tool_result_message(message: dict) -> bool:
         content = message.get("content")
@@ -520,7 +577,7 @@ class LLMProvider:
             raise last_error
         raise RuntimeError("요청을 전송할 연결이 없습니다.")
 
-    def _consume_tool_call_stream(self, stream, stream_callback):
+    def _consume_tool_call_stream(self, stream, stream_callback, cancel_event=None):
         text_parts = []
         pending_text = ""
         suppress_text = False
@@ -544,6 +601,8 @@ class LLMProvider:
             pending_text = ""
 
         for chunk in stream:
+            if cancel_event is not None and cancel_event.is_set():
+                break
             choices = self._response_field(chunk, "choices", []) or []
             if not choices:
                 continue
@@ -579,7 +638,12 @@ class LLMProvider:
                 elif arguments:
                     partial["argument_parts"].append(str(arguments))
 
-        if pending_text.strip() and not suppress_text and stream_callback:
+        if (
+            pending_text.strip()
+            and not suppress_text
+            and stream_callback
+            and not (cancel_event is not None and cancel_event.is_set())
+        ):
             stream_callback(pending_text)
 
         tool_calls = []
@@ -604,12 +668,16 @@ class LLMProvider:
         model: str,
         request_kwargs: dict,
         stream_callback,
+        cancel_event=None,
     ):
         emitted_text = False
+        emitted_parts: List[str] = []
+        cancel_event = cancel_event or threading.Event()
 
         def track_emitted_text(text: str) -> None:
             nonlocal emitted_text
             emitted_text = True
+            emitted_parts.append(text)
             stream_callback(text)
 
         next_client, next_provider, next_model = client, provider, model
@@ -622,6 +690,8 @@ class LLMProvider:
         else:
             timeout_errors += (APITimeoutError,)
         while True:
+            if cancel_event.is_set():
+                return "".join(emitted_parts), []
             stream, active_target = self._create_completion_with_fallback(
                 next_client,
                 next_provider,
@@ -632,12 +702,16 @@ class LLMProvider:
                 stream=True,
             )
             _, active_provider, active_model = active_target
+            self._set_active_stream(stream, cancel_event)
             try:
                 text, tool_calls = self._consume_tool_call_stream(
                     stream,
                     track_emitted_text,
+                    cancel_event,
                 )
             except timeout_errors:
+                if cancel_event.is_set():
+                    return "".join(emitted_parts), []
                 active_key = (str(active_provider or ""), str(active_model or ""))
                 if emitted_text:
                     raise
@@ -655,6 +729,8 @@ class LLMProvider:
                     raise
                 next_client, next_provider, next_model = next_target
                 continue
+            finally:
+                self._clear_active_stream(stream)
 
             if self._is_custom_provider(active_provider):
                 self._tool_streaming_support[active_provider] = True
@@ -824,8 +900,10 @@ class LLMProvider:
         stream_callback=None,
         save_history=True,
         include_history=True,
+        cancel_event=None,
     ):
         """단순 대화"""
+        cancel_event = cancel_event or threading.Event()
         if not self._has_any_client():
             return "AI 기능이 비활성화되어 있습니다."
 
@@ -893,8 +971,12 @@ class LLMProvider:
                     max_tokens=self._estimate_max_tokens(user_message),
                     stream_callback=stream_callback,
                     provider=provider,
+                    cancel_event=cancel_event,
                 )
-            
+
+            if cancel_event is not None and cancel_event.is_set():
+                return raw_msg
+
             if save_history:
                 from memory.memory_manager import get_memory_manager
                 memory_manager = get_memory_manager()
@@ -911,11 +993,21 @@ class LLMProvider:
                 self._response_cache.set(cache_key, msg)
             return msg
         except Exception as e:
+            if cancel_event is not None and cancel_event.is_set():
+                return ""
             self._log_provider_exception(logging.error, "LLM chat 오류", provider, e)
             return self._error_response(e)
 
-    def chat_with_tools(self, user_message, include_context=True, model_override="", stream_callback=None):
+    def chat_with_tools(
+        self,
+        user_message,
+        include_context=True,
+        model_override="",
+        stream_callback=None,
+        cancel_event=None,
+    ):
         """도구 포함 대화"""
+        cancel_event = cancel_event or threading.Event()
         if not self._has_any_client():
             return "AI 기능 비활성화 상태입니다.", []
 
@@ -999,6 +1091,7 @@ class LLMProvider:
                         model,
                         request_kwargs,
                         stream_callback,
+                        cancel_event,
                     )
                     streamed_response = True
                 except RuntimeError:
@@ -1010,6 +1103,9 @@ class LLMProvider:
                     logging.debug(
                         "[LLMProvider] 사용자 정의 제공자 스트리밍 미지원, 일반 요청으로 폴백"
                     )
+
+            if cancel_event is not None and cancel_event.is_set():
+                return raw_msg, []
 
             if not streamed_response:
                 response = self._create_completion_with_fallback(
@@ -1078,6 +1174,8 @@ class LLMProvider:
                 self.add_to_history("assistant", msg)
             return msg, tool_calls
         except Exception as e:
+            if cancel_event is not None and cancel_event.is_set():
+                return "", []
             self._log_provider_exception(logging.error, "LLM chat_with_tools 오류", provider, e)
             return self._error_response(e), []
 
@@ -1089,6 +1187,7 @@ class LLMProvider:
         **kwargs,
     ) -> str:
         """제공자별 스트리밍 응답을 공통 콜백 인터페이스로 전달한다."""
+        cancel_event = kwargs.get("cancel_event") or threading.Event()
         client, provider, model = self._resolve_route(
             str(messages[-1].get("content", "")) if messages else "",
             kwargs.get("model_override", ""),
@@ -1114,11 +1213,17 @@ class LLMProvider:
                     system=system,
                     messages=anthropic_messages,
                 ) as stream:
-                    for text in stream.text_stream:
-                        if text:
-                            full_text += text
-                            if on_token:
-                                on_token(text)
+                    self._set_active_stream(stream, cancel_event)
+                    try:
+                        for text in stream.text_stream:
+                            if cancel_event.is_set():
+                                break
+                            if text:
+                                full_text += text
+                                if on_token:
+                                    on_token(text)
+                    finally:
+                        self._clear_active_stream(stream)
             else:
                 stream = client.chat.completions.create(
                     model=model,
@@ -1128,33 +1233,46 @@ class LLMProvider:
                     stream=True,
                     extra_body=self._reasoning_extra_body(provider),
                 )
-                for chunk in stream:
-                    choice = chunk.choices[0]
-                    delta = getattr(choice, "delta", None)
-                    text = getattr(delta, "content", "") or ""
-                    if text:
-                        full_text += text
-                        if on_token:
-                            on_token(text)
-                    for tc in getattr(delta, "tool_calls", None) or []:
-                        tool_calls.append(tc)
+                self._set_active_stream(stream, cancel_event)
+                try:
+                    for chunk in stream:
+                        if cancel_event.is_set():
+                            break
+                        choice = chunk.choices[0]
+                        delta = getattr(choice, "delta", None)
+                        text = getattr(delta, "content", "") or ""
+                        if text:
+                            full_text += text
+                            if on_token:
+                                on_token(text)
+                        for tc in getattr(delta, "tool_calls", None) or []:
+                            tool_calls.append(tc)
+                finally:
+                    self._clear_active_stream(stream)
         except Exception as exc:
             self._log_provider_exception(logging.debug, "[LLMProvider] stream_chat 폴백", provider, exc)
-            try:
-                full_text = self._stream_or_chat_completion(
-                    client,
-                    model=model,
-                    messages=messages,
-                    temperature=float(kwargs.get("temperature", 0.7)),
-                    max_tokens=int(kwargs.get("max_tokens", 1000)),
-                    stream_callback=on_token,
-                    provider=provider,
-                )
-            except Exception as fallback_error:
-                if not self._is_custom_provider(provider):
-                    raise
-                self._log_provider_exception(logging.error, "[LLMProvider] stream_chat 실패", provider, fallback_error)
-                full_text = self._error_response(fallback_error)
+            if not cancel_event.is_set():
+                try:
+                    full_text = self._stream_or_chat_completion(
+                        client,
+                        model=model,
+                        messages=messages,
+                        temperature=float(kwargs.get("temperature", 0.7)),
+                        max_tokens=int(kwargs.get("max_tokens", 1000)),
+                        stream_callback=on_token,
+                        provider=provider,
+                        cancel_event=cancel_event,
+                    )
+                except Exception as fallback_error:
+                    if not self._is_custom_provider(provider):
+                        raise
+                    self._log_provider_exception(
+                        logging.error,
+                        "[LLMProvider] stream_chat 실패",
+                        provider,
+                        fallback_error,
+                    )
+                    full_text = self._error_response(fallback_error)
         if on_done:
             on_done(full_text, tool_calls)
         return full_text
@@ -1234,8 +1352,18 @@ class LLMProvider:
             logging.debug("[LLMProvider] OCR 폴백 실패: %s", exc)
         return "현재 제공자에서 이미지 분석을 사용할 수 없습니다."
 
-    def feed_tool_result(self, original_msg: str, tool_calls: list, results: list, model_override="", stream_callback=None) -> str:
+    def feed_tool_result(
+        self,
+        original_msg: str,
+        tool_calls: list,
+        results: list,
+        model_override="",
+        stream_callback=None,
+        cancel_event=None,
+    ) -> str:
         """도구 결과 피드백"""
+        if cancel_event is not None and cancel_event.is_set():
+            return ""
         model = model_override or self.model
         provider = self.provider
         if not self._has_any_client():
@@ -1292,6 +1420,8 @@ class LLMProvider:
                 max_tokens=self._estimate_max_tokens(original_msg),
                 extra_body=self._reasoning_extra_body(provider),
             )
+            if cancel_event is not None and cancel_event.is_set():
+                return ""
             msg = self._clean_response(response.choices[0].message.content or "")
             if stream_callback and msg:
                 self._emit_stream_text(msg, stream_callback)
@@ -1299,6 +1429,8 @@ class LLMProvider:
                 self.add_to_history("assistant", msg)
             return msg
         except Exception as e:
+            if cancel_event is not None and cancel_event.is_set():
+                return ""
             self._log_provider_exception(logging.error, "feed_tool_result 오류", provider, e)
             return self._error_response(e) if self._is_custom_provider(provider) else f"도구 결과 처리 실패: {e}"
 
@@ -1448,7 +1580,11 @@ class LLMProvider:
         max_tokens: int,
         stream_callback=None,
         provider: str = "",
+        cancel_event=None,
     ) -> str:
+        cancel_event = cancel_event or threading.Event()
+        if cancel_event.is_set():
+            return ""
         streaming_enabled = bool(self._load_int_setting("llm_streaming_enabled", 1))
         if not stream_callback or not streaming_enabled:
             resp = self._create_completion_with_fallback(
@@ -1458,6 +1594,8 @@ class LLMProvider:
                 max_tokens=max_tokens,
             )
             return resp.choices[0].message.content or ""
+        parts: List[str] = []
+        stream = None
         try:
             stream = self._create_completion_with_fallback(
                 client, provider, model,
@@ -1466,8 +1604,10 @@ class LLMProvider:
                 max_tokens=max_tokens,
                 stream=True,
             )
-            parts: List[str] = []
+            self._set_active_stream(stream, cancel_event)
             for chunk in stream:
+                if cancel_event.is_set():
+                    break
                 try:
                     delta = chunk.choices[0].delta.content or ""
                 except Exception as exc:
@@ -1478,10 +1618,17 @@ class LLMProvider:
                 parts.append(delta)
                 stream_callback(delta)
             text = "".join(parts)
-            if text:
+            if cancel_event.is_set() or text:
                 return text
         except Exception as exc:
+            if cancel_event.is_set():
+                return "".join(parts)
             self._log_provider_exception(logging.debug, "[LLMProvider] 스트리밍 폴백", provider, exc)
+        finally:
+            if stream is not None:
+                self._clear_active_stream(stream)
+        if cancel_event.is_set():
+            return "".join(parts)
         resp = self._create_completion_with_fallback(
             client, provider, model,
             messages=messages,

@@ -30,6 +30,19 @@ class TTSThreadTests(unittest.TestCase):
         self.assertEqual(task_count, 3)
         self.assertFalse(stop_requested)
 
+    def test_clear_discards_queued_speech_and_cancels_active_batch(self):
+        thread = TTSThread()
+        thread.queue.put_nowait("첫 문장")
+        thread.queue.put_nowait("둘째 문장")
+        stop_event = threading.Event()
+        thread._active_stop_event = stop_event
+
+        self.assertEqual(thread.clear(), 2)
+
+        self.assertTrue(stop_event.is_set())
+        self.assertTrue(thread.queue.empty())
+        self.assertEqual(thread.queue.unfinished_tasks, 0)
+
     def test_collect_batch_preserves_stop_signal(self):
         thread = TTSThread()
         thread.queue.put(None)

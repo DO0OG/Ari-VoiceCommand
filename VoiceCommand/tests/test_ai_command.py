@@ -1,4 +1,5 @@
 import os
+import threading
 import tempfile
 import unittest
 from datetime import datetime
@@ -49,6 +50,19 @@ class _StreamingAssistant:
     def feed_tool_result(self, original_text, tool_calls, results, stream_callback=None):
         del original_text, tool_calls, results, stream_callback
         return ""
+
+
+class _CancellableStreamingAssistant:
+    def __init__(self):
+        self.started = threading.Event()
+
+    def chat_with_tools(self, text, include_context=True, stream_callback=None, cancel_event=None):
+        del text, include_context
+        if stream_callback:
+            stream_callback("표시된 문장.")
+        self.started.set()
+        cancel_event.wait(timeout=5)
+        return "표시된 문장. 아직 표시되지 않은 문장.", []
 
 
 class _ToolCallAssistant:
@@ -444,6 +458,38 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual("".join(streamed), "안녕하세요")
         self.assertIn("안녕하세요", combined)
+
+    def test_cancelled_stream_records_only_displayed_text_and_marker(self):
+        assistant = _CancellableStreamingAssistant()
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        streamed = []
+        result = []
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch("memory.conversation_history.add_conversation") as add_conversation,
+        ):
+            worker = threading.Thread(
+                target=lambda: result.append(
+                    command.run_interaction(
+                        "간단한 인사",
+                        stream_callback=streamed.append,
+                    )
+                )
+            )
+            worker.start()
+            self.assertTrue(assistant.started.wait(timeout=2))
+            self.assertTrue(command.cancel_current_response())
+            worker.join(timeout=2)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(streamed, ["표시된 문장."])
+        self.assertEqual(
+            result,
+            ["표시된 문장.\n\n(응답 중단)"],
+        )
+        add_conversation.assert_called_once()
+        self.assertEqual(add_conversation.call_args.args[1], result[0])
 
     def test_busy_run_interaction_notifies_once_per_five_seconds(self):
         now = [100.0]
