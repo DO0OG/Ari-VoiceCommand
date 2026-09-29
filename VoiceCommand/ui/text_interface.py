@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
@@ -194,6 +194,10 @@ class TextInterface(QMainWindow):
         self._stream_tts_deferred = ""
         self._stream_tts_sentence_batch: list[str] = []
         self._stream_tts_spoken = False
+        self._speech_stopped = False
+        self.stop_speaking_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.stop_speaking_shortcut.setContext(Qt.WindowShortcut)
+        self.stop_speaking_shortcut.activated.connect(self.stop_speaking)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -343,6 +347,7 @@ class TextInterface(QMainWindow):
         self.scroll_to_bottom()
 
         if self.ai_assistant:
+            self._speech_stopped = False
             self._stream_message_index = None
             self._stream_response_buffer = ""
             self._stream_tts_buffer = ""
@@ -392,6 +397,7 @@ class TextInterface(QMainWindow):
 
     def _handle_response(self, response: str) -> None:
         final_response = response or self._stream_response_buffer
+        interrupted = _("(응답 중단)") in final_response
         if self._stream_message_index is not None:
             self.chat_widget.update_message(self._stream_message_index, final_response)
         else:
@@ -400,7 +406,9 @@ class TextInterface(QMainWindow):
         self._stream_response_buffer = ""
         self.scroll_to_bottom()
         self.refresh_status_panel()
-        if self.tts_callback:
+        if self.tts_callback and not interrupted and not self._speech_stopped:
+            from core.VoiceCommand import set_active_conversation_response
+            set_active_conversation_response(final_response)
             # 스트리밍 중 문장 단위 TTS가 이미 시작된 경우: 남은 버퍼만 처리
             if self._stream_tts_spoken:
                 remaining = " ".join(
@@ -419,6 +427,20 @@ class TextInterface(QMainWindow):
         self._stream_tts_deferred = ""
         self._stream_tts_sentence_batch = []
         self._stream_tts_spoken = False
+        self._speech_stopped = False
+
+    def stop_speaking(self) -> None:
+        """현재 음성 재생이나 응답 생성을 중단한다."""
+        self._mark_speaking_stopped()
+        from VoiceCommand import stop_speaking
+        stop_speaking()
+
+    def _mark_speaking_stopped(self) -> None:
+        self._speech_stopped = True
+        self._stream_tts_buffer = ""
+        self._stream_tts_deferred = ""
+        self._stream_tts_sentence_batch = []
+        self._stream_tts_spoken = False
 
     def _on_progress_event(self, event_type: str, kwargs: dict) -> None:
         """워커 스레드 progress 이벤트 → 메인 스레드 대시보드 업데이트."""
@@ -426,7 +448,7 @@ class TextInterface(QMainWindow):
         self.scroll_to_bottom()
 
     def _handle_stream_chunk(self, chunk: str) -> None:
-        if not chunk:
+        if not chunk or self._speech_stopped:
             return
         if self._stream_message_index is None:
             self.chat_widget.add_message("", is_user=False)

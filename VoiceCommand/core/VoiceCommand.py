@@ -1,6 +1,7 @@
 ﻿"""애플리케이션 전역 상태와 음성/TTS 오케스트레이션 헬퍼."""
 
 import logging
+import inspect
 import os
 import re
 import sys
@@ -60,6 +61,8 @@ class AppState:
         self.listening_indicator_active = False
         self.listening_indicator_text = _("말씀해주세요")
         self.tts_resume_guard_until = 0.0
+        self.active_conversation_response = ""
+        self.active_response_lock = threading.Lock()
         self.session_locked = False
         self.session_lock_monitoring_available = True
         self.activity_quiet = False
@@ -366,6 +369,8 @@ def _handle_tts_playback_finished() -> None:
     _state.tts_resume_guard_until = (
         time.monotonic() + TTS_WAKE_GUARD_BUFFER_SECONDS
     )
+    with _state.active_response_lock:
+        _state.active_conversation_response = ""
     emit_plugin_event("on_tts_end", {})
     emit_plugin_event("tts.playback.finished", {})
 
@@ -373,6 +378,102 @@ def _handle_tts_playback_finished() -> None:
         _show_listening_bubble()
     elif _state.character_widget:
         _state.character_widget.hide_speech_bubble()
+
+
+def set_active_conversation_response(text: str) -> None:
+    """현재 재생 중인 대화 응답을 기록한다."""
+    with _state.active_response_lock:
+        _state.active_conversation_response = str(text or "")
+
+
+def _stop_active_llm_stream() -> bool:
+    assistant = _state.ai_assistant
+    if not hasattr(assistant, "stop_stream"):
+        return False
+    try:
+        return bool(assistant.stop_stream())
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        logging.debug("LLM 스트림 중단 생략: %s", exc)
+        return False
+
+
+def stop_speaking() -> bool:
+    """재생·생성 중인 응답과 대기열을 중단한다."""
+    was_playing = is_tts_playing()
+    turn_cancelled = False
+    registry = _state.command_registry
+    if registry is not None:
+        for command in getattr(registry, "commands", ()):
+            cancel = getattr(command, "cancel_current_response", None)
+            if callable(cancel):
+                turn_cancelled = bool(cancel()) or turn_cancelled
+
+    stream_stopped = _stop_active_llm_stream()
+    thread = _state.tts_thread
+    current_text = str(getattr(thread, "current_text", "") or "").strip()
+    removed_count = thread.clear() if hasattr(thread, "clear") else 0
+    if was_playing:
+        with _state.active_response_lock:
+            full_response = _state.active_conversation_response.strip()
+            response = full_response
+        if full_response and current_text:
+            current_position = response.find(current_text)
+            if current_position >= 0:
+                response = response[:current_position + len(current_text)].strip()
+        if full_response and response:
+            interrupted_response = f"{response}\n\n{_('(응답 중단)')}"
+            try:
+                from memory.conversation_history import get_conversation_history
+
+                get_conversation_history().mark_last_response_interrupted(
+                    full_response,
+                    interrupted_response,
+                )
+            except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("중단된 대화 기록 갱신 생략: %s", exc)
+
+            assistant = _state.ai_assistant
+            if hasattr(assistant, "mark_last_response_interrupted"):
+                try:
+                    assistant.mark_last_response_interrupted(
+                        full_response,
+                        interrupted_response,
+                    )
+                except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                    logging.debug("LLM 대화 기록 갱신 생략: %s", exc)
+
+    provider = _state.fish_tts
+    if hasattr(provider, "stop"):
+        try:
+            provider.stop()
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("TTS 재생 중단 생략: %s", exc)
+    else:
+        stop_event = getattr(provider, "stop_event", None)
+        if callable(getattr(stop_event, "set", None)):
+            stop_event.set()
+
+    _state.tts_resume_guard_until = (
+        time.monotonic() + TTS_WAKE_GUARD_BUFFER_SECONDS
+    )
+    did_stop = was_playing or bool(removed_count) or turn_cancelled or stream_stopped
+    if (was_playing or removed_count) and not is_tts_playing():
+        _handle_tts_playback_finished()
+    with _state.active_response_lock:
+        _state.active_conversation_response = ""
+    if _state.character_widget:
+        text_interface = getattr(_state.character_widget, "text_interface", None)
+        mark_stopped = getattr(text_interface, "_mark_speaking_stopped", None)
+        if callable(mark_stopped):
+            mark_stopped()
+        reset_stream = getattr(_state.character_widget, "_reset_stream_buffer", None)
+        if callable(reset_stream):
+            reset_stream()
+        if _state.listening_indicator_active:
+            _show_listening_bubble()
+        else:
+            _state.character_widget.hide_speech_bubble()
+    return did_stop
 
 
 def _quiet_bubble_only_enabled() -> bool:
@@ -383,8 +484,14 @@ def _quiet_bubble_only_enabled() -> bool:
     return bool(ConfigManager.get("activity_quiet_bubble_only_enabled", False))
 
 
-def text_to_speech(text: str, show_bubble: bool = True) -> bool:
+def text_to_speech(
+    text: str,
+    show_bubble: bool = True,
+    stop_event: threading.Event | None = None,
+) -> bool:
     """TTS로 음성 출력 (최종 최적화 버전)"""
+    if stop_event is not None and stop_event.is_set():
+        return False
     emotion, text = parse_emotion_text(text)
 
     if _quiet_bubble_only_enabled():
@@ -415,6 +522,9 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
             _handle_tts_playback_finished()
         return False
 
+    if stop_event is not None and stop_event.is_set():
+        return False
+
     try:
         if _state.rp_gen:
             text = _state.rp_gen.generate(text)
@@ -425,7 +535,15 @@ def text_to_speech(text: str, show_bubble: bool = True) -> bool:
             {"text": text, "estimated_duration": estimated_duration},
         )
         emit_plugin_event("on_tts_start", {"text": text, "estimated_duration": estimated_duration})
-        ok = _state.fish_tts.speak(text, emotion=emotion)
+        speak = _state.fish_tts.speak
+        speak_kwargs = {"emotion": emotion}
+        if stop_event is not None:
+            try:
+                if "stop_event" in inspect.signature(speak).parameters:
+                    speak_kwargs["stop_event"] = stop_event
+            except (TypeError, ValueError):
+                pass
+        ok = speak(text, **speak_kwargs)
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
         return ok

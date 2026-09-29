@@ -482,6 +482,23 @@ class LLMProviderTests(unittest.TestCase):
         self.assertEqual(streamed, ["안녕", "하세요"])
         self.assertTrue(provider.client.chat.completions.create.call_args.kwargs["stream"])
 
+    def test_cancelled_tool_stream_does_not_flush_pending_text(self):
+        provider = self._stream_provider()
+        cancel_event = threading.Event()
+        streamed = []
+
+        def response_stream():
+            yield {"choices": [{"delta": {"content": " "}}]}
+            cancel_event.set()
+            yield {"choices": [{"delta": {"content": "late"}}]}
+
+        result = provider._consume_tool_call_stream(
+            response_stream(), streamed.append, cancel_event
+        )
+
+        self.assertEqual(result, (" ", []))
+        self.assertEqual(streamed, [])
+
     def test_chat_with_tools_accumulates_tool_call_argument_fragments(self):
         provider = self._stream_provider()
         streamed = []

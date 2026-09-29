@@ -84,6 +84,8 @@ class AICommand(FastPathMixin, BaseCommand):
         self.orchestrator = get_orchestrator(tts_func)
         self._exec_lock = threading.Lock()
         self._current_goal = ""          # _handle_python/shell에서 self-fix 목표로 사용
+        self._response_cancel_lock = threading.Lock()
+        self._active_response_cancel = None
 
         # 능동적 스케줄러 초기화 (늦은 바인딩으로 순환 임포트 방지)
         try:
@@ -1635,6 +1637,15 @@ class AICommand(FastPathMixin, BaseCommand):
             stream_callback = emit_stream_token
         self._run_interaction(text, self.tts_wrapper, stream_callback=stream_callback)
 
+    def cancel_current_response(self) -> bool:
+        """현재 응답 생성을 중단한다."""
+        with self._response_cancel_lock:
+            cancel_event = self._active_response_cancel
+        if cancel_event is None:
+            return False
+        cancel_event.set()
+        return True
+
     def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> str:
         """텍스트 UI용: 실제 도구 실행까지 포함한 응답 문자열 반환."""
         outputs: List[str] = []
@@ -1643,11 +1654,27 @@ class AICommand(FastPathMixin, BaseCommand):
             if message:
                 outputs.append(str(message))
 
-        self._run_interaction(text, collect, stream_callback=stream_callback, tool_result_callback=tool_result_callback)
+        interrupted = self._run_interaction(
+            text,
+            collect,
+            stream_callback=stream_callback,
+            tool_result_callback=tool_result_callback,
+        )
+        if interrupted is not None:
+            return interrupted
         cleaned = [msg.strip() for msg in outputs if msg and msg.strip()]
         return "\n".join(cleaned)
 
-    def _run_interaction(self, text: str, output_callback: Callable[[str], None], stream_callback: Optional[Callable[[str], None]] = None, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> None:
+    def _run_interaction(
+        self,
+        text: str,
+        output_callback: Callable[[str], None],
+        stream_callback: Optional[Callable[[str], None]] = None,
+        *,
+        tool_result_callback: Optional[
+            Callable[[str, Optional[str]], None]
+        ] = None,
+    ) -> Optional[str]:
         if self._is_interrupt_command(text):
             self.orchestrator.interrupt()
             output_callback(_("진행 중인 작업을 중단할게요."))
@@ -1670,14 +1697,38 @@ class AICommand(FastPathMixin, BaseCommand):
                 output_callback(_("아직 이전 요청을 처리하고 있어요."))
             return
 
+        cancel_event = threading.Event()
+        with self._response_cancel_lock:
+            self._active_response_cancel = cancel_event
+        streamed_parts: List[str] = []
+
+        def emit_output(message: str) -> None:
+            if cancel_event.is_set():
+                return
+            if output_callback is original_tts:
+                try:
+                    from core.VoiceCommand import set_active_conversation_response
+                    set_active_conversation_response(str(message or ""))
+                except (ImportError, AttributeError, RuntimeError):
+                    pass
+            output_callback(message)
+
+        def emit_stream(delta: str) -> None:
+            if cancel_event.is_set() or not stream_callback:
+                return
+            chunk = str(delta or "")
+            if chunk:
+                streamed_parts.append(chunk)
+                stream_callback(chunk)
+
         original_tts = self.tts_wrapper
         original_exec_tts = getattr(self.executor, "tts_wrapper", None)
         original_orch_tts = getattr(self.orchestrator, "tts", None)
 
         try:
-            self.tts_wrapper = output_callback
-            self.executor.tts_wrapper = output_callback
-            self.orchestrator.tts = output_callback
+            self.tts_wrapper = emit_output
+            self.executor.tts_wrapper = emit_output
+            self.orchestrator.tts = emit_output
             self._current_goal = ""
             response = None
             tool_calls: List[dict] = []
@@ -1705,7 +1756,8 @@ class AICommand(FastPathMixin, BaseCommand):
                         self.ai_assistant.chat_with_tools,
                         text,
                         include_context=True,
-                        stream_callback=stream_callback,
+                        stream_callback=emit_stream if stream_callback else None,
+                        cancel_event=cancel_event,
                     )
 
                 if not tool_calls:
@@ -1727,7 +1779,7 @@ class AICommand(FastPathMixin, BaseCommand):
                     }]
                     logging.info("[AICommand] 복합 요청을 run_agent_task로 자동 승격 (%d자)", len(text))
 
-                if tool_calls:
+                if tool_calls and not cancel_event.is_set():
                     data_source = self._infer_data_source_from_tool_calls(tool_calls)
                     # 도구 호출 전 자연스러운 안내 문장만 선행 출력
                     has_preface = bool(response and self._should_emit_preface_response(response))
@@ -1771,7 +1823,8 @@ class AICommand(FastPathMixin, BaseCommand):
                             text,
                             tool_calls,
                             results,
-                            stream_callback=stream_callback,
+                            stream_callback=emit_stream if stream_callback else None,
+                            cancel_event=cancel_event,
                         )
                     if followup:
                         self._emit_user_message(followup)
@@ -1790,7 +1843,8 @@ class AICommand(FastPathMixin, BaseCommand):
                     self.ai_assistant.chat,
                     text,
                     include_context=False,
-                    stream_callback=stream_callback,
+                    stream_callback=emit_stream if stream_callback else None,
+                    cancel_event=cancel_event,
                 )
                 self._emit_user_message(response)
             else:
@@ -1799,6 +1853,39 @@ class AICommand(FastPathMixin, BaseCommand):
 
             if response:
                 logging.info("AI 응답: %s...", response[:50])
+
+            if cancel_event.is_set():
+                partial = "".join(streamed_parts).strip()
+                if partial:
+                    interrupted_response = f"{partial}\n\n{_('(응답 중단)')}"
+                    try:
+                        from memory.conversation_history import add_conversation
+                        add_conversation(
+                            text,
+                            interrupted_response,
+                            skill_used=skill_used,
+                            data_source=data_source,
+                            lang=lang,
+                        )
+                    except (
+                        ImportError,
+                        AttributeError,
+                        OSError,
+                        RuntimeError,
+                        TypeError,
+                        ValueError,
+                    ) as exc:
+                        logging.debug("중단된 대화 기록 저장 생략: %s", exc)
+                    marker_record = getattr(
+                        self.ai_assistant, "mark_last_response_interrupted", None
+                    )
+                    if callable(marker_record):
+                        try:
+                            marker_record(response or partial, interrupted_response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("LLM 중단 기록 갱신 생략: %s", exc)
+                    return interrupted_response
+                return ""
 
             if response:
                 try:
@@ -1829,6 +1916,9 @@ class AICommand(FastPathMixin, BaseCommand):
             self.executor.tts_wrapper = original_exec_tts
             self.orchestrator.tts = original_orch_tts
             self._current_goal = ""
+            with self._response_cancel_lock:
+                if self._active_response_cancel is cancel_event:
+                    self._active_response_cancel = None
             self._exec_lock.release()
 
     def _is_interrupt_command(self, text: str) -> bool:
@@ -1869,6 +1959,7 @@ class AICommand(FastPathMixin, BaseCommand):
         tool_calls: list,
         results: List[Optional[str]],
         stream_callback: Optional[Callable[[str], None]] = None,
+        cancel_event=None,
     ) -> Optional[str]:
         """도구 실행 결과를 LLM에 피드백하고 최종 응답 문자열을 반환."""
         try:
@@ -1878,31 +1969,42 @@ class AICommand(FastPathMixin, BaseCommand):
                 tool_calls,
                 results,
                 stream_callback=stream_callback,
+                cancel_event=cancel_event,
             )
         except Exception as e:
             logging.error("에이전틱 후속 처리 오류: %s", e, exc_info=True)
             return None
 
-    def _invoke_with_optional_stream(self, func: Callable, *args, stream_callback=None, **kwargs):
-        if stream_callback:
-            try:
-                signature = inspect.signature(func)
-            except (TypeError, ValueError):
-                signature = None
-
-            if signature is not None:
-                parameters = signature.parameters.values()
-                if (
-                    "stream_callback" in signature.parameters
-                    or any(param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters)
-                ):
+    def _invoke_with_optional_stream(
+        self,
+        func: Callable,
+        *args,
+        stream_callback=None,
+        cancel_event=None,
+        **kwargs,
+    ):
+        try:
+            signature = inspect.signature(func)
+        except (TypeError, ValueError):
+            signature = None
+        if signature is None:
+            if stream_callback:
+                try:
                     return func(*args, stream_callback=stream_callback, **kwargs)
-                return func(*args, **kwargs)
+                except TypeError as exc:
+                    if "stream_callback" not in str(exc):
+                        raise
+            return func(*args, **kwargs)
 
-            try:
-                return func(*args, stream_callback=stream_callback, **kwargs)
-            except TypeError:
-                pass
+        parameters = signature.parameters
+        accepts_kwargs = any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters.values()
+        )
+        if stream_callback and ("stream_callback" in parameters or accepts_kwargs):
+            kwargs["stream_callback"] = stream_callback
+        if cancel_event is not None and ("cancel_event" in parameters or accepts_kwargs):
+            kwargs["cancel_event"] = cancel_event
         return func(*args, **kwargs)
 
     def _should_emit_preface_response(self, response: str) -> bool:

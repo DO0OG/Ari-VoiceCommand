@@ -33,6 +33,7 @@ class _DummyTextInterface:
     _TTS_MIN_SENTENCE_LEN = TextInterface._TTS_MIN_SENTENCE_LEN
     _TTS_BATCH_TARGET_LEN = TextInterface._TTS_BATCH_TARGET_LEN
     _TTS_MAX_BATCH_SENTENCES = TextInterface._TTS_MAX_BATCH_SENTENCES
+    _speech_stopped = False
 
     def _try_stream_tts(self, chunk: str) -> None:
         TextInterface._try_stream_tts(self, chunk)

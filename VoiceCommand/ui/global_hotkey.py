@@ -199,6 +199,13 @@ class GlobalVoiceHotkey(QAbstractNativeEventFilter):
         ):
             return False, 0
 
+        try:
+            from VoiceCommand import is_tts_playing, stop_speaking
+            if is_tts_playing():
+                stop_speaking()
+        except (ImportError, AttributeError, RuntimeError) as exc:
+            logging.debug("TTS 중단 처리 생략: %s", exc)
+
         if self._mode == "push_to_talk":
             self._holding = self.voice_thread.request_listening(push_to_talk=True)
             if self._holding:

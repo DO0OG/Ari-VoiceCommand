@@ -44,6 +44,20 @@ class ConversationHistoryTests(unittest.TestCase):
             self.assertEqual(payload["active"][1]["data_source"], "web_search")
             self.assertEqual(payload["active"][1]["lang"], "ko")
 
+    def test_interrupted_response_keeps_only_played_text_and_marker(self):
+        history = self._make_history(tempfile.gettempdir())
+        history.active.append({"user": "질문", "ai": "첫 문장. 둘째 문장."})
+
+        with patch.object(history, "_schedule_save") as schedule_save:
+            updated = history.mark_last_response_interrupted(
+                "첫 문장. 둘째 문장.",
+                "첫 문장.\n\n(응답 중단)",
+            )
+
+        self.assertTrue(updated)
+        self.assertEqual(history.active[-1]["ai"], "첫 문장.\n\n(응답 중단)")
+        schedule_save.assert_called_once_with()
+
     def test_summarize_chunk_uses_compact_summary_prefix(self):
         history = self._make_history(tempfile.gettempdir())
 

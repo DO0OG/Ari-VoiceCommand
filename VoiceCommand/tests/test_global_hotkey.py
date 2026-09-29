@@ -47,6 +47,31 @@ class GlobalHotkeyTests(unittest.TestCase):
         self.assertEqual(result, (True, 0))
         voice_thread.request_listening.assert_called_once_with()
 
+    def test_native_event_stops_playback_before_starting_listening(self):
+        calls = []
+        voice_thread = Mock()
+        voice_thread.request_listening.side_effect = lambda: calls.append("listen")
+        hotkey = GlobalVoiceHotkey(voice_thread, api=Mock(), platform="win32")
+        hotkey._registered_id = 0xA191
+        hotkey._mode = "toggle"
+        message = SimpleNamespace(message=0x0312, wParam=0xA191)
+
+        with (
+            patch("VoiceCommand.is_tts_playing", return_value=True),
+            patch(
+                "VoiceCommand.stop_speaking",
+                side_effect=lambda: calls.append("stop"),
+            ),
+            patch(
+                "ui.global_hotkey.ctypes.cast",
+                return_value=SimpleNamespace(contents=message),
+            ),
+        ):
+            result = hotkey.nativeEventFilter(b"windows_dispatcher_MSG", 1)
+
+        self.assertEqual(result, (True, 0))
+        self.assertEqual(calls, ["stop", "listen"])
+
     def test_reconfigure_registers_new_binding_before_removing_old_one(self):
         api = Mock()
         api.RegisterHotKey.return_value = True

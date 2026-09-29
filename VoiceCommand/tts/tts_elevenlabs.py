@@ -3,14 +3,16 @@ ElevenLabs TTS 제공자.
 Fish Audio / CosyVoice3와 동일한 인터페이스: speak() / playback_finished / cleanup()
 """
 import logging
+import threading
 import tempfile
 import time
 
 import pyaudio
 from PySide6.QtCore import QObject, Signal
 
-from audio.audio_manager import GlobalAudio
+from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
+from tts.pcm_playback import write_pcm_chunks
 
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
 _SAMPLE_RATE = 22050
@@ -31,6 +33,8 @@ class ElevenLabsTTS(QObject):
         self.emotion_enabled = bool(emotion_enabled)
         self.is_playing = False
         self._session = None
+        self._state_lock = threading.Lock()
+        self._active_stop_event = None
 
         if api_key:
             logging.info("ElevenLabs TTS 초기화 완료 (voice_id=%s)", self.voice_id)
@@ -61,7 +65,12 @@ class ElevenLabsTTS(QObject):
             "style": style,
         }
 
-    def speak(self, text: str, emotion: str = DEFAULT_EMOTION) -> bool:
+    def speak(
+        self,
+        text: str,
+        emotion: str = DEFAULT_EMOTION,
+        stop_event: threading.Event | None = None,
+    ) -> bool:
         if not text or not self.api_key:
             return False
 
@@ -69,9 +78,15 @@ class ElevenLabsTTS(QObject):
         if session is None:
             return False
 
-        try:
+        stop_event = stop_event or threading.Event()
+        with self._state_lock:
+            self._active_stop_event = stop_event
             self.is_playing = True
+
+        try:
             t0 = time.time()
+            if stop_event.is_set():
+                return False
 
             url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
             headers = {
@@ -88,26 +103,40 @@ class ElevenLabsTTS(QObject):
             bytes_received = 0
             first_chunk_at = None
             with tempfile.SpooledTemporaryFile(max_size=2 * 1024 * 1024) as audio_buffer:
-                with session.post(url, json=payload, headers=headers, timeout=30, stream=True) as resp:
+                with session.post(
+                    url, json=payload, headers=headers, timeout=30, stream=True
+                ) as resp:
                     resp.raise_for_status()
                     for chunk in resp.iter_content(chunk_size=65536):
+                        if stop_event.is_set():
+                            return False
                         if not chunk:
                             continue
                         if first_chunk_at is None:
                             first_chunk_at = time.time()
                         bytes_received += len(chunk)
                         audio_buffer.write(chunk)
+                if stop_event.is_set():
+                    return False
                 audio_buffer.seek(0)
 
                 if first_chunk_at is not None:
-                    logging.info("[TTS] ElevenLabs 첫 청크: %.2fs", first_chunk_at - t0)
-                logging.info("[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes", time.time() - t0, f"{bytes_received:,}")
+                    logging.info(
+                        "[TTS] ElevenLabs 첫 청크: %.2fs", first_chunk_at - t0
+                    )
+                logging.info(
+                    "[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes",
+                    time.time() - t0,
+                    f"{bytes_received:,}",
+                )
 
                 # Decode MP3 to PCM with bundled PyAV codecs.
                 from audio.mp3_decoder import decode_mp3_to_pcm
                 pcm = decode_mp3_to_pcm(audio_buffer.read(), _SAMPLE_RATE)
 
             from audio.audio_manager import get_output_device_index
+            if stop_event.is_set():
+                return False
             stream = GlobalAudio.open_stream(
                 format=pyaudio.paInt16,
                 channels=1,
@@ -116,20 +145,31 @@ class ElevenLabsTTS(QObject):
                 output_device_index=get_output_device_index(),
             )
             try:
-                stream.write(pcm)
+                success = write_pcm_chunks(stream, pcm, stop_event, _SAMPLE_RATE)
             finally:
-                GlobalAudio.close_stream(stream)
+                with get_audio_output_lock():
+                    GlobalAudio.close_stream(stream)
 
+            if not success:
+                return False
             logging.info("[TTS] ElevenLabs 전체 완료: %.2fs", time.time() - t0)
-            self.is_playing = False
-            self.playback_finished.emit()
             return True
 
-        except Exception as e:
-            logging.error("ElevenLabs TTS speak 오류: %s", e)
-            self.is_playing = False
-            self.playback_finished.emit()
+        except Exception as exc:
+            logging.error("ElevenLabs TTS speak 오류: %s", exc)
             return False
+        finally:
+            with self._state_lock:
+                if self._active_stop_event is stop_event:
+                    self._active_stop_event = None
+                    self.is_playing = False
+            self.playback_finished.emit()
+
+    def stop(self) -> None:
+        with self._state_lock:
+            stop_event = self._active_stop_event
+        if stop_event is not None:
+            stop_event.set()
 
     def cleanup(self):
         try:

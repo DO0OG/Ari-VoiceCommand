@@ -23,6 +23,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.chat_action = self.menu.addAction(_("💬 텍스트 대화"))
         self.chat_action.triggered.connect(self.open_text_interface)
 
+        self.stop_speaking_action = self.menu.addAction(_("말하기 중단"))
+        self.stop_speaking_action.triggered.connect(self.stop_speaking)
+
         self.character_action = self.menu.addAction(_("캐릭터 표시"))
         self.character_action.triggered.connect(self.toggle_character)
 
@@ -80,6 +83,10 @@ class SystemTrayIcon(QSystemTrayIcon):
     def _apply_menu_theme(self):
         from ui import theme as theme_module
         self.menu.setStyleSheet(theme_module.MENU_STYLE)
+
+    def stop_speaking(self):
+        from VoiceCommand import stop_speaking
+        stop_speaking()
 
     def toggle_game_mode(self):
         from VoiceCommand import enable_game_mode, disable_game_mode
@@ -208,6 +215,7 @@ class SystemTrayIcon(QSystemTrayIcon):
     def refresh_language(self) -> None:
         """언어 변경 시 트레이 메뉴 텍스트를 즉시 갱신한다."""
         self.chat_action.setText(_("💬 텍스트 대화"))
+        self.stop_speaking_action.setText(_("말하기 중단"))
         self.game_mode_action.setText(_("🎮 게임 모드 (GPU 절약)"))
         self.smart_mode_action.setText(_("스마트 어시스턴트 모드"))
         self.mouse_reaction_action.setText(_("마우스 반응"))

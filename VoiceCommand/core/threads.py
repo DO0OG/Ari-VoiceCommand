@@ -548,8 +548,11 @@ class TTSThread(QThread):
         self.is_processing = False
         self._shutdown_requested = False
         self._shutdown_lock = threading.Lock()
+        self._batch_lock = threading.Lock()
+        self._active_stop_event = None
+        self.current_text = ""
 
-    def _collect_batch(self, first_text):
+    def _collect_batch(self, first_text, stop_event=None):
         texts = []
         task_count = 1
         stop_requested = False
@@ -561,12 +564,17 @@ class TTSThread(QThread):
 
         deadline = time.monotonic() + self._COALESCE_WINDOW_SEC
         while True:
+            if stop_event is not None and stop_event.is_set():
+                break
             drained = False
             while True:
-                try:
-                    next_text = self.queue.get_nowait()
-                except queue.Empty:
-                    break
+                with self._batch_lock:
+                    if stop_event is not None and stop_event.is_set():
+                        break
+                    try:
+                        next_text = self.queue.get_nowait()
+                    except queue.Empty:
+                        break
                 task_count += 1
                 drained = True
                 if next_text is None:
@@ -591,22 +599,37 @@ class TTSThread(QThread):
         logging.info("TTSThread 구동 중")
         while True:
             try:
-                text = self.queue.get(timeout=1.0)
+                with self._batch_lock:
+                    text = self.queue.get(timeout=0.1)
+                    if text is not None:
+                        stop_event = threading.Event()
+                        self._active_stop_event = stop_event
                 if text is None:
                     self.queue.task_done()
                     break
 
                 self.is_processing = True
-                batch_text, task_count, stop_requested = self._collect_batch(text)
+                batch_text, task_count, stop_requested = self._collect_batch(
+                    text, stop_event
+                )
 
                 try:
                     from VoiceCommand import text_to_speech
-                    if batch_text and not self._shutdown_requested:
-                        text_to_speech(batch_text)
+                    if (
+                        batch_text
+                        and not self._shutdown_requested
+                        and not stop_event.is_set()
+                    ):
+                        self.current_text = batch_text
+                        text_to_speech(batch_text, stop_event=stop_event)
                 finally:
                     for _ in range(task_count):
                         self.queue.task_done()
-                    self.is_processing = False
+                    with self._batch_lock:
+                        self.current_text = ""
+                        if self._active_stop_event is stop_event:
+                            self._active_stop_event = None
+                        self.is_processing = False
 
                 # 큐가 완전히 비었을 때 현재 상태(STT 대기 포함)에 맞게 말풍선을 정리
                 if self.queue.empty():
@@ -624,12 +647,29 @@ class TTSThread(QThread):
         with self._shutdown_lock:
             if self._shutdown_requested:
                 return False
-            try:
-                self.queue.put_nowait(text)
-                return True
-            except queue.Full:
-                logging.warning("TTSThread 큐가 가득 차서 마지막 요청을 폐기했습니다.")
-                return False
+            with self._batch_lock:
+                try:
+                    self.queue.put_nowait(text)
+                    return True
+                except queue.Full:
+                    logging.warning("TTSThread 큐가 가득 차서 마지막 요청을 폐기했습니다.")
+                    return False
+
+    def clear(self) -> int:
+        """대기 중인 말과 현재 묶음을 취소한다."""
+        removed = 0
+        with self._batch_lock:
+            if self._active_stop_event is not None:
+                self._active_stop_event.set()
+            while True:
+                try:
+                    self.queue.get_nowait()
+                except queue.Empty:
+                    break
+                else:
+                    self.queue.task_done()
+                    removed += 1
+        return removed
 
     def stop(self):
         with self._shutdown_lock:
@@ -653,14 +693,9 @@ class TTSThread(QThread):
             ) as exc:
                 logging.debug("현재 TTS 재생 중지 생략: %s", exc)
 
-            while True:
-                try:
-                    self.queue.get_nowait()
-                except queue.Empty:
-                    break
-                else:
-                    self.queue.task_done()
-            self.queue.put_nowait(None)
+            self.clear()
+            with self._batch_lock:
+                self.queue.put_nowait(None)
 
 
 # ───────────────────────────────────────────────────────────────────────────
