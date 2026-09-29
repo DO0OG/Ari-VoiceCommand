@@ -46,8 +46,8 @@ class MemoryConsolidatorTests(unittest.TestCase):
         target_day = date(2026, 1, 2)
         timestamp = f"{target_day.isoformat()}T12:00:00"
         indexed_conversation = (
-            f"\uC0AC\uC6A9\uC790: same question\n"
-            f"\uC544\uB9AC: same answer"
+            "\uC0AC\uC6A9\uC790: same question\n"
+            "\uC544\uB9AC: same answer"
         )
         memory_index = FakeMemoryIndex([
             SimpleNamespace(
