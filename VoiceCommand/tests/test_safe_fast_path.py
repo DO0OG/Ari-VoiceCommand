@@ -3,7 +3,7 @@ import gettext
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from commands.ai_command import AICommand
 from tests.test_decision_engine import _simple_skill_context, _write_model
@@ -44,7 +44,9 @@ class SafeFastPathTests(unittest.TestCase):
 
     def assert_fallback(self, text):
         self.command.run_interaction(text)
-        self.assistant.chat_with_tools.assert_called_once_with(text, include_context=True)
+        self.assistant.chat_with_tools.assert_called_once_with(
+            text, include_context=True, cancel_event=ANY
+        )
         self.assistant.feed_tool_result.assert_not_called()
         for handler in self.handlers.values():
             handler.assert_not_called()
