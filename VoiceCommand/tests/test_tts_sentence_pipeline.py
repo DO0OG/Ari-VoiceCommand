@@ -122,6 +122,37 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
 
         stream.write.assert_called_once_with(b"cached-pcm")
 
+    def test_cached_ack_miss_never_synthesizes(self):
+        cache = Mock()
+        cache.get.return_value = None
+        provider = EdgeTTS(audio_cache=cache)
+
+        with patch.object(provider, "_synthesize") as synthesize:
+            self.assertFalse(provider.speak_cached("확인하겠습니다."))
+
+        synthesize.assert_not_called()
+
+    def test_cached_ack_playback_stops_with_provider(self):
+        provider = EdgeTTS(audio_cache=Mock())
+        stream = Mock()
+        stream.write.side_effect = lambda _pcm: provider.stop()
+
+        with (
+            patch.object(GlobalAudio, "open_stream", return_value=stream),
+            patch.object(GlobalAudio, "close_stream") as close_stream,
+            patch("audio.audio_manager.get_output_device_index", return_value=None),
+        ):
+            provider._audio_cache.get.return_value = b"x" * 10000
+            self.assertFalse(
+                provider.speak_cached(
+                    "확인하겠습니다.",
+                    request_cancel_event=threading.Event(),
+                )
+            )
+
+        close_stream.assert_called_once_with(stream)
+        stream.write.assert_called_once()
+
     def test_dynamic_response_is_never_written_to_cache(self):
         cache = Mock()
         cache.get.return_value = None

@@ -91,6 +91,7 @@ def choose_phrase(
     *,
     translator: Callable[[str], str] = _,
     values: dict[str, Any] | None = None,
+    avoid_phrase: str = "",
 ) -> str:
     """기분 구간과 언어에 맞는 문구를 고른다."""
     bucket = mood_bucket(mood_state)
@@ -99,8 +100,18 @@ def choose_phrase(
         candidates = (candidates,)
     if not candidates:
         return ""
-    translated = translator(_RNG.choice(candidates))
-    options = tuple(part.strip() for part in translated.split("||") if part.strip())
+    if avoid_phrase:
+        options = tuple(
+            part.strip()
+            for candidate in candidates
+            for part in translator(candidate).split("||")
+            if part.strip() and part.strip() != avoid_phrase
+        )
+    else:
+        translated = translator(_RNG.choice(candidates))
+        options = tuple(
+            part.strip() for part in translated.split("||") if part.strip()
+        )
     if not options:
         return ""
     phrase = _RNG.choice(options)

@@ -9,6 +9,8 @@ from unittest.mock import Mock, patch
 
 
 from commands.ai_command import AICommand
+from commands.ai_fast_path import FastPathMixin
+from agent.instant_ack import InstantAckTimer, should_acknowledge
 from agent.agent_orchestrator import AgentRunResult
 from i18n.translator import _, get_language, set_language
 
@@ -102,7 +104,140 @@ class _FakeScheduler:
         return "task1234"
 
 
+class _ManualTimer:
+    instances = []
+
+    def __init__(self, interval, callback):
+        self.interval = interval
+        self.callback = callback
+        self.started = False
+        self.cancelled = False
+        self.instances.append(self)
+
+    def start(self):
+        self.started = True
+
+    def cancel(self):
+        self.cancelled = True
+
+    def fire(self):
+        if self.started and not self.cancelled:
+            self.callback()
+
+
+class _PhrasePicker(FastPathMixin):
+    pass
+
+
 class AICommandTests(unittest.TestCase):
+    def setUp(self):
+        _ManualTimer.instances.clear()
+
+    def test_first_response_before_700ms_cancels_ack(self):
+        shown = []
+        ack = InstantAckTimer(lambda: shown.append("ack"), timer_factory=_ManualTimer)
+
+        ack.start()
+        self.assertEqual(_ManualTimer.instances[-1].interval, 0.7)
+        ack.first_response()
+        _ManualTimer.instances[-1].fire()
+
+        self.assertEqual(shown, [])
+
+    def test_timeout_emits_ack_only_once(self):
+        shown = []
+        ack = InstantAckTimer(lambda: shown.append("ack"), timer_factory=_ManualTimer)
+        ack.start()
+        timer = _ManualTimer.instances[-1]
+
+        timer.fire()
+        timer.fire()
+
+        self.assertEqual(shown, ["ack"])
+
+    def test_cancel_prevents_pending_ack(self):
+        shown = []
+        ack = InstantAckTimer(lambda: shown.append("ack"), timer_factory=_ManualTimer)
+        ack.start()
+        ack.cancel()
+        _ManualTimer.instances[-1].fire()
+
+        self.assertEqual(shown, [])
+
+    def test_conversational_intent_is_excluded(self):
+        self.assertFalse(should_acknowledge({"intent": "conversation"}))
+
+    def test_instant_ack_disabled_setting_skips_timer(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        cancel_event = threading.Event()
+
+        with patch("core.config_manager.ConfigManager.get", return_value=False):
+            ack = command._start_instant_ack("웹에서 검색해줘", {}, cancel_event)
+
+        self.assertIsNone(ack)
+        self.assertIsNone(command._active_instant_ack)
+
+    def test_ack_bubble_shows_when_cached_audio_is_unavailable(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        cancel_event = threading.Event()
+        widget = Mock()
+        command._active_response_cancel = cancel_event
+        command.get_instant_ack_phrase = Mock(return_value="확인하겠습니다.")
+
+        with (
+            patch(
+                "core.VoiceCommand._state",
+                SimpleNamespace(character_widget=widget),
+            ),
+            patch("core.VoiceCommand.play_cached_tts", return_value=False),
+        ):
+            command._emit_instant_ack(cancel_event)
+
+        widget.say.assert_called_once_with("확인하겠습니다.", duration=2500)
+
+    def test_tool_intent_is_included(self):
+        self.assertTrue(should_acknowledge({"intent": "web"}))
+        self.assertTrue(should_acknowledge({"intent": "automation"}))
+        self.assertTrue(
+            should_acknowledge({"intent": "conversation", "force_tool": True})
+        )
+
+    def test_persona_fixed_response_overrides_pool_and_avoids_repeat(self):
+        settings = {
+            "fixed_responses": {
+                "instant_ack": {"calm": ["확인할게요.", "곧 살펴볼게요."]},
+            },
+        }
+        picker = _PhrasePicker()
+
+        def get_setting(key, default=None):
+            return settings.get(key, default)
+
+        with (
+            patch("core.config_manager.ConfigManager.get", side_effect=get_setting),
+            patch("core.mood_state.get_mood_state", return_value=None),
+            patch("commands.ai_fast_path._", side_effect=lambda message: message),
+        ):
+            first = picker.get_instant_ack_phrase()
+            second = picker.get_instant_ack_phrase()
+
+        phrases = settings["fixed_responses"]["instant_ack"]["calm"]
+        self.assertIn(first, phrases)
+        self.assertIn(second, phrases)
+        self.assertNotEqual(first, second)
+
+    def test_cancel_current_response_cancels_active_ack(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        cancel_event = threading.Event()
+        ack = Mock()
+        command._active_response_cancel = cancel_event
+        command._active_instant_ack = ack
+
+        self.assertTrue(command.cancel_current_response())
+
+        self.assertTrue(cancel_event.is_set())
+        ack.cancel.assert_called_once_with()
+
     def test_memory_remember_requires_this_turn_explicit_request_and_uses_tool_source(self):
         command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
         command._current_goal = "기억해: favorite drink=tea"

@@ -14,11 +14,13 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from agent.assistant_text_utils import (
+    analyze_tool_request,
     clean_tool_artifact_text,
     contains_specific_goal_markers,
     is_generic_agent_explanation,
     resolve_agent_task_goal,
 )
+from agent.instant_ack import InstantAckTimer, should_acknowledge
 from agent.autonomous_executor import get_executor, ExecutionResult
 from agent.agent_orchestrator import get_orchestrator, AgentRunResult
 from agent.tool_schemas import TOOL_FOLLOWUP_POLICIES
@@ -86,6 +88,7 @@ class AICommand(FastPathMixin, BaseCommand):
         self._current_goal = ""          # _handle_python/shell에서 self-fix 목표로 사용
         self._response_cancel_lock = threading.Lock()
         self._active_response_cancel = None
+        self._active_instant_ack = None
 
         # 능동적 스케줄러 초기화 (늦은 바인딩으로 순환 임포트 방지)
         try:
@@ -1637,13 +1640,58 @@ class AICommand(FastPathMixin, BaseCommand):
             stream_callback = emit_stream_token
         self._run_interaction(text, self.tts_wrapper, stream_callback=stream_callback)
 
+    def _start_instant_ack(self, text: str, skill_ctx: dict, cancel_event):
+        try:
+            from core.config_manager import ConfigManager
+
+            if ConfigManager.get("instant_ack_enabled", True) is not True:
+                return None
+            if not should_acknowledge(analyze_tool_request(text), skill_ctx):
+                return None
+            ack = InstantAckTimer(
+                lambda: self._emit_instant_ack(cancel_event),
+            )
+            with self._response_cancel_lock:
+                if cancel_event.is_set():
+                    return None
+                self._active_instant_ack = ack
+            ack.start()
+            return ack
+        except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("즉시 반응 타이머를 시작하지 못했습니다: %s", exc)
+            return None
+
+    def _emit_instant_ack(self, cancel_event) -> None:
+        try:
+            phrase = self.get_instant_ack_phrase()
+            if not phrase:
+                return
+            from core.VoiceCommand import _state, play_cached_tts
+
+            with self._response_cancel_lock:
+                if (
+                    cancel_event.is_set()
+                    or self._active_response_cancel is not cancel_event
+                ):
+                    return
+                widget = getattr(_state, "character_widget", None)
+                if widget is not None:
+                    widget.say(phrase, duration=2500)
+            play_cached_tts(phrase, request_cancel_event=cancel_event)
+        except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("즉시 반응 문구 출력을 건너뜁니다: %s", exc)
+
     def cancel_current_response(self) -> bool:
         """현재 응답 생성을 중단한다."""
         with self._response_cancel_lock:
             cancel_event = self._active_response_cancel
+            ack = self._active_instant_ack
+            if cancel_event is not None:
+                cancel_event.set()
+                if ack is not None:
+                    ack.cancel()
         if cancel_event is None:
             return False
-        cancel_event.set()
         return True
 
     def run_interaction(self, text: str, stream_callback: Optional[Callable[[str], None]] = None, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> str:
@@ -1701,6 +1749,20 @@ class AICommand(FastPathMixin, BaseCommand):
         with self._response_cancel_lock:
             self._active_response_cancel = cancel_event
         streamed_parts: List[str] = []
+        instant_ack = None
+        llm_request_started = None
+        first_response_reported = False
+
+        def mark_first_response() -> None:
+            nonlocal first_response_reported
+            if first_response_reported:
+                return
+            first_response_reported = True
+            if llm_request_started is not None:
+                elapsed = max(0.0, self._time_fn() - llm_request_started)
+                logging.info("[LLM] T_first_token=%.3fs", elapsed)
+            if instant_ack is not None:
+                instant_ack.first_response()
 
         def emit_output(message: str) -> None:
             if cancel_event.is_set():
@@ -1718,6 +1780,7 @@ class AICommand(FastPathMixin, BaseCommand):
                 return
             chunk = str(delta or "")
             if chunk:
+                mark_first_response()
                 streamed_parts.append(chunk)
                 stream_callback(chunk)
 
@@ -1742,6 +1805,8 @@ class AICommand(FastPathMixin, BaseCommand):
             self._current_goal = text
             skill_ctx = self._get_skill_context(text)
             skill_used = self._get_primary_skill_name(skill_ctx)
+            llm_request_started = self._time_fn()
+            instant_ack = self._start_instant_ack(text, skill_ctx, cancel_event)
             data_source = ""
             lang = self._get_current_language()
 
@@ -1759,6 +1824,7 @@ class AICommand(FastPathMixin, BaseCommand):
                         stream_callback=emit_stream if stream_callback else None,
                         cancel_event=cancel_event,
                     )
+                    mark_first_response()
 
                 if not tool_calls:
                     tool_calls = self._recover_tool_calls_from_response(text, response)
@@ -1846,9 +1912,11 @@ class AICommand(FastPathMixin, BaseCommand):
                     stream_callback=emit_stream if stream_callback else None,
                     cancel_event=cancel_event,
                 )
+                mark_first_response()
                 self._emit_user_message(response)
             else:
                 response = self.ai_assistant.process_query(text)[0]
+                mark_first_response()
                 self._emit_user_message(response)
 
             if response:
@@ -1912,6 +1980,8 @@ class AICommand(FastPathMixin, BaseCommand):
             logging.error("AI 응답 생성 오류: %s", e, exc_info=True)
             self.tts_wrapper(_("응답 생성 중 오류가 발생했습니다."))
         finally:
+            if instant_ack is not None:
+                instant_ack.cancel()
             self.tts_wrapper = original_tts
             self.executor.tts_wrapper = original_exec_tts
             self.orchestrator.tts = original_orch_tts
@@ -1919,6 +1989,8 @@ class AICommand(FastPathMixin, BaseCommand):
             with self._response_cancel_lock:
                 if self._active_response_cancel is cancel_event:
                     self._active_response_cancel = None
+                if self._active_instant_ack is instant_ack:
+                    self._active_instant_ack = None
             self._exec_lock.release()
 
     def _is_interrupt_command(self, text: str) -> bool:
