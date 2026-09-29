@@ -6,6 +6,7 @@ import math
 import re
 import struct
 import time
+import unicodedata
 from collections import deque
 
 import speech_recognition as sr
@@ -15,10 +16,54 @@ from core.stt_provider import create_stt_provider
 
 
 _NORMALIZE_WHITESPACE_RE = re.compile(r"\s+")
-_STRIP_PUNCTUATION_RE = re.compile(r"[^0-9A-Za-z가-힣\s]+")
 _WAKE_MIN_AUDIO_SECONDS = 0.3
-_WAKE_MAX_AUDIO_SECONDS = 1.5
+_WAKE_MAX_AUDIO_SECONDS = 4.0
+_SHORT_WAKE_WORD_MAX_LENGTH = 3
+_SHORT_WAKE_WORD_EDIT_DISTANCE = 1
+_LONG_WAKE_WORD_EDIT_DISTANCE = 2
 _ENERGY_SAVE_DELAY_SECONDS = 1.0
+
+
+def _edit_distance(left, right, max_distance):
+    if abs(len(left) - len(right)) > max_distance:
+        return max_distance + 1
+
+    previous = list(range(len(right) + 1))
+    for left_index, left_char in enumerate(left, start=1):
+        current = [left_index]
+        for right_index, right_char in enumerate(right, start=1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[right_index] + 1,
+                    previous[right_index - 1] + (left_char != right_char),
+                )
+            )
+        if min(current) > max_distance:
+            return max_distance + 1
+        previous = current
+    return previous[-1]
+
+
+def _is_text_separator(char):
+    category = unicodedata.category(char)
+    return char.isspace() or category[0] in ("P", "Z")
+
+
+def _is_kana(char):
+    codepoint = ord(char)
+    return 0x3040 <= codepoint <= 0x30FF or 0x31F0 <= codepoint <= 0x31FF
+
+
+def _is_japanese_prefix_boundary(text, boundary, wake_word):
+    normalized_wake_word = unicodedata.normalize("NFKC", wake_word or "")
+    if not any(_is_kana(char) for char in normalized_wake_word):
+        return False
+    next_char = text[boundary]
+    return (
+        _is_kana(text[boundary - 1])
+        and unicodedata.category(next_char)[0] in ("L", "N")
+    )
 
 
 def should_transcribe_wake_audio(audio_data, energy_threshold):
@@ -73,6 +118,7 @@ def should_transcribe_wake_audio(audio_data, energy_threshold):
 class SimpleWakeWord:
     def __init__(self, wake_words=None, stt_provider=None, provider_signature=None):
         self.wake_words = list(wake_words or ["아리야", "시작"])
+        self.detected_command = None
         self.recognizer = sr.Recognizer()
         self.should_stop = False
         self._calibrated = False  # 첫 listen 시 lazy 캘리브레이션
@@ -125,16 +171,79 @@ class SimpleWakeWord:
             self._provider_signature = signature
 
     def _normalize_text(self, text):
-        normalized = _STRIP_PUNCTUATION_RE.sub(" ", text or "")
-        normalized = _NORMALIZE_WHITESPACE_RE.sub(" ", normalized)
-        return normalized.strip().lower()
+        normalized = unicodedata.normalize("NFKC", text or "").casefold()
+        normalized_chars = []
+        for char in normalized:
+            codepoint = ord(char)
+            if 0x30A1 <= codepoint <= 0x30F6 or codepoint in (0x30FD, 0x30FE):
+                char = chr(codepoint - 0x60)
+            category = unicodedata.category(char)
+            if char.isspace() or category[0] in ("P", "Z"):
+                normalized_chars.append(" ")
+            elif category[0] in ("L", "N", "M"):
+                normalized_chars.append(char)
+        normalized = _NORMALIZE_WHITESPACE_RE.sub(" ", "".join(normalized_chars))
+        return normalized.strip()
+
+    def _wake_word_distance(self, text, wake_word):
+        normalized_text = self._normalize_text(text).replace(" ", "")
+        normalized_wake_word = self._normalize_text(wake_word).replace(" ", "")
+        if not normalized_text or not normalized_wake_word:
+            return None
+
+        has_hangul = any("\uac00" <= char <= "\ud7a3" for char in normalized_wake_word)
+        if has_hangul:
+            wake_length = sum(
+                "\uac00" <= char <= "\ud7a3" for char in normalized_wake_word
+            )
+        else:
+            wake_length = len(normalized_wake_word)
+        max_distance = (
+            _SHORT_WAKE_WORD_EDIT_DISTANCE
+            if wake_length <= _SHORT_WAKE_WORD_MAX_LENGTH
+            else _LONG_WAKE_WORD_EDIT_DISTANCE
+        )
+        if has_hangul:
+            normalized_text = unicodedata.normalize("NFD", normalized_text)
+            normalized_wake_word = unicodedata.normalize("NFD", normalized_wake_word)
+        distance = _edit_distance(normalized_text, normalized_wake_word, max_distance)
+        return distance, max_distance
 
     def _matches_wake_word(self, text, wake_word):
-        normalized_text = self._normalize_text(text)
-        normalized_wake_word = self._normalize_text(wake_word)
-        if not normalized_text or not normalized_wake_word:
-            return False
-        return normalized_text == normalized_wake_word
+        distance = self._wake_word_distance(text, wake_word)
+        return distance is not None and distance[0] <= distance[1]
+
+    def _command_after_wake_word(self, text, wake_word):
+        best_match = None
+        best_rank = None
+        for boundary in range(1, len(text)):
+            has_separator = _is_text_separator(text[boundary])
+            if not has_separator and not _is_japanese_prefix_boundary(
+                text, boundary, wake_word
+            ):
+                continue
+            command_start = boundary + int(has_separator)
+            while command_start < len(text) and _is_text_separator(text[command_start]):
+                command_start += 1
+            command = text[command_start:].strip()
+            if not command or not self._normalize_text(command):
+                continue
+
+            distance = self._wake_word_distance(text[:boundary], wake_word)
+            if distance is None or distance[0] > distance[1]:
+                continue
+            if (
+                not has_separator
+                and _is_kana(text[boundary])
+                and len(self._normalize_text(text[:boundary]).replace(" ", ""))
+                != len(self._normalize_text(wake_word).replace(" ", ""))
+            ):
+                continue
+            rank = (distance[0], boundary)
+            if best_rank is None or rank < best_rank:
+                best_match = command
+                best_rank = rank
+        return best_match
 
     def recalibrate(self, source):
         """TTS 이후 환경 변화 시 임계값 재조정"""
@@ -147,6 +256,7 @@ class SimpleWakeWord:
 
     def listen_for_wake_word(self, source, detection_allowed=None, interrupt_event=None):
         """웨이크워드 대기 — 첫 호출 시 캘리브레이션, 이후 즉시 청취"""
+        self.detected_command = None
         if self.should_stop:
             return False
         try:
@@ -166,7 +276,11 @@ class SimpleWakeWord:
                 original_stream = source.stream
                 source.stream = _WakeListenStream(original_stream, interrupt_event)
             try:
-                audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=2)
+                audio = self.recognizer.listen(
+                    source,
+                    timeout=2,
+                    phrase_time_limit=_WAKE_MAX_AUDIO_SECONDS,
+                )
             finally:
                 if original_stream is not None:
                     source.stream = original_stream
@@ -181,10 +295,12 @@ class SimpleWakeWord:
             logging.debug("들은 내용 (%d자)", len(text))
 
             for wake_word in self.wake_words:
-                if self._matches_wake_word(text, wake_word):
+                command = self._command_after_wake_word(text, wake_word)
+                if command is not None or self._matches_wake_word(text, wake_word):
                     if detection_allowed is not None and not detection_allowed():
                         logging.debug("[WakeWord] TTS 재생/보호 구간 중 감지 후보 무시")
                         return False
+                    self.detected_command = command
                     return True
             return False
 
