@@ -560,13 +560,12 @@ def play_cached_tts(
 ) -> bool:
     """이미 합성된 Edge TTS 문구만 재생한다."""
     provider = _state.fish_tts
-    speak_cached = getattr(provider, "speak_cached", None)
-    if not callable(speak_cached):
+    if not hasattr(provider, "speak_cached"):
         return False
     emotion, text = parse_emotion_text(text)
     try:
         return bool(
-            speak_cached(
+            provider.speak_cached(
                 text,
                 emotion=emotion,
                 request_cancel_event=request_cancel_event,
