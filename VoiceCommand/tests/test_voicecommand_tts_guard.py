@@ -58,10 +58,13 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         previous_rp_gen = VoiceCommand._state.rp_gen
         previous_widget = VoiceCommand._state.character_widget
         previous_indicator = VoiceCommand._state.listening_indicator_active
+        playback_finished = VoiceCommand._state.tts_playback_finished_event
+        previous_playback_finished = playback_finished.is_set()
         VoiceCommand._state.fish_tts = _FakePlaybackTTS()
         VoiceCommand._state.rp_gen = None
         VoiceCommand._state.character_widget = None
         VoiceCommand._state.listening_indicator_active = False
+        playback_finished.clear()
         monotonic_values = iter([100.0, 103.0])
         try:
             with (
@@ -79,6 +82,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                 VoiceCommand._handle_tts_playback_finished()
 
             self.assertEqual(VoiceCommand._state.tts_resume_guard_until, 103.5)
+            self.assertTrue(playback_finished.is_set())
             self.assertTrue(VoiceCommand.should_pause_wake_detection(now=103.49))
             self.assertFalse(VoiceCommand.should_pause_wake_detection(now=103.5))
         finally:
@@ -86,6 +90,10 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand._state.rp_gen = previous_rp_gen
             VoiceCommand._state.character_widget = previous_widget
             VoiceCommand._state.listening_indicator_active = previous_indicator
+            if previous_playback_finished:
+                playback_finished.set()
+            else:
+                playback_finished.clear()
 
     def test_tts_startup_failure_does_not_escape_or_leave_waiters_blocked(self):
         old_started = VoiceCommand._state.tts_init_started

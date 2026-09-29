@@ -32,6 +32,10 @@ class VoiceCommandSpeechTests(unittest.TestCase):
             phrase_time_limit=15,
         )
         signal.emit.assert_called_once_with("다운로드한 문서를 옮겨줘")
+        provider.transcribe.assert_called_once_with(
+            recognizer.listen.return_value,
+            mode="command",
+        )
 
     def test_same_phrase_is_suppressed_only_before_two_seconds(self):
         recognizer = Mock()
@@ -91,7 +95,7 @@ class VoiceCommandSpeechTests(unittest.TestCase):
             )
 
         self.assertIs(source.stream, stream)
-        provider.transcribe.assert_called_once_with(bytes(8))
+        provider.transcribe.assert_called_once_with(bytes(8), mode="command")
         signal.emit.assert_called_once_with("볼륨 올려줘")
 
     def test_estimated_tts_duration_uses_current_language_rate(self):

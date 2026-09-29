@@ -71,7 +71,7 @@ def should_transcribe_wake_audio(audio_data, energy_threshold):
 
 
 class SimpleWakeWord:
-    def __init__(self, wake_words=None):
+    def __init__(self, wake_words=None, stt_provider=None, provider_signature=None):
         self.wake_words = list(wake_words or ["아리야", "시작"])
         self.recognizer = sr.Recognizer()
         self.should_stop = False
@@ -82,11 +82,11 @@ class SimpleWakeWord:
         self._pending_energy_since = None
         self._stt_call_times = deque()
         self._last_stt_metric_log = time.monotonic()
-        self._provider_signature = None
-        self._stt = None
-        self.refresh_settings()
+        self._provider_signature = provider_signature
+        self._stt = stt_provider
+        self.refresh_settings(initialize_provider=False)
 
-    def refresh_settings(self):
+    def refresh_settings(self, initialize_provider=True):
         settings = ConfigManager.load_settings()
         self.wake_words = list(settings.get("wake_words", self.wake_words) or ["아리야", "시작"])
         energy_threshold = int(settings.get("stt_energy_threshold", 300))
@@ -97,6 +97,12 @@ class SimpleWakeWord:
             self._pending_energy_threshold = None
             self._pending_energy_since = None
         self.recognizer.dynamic_energy_threshold = bool(settings.get("stt_dynamic_energy", True))
+        pause_threshold = max(0.0, float(settings.get("wake_pause_threshold", 0.4)))
+        self.recognizer.pause_threshold = pause_threshold
+        self.recognizer.non_speaking_duration = min(
+            self.recognizer.non_speaking_duration,
+            pause_threshold,
+        )
 
         signature = (
             settings.get("stt_provider", "google"),
@@ -110,11 +116,13 @@ class SimpleWakeWord:
                 needs_refresh = not bool(self._stt.is_healthy())
             except Exception:
                 needs_refresh = True
-        if needs_refresh:
+        if needs_refresh and initialize_provider:
             self._provider_signature = signature
             self._stt = create_stt_provider(settings)
             self._calibrated = False
             logging.info("[WakeWord] STT 프로바이더 갱신: %s", signature[0])
+        elif self._stt is not None and self._provider_signature is None:
+            self._provider_signature = signature
 
     def _normalize_text(self, text):
         normalized = _STRIP_PUNCTUATION_RE.sub(" ", text or "")
@@ -199,7 +207,7 @@ class SimpleWakeWord:
         if self._stt is None:
             return None
         self._stt_call_times.append(time.monotonic())
-        return self._stt.transcribe(audio)
+        return self._stt.transcribe(audio, mode="wake")
 
     def _log_stt_call_rate(self):
         now = time.monotonic()

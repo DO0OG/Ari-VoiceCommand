@@ -2,7 +2,7 @@
 Whisper STT 워커 프로세스.
 메인 프로세스와 stdin/stdout IPC로 통신:
   - 초기화 완료 시 stdout에 "READY\\n" 출력
-  - 입력: base64 인코딩된 WAV 바이트 한 줄
+  - 입력: base64 WAV와 인식 모드가 담긴 JSON 한 줄 (구형 base64 입력도 허용)
   - 출력: 전사 텍스트 한 줄, 결과 없으면 "__NONE__"
   - "QUIT" 수신 시 종료
 """
@@ -218,19 +218,35 @@ def main(argv: list[str] | None = None) -> int:
         if line == "QUIT":
             break
         try:
-            wav_bytes = base64.b64decode(line)
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError:
+                request = None
+            if isinstance(request, dict):
+                audio_payload = request.get("audio", "")
+                mode = request.get("mode")
+            else:
+                audio_payload = line
+                mode = None
+            wav_bytes = base64.b64decode(audio_payload)
             audio_np = _wav_bytes_to_numpy(wav_bytes)
             if audio_np is None:
                 sys.stdout.write("__NONE__\n")
                 sys.stdout.flush()
                 continue
-            segments, _ = model.transcribe(
-                audio_np,
-                language=language,
-                beam_size=5,
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300},
-            )
+            fast_mode = mode == "wake" or mode == "command"
+            options = {
+                "language": language,
+                "beam_size": 1 if fast_mode else 5,
+                "vad_filter": True,
+                "vad_parameters": {"min_silence_duration_ms": 300},
+            }
+            if fast_mode:
+                options.update(
+                    condition_on_previous_text=False,
+                    without_timestamps=True,
+                )
+            segments, _ = model.transcribe(audio_np, **options)
             text = " ".join(s.text.strip() for s in segments).strip()
             sys.stdout.write((text if text else "__NONE__") + "\n")
             sys.stdout.flush()

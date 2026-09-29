@@ -59,31 +59,32 @@ class TTSThreadTests(unittest.TestCase):
                 thread.queue.get_nowait()
             self.assertFalse(thread.speak("late speech"))
 
-    def test_wait_for_tts_playback_completion_uses_backoff(self):
-        checks = iter([True, True, True, False])
-        slept = []
-        now_values = iter([0.0, 0.01, 0.08, 0.2])
+    def test_wait_for_tts_playback_completion_uses_event(self):
+        event = threading.Event()
+        event.set()
+        checks = iter([True, False])
 
         completed = _wait_for_tts_playback_completion(
             is_tts_playing=lambda: next(checks),
-            sleep_fn=lambda seconds: slept.append(round(seconds, 3)),
-            now_fn=lambda: next(now_values),
+            playback_finished=event,
         )
 
         self.assertTrue(completed)
-        self.assertEqual(slept, [0.05, 0.075, 0.113])
+        self.assertFalse(event.is_set())
 
     def test_wait_for_tts_playback_completion_times_out(self):
+        event = SimpleNamespace(wait=MagicMock(return_value=False), clear=MagicMock())
         with patch("core.threads.logging.warning") as mocked_warning:
             completed = _wait_for_tts_playback_completion(
                 is_tts_playing=lambda: True,
+                playback_finished=event,
                 timeout=0.1,
-                sleep_fn=lambda _seconds: None,
-                now_fn=iter([0.0, 0.05, 0.11]).__next__,
+                now_fn=iter([0.0, 0.0, 0.11]).__next__,
             )
 
         self.assertFalse(completed)
         mocked_warning.assert_called_once()
+        event.wait.assert_called_once_with(0.1)
 
     def test_command_execution_thread_marks_failed_command_done(self):
         thread = CommandExecutionThread()
@@ -97,6 +98,31 @@ class TTSThreadTests(unittest.TestCase):
 
 
 class VoiceRecognitionThreadTests(unittest.TestCase):
+    def test_recognizer_pause_threshold_caps_trailing_silence(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        recognizer = SimpleNamespace(
+            energy_threshold=0,
+            dynamic_energy_threshold=False,
+            pause_threshold=0.8,
+            non_speaking_duration=0.5,
+        )
+        thread.speech_recognizer = recognizer
+        settings = {
+            "stt_energy_threshold": 300,
+            "stt_dynamic_energy": True,
+            "stt_pause_threshold": 0.3,
+        }
+
+        with patch(
+            "core.threads.ConfigManager.get",
+            side_effect=lambda key, default=None: settings.get(key, default),
+        ):
+            thread._apply_recognizer_settings()
+
+        self.assertEqual(recognizer.pause_threshold, 0.3)
+        self.assertEqual(recognizer.non_speaking_duration, 0.3)
+
     def test_activation_is_thread_safe_and_releases_push_to_talk(self):
         with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
             thread = VoiceRecognitionThread()
@@ -200,10 +226,12 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
                 events.append(("bubble", text, duration))
             )),
             patch("core.threads._wait_for_tts_playback_completion"),
-            patch("core.threads.time.sleep"),
+            patch("core.threads.time.sleep") as sleep,
+            patch("core.threads.ConfigManager.get", return_value=100),
         ):
             thread.handle_wake_word()
 
+        sleep.assert_called_once_with(0.1)
         self.assertEqual(
             events,
             [

@@ -8,12 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from audio.simple_wake import SimpleWakeWord
 from core._whisper_worker import bundled_executable_path
-from core.stt_provider import WhisperSTTProvider, create_stt_provider
+from core.stt_provider import GoogleSTTProvider, WhisperSTTProvider, create_stt_provider
 
 
 class _FakePipe:
@@ -80,6 +80,22 @@ class _ExplodingProcess(_FakeProcess):
 
 
 class STTProviderTests(unittest.TestCase):
+    def test_google_provider_accepts_and_ignores_mode(self):
+        provider = GoogleSTTProvider.__new__(GoogleSTTProvider)
+        provider._language = "ko-KR"
+        provider._recognizer = SimpleNamespace(
+            recognize_google=Mock(return_value="recognized text")
+        )
+        audio = object()
+
+        result = provider.transcribe(audio, mode="wake")
+
+        self.assertEqual(result, "recognized text")
+        provider._recognizer.recognize_google.assert_called_once_with(
+            audio,
+            language="ko-KR",
+        )
+
     def test_startup_timeout_raises_and_terminates_worker(self):
         fake_proc = _FakeProcess(stderr_payload=b"startup timeout")
         stderr_read_while_running = []
@@ -112,6 +128,22 @@ class STTProviderTests(unittest.TestCase):
         self.assertFalse(first_proc._alive)
         self.assertTrue(second_proc._alive)
 
+    def test_transcribe_sends_mode_to_worker(self):
+        fake_proc = _FakeProcess()
+        with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc):
+            with patch.object(
+                WhisperSTTProvider,
+                "_read_process_line",
+                side_effect=["READY", "recognized text"],
+            ):
+                provider = WhisperSTTProvider(device="cpu")
+                result = provider.transcribe(_FakeAudioData(), mode="wake")
+
+        request = json.loads(fake_proc.stdin.writes[0].decode("ascii"))
+        self.assertEqual(result, "recognized text")
+        self.assertEqual(request, {"audio": "d2F2LWJ5dGVz", "mode": "wake"})
+        provider._terminate_worker_locked()
+
     def test_wake_word_refresh_recreates_unhealthy_provider(self):
         settings = {
             "wake_words": ["아리야"],
@@ -126,7 +158,12 @@ class STTProviderTests(unittest.TestCase):
         healthy = SimpleNamespace(is_healthy=lambda: True)
         wake = SimpleWakeWord.__new__(SimpleWakeWord)
         wake.wake_words = ["아리야"]
-        wake.recognizer = SimpleNamespace(energy_threshold=0, dynamic_energy_threshold=False)
+        wake.recognizer = SimpleNamespace(
+            energy_threshold=0,
+            dynamic_energy_threshold=False,
+            pause_threshold=0.8,
+            non_speaking_duration=0.5,
+        )
         wake._provider_signature = (
             "whisper",
             "small",
@@ -248,7 +285,7 @@ class STTProviderTests(unittest.TestCase):
         ):
             transcribe_calls = []
             fake_model = SimpleNamespace(
-                transcribe=lambda audio, **kwargs: (
+                transcribe=lambda _audio, **kwargs: (
                     transcribe_calls.append(kwargs) or [SimpleNamespace(text="ok")],
                     None,
                 )
@@ -264,7 +301,77 @@ class STTProviderTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             self.assertEqual(transcribe_calls[0]["language"], expected_language)
+            self.assertEqual(transcribe_calls[0]["beam_size"], 5)
+            self.assertNotIn("condition_on_previous_text", transcribe_calls[0])
+            self.assertNotIn("without_timestamps", transcribe_calls[0])
             self.assertEqual(stdout.getvalue().splitlines(), ["READY", "ok"])
+
+    def test_worker_uses_fast_options_for_wake_and_command_modes(self):
+        import core._whisper_worker as worker
+
+        encoded_audio = base64.b64encode(b"test-audio-payload").decode("ascii")
+        for mode in ("wake", "command"):
+            transcribe_calls = []
+            fake_model = SimpleNamespace(
+                transcribe=lambda _audio, **kwargs: (
+                    transcribe_calls.append(kwargs) or [SimpleNamespace(text="ok")],
+                    None,
+                )
+            )
+            fake_module = SimpleNamespace(WhisperModel=lambda *args, **kwargs: fake_model)
+            stdout = io.StringIO()
+            request = json.dumps({"audio": encoded_audio, "mode": mode})
+
+            with patch.dict(sys.modules, {"faster_whisper": fake_module}):
+                with patch("core._whisper_worker._wav_bytes_to_numpy", return_value=object()):
+                    with patch(
+                        "core._whisper_worker.sys.stdin",
+                        io.StringIO(f"{request}\nQUIT\n"),
+                    ):
+                        with patch("core._whisper_worker.sys.stdout", stdout):
+                            result = worker.main(["small", "cpu", "int8"])
+
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                transcribe_calls[0],
+                {
+                    "language": "ko",
+                    "beam_size": 1,
+                    "vad_filter": True,
+                    "vad_parameters": {"min_silence_duration_ms": 300},
+                    "condition_on_previous_text": False,
+                    "without_timestamps": True,
+                },
+            )
+            self.assertEqual(stdout.getvalue().splitlines(), ["READY", "ok"])
+
+    def test_worker_dictation_mode_preserves_default_options(self):
+        import core._whisper_worker as worker
+
+        encoded_audio = base64.b64encode(b"test-audio-payload").decode("ascii")
+        transcribe_calls = []
+        fake_model = SimpleNamespace(
+            transcribe=lambda _audio, **kwargs: (
+                transcribe_calls.append(kwargs) or [SimpleNamespace(text="ok")],
+                None,
+            )
+        )
+        fake_module = SimpleNamespace(WhisperModel=lambda *args, **kwargs: fake_model)
+        request = json.dumps({"audio": encoded_audio, "mode": "dictation"})
+
+        with patch.dict(sys.modules, {"faster_whisper": fake_module}):
+            with patch("core._whisper_worker._wav_bytes_to_numpy", return_value=object()):
+                with patch(
+                    "core._whisper_worker.sys.stdin",
+                    io.StringIO(f"{request}\nQUIT\n"),
+                ):
+                    with patch("core._whisper_worker.sys.stdout", io.StringIO()):
+                        result = worker.main(["small", "cpu", "int8"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(transcribe_calls[0]["beam_size"], 5)
+        self.assertNotIn("condition_on_previous_text", transcribe_calls[0])
+        self.assertNotIn("without_timestamps", transcribe_calls[0])
 
     def test_model_free_worker_self_test_checks_language_and_writes_result_file(self):
         import core._whisper_worker as worker

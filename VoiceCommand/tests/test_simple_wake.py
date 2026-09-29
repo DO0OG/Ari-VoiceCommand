@@ -9,6 +9,7 @@ import speech_recognition as sr
 
 
 from audio.simple_wake import SimpleWakeWord, should_transcribe_wake_audio
+from core.threads import VoiceRecognitionThread
 
 
 def _audio_from_envelope(envelope):
@@ -25,14 +26,55 @@ def _audio_from_envelope(envelope):
 
 
 class _FakeSttProvider:
+    def __init__(self):
+        self.modes = []
+
     def is_healthy(self):
         return True
 
-    def transcribe(self, _audio):
+    def transcribe(self, _audio, mode=None):
+        self.modes.append(mode)
         return "아리야"
 
 
 class SimpleWakeWordTests(unittest.TestCase):
+    def test_thread_initialization_creates_one_shared_stt_provider(self):
+        settings = {
+            "wake_words": ["아리야"],
+            "stt_energy_threshold": 300,
+            "stt_dynamic_energy": True,
+            "stt_provider": "google",
+            "whisper_model": "small",
+            "whisper_device": "auto",
+            "whisper_compute_type": "int8",
+        }
+        created = []
+        provider = SimpleNamespace(is_healthy=lambda: True)
+
+        def create_provider(_settings):
+            created.append(True)
+            return provider
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", return_value=Mock()),
+            patch("core.threads.ConfigManager.load_settings", return_value=settings),
+            patch(
+                "core.threads.ConfigManager.get",
+                side_effect=lambda key, default=None: settings.get(key, default),
+            ),
+            patch("core.threads.create_stt_provider", side_effect=create_provider),
+            patch("audio.simple_wake.create_stt_provider", side_effect=create_provider),
+        ):
+            thread = VoiceRecognitionThread()
+            self.assertTrue(thread._initialize_voice_recognition())
+
+        self.assertEqual(len(created), 1)
+        self.assertIs(thread.wake_detector._stt, provider)
+        self.assertEqual(
+            thread.wake_detector._provider_signature,
+            thread._stt_signature,
+        )
+
     def _make_detector(self):
         settings = {
             "wake_words": ["아리야", "시작"],
@@ -44,14 +86,29 @@ class SimpleWakeWordTests(unittest.TestCase):
             "whisper_compute_type": "int8",
         }
         with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
-            with patch("audio.simple_wake.create_stt_provider", return_value=_FakeSttProvider()):
-                return SimpleWakeWord()
+            return SimpleWakeWord(stt_provider=_FakeSttProvider())
 
     def test_matches_exact_wake_word_even_with_punctuation(self):
         detector = self._make_detector()
 
         self.assertTrue(detector._matches_wake_word("아리야!", "아리야"))
         self.assertTrue(detector._matches_wake_word(" 시작... ", "시작"))
+
+    def test_wake_recognizer_uses_short_pause_threshold(self):
+        settings = {
+            "wake_words": ["아리야"],
+            "stt_energy_threshold": 300,
+            "stt_dynamic_energy": True,
+            "wake_pause_threshold": 0.4,
+        }
+        with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
+            detector = SimpleWakeWord(stt_provider=_FakeSttProvider())
+
+        self.assertEqual(detector.recognizer.pause_threshold, 0.4)
+        self.assertLessEqual(
+            detector.recognizer.non_speaking_duration,
+            detector.recognizer.pause_threshold,
+        )
 
     def test_does_not_match_generic_word_inside_longer_sentence(self):
         detector = self._make_detector()
@@ -98,9 +155,9 @@ class SimpleWakeWordTests(unittest.TestCase):
             "stt_dynamic_energy": True,
             "stt_provider": "google",
         }
+        provider = _FakeSttProvider()
         with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
-            with patch("audio.simple_wake.create_stt_provider", return_value=_FakeSttProvider()):
-                detector = SimpleWakeWord()
+            detector = SimpleWakeWord(stt_provider=provider)
         detector._calibrated = True
         envelope = [0.0] * 40 + [0.9] * 10 + [0.0] * 3 + [0.4] * 9
         audio = _audio_from_envelope(envelope + [0.0] * 5 + [0.85] * 8)
@@ -117,6 +174,7 @@ class SimpleWakeWordTests(unittest.TestCase):
             self.assertTrue(detector.listen_for_wake_word(object()))
 
         self.assertEqual(detector.stt_calls_per_hour, 1)
+        self.assertEqual(provider.modes, ["wake"])
 
     def test_interrupt_discards_current_wake_audio_before_stt(self):
         detector = self._make_detector()

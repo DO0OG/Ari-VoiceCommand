@@ -52,6 +52,7 @@ class AppState:
         self.tts_thread = None
         self.tts_signature = None
         self.tts_init_event = threading.Event()
+        self.tts_playback_finished_event = threading.Event()
         self.tts_init_started = False
         self.game_mode = False
         self.saved_tts_mode = None
@@ -361,6 +362,7 @@ def _handle_tts_playback_finished() -> None:
     """TTS 종료 후 현재 상태에 맞게 말풍선을 정리한다."""
     if is_tts_playing():
         return
+    _state.tts_playback_finished_event.set()
     _state.tts_resume_guard_until = (
         time.monotonic() + TTS_WAKE_GUARD_BUFFER_SECONDS
     )
@@ -566,7 +568,7 @@ def recognize_speech_helper(
             provider = create_stt_provider(ConfigManager.load_settings())
         if continue_check is not None and not continue_check():
             return None
-        text = provider.transcribe(audio)
+        text = provider.transcribe(audio, mode="command")
         if continue_check is not None and not continue_check():
             return None
         if not text:
