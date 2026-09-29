@@ -334,10 +334,29 @@ class AgentOrchestrator:
             self._emit_plugin_event("on_agent_complete", payload)
             if run_result.achieved:
                 self._emit_plugin_event("agent.task.completed", payload)
+            try:
+                from agent.speech_scheduler import get_speech_scheduler
+
+                speech_scheduler = get_speech_scheduler()
+                if speech_scheduler is not None:
+                    speech_scheduler.request("agent_done", summary=run_result.summary)
+            except (
+                ImportError,
+                AttributeError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                logger.debug("작업 완료 발화 예약을 건너뜁니다: %s", exc)
             return run_result
         finally:
             self._set_thinking(False)
             self._run_lock.release()
+
+    @property
+    def is_running(self) -> bool:
+        return self._run_lock.locked()
 
     # ── 내부 루프 ─────────────────────────────────────────────────────────────
 
@@ -968,6 +987,11 @@ class AgentOrchestrator:
 
 _orchestrator: Optional[AgentOrchestrator] = None
 _orchestrator_lock = threading.Lock()
+
+
+def is_agent_running() -> bool:
+    """초기화된 오케스트레이터의 실행 상태를 반환한다."""
+    return bool(_orchestrator and _orchestrator.is_running)
 
 
 def get_orchestrator(

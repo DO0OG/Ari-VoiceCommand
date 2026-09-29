@@ -73,6 +73,20 @@ class ProactiveSuggestionBar(QFrame):
         self.show()
 
     def _build_suggestions(self) -> list:
+        try:
+            from agent.speech_scheduler import get_speech_scheduler
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+            scheduler = None
+        else:
+            scheduler = get_speech_scheduler()
+        if scheduler is not None:
+            suggestions = []
+            for item in scheduler.get_proactive_suggestions():
+                text = str(item.get("text", "")).strip()
+                goal = str(item.get("goal", text)).strip()
+                if text and goal:
+                    suggestions.append((text, goal))
+            return suggestions[:4]
         if not self._ctx:
             return []
         suggestions = []

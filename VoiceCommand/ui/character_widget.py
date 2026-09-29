@@ -22,7 +22,6 @@ from core.mood_state import get_mood_state
 from core import window_inspector
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
-    GREETING_INTERVAL
 )
 
 _RNG = secrets.SystemRandom()
@@ -251,7 +250,7 @@ class CharacterWidget(QWidget):
         # 시간별 인사 타이머
         self.greeting_timer = QTimer(self)
         self.greeting_timer.timeout.connect(self.time_based_greeting)
-        self.greeting_timer.start(GREETING_INTERVAL)
+        self.greeting_timer.start(5000)
         self._sleepy_mode: bool = False
         self._sleepy_check_timer = QTimer(self)
         self._sleepy_check_timer.timeout.connect(self._update_sleepy_mode)
@@ -1688,28 +1687,17 @@ class CharacterWidget(QWidget):
         self.bubble_hide_timer.stop()
 
     def time_based_greeting(self):
-        """시간대별 인사"""
-        if self._activity_paused():
+        """사건 발화를 확인한다."""
+        try:
+            from agent.speech_scheduler import get_speech_scheduler
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             return
-        from datetime import datetime
-        from i18n.translator import _
-
-        hour = datetime.now().hour
-
-        greetings = {
-            (6, 11): [_("좋은 아침이에요!"), _("잘 주무셨어요?"), _("아침이네요!")],
-            (12, 13): [_("점심 시간이에요!"), _("맛있게 드세요!")],
-            (14, 17): [_("오후네요~"), _("힘내세요!")],
-            (18, 21): [_("저녁 시간이에요"), _("하루 어떠셨어요?")],
-            (22, 23): [_("하암... 밤이 깊었어요."), _("졸려요... 같이 쉬어요."), _("이제 그만 자요~")],
-            (0, 5): [_("꾸벅..."), _("...자고 있었는데."), _("빨리 주무세요...")],
-        }
-
-        for (start, end), messages in greetings.items():
-            if start <= hour <= end:
-                message = _RNG.choice(messages)
-                self.say(message, duration=4000)
-                break
+        scheduler = get_speech_scheduler()
+        if scheduler is not None:
+            try:
+                scheduler.tick()
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("사건 발화 확인을 건너뜁니다: %s", exc)
 
     def cleanup(self):
         """정리"""

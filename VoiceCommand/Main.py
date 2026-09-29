@@ -86,7 +86,8 @@ from core.VoiceCommand import (
     _state,
     disable_game_mode,
     enable_game_mode,
-    is_game_mode,
+    is_game_mode as get_game_mode_state,
+    is_tts_playing as get_tts_playing_state,
     tts_wrapper,
     set_ai_assistant,
     set_character_widget,
@@ -105,6 +106,10 @@ from core.plugin_loader import PluginContext, get_plugin_manager
 from commands.ai_command import AICommand
 from agent.llm_provider import get_llm_provider
 from agent.proactive_scheduler import get_scheduler
+from core.window_inspector import (
+    get_foreground_fullscreen,
+    get_foreground_process_name,
+)
 
 # 전역 변수 선언
 ai_assistant = None
@@ -353,6 +358,7 @@ def main():
     telegram_bridge = None
     update_checker = None
     activity_monitor = None
+    speech_scheduler = None
     mood_state = None
 
     def _show_character():
@@ -375,6 +381,7 @@ def main():
         ResourceManager.extract_resources()
 
         # 기분 상태는 선택 기능이므로 저장소 초기화에 실패해도 앱을 시작한다.
+        mood_state = None
         try:
             from core.mood_state import initialize_mood_state
 
@@ -400,9 +407,9 @@ def main():
                 and auto_enabled
                 and activity_monitor.foreground_category in ("game", "video")
             )
-            if should_enable and not auto_game_mode_applied and not is_game_mode():
+            if should_enable and not auto_game_mode_applied and not get_game_mode_state():
                 enable_game_mode()
-                auto_game_mode_applied = is_game_mode()
+                auto_game_mode_applied = get_game_mode_state()
             elif not should_enable and auto_game_mode_applied:
                 disable_game_mode()
                 auto_game_mode_applied = False
@@ -491,6 +498,81 @@ def main():
         except Exception as exc:
             logging.warning("예약 작업 초기화 실패; 예약 기능을 사용할 수 없습니다: %s", exc)
 
+        try:
+            from agent.agent_orchestrator import is_agent_running
+            from agent.speech_scheduler import (
+                EventSpeechScheduler,
+                set_speech_scheduler,
+            )
+
+            def _get_speech_suggestions():
+                suggestions = (
+                    scheduler.get_proactive_suggestions()
+                    if scheduler is not None
+                    else []
+                )
+                if suggestions:
+                    return suggestions
+                from memory.user_context import get_context_manager
+
+                context = get_context_manager()
+                results = [
+                    {"text": _("⏰ {command}").format(command=command), "goal": command}
+                    for command in context.get_time_based_suggestions(limit=2)
+                ]
+                for command in context.get_predicted_next_commands()[:2]:
+                    if not any(item["goal"] == command for item in results):
+                        results.append(
+                            {
+                                "text": _("→ {command}").format(command=command),
+                                "goal": command,
+                            }
+                        )
+                return results
+
+            def _speech_guard_state():
+                monitor = activity_monitor
+                category = monitor.foreground_category if monitor else None
+                fullscreen = (
+                    any(
+                        monitor.foreground_covers(
+                            screen.geometry().width(), screen.geometry().height()
+                        )
+                        for screen in app.screens()
+                    )
+                    if monitor is not None
+                    else get_foreground_fullscreen() is True
+                )
+                foreground_process = get_foreground_process_name()
+                own_process = os.path.basename(sys.executable).casefold()
+                return {
+                    "locked": monitor is None or monitor.session_is_locked,
+                    "away": monitor is None or monitor.is_user_away,
+                    "quiet": bool(
+                        monitor is None
+                        or monitor.quiet_reason != "none"
+                        or category in ("game", "video")
+                    ),
+                    "fullscreen": fullscreen,
+                    "game": get_game_mode_state() or category == "game",
+                    "tts": get_tts_playing_state(),
+                    "agent": is_agent_running(),
+                    "other_window": bool(
+                        foreground_process
+                        and foreground_process.casefold() != own_process
+                    ),
+                }
+
+            speech_scheduler = EventSpeechScheduler(
+                tts_wrapper,
+                guard_state=_speech_guard_state,
+                suggestions_provider=_get_speech_suggestions,
+                mood_provider=lambda: mood_state,
+            )
+            set_speech_scheduler(speech_scheduler)
+        except Exception as exc:
+            logging.warning("발화 스케줄러 초기화 실패; 발화 기능을 사용할 수 없습니다: %s", exc)
+
         if scheduler is not None:
             if activity_monitor is not None:
                 scheduler.set_activity_state(
@@ -530,18 +612,25 @@ def main():
         character = CharacterWidget(activity_monitor=activity_monitor)
         logging.info("캐릭터 위젯 생성 완료")
         set_character_widget(character)
-        if scheduler is not None and activity_monitor is not None:
+        if activity_monitor is not None:
             def _report_activity_return(away_seconds):
-                summary = scheduler.activity_return_summary(away_seconds)
-                if summary:
-                    character.say(summary, duration=6000)
+                if away_seconds < 30 * 60:
+                    return
+                summary = (
+                    scheduler.activity_return_summary(away_seconds)
+                    if scheduler is not None
+                    else ""
+                )
+                if speech_scheduler is not None:
+                    speech_scheduler.request("return", summary=summary)
 
             activity_monitor.user_returned.connect(_report_activity_return)
 
             def _report_ide_long_use(duration_seconds):
-                message = scheduler.activity_ide_long_use_message(duration_seconds)
-                if message:
-                    character.say(message, duration=5000)
+                if duration_seconds < 3 * 60 * 60:
+                    return
+                if speech_scheduler is not None:
+                    speech_scheduler.request("long_use")
 
             activity_monitor.ide_long_use_due.connect(_report_ide_long_use)
 
@@ -709,6 +798,13 @@ def main():
             update_checker.stop()
         if activity_monitor:
             activity_monitor.stop()
+        if speech_scheduler is not None:
+            try:
+                from agent.speech_scheduler import set_speech_scheduler
+
+                set_speech_scheduler(None)
+            except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("발화 스케줄러 정리를 건너뜁니다: %s", exc)
         flush_runtime_state()
         if hotkey_filter:
             try:

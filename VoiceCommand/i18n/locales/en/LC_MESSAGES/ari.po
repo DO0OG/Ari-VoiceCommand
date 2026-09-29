@@ -3781,3 +3781,197 @@ msgstr "Local command: {content}"
 
 msgid "Scheduled run ({outcome}): {content}"
 msgstr "Scheduled run ({outcome}): {content}"
+
+msgid "학습"
+msgstr "Learning"
+
+msgid "학습 스킬"
+msgstr "Learned skills"
+
+msgid "{rate}%"
+msgstr "{rate}%"
+
+msgid "표본 없음"
+msgstr "No samples"
+
+msgid "사용 중"
+msgstr "Enabled"
+
+msgid "꺼짐"
+msgstr "Disabled"
+
+msgid "{name} · 성공률 {rate} · 마지막 사용: {last_used} · 상태: {status}"
+msgstr "{name} · Success rate {rate} · Last used: {last_used} · Status: {status}"
+
+msgid "사용 스킬이 없습니다."
+msgstr "No learned skills."
+
+msgid "이 스킬 끄기"
+msgstr "Disable this skill"
+
+msgid "활성 교훈"
+msgstr "Active lessons"
+
+msgid "교훈이 없습니다."
+msgstr "No lessons."
+
+msgid "이 교훈 삭제"
+msgstr "Delete this lesson"
+
+msgid "최근 정책 기록"
+msgstr "Recent policy records"
+
+msgid "컴포넌트 lift"
+msgstr "Component lift"
+
+msgid "{component}: {lift:+d}%p"
+msgstr "{component}: {lift:+d} pp"
+
+msgid ""
+"다시 오셨네요, 반가워요.||돌아오셔서 기뻐요. "
+"같이 이어서 해봐요."
+msgstr ""
+"Welcome back.||I'm glad you're back. "
+"Let's pick up where we left off."
+
+msgid "다시 오셨네요.||돌아오셨군요. 어디부터 이어갈까요?"
+msgstr "Welcome back.||You're back. Where should we pick up?"
+
+msgid ""
+"돌아오셨네요. 천천히 다시 시작해요.||기다리고 있었어요. "
+"무리하지 말고 해봐요."
+msgstr ""
+"You're back. Let's ease into things.||I've been waiting. "
+"Take it easy as you get started."
+
+msgid ""
+"오래 집중하셨네요. 잠깐 쉬고 다시 해봐요.||많이 해내셨네요. "
+"물 한잔 어때요?"
+msgstr ""
+"You've been focused for a while. Take a short break.||You've "
+"gotten a lot done. How about some water?"
+
+msgid ""
+"계속 집중하고 계시네요. 잠깐 쉬어 가는 건 어때요?||오래 일하셨네요. "
+"잠깐 몸을 풀어봐요."
+msgstr ""
+"You've been concentrating for a while. How about a short break?||"
+"You've worked for a long time. Stretch a little."
+
+msgid ""
+"너무 오래 붙잡고 계셨어요. 조금 쉬어요.||잠깐 쉬어도 괜찮아요. "
+"몸을 돌봐주세요."
+msgstr ""
+"You've been at it too long. Rest for a bit.||It's okay to take a "
+"break. Please take care of yourself."
+
+msgid ""
+"늦은 시간까지 수고 많으셨어요. 이제 쉬어도 좋아요.||오늘은 여기까지 하고 "
+"푹 쉬어요."
+msgstr ""
+"You've worked hard this late. You can rest now.||That's enough "
+"for today. Get some good sleep."
+
+msgid ""
+"시간이 늦었네요. 잠깐 쉬는 건 어때요?||아직 깨어 계셨네요. "
+"조금 쉬어 가요."
+msgstr ""
+"It's getting late. How about a short break?||You're still up. "
+"Take a little rest."
+
+msgid ""
+"밤이 꽤 깊었어요. 무리하지 말고 쉬어요.||오늘은 일찍 마무리해도 "
+"괜찮아요."
+msgstr ""
+"It's quite late. Don't push yourself; get some rest.||It's okay "
+"to call it an early night."
+
+msgid ""
+"작업이 끝났어요. 결과를 확인해 주세요: {summary}||요청하신 일을 "
+"마쳤어요: {summary}"
+msgstr ""
+"The task is done. Please check the result: {summary}||I've finished "
+"what you asked: {summary}"
+
+msgid ""
+"작업을 마쳤어요. 결과는 이렇습니다: {summary}||완료된 내용이에요: "
+"{summary}"
+msgstr ""
+"I've finished the task. Here's the result: {summary}||Here's what "
+"was completed: {summary}"
+
+msgid ""
+"작업 결과가 나왔어요. 확인해 주세요: {summary}||요청하신 작업을 "
+"끝냈어요: {summary}"
+msgstr ""
+"The task result is ready. Please check it: {summary}||I've finished "
+"the task you requested: {summary}"
+
+msgid ""
+"이번 주 학습 리포트를 정리했어요.||이번 주에 배운 내용을 "
+"모아뒀어요."
+msgstr ""
+"I've put together this week's learning report.||I've gathered "
+"what I learned this week."
+
+msgid ""
+"이번 주 학습 리포트를 준비했어요.||주간 리포트를 확인할 수 "
+"있어요."
+msgstr ""
+"This week's learning report is ready.||You can check the weekly "
+"report now."
+
+msgid ""
+"이번 주 학습 결과를 정리해 뒀어요.||주간 리포트를 준비했어요. "
+"편할 때 확인해 주세요."
+msgstr ""
+"I've gathered this week's learning results.||The weekly report "
+"is ready whenever you'd like to check it."
+
+msgid ""
+"계속 칭찬해 주셔서 기분이 좋아요.||칭찬을 들으니 더 힘이 "
+"나요."
+msgstr ""
+"Your praise keeps making me happy.||Hearing your praise gives "
+"me a little more energy."
+
+msgid ""
+"따뜻한 말씀 고마워요.||계속 응원해 주셔서 "
+"고마워요."
+msgstr ""
+"Thank you for your kind words.||Thanks for continuing to "
+"cheer me on."
+
+msgid ""
+"다정하게 말해 주셔서 고마워요.||칭찬해 주셔서 "
+"힘이 나요."
+msgstr ""
+"Thank you for being so kind.||Your praise gives me "
+"strength."
+
+msgid ""
+"새벽 정리 결과가 나왔어요. {summary}||메모리 정리 결과예요. "
+"{summary}"
+msgstr ""
+"The overnight cleanup is done. {summary}||Here's the memory "
+"cleanup result. {summary}"
+
+msgid ""
+"정리 작업 결과예요. {summary}||새벽 정리 결과가 나왔어요. "
+"{summary}"
+msgstr ""
+"Here's the cleanup result. {summary}||The overnight cleanup "
+"is done. {summary}"
+
+msgid ""
+"정리 결과가 나왔어요. {summary}||메모리 정리 결과예요. "
+"{summary}"
+msgstr ""
+"The cleanup result is ready. {summary}||Here's the memory "
+"cleanup result. {summary}"
+
+msgid "⏰ {command}"
+msgstr "⏰ {command}"
+
+msgid "→ {command}"
+msgstr "→ {command}"
