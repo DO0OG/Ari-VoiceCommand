@@ -292,6 +292,49 @@ class StrategyMemory:
                 break
         return lessons
 
+    def get_recent_lessons(self, limit: int = 20) -> List[StrategyRecord]:
+        safe_limit = max(int(limit or 0), 0)
+        if not safe_limit:
+            return []
+        with self._save_lock:
+            return [
+                record
+                for record in reversed(self._records)
+                if str(record.lesson or "").strip()
+            ][:safe_limit]
+
+    def get_skill_usage(self) -> dict[str, dict]:
+        usage: dict[str, dict] = {}
+        with self._save_lock:
+            for record in self._records:
+                skill_id = str(record.skill_id or "").strip()
+                if not skill_id:
+                    continue
+                stats = usage.setdefault(
+                    skill_id,
+                    {"total": 0, "success": 0, "success_rate": 0.0, "last_used": ""},
+                )
+                stats["total"] += 1
+                stats["success"] += int(bool(record.success))
+                if record.timestamp > stats["last_used"]:
+                    stats["last_used"] = record.timestamp
+        for stats in usage.values():
+            stats["success_rate"] = round(stats["success"] / stats["total"], 4)
+        return usage
+
+    def delete_lesson(self, record_id: str) -> bool:
+        normalized_id = str(record_id or "").strip()
+        if not normalized_id:
+            return False
+        with self._save_lock:
+            for record in self._records:
+                if record.record_id != normalized_id or not record.lesson:
+                    continue
+                record.lesson = ""
+                self._schedule_save()
+                return True
+        return False
+
     def update_latest_lesson(self, goal: str, lesson: str, failure_kind: str = "") -> bool:
         normalized_goal = str(goal or "")[:200]
         normalized_lesson = str(lesson or "").strip()[:400]

@@ -11,6 +11,36 @@ from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask, Schedul
 
 
 class ProactiveSchedulerTests(unittest.TestCase):
+    def test_successful_maintenance_is_logged_without_tts(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler.tts = Mock()
+        scheduler._finalize_task_run = Mock()
+        task = ScheduledTask(
+            task_id="maintenance",
+            goal="메모리 정리",
+            schedule_expr="매일 오전 3시 30분",
+            next_run="",
+            task_type="maintenance",
+        )
+        consolidator = Mock()
+        consolidator.run_all.return_value = {
+            "facts": 2,
+            "strategies": 1,
+            "conversations": 0,
+        }
+
+        with (
+            patch("core.config_manager.ConfigManager.get", return_value=14),
+            patch(
+                "memory.memory_consolidator.get_memory_consolidator",
+                return_value=consolidator,
+            ),
+        ):
+            scheduler._execute_task(task)
+
+        scheduler.tts.assert_not_called()
+        scheduler._finalize_task_run.assert_called_once()
+
     def test_due_tasks_wait_until_activity_allows_them(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         scheduler._activity_state_lock = threading.Lock()

@@ -306,6 +306,7 @@ class UserContextManager:
             "last_interaction_elapsed_minutes": (
                 None if elapsed_seconds is None else elapsed_seconds // 60
             ),
+            "seconds_since_last_interaction": elapsed_seconds,
             "today_interaction_count": today_count,
             "continuous_use_minutes": continuous_minutes,
             "local_time": current.strftime("%H:%M"),

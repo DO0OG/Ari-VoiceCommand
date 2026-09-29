@@ -127,6 +127,7 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertEqual(active["today_interaction_count"], 1)
             self.assertEqual(active["continuous_use_minutes"], 20)
             self.assertEqual(active["last_interaction_elapsed_minutes"], 20)
+            self.assertEqual(active["seconds_since_last_interaction"], 20 * 60)
             self.assertEqual(active["recent_praise_count"], 1)
 
             follow_up = start + timedelta(minutes=20)
@@ -135,10 +136,12 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertEqual(active["today_interaction_count"], 2)
             self.assertEqual(active["continuous_use_minutes"], 25)
             self.assertEqual(active["last_interaction_elapsed_minutes"], 5)
+            self.assertEqual(active["seconds_since_last_interaction"], 5 * 60)
 
             idle = manager.get_situation_metrics(now=start + timedelta(minutes=51))
             self.assertEqual(idle["continuous_use_minutes"], 0)
             self.assertEqual(idle["last_interaction_elapsed_minutes"], 31)
+            self.assertEqual(idle["seconds_since_last_interaction"], 31 * 60)
 
             next_day = start + timedelta(days=1, minutes=1)
             manager.record_interaction("ordinary request", now=next_day)

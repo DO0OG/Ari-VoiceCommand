@@ -118,6 +118,15 @@ class SettingsDialog(QDialog):
         self._agent_page = _AgentSettingsPage(self.settings, self)
         self.tabs.addTab(self._agent_page, _("에이전트"))
 
+        try:
+            from ui.settings_learning_page import _LearningSettingsPage
+
+            self._learning_page = _LearningSettingsPage(self)
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("[SettingsDialog] 학습 페이지 로드 실패: %s", exc)
+        else:
+            self.tabs.addTab(self._learning_page, _("학습"))
+
         # 7. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
         self.tabs.addTab(self._plugin_page, _("확장"))

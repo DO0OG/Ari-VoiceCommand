@@ -79,6 +79,7 @@ DEFAULT_SETTINGS = {
     "personality": "",
     "personality_examples_en": "",
     "personality_examples_ja": "",
+    "fixed_responses": {},
     "scenario": "",
     "system_prompt": "",
     "history_instruction": "",

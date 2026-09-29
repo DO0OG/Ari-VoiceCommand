@@ -458,6 +458,17 @@ class ProactiveScheduler:
         for task, run_meta in due:
             threading.Thread(target=self._execute_task, args=(task, run_meta), daemon=True).start()
 
+    def _announce_scheduled_event(self, event: str, **values) -> None:
+        try:
+            from agent.speech_scheduler import get_speech_scheduler
+
+            speech_scheduler = get_speech_scheduler()
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("예약 작업 발화를 연결하지 못했습니다: %s", exc)
+            speech_scheduler = None
+        if speech_scheduler is not None:
+            speech_scheduler.request(event, **values)
+
     def _execute_task(self, task: ScheduledTask, run_meta: Optional[Dict[str, str]] = None):
         started_at = (run_meta or {}).get("started_at") or datetime.now().isoformat()
         next_run_before = (run_meta or {}).get("next_run_before", "")
@@ -493,8 +504,11 @@ class ProactiveScheduler:
                 error = str(exc)
                 summary = _("메모리 정리 실패")
                 logging.error("[Scheduler] 메모리 정리 실패: %s", exc)
-            if self.tts and summary:
-                self.tts(summary if success else f"(걱정) {summary}: {error}")
+            if not success and summary:
+                self._announce_scheduled_event(
+                    "maintenance_result",
+                    summary=summary,
+                )
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
@@ -507,8 +521,8 @@ class ProactiveScheduler:
                 error = str(exc)
                 summary = _("주간 리포트 생성 실패")
                 logging.error("[Scheduler] 주간 리포트 생성 실패: %s", exc)
-            if self.tts and summary:
-                self.tts(summary if success else f"(걱정) {summary}: {error}")
+            if success and summary:
+                self._announce_scheduled_event("weekly_report")
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
@@ -526,8 +540,6 @@ class ProactiveScheduler:
             res = self._orchestrator_func(task.goal)
             summary = getattr(res, "summary", _("작업 완료"))
             success = bool(getattr(res, "achieved", True))
-            if self.tts:
-                self.tts(summary)
         except Exception as e:
             logging.error("[Scheduler] 실행 실패: %s", e)
             error = str(e)

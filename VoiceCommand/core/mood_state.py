@@ -158,6 +158,10 @@ class MoodState:
             self._clock() if now is None else now,
         )
 
+    def record_ignored_suggestion(self, now: float | None = None) -> None:
+        """무시된 선제 발화를 약하게 반영한다."""
+        self._apply(-0.03, -0.01, self._clock() if now is None else now)
+
     def claim_big_motion(self, now: float | None = None) -> bool:
         """큰 기분 변화 직후 쿨다운을 지키며 한 번만 허용한다."""
         current = self._clock() if now is None else now

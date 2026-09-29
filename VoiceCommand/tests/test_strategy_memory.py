@@ -254,6 +254,46 @@ class StrategyMemoryTests(unittest.TestCase):
             self.assertEqual(stats["fail"], 2)
             self.assertTrue(any(kind == "timeout" and count == 2 for kind, count in repeated))
 
+    def test_learning_page_data_lists_skill_usage_and_deletes_only_lesson(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = StrategyMemory(filepath=os.path.join(tmp, "strategy.json"))
+            memory.record(
+                "스킬 작업",
+                [],
+                True,
+                lesson="이전 성공 교훈",
+                skill_id="skill_a",
+            )
+            memory.record(
+                "스킬 작업",
+                [],
+                False,
+                lesson="최근 실패 교훈",
+                skill_id="skill_a",
+            )
+            first, latest = memory._records
+
+            usage = memory.get_skill_usage()["skill_a"]
+            lessons = memory.get_recent_lessons()
+
+            self.assertEqual(usage["total"], 2)
+            self.assertEqual(usage["success_rate"], 0.5)
+            self.assertEqual(usage["last_used"], latest.timestamp)
+            self.assertEqual(
+                [item.record_id for item in lessons],
+                [latest.record_id, first.record_id],
+            )
+            self.assertTrue(memory.delete_lesson(latest.record_id))
+            self.assertFalse(memory.delete_lesson(latest.record_id))
+            self.assertEqual(memory.count(), 2)
+            self.assertEqual(memory.get_recent_lessons(), [first])
+
+            memory.flush()
+            with open(memory.filepath, "r", encoding="utf-8") as handle:
+                saved_records = json.load(handle)["records"]
+            self.assertEqual(saved_records[1]["lesson"], "")
+            self.assertEqual(saved_records[1]["skill_id"], "skill_a")
+
     def test_flush_persists_pending_debounced_save(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "strategy.json")
