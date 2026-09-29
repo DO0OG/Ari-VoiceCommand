@@ -1,60 +1,90 @@
-# 🎙️ Ari — オープンソースのWindows音声アシスタント・デスクトップエージェント
+# 🎙️ Ari — オープンソース Windows AI 音声アシスタント・デスクトップ自動化エージェント
 
 <div align="center">
-  <img src="docs/assets/ari-idle.gif" width="180" alt="Ari のキャラクター" />
-  <p><strong>話す・入力する・クリックするだけでWindowsの作業を頼み、音声で結果を確認できます。</strong></p>
+  <img src="docs/assets/ari-idle.gif" width="180" alt="Ari デスクトップアシスタントのキャラクター" />
+  <p><strong>音声操作、デスクトップ自動化、ローカル AI、メモリ、MCP ツール、キャラクターアシスタントを一つの Windows アプリに。</strong></p>
   <p>
-    <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white" alt="Python 3.11" />
-    <img src="https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white" alt="Windows" />
-    <img src="https://img.shields.io/badge/UI-PySide6-41CD52?logo=qt&logoColor=white" alt="PySide6" />
-    <img src="https://img.shields.io/badge/Languages-KO%20%7C%20EN%20%7C%20JA-orange" alt="韓国語・英語・日本語" />
+    <a href="https://github.com/DO0OG/Ari-VoiceCommand/releases/latest"><img src="https://img.shields.io/github/v/release/DO0OG/Ari-VoiceCommand?display_name=tag&sort=semver" alt="最新リリース" /></a>
+    <a href="https://github.com/DO0OG/Ari-VoiceCommand/stargazers"><img src="https://img.shields.io/github/stars/DO0OG/Ari-VoiceCommand?style=flat&logo=github" alt="GitHub Stars" /></a>
+    <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white" alt="Windows 10 / 11" />
+    <img src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11" />
+    <img src="https://img.shields.io/badge/Local%20LLM-Ollama-black" alt="Ollama ローカル LLM 対応" />
+    <img src="https://img.shields.io/badge/Protocol-MCP-7C3AED" alt="Model Context Protocol 対応" />
+    <img src="https://img.shields.io/badge/Languages-KO%20%7C%20EN%20%7C%20JA-orange" alt="韓国語、英語、日本語" />
     <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
-    <a href="https://app.codacy.com/gh/DO0OG/Ari-VoiceCommand/dashboard"><img src="https://img.shields.io/codacy/grade/b30dee6110a44335b36a1cdf47f0566f/main?logo=codacy&label=Codacy" alt="Codacy grade" /></a>
   </p>
-  <p><a href="./README.md">English</a> | <a href="./README.ko.md">한국어</a> | <strong>日本語</strong></p>
+  <p><a href="./README.md">English</a> · <a href="./README.ko.md">한국어</a> · <strong>日本語</strong></p>
   <p>
-    <a href="https://github.com/DO0OG/Ari-VoiceCommand/releases"><img src="https://img.shields.io/badge/ダウンロード-Releases-blue?style=for-the-badge" alt="Releases からダウンロード" /></a>
-    <a href="https://ari-voice-command.vercel.app"><img src="https://img.shields.io/badge/訪問-ホームページ-6c5ce7?style=for-the-badge" alt="Ari のホームページ" /></a>
+    <a href="https://github.com/DO0OG/Ari-VoiceCommand/releases/latest"><img src="https://img.shields.io/badge/ダウンロード-最新リリース-blue?style=for-the-badge" alt="最新の Ari をダウンロード" /></a>
+    <a href="https://ari-voice-command.vercel.app"><img src="https://img.shields.io/badge/訪問-ホームページ-6c5ce7?style=for-the-badge" alt="Ari ホームページ" /></a>
     <a href="./docs/USAGE.md"><img src="https://img.shields.io/badge/読む-使い方ガイド-20a779?style=for-the-badge" alt="使い方ガイド" /></a>
   </p>
 </div>
 
 ---
 
-## Ari の特長
+Ari は Python と PySide6 で作られた **オープンソースの Windows AI 音声アシスタント兼自律デスクトップエージェント**です。ウェイクワードによる音声操作、音声認識（STT）、音声合成（TTS）、Windows 自動化、永続メモリ、ローカル／ホスト型 LLM、Model Context Protocol（MCP）、プラグイン、スキルを一つのデスクトップアプリに統合します。
 
-- **音声操作と作業実行を一つに:** ウェイクワード、音声ショートカット、キャラクターのクリックで依頼し、複数手順のデスクトップ作業を任せられます。
-- **すばやいローカル判定:** 対応する高信頼のコマンドは LLM を使わず実行でき、不確かな依頼は設定したプロバイダーに進みます。直接実行は既定で無効です。
-- **反応するキャラクター:** ウィジェットが活動や気分を表現し、戻ってきたときや作業完了時などにイベントに応じて話します。
-- **ローカルモデルとホスト型モデル:** Ollama、ローカルの CosyVoice3 と ONNX 埋め込み、OpenAI 互換 LLM プロバイダーを利用できます。リモート埋め込みは既定で無効です。
-- **管理できる記憶:** 事実や会話履歴を検索し、記憶・忘却を指示できます。プロフィール情報の候補は確認してから保存できます。
-- **拡張と多言語:** プラグイン、`SKILL.md` スキル、MCP ツールを追加できます。Telegram リモート操作は既定で無効で、日本語・英語・韓国語に対応します。
+単に会話するだけではなく、対応コマンドをローカルで素早く判定し、複雑な目標をエージェントワークフローへ渡してツールを使い、結果を確認し、必要な情報を記憶して音声で返す Windows 向けアシスタントを目指しています。
 
-## 機能一覧
+> [!NOTE]
+> 現在 Ari は **Windows 10/11 64-bit** 向けです。任意の直接ローカル実行、Telegram リモートコマンド、リモート埋め込みは既定で無効です。
 
-| 領域 | Ari の機能 |
+## Ari でできること
+
+| 分野 | 機能 |
 | :--- | :--- |
-| 音声入力 | ウェイクワード、音声ショートカット、キャラクタークリック、Google またはオフライン Whisper STT |
-| テキスト・リモート入力 | テキストチャットと許可リスト登録済み Telegram コマンド (Telegram は既定で無効) |
-| ローカル判定 | 高信頼コマンド向けの任意機能で、既定で無効です。LLM 会話経路にフォールバックします |
-| 自律エージェント | 計画、ツール実行、結果検証、振り返り、再利用できる戦略の記録 |
-| 記憶 | 事実や会話要約の取得、検索、記憶、忘却、候補の確認 |
-| 音声とキャラクター | 文単位のストリーミング TTS、気分、イベント発話、停止操作 |
-| モデルと拡張 | Ollama、CosyVoice3、ローカル ONNX 埋め込み、OpenAI 互換プロバイダー、プラグイン、スキル、MCP |
+| **音声アシスタント** | ウェイクワード、音声ショートカット、キャラクタークリック、Google STT、オフライン Whisper STT、ストリーミング音声出力 |
+| **Windows 自動化** | 対応するローカルコマンドと、ツール・自律エージェントによる複数手順のデスクトップ作業 |
+| **高速ローカルコマンド** | 時刻、実行中アプリ、スクリーンショット、音量操作など、高信頼の対応コマンド向け任意ルート |
+| **ローカル AI** | Ollama ローカル LLM、ローカル CosyVoice3、ローカル ONNX 埋め込み、オフライン Whisper |
+| **ホスト型 AI** | ローカルまたはリモートで動く OpenAI 互換モデルプロバイダー |
+| **メモリ** | 関連する事実・会話の検索、明示的な記憶／忘却、確認可能なメモリ候補 |
+| **エージェント処理** | 計画、実行、検証、振り返り、戦略の再利用、実行中の処理停止、対応フローの再開 |
+| **拡張** | プラグイン、インストール可能な `SKILL.md` スキル、MCP サーバー／ツール |
+| **リモート操作** | 許可リスト方式の Telegram コマンドを同じリクエスト処理系へ接続 |
+| **多言語** | 韓国語、英語、日本語の UI とコマンドルーティング |
+
+## Ari の特徴
+
+- **Windows を中心に設計:** ブラウザ中心のチャットではなく、デスクトップ操作、音声制御、システムコマンド、Windows 自動化を重視しています。
+- **ローカル優先の構成が可能:** Ollama、Whisper、CosyVoice3、ローカル埋め込みを組み合わせ、より多くの処理を PC 内で行えます。
+- **LLM が不要な処理は高速化:** 対応する高信頼コマンドは、任意のローカル判定ルートを使って LLM の応答を待たずに処理できます。
+- **チャット以上の処理:** 複雑な依頼は「計画 → 実行 → 検証 → 振り返り」の流れに入り、ツールや再利用可能な戦略を利用できます。
+- **見えるアシスタント:** デスクトップキャラクターが状態や気分を表現し、イベントに応じて発話し、クリックからすぐ音声入力を開始できます。
+- **拡張しやすい構造:** コアを置き換えずに、プラグイン、`SKILL.md`、MCP ツール、OpenAI 互換プロバイダーを追加できます。
+
+## 操作例
+
+実際の動作は有効にした機能や選択したモデル／プロバイダーによって変わりますが、対応する依頼には次のようなものがあります。
+
+```text
+"今何時？"
+"音量を30%にして。"
+"スクリーンショットを撮って。"
+"起動中のアプリを教えて。"
+"短い回答が好きだと覚えて。"
+"さっき伝えたその好みは忘れて。"
+```
+
+より大きな目標は自律エージェントのワークフローへ渡し、現在の設定で利用できるツールを使って処理できます。
 
 ## クイックスタート
 
 ### 要件
 
-- Windows 10/11 (64-bit)。
-- ソースから実行する場合は Python 3.11 が必要です。
-- RAM は 8 GB を推奨し、ローカルモデルには GPU VRAM 4 GB を推奨します。
+- Windows 10/11 (64-bit)
+- ソースから実行する場合は Python 3.11
+- RAM 8 GB 推奨
+- GPU を使うローカルモデルでは VRAM 4 GB 推奨
 
-### インストール
+### Windows 版をインストール
 
-[Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases)から`Ari-Setup-<version>.exe`をダウンロードして実行してください。既定のインストール先は`Program Files\Ari`で、設定と履歴は`%AppData%\Ari`に保存されます。
+**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** から `Ari-Setup-<version>.exe` をダウンロードして実行してください。
 
-ソースから実行する場合は Python 3.11 を使用してください。
+既定のインストール先は `Program Files\Ari` で、ユーザー設定・履歴・ランタイムデータは `%AppData%\Ari` に保存されます。
+
+### ソースから実行
 
 ```bat
 git clone https://github.com/DO0OG/Ari-VoiceCommand.git
@@ -63,11 +93,24 @@ setup.bat
 Ari.vbs
 ```
 
-ローカル CosyVoice3 は `setup.bat --with-tts` で準備できます。以前の zip 版のデータは、設定 → デバイス設定 →「以前のバージョンからデータをインポート」で `.ari_runtime` フォルダーを選んで取り込めます。診断用の `Ari.bat` と詳しい使い方は[ガイド](./docs/USAGE.md)をご覧ください。
+ローカル CosyVoice3 も準備する場合は `setup.bat --with-tts` を実行してください。起動診断が必要な場合は `Ari.bat` を使用できます。プロバイダー、音声設定、スキル、高度な機能は **[使い方ガイド](./docs/USAGE.md)** を参照してください。
 
-## システムアーキテクチャ
+## ローカル優先構成とプライバシーを意識した既定値
 
-ウェイクワードを検知すると接続の事前準備と音声認識を始めます。テキストと Telegram の依頼も同じ対話処理に進みます。
+Ari はクラウドサービスも利用できますが、より多くの処理をローカルに置く構成にも対応します。
+
+- Ollama によるローカル LLM
+- オフライン Whisper 音声認識
+- CosyVoice3 ローカル TTS
+- メモリ／戦略検索向けローカル ONNX 埋め込み
+- リモート埋め込みは既定で無効
+- Telegram 連携は既定で無効
+- 直接ローカルコマンド実行は既定で無効
+- ユーザーの同意なしにプラグインを自動読み込みしない
+
+実際のデータフローは、有効にしたプロバイダーとオプション機能によって異なります。
+
+## 動作の流れ
 
 ```mermaid
 graph TD
@@ -79,66 +122,76 @@ graph TD
     Chat["テキストチャット / Telegram"] --> Handler["リクエスト処理"]
     Registry --> Handler
     Handler --> Decision["ローカル判定エンジン"]
-    Decision -- "対象かつ高信頼" --> Fast["ローカルで直接実行"]
-    Decision -- "不確実または複雑な依頼" --> Ack["即時応答メッセージ"]
-    Decision -- "不確実または複雑な依頼" --> LLM["LLM プロバイダー: ストリーミングとツール呼び出し"]
+    Decision -- "対象 + 高信頼" --> Fast["直接ローカルコマンド"]
+    Decision -- "不確実 / 複雑" --> Ack["即時応答"]
+    Decision -- "不確実 / 複雑" --> LLM["LLM プロバイダー + ツール呼び出し"]
     Ack -.-> LLM
     Warm --> LLM
     LLM --> Tools["ツール実行"]
     Tools --> Policy["ツール結果の後続呼び出しポリシー"]
     Policy --> LLM
-    Memory["事実・会話・要約の記憶"] -- "検索した文脈と事実" --> LLM
+    Memory["事実 + 会話メモリ"] --> LLM
     Tools --> Agent["自律エージェント"]
     Agent --> Loop["計画 / 実行 / 検証 / 振り返り"]
-    Loop --> Strategy["戦略記憶 / スキル"]
+    Loop --> Strategy["戦略メモリ / スキル"]
     Strategy -.-> Agent
     Fast --> TTS["文単位ストリーミング TTS"]
     LLM --> TTS
     Agent --> TTS
-    Agent --> Character["キャラクターの気分 / イベント発話スケジューラー"]
+    Agent --> Character["キャラクターの気分 / イベント発話"]
     TTS --> Character
-    Stop["発話停止 / 作業中断"] --> TTS
+    Stop["停止 / 中断"] --> TTS
     Stop --> Agent
 ```
 
-- ローカル判定エンジンは、対応コマンドの解析と信頼度・実行ポリシーの条件を満たした場合だけ実行します。直接実行は既定で無効です。
-- ツールの結果に応じてローカルで返答するか、LLM に後続応答を依頼します。複雑な作業は計画・実行・検証・振り返りの流れに進みます。
-- 検索した事実や会話の文脈をプロバイダーのプロンプトに加えます。文単位の出力を TTS に送り、キャラクターは気分やイベントに応じて話します。停止操作で発話やエージェント作業を中断できます。
+## 検証済みローカル判定評価
 
-## 判定エンジンの数値
+任意のローカル判定エンジンには、対応コマンド経路向けの独立したホールドアウト評価があります。
 
-- 生成したテスト文 7,407 件のうち、パーサーが確認した 367 件の選択で測定精度は 100.0%、誤った直接実行は 0 件でした。この評価ではコマンド実行やマイク認識率を測定していません。
-- AMD64 の Windows デスクトップで 1,000 回実行したウォーム推論の遅延は p50 0.053 ms、p95 0.100 ms でした。
+- 生成評価例 **7,407件**
+- パーサー確認済み直接選択 **367件**
+- その選択に対する **測定精度 100.0%**
+- この評価での **誤った直接選択 0件**
+- AMD64 Windows デスクトップで 1,000 回のウォーム推論: **p50 0.053ms**、**p95 0.100ms**
 
-## v1.1 の新機能
+これらの数値は判定／パーサー経路のみを評価したものです。マイク音声認識の精度、エージェント全体の成功率、あらゆるユーザー依頼の成功率を示すものではありません。
 
-- 即時応答メッセージを用意し、ウェイクワード検知時に接続を事前準備します。
-- イベントに応じてキャラクターが話し、記憶の候補を確認して管理できます。
-- 応答をストリーミングし、文単位で音声を出力します。
+## v1.1 の主な変更点
 
-[リリース一覧](https://github.com/DO0OG/Ari-VoiceCommand/releases)。
+- ウェイク時の接続事前準備と即時応答による、より速い音声インタラクション
+- ウェイクワードと命令を一度に発話
+- 発話終了判定の高速化と Whisper 動作改善
+- Edge TTS のストリーミング／キャッシュと文単位再生
+- Ari の発話中や応答生成中に中断
+- 明示的な記憶／忘却コマンドと多言語メモリ検索の改善
+- 持続する気分、会話コンテキスト、イベントベースのキャラクター発話
+- アップデート確認・通知とインストーラーの安定性向上
 
-## ドキュメント
+詳しくは **[v1.1.0 リリースノート](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.0)** をご覧ください。
 
-- [使い方ガイド](./docs/USAGE.md)
-- [ローカル判定エンジン](./docs/LOCAL_DECISION_ENGINE.md)
-- [自律エージェントの詳細](./docs/AGENT_ADVANCED.md)
-- [プラグインガイド](./docs/PLUGIN_GUIDE.md) · [MCP サーバー](./docs/MCP_SERVER.md)
-- [テーマのカスタマイズ](./docs/THEME_CUSTOMIZATION.md)
-- [認証情報の管理](./docs/CREDENTIALS.md)
+## 開発者向けドキュメント
 
-## コントリビュート
+Ari は複数の拡張ポイントを持つ Python/PySide6 製 Windows デスクトッププロジェクトです。
 
-コントリビュートを歓迎します。まずは[コントリビューションガイド](./docs/CONTRIBUTING.md)をご覧ください。
+- **[プラグイン開発](./docs/PLUGIN_GUIDE.md)**
+- **[MCP サーバーとツール](./docs/MCP_SERVER.md)**
+- **[高度なエージェント機能](./docs/AGENT_ADVANCED.md)**
+- **[ローカル判定エンジン](./docs/LOCAL_DECISION_ENGINE.md)**
+- **[テーマのカスタマイズ](./docs/THEME_CUSTOMIZATION.md)**
+- **[認証情報の管理](./docs/CREDENTIALS.md)**
+- **[コントリビューションガイド](./docs/CONTRIBUTING.md)**
+
+Windows 自動化、STT/TTS、ローカルモデル連携、PySide6 UX、プラグイン、スキル、MCP ワークフロー、安定性、多言語対応へのコントリビューションを歓迎します。
 
 ## アセットとクレジット
 
-- 既定のキャラクターイラスト — **JAraTang** 氏: <https://www.pixiv.net/users/78194943>
-- `DNFBitBitv2` フォントの公式配布元: <https://df.nexon.com/data/font/dnfbitbitv2>
+- デフォルトキャラクター画像 — **JAraTang**: <https://www.pixiv.net/users/78194943>
+- `DNFBitBitv2` フォント — 公式配布元: <https://df.nexon.com/data/font/dnfbitbitv2>
 
-本プロジェクトの外へ再配布したり使い回したりする場合は、そのフォントの利用条件も併せて確認してください。
+プロジェクト外で再配布・再利用する場合は、フォントの利用条件も確認してください。
 
-## License
+## ライセンス
 
 Copyright © 2026 [DO0OG (MAD_DOGGO)](https://github.com/DO0OG).
-This project is licensed under the **MIT License**.
+
+Ari は **MIT License** で公開されています。
