@@ -240,14 +240,14 @@ def initialize_tts():
             except (AttributeError, OSError, RuntimeError) as e:
                 logging.debug("기존 TTS 정리 중 무시된 오류: %s", e)
         try:
-            _state.fish_tts, _ = create_tts_provider()
+            _state.fish_tts = create_tts_provider()[0]
         except (ImportError, OSError, RuntimeError, ValueError) as exc:
             logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
             fallback = settings.get("tts_fallback_provider", "edge")
             fallback_settings = dict(settings)
             fallback_settings["tts_mode"] = fallback
             logging.warning("[TTS] 폴백으로 전환: %s", fallback)
-            _state.fish_tts, _ = create_tts_provider(fallback_settings)
+            _state.fish_tts = create_tts_provider(fallback_settings)[0]
         _state.tts_signature = next_signature
 
     if _state.character_widget and hasattr(_state.fish_tts, 'playback_finished'):
@@ -551,6 +551,28 @@ def text_to_speech(
         logging.error("TTS 오류: %s", e)
         if show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
+        return False
+
+
+def play_cached_tts(
+    text: str,
+    request_cancel_event: threading.Event | None = None,
+) -> bool:
+    """이미 합성된 Edge TTS 문구만 재생한다."""
+    provider = _state.fish_tts
+    if not hasattr(provider, "speak_cached"):
+        return False
+    emotion, text = parse_emotion_text(text)
+    try:
+        return bool(
+            provider.speak_cached(
+                text,
+                emotion=emotion,
+                request_cancel_event=request_cancel_event,
+            )
+        )
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        logging.debug("TTS 캐시 문구 재생을 건너뜁니다: %s", exc)
         return False
 
 

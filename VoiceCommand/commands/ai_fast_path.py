@@ -12,6 +12,11 @@ if TYPE_CHECKING:
 class FastPathMixin:
     """`_execute_tool_calls`와 `_emit_user_message`를 가진 명령 클래스에 섞어 쓴다."""
 
+    _INSTANT_ACK_RESPONSE_POOL = {
+        "good": ("확인하겠습니다.", "바로 살펴보겠습니다."),
+        "calm": ("잠시만요.", "곧 확인하겠습니다."),
+        "down": ("조금만 기다려 주세요.", "바로 살펴보겠습니다."),
+    }
     _FAST_PATH_RESPONSE_POOLS = {
         "get_running_apps": {
             "good": ("실행 중인 앱 목록을 확인했습니다.",),
@@ -142,6 +147,7 @@ class FastPathMixin:
         name: str,
         phrases: dict[str, tuple[str, ...]],
         values: dict | None = None,
+        avoid_phrase: str = "",
     ) -> str:
         from agent.speech_scheduler import choose_phrase
         from core.config_manager import ConfigManager
@@ -171,7 +177,25 @@ class FastPathMixin:
             mood_state = get_mood_state()
         except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             mood_state = None
-        return choose_phrase(phrases, mood_state, translator=_, values=values)
+        return choose_phrase(
+            phrases,
+            mood_state,
+            translator=_,
+            values=values,
+            avoid_phrase=avoid_phrase,
+        )
+
+    def get_instant_ack_phrase(self) -> str:
+        """직전 문구를 피해서 즉시 반응 문구를 고른다."""
+        previous = getattr(self, "_last_instant_ack_phrase", "")
+        phrase = self._fixed_response(
+            "instant_ack",
+            self._INSTANT_ACK_RESPONSE_POOL,
+            avoid_phrase=previous,
+        )
+        if phrase:
+            self._last_instant_ack_phrase = phrase
+        return phrase
 
     def _decision_engine_call(self, method: str, *args) -> None:
         engine = getattr(self, "_decision_engine", None)

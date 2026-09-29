@@ -171,7 +171,14 @@ class EdgeTTS(QObject):
             gettext_func(message)
             for message in FastPathMixin._FAST_PATH_MESSAGES.values()
         )
-        return frozenset((*get_wake_responses(), *fast_path_messages))
+        instant_ack_messages = (
+            gettext_func(message)
+            for phrases in FastPathMixin._INSTANT_ACK_RESPONSE_POOL.values()
+            for message in phrases
+        )
+        return frozenset(
+            (*get_wake_responses(), *fast_path_messages, *instant_ack_messages)
+        )
 
     def _prosody(self, emotion: str) -> tuple[str, str]:
         details = get_emotion_details(emotion)
@@ -438,6 +445,63 @@ class EdgeTTS(QObject):
 
         self._restart_cache_warmup()
         return False
+
+    def speak_cached(
+        self,
+        text: str,
+        emotion: str = DEFAULT_EMOTION,
+        request_cancel_event: threading.Event | None = None,
+    ) -> bool:
+        """캐시된 고정 문구만 재생하고 합성 요청은 하지 않는다."""
+        if not text or (
+            request_cancel_event is not None and request_cancel_event.is_set()
+        ):
+            return False
+        from i18n.translator import get_language
+
+        pcm = self._audio_cache.get(self._cache_key(text, emotion, get_language()))
+        if pcm is None:
+            return False
+
+        stop_event = threading.Event()
+        with self._state_lock:
+            if (
+                self._closed
+                or self.is_playing
+                or (
+                    request_cancel_event is not None
+                    and request_cancel_event.is_set()
+                )
+            ):
+                return False
+            self._active_stop_event = stop_event
+            self._playback_thread = threading.current_thread()
+            self.is_playing = True
+            self._speak_finished.clear()
+
+        stream = None
+        try:
+            if stop_event.is_set():
+                return False
+            stream = self._create_output_stream()
+            return self._write_pcm_chunks(stream, pcm, stop_event)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.warning("Edge TTS 캐시 재생 실패: %s", type(exc).__name__)
+            return False
+        finally:
+            if stream is not None:
+                try:
+                    with get_audio_output_lock():
+                        GlobalAudio.close_stream(stream)
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                    logging.debug("Edge TTS 캐시 스트림 정리 실패: %s", type(exc).__name__)
+            with self._state_lock:
+                if self._active_stop_event is stop_event:
+                    self._active_stop_event = None
+                self._playback_thread = None
+                self.is_playing = False
+                self._speak_finished.set()
+            self.playback_finished.emit()
 
     def schedule_fixed_message_cache_warmup(self, is_idle=None) -> None:
         if self._closed:

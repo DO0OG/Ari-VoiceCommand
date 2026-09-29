@@ -111,6 +111,18 @@ class TTSThreadTests(unittest.TestCase):
 
 
 class VoiceRecognitionThreadTests(unittest.TestCase):
+    def test_manual_activation_schedules_llm_prewarm(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        thread.running = True
+        thread.microphone = MagicMock()
+        thread._microphone_active = True
+
+        with patch.object(thread, "_prewarm_llm_connection") as prewarm:
+            self.assertTrue(thread.request_listening())
+
+        prewarm.assert_called_once_with()
+
     def test_recognizer_pause_threshold_caps_trailing_silence(self):
         with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
             thread = VoiceRecognitionThread()

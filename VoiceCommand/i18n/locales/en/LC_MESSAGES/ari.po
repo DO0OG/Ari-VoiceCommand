@@ -3975,3 +3975,18 @@ msgstr "⏰ {command}"
 
 msgid "→ {command}"
 msgstr "→ {command}"
+
+msgid "확인하겠습니다."
+msgstr "I'll check."
+
+msgid "바로 살펴보겠습니다."
+msgstr "I'll take a look right away."
+
+msgid "잠시만요."
+msgstr "One moment, please."
+
+msgid "곧 확인하겠습니다."
+msgstr "I'll check shortly."
+
+msgid "조금만 기다려 주세요."
+msgstr "Please wait a moment."

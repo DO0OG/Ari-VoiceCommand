@@ -126,7 +126,17 @@ class VoiceRecognitionThread(QThread):
                 "released": threading.Event() if push_to_talk else None,
             }
             self._voice_wakeup.set()
+        self._prewarm_llm_connection()
         return True
+
+    @staticmethod
+    def _prewarm_llm_connection() -> None:
+        try:
+            from agent.llm_prewarm import prewarm_current_llm_connection
+
+            prewarm_current_llm_connection()
+        except (ImportError, RuntimeError) as exc:
+            logging.debug("LLM 연결 예열을 건너뜁니다: %s", exc)
 
     def release_listening(self) -> None:
         """push-to-talk 입력 종료를 전달한다."""
@@ -404,6 +414,7 @@ class VoiceRecognitionThread(QThread):
                 return
             self._command_listening = True
 
+        self._prewarm_llm_connection()
         logging.info("웨이크 워드 감지됨!")
         if isinstance(command_text, str):
             command_text = command_text.strip() or None
