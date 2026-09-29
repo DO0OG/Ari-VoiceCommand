@@ -46,7 +46,15 @@ class DecisionDataTests(unittest.TestCase):
         self.assertEqual(tuple(snapshot["candidate_labels"]), registry_candidate_names())
         self.assertEqual(snapshot["source"]["candidate_registry"], "agent.decision.candidates.REGISTRY")
         self.assertEqual(snapshot["unsupported_schema_tools"], [])
-        for name in ("adjust_volume", "mcp_call", "play_youtube", "shutdown_computer"):
+        for name in (
+            "adjust_volume",
+            "mcp_call",
+            "play_youtube",
+            "shutdown_computer",
+            "memory_search",
+            "memory_remember",
+            "memory_forget",
+        ):
             self.assertIn(name, snapshot["candidate_labels"])
         self.assertEqual(len(snapshot["core_tool_schemas"]), len(snapshot["core_tool_names"]))
 

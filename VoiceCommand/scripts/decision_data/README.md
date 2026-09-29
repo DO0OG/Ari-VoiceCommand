@@ -4,11 +4,12 @@ Python 3.11, NumPy와 psutil을 사용한다. 추가 설치나 외부 호출은 
 아래 명령은 `VoiceCommand/`에서 실행한다.
 
 ```powershell
+.venv/Scripts/python.exe -m scripts.decision_data.gold_data
 .venv/Scripts/python.exe -m scripts.decision_data.build_dataset --output scripts/decision_data/dataset.jsonl
-.venv/Scripts/python.exe -m scripts.decision_data.train
-.venv/Scripts/python.exe -m scripts.decision_data.evaluate
+.venv/Scripts/python.exe -m scripts.decision_data.train --output resources/decision --augment
 .venv/Scripts/python.exe -m scripts.decision_data.evaluate --gold
 .venv/Scripts/python.exe -m scripts.decision_data.benchmark
+.venv/Scripts/python.exe -m scripts.decision_data.evaluate
 .venv/Scripts/python.exe -m scripts.decision_data.split_dataset --check-manifest
 .venv/Scripts/python.exe -m scripts.decision_data.split_dataset --write-manifest
 .venv/Scripts/python.exe -m scripts.decision_data.robustness

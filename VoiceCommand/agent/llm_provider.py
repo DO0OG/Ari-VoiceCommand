@@ -815,7 +815,16 @@ class LLMProvider:
             logging.debug("[LLMRouter] 라우팅 생략: %s", e)
         return client, provider, model
 
-    def chat(self, user_message, include_context=True, model_override="", system_override="", stream_callback=None, save_history=True):
+    def chat(
+        self,
+        user_message,
+        include_context=True,
+        model_override="",
+        system_override="",
+        stream_callback=None,
+        save_history=True,
+        include_history=True,
+    ):
         """단순 대화"""
         if not self._has_any_client():
             return "AI 기능이 비활성화되어 있습니다."
@@ -828,7 +837,9 @@ class LLMProvider:
             if not model:
                 logging.warning("[LLMProvider] 모델 미설정: provider=%s", provider)
                 return self._missing_model_response(provider)
-            situation_prompt = self._build_situation_prompt()
+            situation_prompt = (
+                self._build_situation_prompt() if include_history else ""
+            )
             cache_key = self._build_cache_key(
                 user_message,
                 include_context,
@@ -836,7 +847,8 @@ class LLMProvider:
                 model=model,
                 situation_signature=situation_prompt,
             )
-            cached = self._response_cache.get(cache_key) if self._should_cache(user_message) else None
+            should_cache = include_history and self._should_cache(user_message)
+            cached = self._response_cache.get(cache_key) if should_cache else None
             if cached:
                 if save_history:
                     from memory.user_context import get_context_manager
@@ -858,7 +870,8 @@ class LLMProvider:
                 else self._append_situation_prompt(system_override, situation_prompt)
             )
             messages = [{"role": "system", "content": system_content}]
-            messages.extend(self._history_for_context())
+            if include_history:
+                messages.extend(self._history_for_context())
             messages.append({"role": "user", "content": user_message})
             if save_history:
                 self.add_to_history("user", user_message)
@@ -894,7 +907,7 @@ class LLMProvider:
             msg = self._clean_response(raw_msg)
             if save_history:
                 self.add_to_history("assistant", msg)
-            if msg and self._should_cache(user_message):
+            if msg and should_cache:
                 self._response_cache.set(cache_key, msg)
             return msg
         except Exception as e:
@@ -1808,7 +1821,10 @@ class LLMProvider:
             try:
                 from memory.memory_manager import get_memory_manager
                 memory_manager = get_memory_manager()
-                facts_prompt = memory_manager.get_top_facts_prompt(n=5)
+                facts_prompt = memory_manager.get_top_facts_prompt(
+                    n=3,
+                    query=user_message,
+                )
                 if facts_prompt:
                     parts.append(facts_prompt)
             except Exception as e:
@@ -1843,12 +1859,12 @@ class LLMProvider:
         )
         if situation:
             parts.append(situation)
-        if include_context and time_prompt:
-            parts.append(time_prompt)
         if include_context:
             activity_context = get_activity_context()
             if activity_context:
                 parts.append(activity_context)
+        if include_context and time_prompt:
+            parts.append(time_prompt)
         return "\n\n".join(part for part in parts if part)
 
     def _clean_response(self, text):

@@ -82,6 +82,105 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertIn("- 중간: 3", prompt)
         self.assertNotIn("- 낮음: 1", prompt)
 
+    def test_relevant_fact_prompt_limits_pinned_and_fts_facts_without_duplicates(self):
+        facts = {
+            f"pin{number}": {
+                "value": f"pinned {number}",
+                "confidence": 1.0 - number / 10,
+                "source": "user_request",
+            }
+            for number in range(1, 5)
+        }
+        facts.update({
+            f"related{number}": {
+                "value": f"tea fact {number}",
+                "confidence": 0.7,
+                "source": "assistant",
+            }
+            for number in range(1, 5)
+        })
+        facts["diagnosis"] = {
+            "value": "health diagnosis: private",
+            "confidence": 1.0,
+            "source": "user_request",
+        }
+        facts["pinned_duplicate"] = {
+            "value": "pinned 1",
+            "confidence": 1.0,
+            "source": "user_request",
+        }
+        facts["related_duplicate"] = {
+            "value": "tea fact 1",
+            "confidence": 0.7,
+            "source": "assistant",
+        }
+        fake_context = SimpleNamespace(
+            context={"facts": facts}, extract_topics=lambda *_args: []
+        )
+        results = [
+            SimpleNamespace(
+                content=f"{key}: {facts[key]['value']} (confidence=0.70)"
+            )
+            for key in (
+                "pin1", "related1", "related2", "related3", "related4",
+                "related_duplicate", "diagnosis",
+            )
+        ]
+        fake_index = Mock()
+        fake_index.search.return_value = results
+        fake_embedder = SimpleNamespace(status="failed")
+
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        with patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
+            "agent.embedder.get_embedder", return_value=fake_embedder
+        ):
+            prompt = manager.get_top_facts_prompt(n=3, query="tea")
+
+        lines = prompt.splitlines()[1:]
+        self.assertEqual(len(lines), 6)
+        self.assertEqual(sum("pinned" in line for line in lines), 3)
+        self.assertEqual(sum("tea fact" in line for line in lines), 3)
+        self.assertEqual(sum("tea fact 1" in line for line in lines), 1)
+        self.assertEqual(sum("pinned 1" in line for line in lines), 1)
+        self.assertNotIn("private", prompt)
+        fake_index.search.assert_called_once_with("tea", limit=30, kind="fact")
+
+    def test_relevant_fact_prompt_reranks_fts_candidates_with_ready_embedder(self):
+        facts = {
+            "first": {"value": "first fact", "confidence": 0.8},
+            "second": {"value": "second fact", "confidence": 0.7},
+        }
+        fake_context = SimpleNamespace(
+            context={"facts": facts}, extract_topics=lambda *_args: []
+        )
+        fake_index = Mock()
+        fake_index.search.return_value = [
+            SimpleNamespace(content="first: first fact (confidence=0.80)"),
+            SimpleNamespace(content="second: second fact (confidence=0.70)"),
+        ]
+        vectors = {
+            "query": (1.0, 0.0),
+            "first: first fact": (0.0, 1.0),
+            "second: second fact": (1.0, 0.0),
+        }
+        fake_embedder = SimpleNamespace(
+            status="ready",
+            embed=lambda text: vectors[text],
+            cosine_similarity=lambda left, right: sum(
+                a * b for a, b in zip(left, right)
+            ),
+        )
+
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        with patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
+            "agent.embedder.get_embedder", return_value=fake_embedder
+        ):
+            prompt = manager.get_top_facts_prompt(n=3, query="query")
+
+        self.assertLess(prompt.index("second: second fact"), prompt.index("first: first fact"))
+
     def test_get_memory_prompt_delegates_to_full_context_prompt(self):
         fake_context = SimpleNamespace(
             context={"facts": {}},

@@ -12,7 +12,9 @@ from datetime import datetime
 from typing import Callable, Optional
 from commands.memory_command import is_memory_command
 from core.config_manager import ConfigManager
+from i18n.translator import _
 from memory.fact_suggestions import get_fact_suggestion_store
+from memory.sensitive_patterns import is_sensitive_memory_text
 from memory.user_context import get_context_manager
 from memory.conversation_history import add_conversation
 from memory.memory_index import get_memory_index
@@ -397,16 +399,106 @@ class MemoryManager:
         """레거시 호출부 호환용 컨텍스트 프롬프트 반환."""
         return self.get_full_context_prompt()
 
-    def get_top_facts_prompt(self, n: int = 5) -> str:
-        facts = self.context_manager.context.get("facts", {})
+    def get_top_facts_prompt(self, n: int = 5, query: str = "") -> str:
+        facts = {
+            key: fact
+            for key, fact in self.context_manager.context.get("facts", {}).items()
+            if isinstance(fact, dict)
+            and not is_sensitive_memory_text(
+                f"{key}: {fact.get('value', '')}"
+            )
+        }
         if not facts:
             return ""
-        top_facts = heapq.nlargest(
-            n,
-            facts.items(),
-            key=lambda item: item[1].get("confidence", 0),
-        )
-        lines = ["[기억하고 있는 사실]"]
+
+        top_facts = []
+        if query.strip():
+            pinned_candidates = heapq.nlargest(
+                len(facts),
+                (
+                    item for item in facts.items()
+                    if item[1].get("pinned")
+                    or item[1].get("source") in {"user", "user_request"}
+                ),
+                key=lambda item: item[1].get("confidence", 0),
+            )
+            pinned = []
+            seen_values = set()
+            for key, fact in pinned_candidates:
+                value_key = " ".join(
+                    str(fact.get("value", "") or "").casefold().split()
+                )
+                if value_key and value_key not in seen_values:
+                    pinned.append((key, fact))
+                    seen_values.add(value_key)
+                    if len(pinned) == 3:
+                        break
+            pinned_keys = {key for key, _fact in pinned}
+            indexed_facts = get_memory_index().search(
+                query, limit=30, kind="fact"
+            )
+            candidates = []
+            seen_keys = set()
+            for result in indexed_facts:
+                for key, fact in facts.items():
+                    value = str(fact.get("value", "") or "")
+                    value_key = " ".join(value.casefold().split())
+                    prefix = f"{key}: {value} (confidence="
+                    if (
+                        key not in pinned_keys
+                        and key not in seen_keys
+                        and value_key not in seen_values
+                        and value
+                        and result.content.startswith(prefix)
+                    ):
+                        candidates.append((key, fact))
+                        seen_keys.add(key)
+                        seen_values.add(value_key)
+                        break
+            ranks = {key: rank for rank, (key, _fact) in enumerate(candidates)}
+            semantic_ranks = {}
+            try:
+                from agent.embedder import get_embedder
+
+                embedder = get_embedder()
+                if embedder.status == "ready" and candidates:
+                    query_vector = embedder.embed(query)
+                    if query_vector is not None:
+                        similarities = []
+                        for key, fact in candidates:
+                            text = f"{key}: {fact.get('value', '')}"
+                            vector = embedder.embed(text)
+                            if vector is not None:
+                                score = embedder.cosine_similarity(query_vector, vector)
+                                similarities.append((score, key))
+                        semantic_ranks = {
+                            key: rank
+                            for rank, (_score, key) in enumerate(
+                                sorted(similarities, reverse=True)
+                            )
+                        }
+            except (AttributeError, ImportError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("사실 임베딩 검색 생략: %s", exc)
+            candidates.sort(
+                key=lambda item: (
+                    (
+                        1 / (60 + ranks[item[0]])
+                        + 1 / (60 + semantic_ranks[item[0]])
+                        if item[0] in semantic_ranks
+                        else 1 / (60 + ranks[item[0]])
+                    ),
+                    -semantic_ranks.get(item[0], ranks[item[0]]),
+                ),
+                reverse=True,
+            )
+            top_facts = pinned + candidates[:min(3, max(0, n))]
+        else:
+            top_facts = heapq.nlargest(
+                n,
+                facts.items(),
+                key=lambda item: item[1].get("confidence", 0),
+            )
+        lines = [_('[기억하고 있는 사실]')]
         for key, fact in top_facts:
             value = fact.get("value", "")
             if value:

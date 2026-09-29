@@ -108,6 +108,36 @@ class MemoryIndexTests(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(count, 1)
 
+    def test_search_filters_by_kind_and_since(self):
+        yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+        today = datetime.now()
+        self.index.index_fact("favorite_drink", "tea", 0.8)
+        self.index.index_conversation(
+            "I mentioned tea yesterday", "", yesterday
+        )
+        self.index.index_digest(
+            today.date(), "Tea was discussed today"
+        )
+
+        facts = self.index.search("tea", kind="fact")
+        recent = self.index.search("tea", since=today.date().isoformat())
+
+        self.assertEqual([item.entry_type for item in facts], ["fact"])
+        self.assertEqual(
+            {item.entry_type for item in recent}, {"fact", "digest"}
+        )
+
+    def test_digest_is_indexed_once_and_pruned_after_retention(self):
+        old_day = (datetime.now() - timedelta(days=100)).date()
+        today = datetime.now().date()
+
+        self.assertTrue(self.index.index_digest(old_day, "old digest"))
+        self.assertFalse(self.index.index_digest(old_day, "duplicate digest"))
+        self.assertTrue(self.index.index_digest(today, "recent digest"))
+        self.assertEqual(self.index.prune_digests_older_than(90), 1)
+        self.assertFalse(self.index.search("old", kind="digest"))
+        self.assertTrue(self.index.search("recent digest"))
+
     def test_fact_and_matching_conversations_can_be_deleted(self):
         self.index.index_fact("favorite_drink", "coffee", 0.8)
         self.index.index_conversation("I like COFFEE", "", "2026-09-29T10:00:00")
@@ -166,6 +196,9 @@ class MemoryIndexTests(unittest.TestCase):
         context_module = types.ModuleType("memory.user_context")
         context_module.get_context_manager = lambda: context_manager
         self.index.index_fact("stale", "remove me", 0.5)
+        self.index.index_digest(
+            datetime(2026, 9, 29).date(), "daily digest entry"
+        )
 
         with patch.dict(
             "sys.modules",
@@ -179,6 +212,7 @@ class MemoryIndexTests(unittest.TestCase):
         self.assertTrue(self.index.search("프로젝트"))
         self.assertTrue(self.index.search("요약"))
         self.assertTrue(self.index.search("coffee"))
+        self.assertTrue(self.index.search("daily digest", kind="digest"))
         self.assertEqual(self.index.delete_fact("stale"), 0)
 
     def test_sqlite_version_gates_trigram_and_unsupported_uses_like(self):

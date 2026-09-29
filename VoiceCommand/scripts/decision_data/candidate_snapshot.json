@@ -25,6 +25,9 @@
     "list_directory",
     "list_scheduled_tasks",
     "mcp_call",
+    "memory_forget",
+    "memory_remember",
+    "memory_search",
     "move_file",
     "play_youtube",
     "read_emails",
@@ -68,6 +71,9 @@
     "list_directory",
     "list_scheduled_tasks",
     "mcp_call",
+    "memory_forget",
+    "memory_remember",
+    "memory_search",
     "move_file",
     "play_youtube",
     "read_emails",
@@ -923,9 +929,85 @@
         }
       },
       "type": "function"
+    },
+    {
+      "function": {
+        "description": "기억한 사실, 대화, 일일 요약을 검색합니다.",
+        "name": "memory_search",
+        "parameters": {
+          "properties": {
+            "kind": {
+              "description": "검색 종류 (선택)",
+              "enum": [
+                "fact",
+                "conversation",
+                "digest"
+              ],
+              "type": "string"
+            },
+            "query": {
+              "description": "검색어",
+              "type": "string"
+            },
+            "since": {
+              "description": "검색 시작일 또는 시각 (ISO 8601, 선택)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "이번 발화에서 명시적으로 요청한 사실만 기억합니다.",
+        "name": "memory_remember",
+        "parameters": {
+          "properties": {
+            "key": {
+              "description": "기억 항목 이름",
+              "type": "string"
+            },
+            "value": {
+              "description": "기억할 내용",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "명시적 삭제 요청을 확인 후 기억에서 삭제합니다.",
+        "name": "memory_forget",
+        "parameters": {
+          "properties": {
+            "key": {
+              "description": "삭제할 기억 항목",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
     }
   ],
   "mapped_tool_names": [
+    "adjust_volume",
     "analyze_image_file",
     "analyze_screenshot",
     "api_call",
@@ -949,6 +1031,9 @@
     "launch_app",
     "list_directory",
     "list_scheduled_tasks",
+    "memory_forget",
+    "memory_remember",
+    "memory_search",
     "move_file",
     "read_emails",
     "read_file",
@@ -971,6 +1056,7 @@
   "stale_mapping_tools": [],
   "tool_names_by_intent": {
     "automation": [
+      "adjust_volume",
       "analyze_image_file",
       "analyze_screenshot",
       "api_call",
@@ -999,9 +1085,11 @@
     "conversation": [
       "get_calendar_events",
       "get_current_time",
+      "get_running_apps",
       "get_weather",
       "list_scheduled_tasks",
       "read_emails",
+      "take_screenshot",
       "web_fetch",
       "web_search"
     ],
@@ -1018,6 +1106,9 @@
       "get_current_time",
       "get_weather",
       "list_scheduled_tasks",
+      "memory_forget",
+      "memory_remember",
+      "memory_search",
       "web_fetch",
       "web_search"
     ],

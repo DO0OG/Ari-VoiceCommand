@@ -6,7 +6,7 @@ import re
 
 from commands.base_command import BaseCommand
 from i18n.translator import _
-from memory.sensitive_patterns import SENSITIVE_PATTERNS as _SENSITIVE_PATTERNS
+from memory.sensitive_patterns import is_sensitive_memory_text
 
 
 _REMEMBER_PATTERNS = (
@@ -155,7 +155,7 @@ class MemoryCommand(BaseCommand):
             facts = get_memory_manager().get_top_facts_prompt(3)
             self.tts_wrapper(f"{profile} {facts}".strip())
 
-    def _remember(self, content: str) -> None:
+    def _remember(self, content: str, source: str = "user") -> None:
         if not content:
             from memory.conversation_history import get_conversation_history
 
@@ -164,7 +164,7 @@ class MemoryCommand(BaseCommand):
             if not content:
                 self.tts_wrapper(_("무엇을 기억할까요?"))
                 return
-        if any(pattern.search(content) for pattern in _SENSITIVE_PATTERNS):
+        if is_sensitive_memory_text(content):
             self.tts_wrapper(_("민감 정보는 저장하지 않아요."))
             return
 
@@ -181,7 +181,7 @@ class MemoryCommand(BaseCommand):
 
         context = get_context_manager()
         if not context.record_fact(
-            key, value, source="user", confidence=1.0, ttl_days=0, force=True
+            key, value, source=source, confidence=1.0, ttl_days=0, force=True
         ):
             self.tts_wrapper(_("기억을 저장하지 못했어요."))
             return

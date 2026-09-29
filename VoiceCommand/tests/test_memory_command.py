@@ -54,6 +54,7 @@ class MemoryCommandTests(unittest.TestCase):
             "기억해: 카드 4111 1111 1111 1111",
             "기억해: 주민번호 900101-1234567",
             "기억해: SSN 123-45-6789",
+            "기억해: 건강 진단=불안증",
         )
         for text in sensitive_commands:
             with self.subTest(text=text):

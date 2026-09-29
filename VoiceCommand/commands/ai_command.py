@@ -1,5 +1,7 @@
 from commands.base_command import BaseCommand
 from commands.ai_fast_path import FastPathMixin
+from commands.memory_command import MemoryCommand, _parse_explicit_command
+from memory.sensitive_patterns import is_sensitive_memory_text
 import inspect
 import json
 import logging
@@ -118,6 +120,9 @@ class AICommand(FastPathMixin, BaseCommand):
             "delegate_to_subagent":      self._handle_delegate_to_subagent,
             "web_search":               self._handle_web_search,
             "web_fetch":                self._handle_web_fetch,
+            "memory_search":            self._handle_memory_search,
+            "memory_remember":          self._handle_memory_remember,
+            "memory_forget":            self._handle_memory_forget,
             "mcp_call":                 self._handle_mcp_call,
             "api_call":                 self._handle_api_call,
             "read_file":                self._handle_read_file,
@@ -468,6 +473,67 @@ class AICommand(FastPathMixin, BaseCommand):
         except Exception as e:
             logging.error("web_fetch 오류: %s", e)
             return _("페이지 로드 오류: {error}", error=e)
+
+    def _handle_memory_search(self, args: dict) -> Optional[str]:
+        query = str(args.get("query", "") or "").strip()
+        if not query:
+            return _("검색어를 입력해 주세요.")
+        kind = str(args.get("kind", "") or "").strip()
+        if kind and kind not in {"fact", "conversation", "digest"}:
+            return _("기억 검색 종류가 올바르지 않아요.")
+        since = str(args.get("since", "") or "").strip()
+        if since:
+            try:
+                datetime.fromisoformat(since)
+            except ValueError:
+                return _("검색 날짜 형식은 ISO 8601이어야 해요.")
+
+        from memory.memory_index import get_memory_index
+
+        results = [
+            item
+            for item in get_memory_index().search(
+                query, limit=5, kind=kind or None, since=since or None
+            )
+            if not is_sensitive_memory_text(item.content)
+        ]
+        if not results:
+            return _("기억 검색 결과가 없어요.")
+        lines = [
+            f"- {item.timestamp[:16]}: {item.content[:500]}"
+            for item in results
+        ]
+        return _("기억 검색 결과:\n{results}", results="\n".join(lines))
+
+    def _handle_memory_remember(self, args: dict) -> Optional[str]:
+        explicit = _parse_explicit_command(self._current_goal)
+        if not explicit or explicit[0] != "remember":
+            return _("이번 요청에서 명시적으로 기억해 달라고 하지 않았어요.")
+        key = str(args.get("key", "") or "").strip()
+        value = str(args.get("value", "") or "").strip()
+        if not key or not value:
+            return _("기억 항목 이름과 내용을 입력해 주세요.")
+
+        responses = []
+        command = MemoryCommand(responses.append)
+        command._remember(explicit[1], source="user_request")
+        return responses[-1] if responses else _("기억을 저장하지 못했어요.")
+
+    def _handle_memory_forget(self, args: dict) -> Optional[str]:
+        explicit = _parse_explicit_command(self._current_goal)
+        if not explicit or explicit[0] not in {"forget", "forget_recent"}:
+            return _("이번 요청에서 명시적으로 기억을 잊으라고 하지 않았어요.")
+        key = str(args.get("key", "") or "").strip()
+        if not key:
+            return _("삭제할 기억 항목을 입력해 주세요.")
+        content = explicit[1]
+        if explicit[0] == "forget" and not content:
+            return _("삭제할 기억 항목을 입력해 주세요.")
+
+        responses = []
+        command = MemoryCommand(responses.append)
+        command._forget(content, recent=explicit[0] == "forget_recent")
+        return responses[-1] if responses else _("기억을 삭제하지 못했어요.")
 
     def _handle_mcp_call(self, args: dict) -> Optional[str]:
         endpoint = str(args.get("endpoint", "") or "").strip()

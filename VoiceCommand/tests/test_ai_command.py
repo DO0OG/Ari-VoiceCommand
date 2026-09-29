@@ -89,6 +89,79 @@ class _FakeScheduler:
 
 
 class AICommandTests(unittest.TestCase):
+    def test_memory_remember_requires_this_turn_explicit_request_and_uses_tool_source(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        command._current_goal = "기억해: favorite drink=tea"
+        context = Mock()
+        memory_index = Mock()
+
+        with patch("memory.user_context.get_context_manager", return_value=context), patch(
+            "memory.memory_index.get_memory_index", return_value=memory_index
+        ):
+            result = command._handle_memory_remember(
+                {"key": "unrelated", "value": "unrequested detail"}
+            )
+
+        context.record_fact.assert_called_once_with(
+            "favorite drink", "tea", source="user_request", confidence=1.0,
+            ttl_days=0, force=True,
+        )
+        memory_index.index_fact.assert_called_once_with("favorite drink", "tea", 1.0)
+        self.assertEqual(result, "기억했어요: tea")
+
+    def test_memory_remember_rejects_non_explicit_turn(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        command._current_goal = "I enjoy tea"
+
+        result = command._handle_memory_remember(
+            {"key": "favorite drink", "value": "tea"}
+        )
+
+        self.assertEqual(result, "이번 요청에서 명시적으로 기억해 달라고 하지 않았어요.")
+
+    def test_memory_forget_reuses_confirmation_before_deleting(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        command._current_goal = "forget favorite drink"
+        context = Mock()
+        context.get_facts_snapshot.return_value = {
+            "favorite drink": {"value": "tea"}
+        }
+        context.delete_fact.return_value = True
+
+        with patch("memory.user_context.get_context_manager", return_value=context), patch(
+            "agent.confirmation_manager.get_confirmation_manager"
+        ) as get_manager:
+            get_manager.return_value.request_confirmation.return_value = True
+            result = command._handle_memory_forget({"key": "unrelated"})
+
+        get_manager.return_value.request_confirmation.assert_called_once()
+        context.delete_fact.assert_called_once_with(
+            "favorite drink", expected_value="tea"
+        )
+        self.assertEqual(result, "기억을 잊었어요: favorite drink")
+
+    def test_memory_search_passes_kind_and_since_filters(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        index = Mock()
+        index.search.return_value = [
+            SimpleNamespace(timestamp="2026-09-29T10:00:00", content="favorite drink: tea"),
+            SimpleNamespace(
+                timestamp="2026-09-29T10:00:00",
+                content="Health diagnosis: private details",
+            ),
+        ]
+
+        with patch("memory.memory_index.get_memory_index", return_value=index):
+            result = command._handle_memory_search({
+                "query": "tea", "kind": "fact", "since": "2026-09-29"
+            })
+
+        index.search.assert_called_once_with(
+            "tea", limit=5, kind="fact", since="2026-09-29"
+        )
+        self.assertIn("favorite drink: tea", result)
+        self.assertNotIn("private details", result)
+
     def test_complex_request_is_escalated_to_agent_task(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         self.assertTrue(

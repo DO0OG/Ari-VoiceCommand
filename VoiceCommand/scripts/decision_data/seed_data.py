@@ -273,6 +273,72 @@ TOOL_FAMILY_TEXTS: dict[str, tuple[LanguageText, ...]] = {
         ("외부 MCP 기능으로 이 작업을 처리해줘", "Handle this through an external MCP capability", "外部MCP機能でこの作業を処理して"),
         ("MCP를 사용해서 데이터를 가져와줘", "Use MCP to retrieve the data", "MCPを使ってデータを取得して"),
     ),
+    "memory_forget": (
+        (
+            "저장된 정보에서 예전 노트북 모델을 지워줘",
+            "Delete the old laptop model from my saved details",
+            "保存済みの情報から以前のノートパソコンの機種を削除して",
+        ),
+        (
+            "내 선호 목록에서 매운 음식 항목을 삭제해줘",
+            "Remove spicy food from the preferences in my profile",
+            "プロフィールの好みから辛い料理の項目を削除して",
+        ),
+        (
+            "등록된 정보에서 내가 쓰던 교통수단을 빼줘",
+            "Take my former commute method out of the saved information",
+            "登録済みの情報から以前の通勤手段を取り除いて",
+        ),
+        (
+            "저장된 프로필에서 오래된 여행 선호를 없애줘",
+            "Clear an outdated travel preference from my saved profile",
+            "保存済みプロフィールから古い旅行の好みを消して",
+        ),
+    ),
+    "memory_remember": (
+        (
+            "내 생일은 10월 8일이야. 이 내용을 저장해 두고 다음에 축하해줘",
+            "My birthday is October 8; save that and use it when you congratulate me later",
+            "私の誕生日は10月8日です。これを保存して次にお祝いするときに使ってください",
+        ),
+        (
+            "매운 음식을 잘 못 먹으니 이 선호를 저장해 두고 식당 추천에 반영해줘",
+            "I do not handle spicy food well; save that preference for restaurant suggestions",
+            "辛い料理が苦手なので、その好みを記録して店のおすすめに反映して",
+        ),
+        (
+            "우리 고양이 이름은 호두야. 이 이름을 저장해 두고 다음에 물으면 알려줘",
+            "My cat is named Hodu; save the name so you can use it next time",
+            "うちの猫はホドゥという名前です。その名前を保存して次に聞いたら答えて",
+        ),
+        (
+            "짧은 요약을 먼저 받는 편이 좋으니 이 선호를 저장해 둬",
+            "I prefer getting a short summary first; keep that as a preference",
+            "短い要約を先に読むほうが好きなので、その好みを記録しておいて",
+        ),
+    ),
+    "memory_search": (
+        (
+            "전에 이야기했던 카페 이름이 뭐였더라?",
+            "What was the name of that cafe I mentioned earlier?",
+            "前に話したカフェの名前は何だったかな？",
+        ),
+        (
+            "내가 선호하는 회의 시간대가 언제였는지 확인해줘",
+            "Check which meeting time I said I prefer",
+            "私が希望していた会議の時間帯を確認して",
+        ),
+        (
+            "등록해 둔 반려견 이름이 뭐였지?",
+            "What name did I give my dog?",
+            "登録してある犬の名前は何だった？",
+        ),
+        (
+            "지난 대화에서 고른 여행 달이 언제였는지 알려줘",
+            "Tell me which month I picked for the trip",
+            "前の会話で選んだ旅行の月を教えて",
+        ),
+    ),
     "create_calendar_event": (
         ("내일 회의 일정을 캘린더에 추가해줘", "Add tomorrow's meeting to my calendar", "明日の会議をカレンダーに追加して"),
         ("금요일에 약속을 만들어줘", "Create an appointment for Friday", "金曜日に予定を作って"),
