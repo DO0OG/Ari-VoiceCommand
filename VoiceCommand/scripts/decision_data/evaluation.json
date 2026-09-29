@@ -6759,7 +6759,7 @@
   "model_sha256": "21c11b92282b46e7091bd40fb538b82ed064596585b67633098c6f1feb183e03",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "55c1fe15c3a936835aab313b788a7c68a1517e322faf21817c5a63cb66a2fd08",
+    "previous_artifact_sha256": "9f0d83e6e7cf4e81573b64860ef05870b81f66b42327a349f0f8dc55b68e9ab3",
     "major_pairs": [
       {
         "actual": "focus_window",
