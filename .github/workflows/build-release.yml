@@ -216,8 +216,11 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "설치에 실패했습니다 (exit $($proc.ExitCode))." }
           if (-not (Test-Path "$dir\Ari.exe")) { throw "설치 폴더에 Ari.exe가 없습니다." }
 
-          $reportedVersion = & "$dir\Ari.exe" --version
-          if ($LASTEXITCODE -ne 0 -or $reportedVersion.Trim() -ne $env:EXPECTED_VERSION) {
+          # 콘솔 없는 GUI 실행 파일이라 직접 호출하면 표준 출력이 연결되지 않는다. 파일로 받아 읽는다.
+          $versionOut = Join-Path $env:RUNNER_TEMP "installed-version.txt"
+          $versionProc = Start-Process "$dir\Ari.exe" -ArgumentList "--version" -RedirectStandardOutput $versionOut -NoNewWindow -Wait -PassThru
+          $reportedVersion = if (Test-Path $versionOut) { (Get-Content $versionOut -Raw).Trim() } else { "" }
+          if ($versionProc.ExitCode -ne 0 -or $reportedVersion -ne $env:EXPECTED_VERSION) {
             throw "Installed version mismatch: expected $env:EXPECTED_VERSION, got $reportedVersion"
           }
           if ($env:EXPECTED_VERSION -match '^(\d+)\.(\d+)\.(\d+)(?:-.*)?$') {
