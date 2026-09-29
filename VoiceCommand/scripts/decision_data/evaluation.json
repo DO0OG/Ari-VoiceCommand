@@ -7075,7 +7075,7 @@
   "model_sha256": "8541d1f29b172f538558e053ba495efc90a81b5f5e8ea89426a83cb7d17b77ba",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "31f102af8acf1b07abbfbd79a35ecf5a2b855c86690d182d8289a1929b653eff",
+    "previous_artifact_sha256": "05e1042da174734fb78aaaf83ba1f146c94f567d0ad97621b52524ab3833a52d",
     "major_pairs": [
       {
         "actual": "focus_window",
@@ -7128,77 +7128,6 @@
         "count": 26
       }
     ],
-    "top_10_worsened_pairs": [
-      {
-        "actual": "set_timer",
-        "predicted": "launch_app",
-        "current_count": 83,
-        "previous_count": 41,
-        "increase": 42
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "send_email",
-        "current_count": 27,
-        "previous_count": 6,
-        "increase": 21
-      },
-      {
-        "actual": "get_calendar_events",
-        "predicted": "create_calendar_event",
-        "current_count": 23,
-        "previous_count": 9,
-        "increase": 14
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "get_current_time",
-        "current_count": 20,
-        "previous_count": 7,
-        "increase": 13
-      },
-      {
-        "actual": "set_timer",
-        "predicted": "get_weather",
-        "current_count": 10,
-        "previous_count": 0,
-        "increase": 10
-      },
-      {
-        "actual": "memory_remember",
-        "predicted": "get_running_apps",
-        "current_count": 10,
-        "previous_count": 1,
-        "increase": 9
-      },
-      {
-        "actual": "write_file",
-        "predicted": "take_screenshot",
-        "current_count": 10,
-        "previous_count": 1,
-        "increase": 9
-      },
-      {
-        "actual": "memory_search",
-        "predicted": "get_current_time",
-        "current_count": 24,
-        "previous_count": 16,
-        "increase": 8
-      },
-      {
-        "actual": "set_timer",
-        "predicted": "get_current_time",
-        "current_count": 15,
-        "previous_count": 7,
-        "increase": 8
-      },
-      {
-        "actual": "unknown_or_complex",
-        "predicted": "focus_window",
-        "current_count": 15,
-        "previous_count": 7,
-        "increase": 8
-      }
-    ]
+    "top_10_worsened_pairs": []
   }
 }

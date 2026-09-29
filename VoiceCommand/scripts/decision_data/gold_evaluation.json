@@ -5231,7 +5231,7 @@
   "model_sha256": "8541d1f29b172f538558e053ba495efc90a81b5f5e8ea89426a83cb7d17b77ba",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "d4f54c3564755bfb18e9447d9e28bba1ef97a7114c8f840d09c84f6d4248fda0",
+    "previous_artifact_sha256": "847b9ec04c8e201c83c90aa45d20e5f16297598bad1d68eb1c7ba5fa3552538b",
     "major_pairs": [
       {
         "actual": "run_agent_task",
@@ -5284,77 +5284,6 @@
         "count": 2
       }
     ],
-    "top_10_worsened_pairs": [
-      {
-        "actual": "list_directory",
-        "predicted": "unknown_or_complex",
-        "current_count": 3,
-        "previous_count": 1,
-        "increase": 2
-      },
-      {
-        "actual": "list_directory",
-        "predicted": "move_file",
-        "current_count": 2,
-        "previous_count": 0,
-        "increase": 2
-      },
-      {
-        "actual": "set_clipboard",
-        "predicted": "get_clipboard",
-        "current_count": 4,
-        "previous_count": 3,
-        "increase": 1
-      },
-      {
-        "actual": "analyze_image_file",
-        "predicted": "write_file",
-        "current_count": 2,
-        "previous_count": 1,
-        "increase": 1
-      },
-      {
-        "actual": "write_file",
-        "predicted": "launch_app",
-        "current_count": 2,
-        "previous_count": 1,
-        "increase": 1
-      },
-      {
-        "actual": "analyze_image_file",
-        "predicted": "read_emails",
-        "current_count": 1,
-        "previous_count": 0,
-        "increase": 1
-      },
-      {
-        "actual": "cancel_scheduled_task",
-        "predicted": "cancel_timer",
-        "current_count": 1,
-        "previous_count": 0,
-        "increase": 1
-      },
-      {
-        "actual": "create_calendar_event",
-        "predicted": "focus_window",
-        "current_count": 1,
-        "previous_count": 0,
-        "increase": 1
-      },
-      {
-        "actual": "create_calendar_event",
-        "predicted": "get_calendar_events",
-        "current_count": 1,
-        "previous_count": 0,
-        "increase": 1
-      },
-      {
-        "actual": "delegate_to_subagent",
-        "predicted": "read_file",
-        "current_count": 1,
-        "previous_count": 0,
-        "increase": 1
-      }
-    ]
+    "top_10_worsened_pairs": []
   }
 }
