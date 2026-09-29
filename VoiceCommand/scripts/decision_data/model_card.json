@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1322113,
-    "additional_steady_rss_bytes": 17477632,
-    "warm_p95_ms": 0.07691000319027806,
+    "additional_steady_rss_bytes": 16879616,
+    "warm_p95_ms": 0.12199999764561653,
     "gpu_used": false
   },
   "review": {
