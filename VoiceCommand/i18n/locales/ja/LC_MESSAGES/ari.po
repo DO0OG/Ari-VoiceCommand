@@ -3692,3 +3692,83 @@ msgstr "沈み気味"
 
 msgid " · 기분 {mood}"
 msgstr " · 気分 {mood}"
+
+msgid "기억한 사실, 대화, 일일 요약을 검색합니다."
+msgstr "記憶した事実、会話、日次要約を検索します。"
+
+msgid "검색 종류 (선택)"
+msgstr "検索種別（任意）"
+
+msgid "검색 시작일 또는 시각 (ISO 8601, 선택)"
+msgstr "検索開始日時（ISO 8601、任意）"
+
+msgid "이번 발화에서 명시적으로 요청한 사실만 기억합니다."
+msgstr "この発話で明示的に頼まれた事実だけを記憶します。"
+
+msgid "기억 항목 이름"
+msgstr "記憶項目名"
+
+msgid "기억할 내용"
+msgstr "記憶する内容"
+
+msgid "명시적 삭제 요청을 확인 후 기억에서 삭제합니다."
+msgstr "明示的な依頼を確認してから記憶を削除します。"
+
+msgid "삭제할 기억 항목"
+msgstr "削除する記憶項目"
+
+msgid "검색어를 입력해 주세요."
+msgstr "検索語を入力してください。"
+
+msgid "기억 검색 종류가 올바르지 않아요."
+msgstr "記憶の検索種別が正しくありません。"
+
+msgid "검색 날짜 형식은 ISO 8601이어야 해요."
+msgstr "検索日時は ISO 8601 形式で入力してください。"
+
+msgid "기억 검색 결과가 없어요."
+msgstr "一致する記憶はありません。"
+
+msgid "기억 검색 결과:\n{results}"
+msgstr "記憶の検索結果:\n{results}"
+
+msgid "이번 요청에서 명시적으로 기억해 달라고 하지 않았어요."
+msgstr "今回の発話では、明示的に記憶するよう依頼されていません。"
+
+msgid "기억 항목 이름과 내용을 입력해 주세요."
+msgstr "記憶項目名と内容を入力してください。"
+
+msgid "이번 요청에서 명시적으로 기억을 잊으라고 하지 않았어요."
+msgstr "今回の発話では、明示的に記憶を削除するよう依頼されていません。"
+
+msgid "삭제할 기억 항목을 입력해 주세요."
+msgstr "削除する記憶項目を入力してください。"
+
+msgid "[기억하고 있는 사실]"
+msgstr "[記憶している事実]"
+
+msgid ""
+"Create a daily digest for {date} in UI language {language}. "
+"Write 3-5 sentences, then a keyword line labeled {keywords_label}. "
+"Use only the records below."
+msgstr ""
+"{date}の記録だけを使い、UI言語（{language}）で3～5文に要約し、"
+"最後に{keywords_label}を付けてください。"
+
+msgid "Keywords:"
+msgstr "キーワード:"
+
+msgid "success"
+msgstr "成功"
+
+msgid "failure"
+msgstr "失敗"
+
+msgid "Episode ({outcome}): {content}"
+msgstr "エピソード（{outcome}）: {content}"
+
+msgid "Local command: {content}"
+msgstr "ローカルコマンド: {content}"
+
+msgid "Scheduled run ({outcome}): {content}"
+msgstr "スケジュール実行（{outcome}）: {content}"

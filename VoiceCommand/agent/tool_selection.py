@@ -50,6 +50,9 @@ _TOOL_NAMES_BY_INTENT = {
         "web_search",
         "web_fetch",
         "list_scheduled_tasks",
+        "memory_search",
+        "memory_remember",
+        "memory_forget",
     },
     "web": {
         "web_search",

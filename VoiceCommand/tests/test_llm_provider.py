@@ -866,6 +866,45 @@ class LLMProviderTests(unittest.TestCase):
         self.assertFalse(provider._should_cache("지금 몇 시야?"))
         self.assertFalse(provider._should_cache("오늘 날씨 알려줘"))
 
+    def test_isolated_chat_omits_situation_history_and_cache(self):
+        provider = self._stream_provider()
+        messages = []
+
+        def capture_messages(_client, **kwargs):
+            messages.extend(kwargs["messages"])
+            return "digest"
+
+        with (
+            patch.object(
+                provider,
+                "_resolve_route",
+                return_value=(provider.client, "openai", "test"),
+            ),
+            patch.object(provider, "_build_system", return_value="system"),
+            patch.object(
+                provider,
+                "_build_situation_prompt",
+                side_effect=AssertionError("situation should be excluded"),
+            ),
+            patch.object(
+                provider,
+                "_history_for_context",
+                side_effect=AssertionError("history should be excluded"),
+            ),
+            patch.object(provider, "_stream_or_chat_completion", side_effect=capture_messages),
+            patch.object(provider._response_cache, "set") as cache_set,
+        ):
+            result = provider.chat(
+                "digest input",
+                include_context=False,
+                save_history=False,
+                include_history=False,
+            )
+
+        self.assertEqual(result, "digest")
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        cache_set.assert_not_called()
+
     def test_cache_key_changes_when_prompt_configuration_changes(self):
         provider_a = LLMProvider(provider="groq", model="model-a", system_prompt="prompt-a")
         provider_b = LLMProvider(provider="groq", model="model-a", system_prompt="prompt-b")
@@ -883,6 +922,9 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("run_agent_task", tool_names)
         self.assertIn("web_search", tool_names)
         self.assertIn("schedule_task", tool_names)
+        self.assertIn("memory_search", tool_names)
+        self.assertIn("memory_remember", tool_names)
+        self.assertIn("memory_forget", tool_names)
 
     def test_analyze_request_marks_automation_and_memory_intents(self):
         provider = LLMProvider()
@@ -934,6 +976,9 @@ class LLMProviderTests(unittest.TestCase):
         self.assertNotIn("execute_python_code", tool_names)
         self.assertNotIn("execute_shell_command", tool_names)
         self.assertIn("web_search", tool_names)
+        self.assertIn("memory_search", tool_names)
+        self.assertIn("memory_remember", tool_names)
+        self.assertIn("memory_forget", tool_names)
 
     def test_select_tools_for_request_prefers_schedule_tools(self):
         provider = LLMProvider()

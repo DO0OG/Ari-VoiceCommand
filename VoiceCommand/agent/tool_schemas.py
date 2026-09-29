@@ -547,6 +547,61 @@ CORE_TOOL_SCHEMAS.extend([
     },
 ])
 
+CORE_TOOL_SCHEMAS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_search",
+            "description": _("기억한 사실, 대화, 일일 요약을 검색합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": _("검색어")},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["fact", "conversation", "digest"],
+                        "description": _("검색 종류 (선택)"),
+                    },
+                    "since": {
+                        "type": "string",
+                        "description": _("검색 시작일 또는 시각 (ISO 8601, 선택)"),
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_remember",
+            "description": _("이번 발화에서 명시적으로 요청한 사실만 기억합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": _("기억 항목 이름")},
+                    "value": {"type": "string", "description": _("기억할 내용")},
+                },
+                "required": ["key", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_forget",
+            "description": _("명시적 삭제 요청을 확인 후 기억에서 삭제합니다."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": _("삭제할 기억 항목")},
+                },
+                "required": ["key"],
+            },
+        },
+    },
+])
+
 
 def build_available_tools(plugin_tools: list[dict]) -> list[dict]:
     tools = deepcopy(CORE_TOOL_SCHEMAS)

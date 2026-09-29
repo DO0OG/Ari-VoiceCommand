@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterator, List
 
 from memory.fts_utils import build_fts_query, split_fts_tokens
@@ -15,7 +15,7 @@ _SCHEMA_VERSION = 1
 _TRIGRAM_MIN_VERSION = (3, 34, 0)
 _ENTRY_COLUMNS = {"content", "entry_type", "timestamp", "ref_key"}
 _SEARCH_LIKE_SQL = (
-    "SELECT entry_type, content, timestamp, 0.0 FROM memory_entries WHERE "
+    "SELECT entry_type, content, timestamp, 0.0 FROM memory_entries WHERE ("
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
@@ -27,7 +27,9 @@ _SEARCH_LIKE_SQL = (
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
     "content LIKE '%' || ? || '%' ESCAPE '\\' OR "
-    "content LIKE '%' || ? || '%' ESCAPE '\\' "
+    "content LIKE '%' || ? || '%' ESCAPE '\\') "
+    "AND (? IS NULL OR entry_type = ?) "
+    "AND (? IS NULL OR timestamp >= ?) "
     "ORDER BY timestamp DESC LIMIT ?"
 )
 
@@ -217,6 +219,28 @@ class MemoryIndex:
                 ("fact", content, timestamp, fact_key),
             )
 
+    def index_digest(self, digest_date: date, content: str) -> bool:
+        text = str(content or "").strip()
+        if not text:
+            return False
+        day = digest_date.date() if isinstance(digest_date, datetime) else digest_date
+        ref_key = f"digest:{day.isoformat()}"
+        timestamp = datetime.combine(day, datetime.min.time()).isoformat()
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM memory_entries WHERE entry_type='digest' "
+                "AND ref_key=? LIMIT 1",
+                (ref_key,),
+            ).fetchone()
+            if existing:
+                return False
+            conn.execute(
+                "INSERT INTO memory_entries"
+                "(entry_type, content, timestamp, ref_key) VALUES (?, ?, ?, ?)",
+                ("digest", text, timestamp, ref_key),
+            )
+        return True
+
     def delete_fact(self, key: str) -> int:
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
@@ -267,6 +291,28 @@ class MemoryIndex:
             )
             return len(expired)
 
+    def prune_digests_older_than(self, days: int = 90) -> int:
+        cutoff = datetime.now() - timedelta(days=max(0, int(days)))
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT rowid, timestamp FROM memory_entries "
+                "WHERE entry_type='digest'"
+            ).fetchall()
+            expired = []
+            for rowid, raw_timestamp in rows:
+                try:
+                    timestamp = datetime.fromisoformat(str(raw_timestamp))
+                    if timestamp.tzinfo is not None:
+                        timestamp = timestamp.astimezone().replace(tzinfo=None)
+                except (OverflowError, TypeError, ValueError):
+                    continue
+                if timestamp < cutoff:
+                    expired.append((rowid,))
+            conn.executemany(
+                "DELETE FROM memory_entries WHERE rowid=?", expired
+            )
+            return len(expired)
+
     def _insert(
         self,
         entry_type: str,
@@ -284,27 +330,52 @@ class MemoryIndex:
         except sqlite3.Error as exc:
             logging.debug("[MemoryIndex] insert 실패: %s", exc)
 
-    def search(self, query: str, limit: int = 5) -> List[MemorySearchResult]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        kind: str | None = None,
+        since: str | None = None,
+    ) -> List[MemorySearchResult]:
         text = str(query or "").strip()
         tokens = split_fts_tokens(text)
         if not tokens or limit <= 0:
             return []
+        entry_type = str(kind or "").strip() or None
+        since_filter = None
+        if since:
+            try:
+                since_value = datetime.fromisoformat(str(since).strip())
+            except (TypeError, ValueError):
+                return []
+            if since_value.tzinfo is not None:
+                since_value = since_value.astimezone().replace(tzinfo=None)
+            since_filter = since_value.isoformat()
         use_like = not self._supports_trigram or any(len(token) < 3 for token in tokens)
         try:
             with self._lock, self._connect() as conn:
                 if use_like:
-                    rows = self._search_like(conn, tokens, limit)
+                    rows = self._search_like(
+                        conn, tokens, limit, entry_type, since_filter
+                    )
                 else:
                     try:
                         rows = conn.execute(
                             "SELECT entry_type, content, timestamp, bm25(memory_entries) "
                             "FROM memory_entries WHERE memory_entries MATCH ? "
+                            "AND (? IS NULL OR entry_type = ?) "
+                            "AND (? IS NULL OR timestamp >= ?) "
                             "ORDER BY bm25(memory_entries) LIMIT ?",
-                            (build_fts_query(text), limit),
+                            (
+                                build_fts_query(text), entry_type, entry_type,
+                                since_filter, since_filter, limit,
+                            ),
                         ).fetchall()
                     except sqlite3.Error as exc:
                         logging.debug("[MemoryIndex] FTS 검색 실패, LIKE 폴백: %s", exc)
-                        rows = self._search_like(conn, tokens, limit)
+                        rows = self._search_like(
+                            conn, tokens, limit, entry_type, since_filter
+                        )
             return [MemorySearchResult(*row) for row in rows]
         except sqlite3.Error as exc:
             logging.debug("[MemoryIndex] search 실패: %s", exc)
@@ -315,9 +386,14 @@ class MemoryIndex:
         conn: sqlite3.Connection,
         tokens: list[str],
         limit: int,
+        kind: str | None = None,
+        since: str | None = None,
     ) -> list[tuple[str, str, str, float]]:
         patterns = tuple(self._escape_like(token) for token in tokens)
-        parameters = patterns + (None,) * (12 - len(patterns)) + (limit,)
+        parameters = (
+            patterns + (None,) * (12 - len(patterns))
+            + (kind, kind, since, since, limit)
+        )
         rows = conn.execute(
             _SEARCH_LIKE_SQL,
             parameters,
@@ -355,6 +431,11 @@ class MemoryIndex:
         summaries = list(getattr(history, "summaries", []))
         facts = context.get("facts", {})
         now = datetime.now().isoformat()
+        with self._lock, self._connect() as conn:
+            digests = conn.execute(
+                "SELECT entry_type, content, timestamp, ref_key "
+                "FROM memory_entries WHERE entry_type='digest'"
+            ).fetchall()
         rows = []
         for entry in conversations:
             user_msg = str(entry.get("user", "") or "")
@@ -387,7 +468,7 @@ class MemoryIndex:
             conn.executemany(
                 "INSERT INTO memory_entries"
                 "(entry_type, content, timestamp, ref_key) VALUES (?, ?, ?, ?)",
-                rows,
+                rows + digests,
             )
 
 
