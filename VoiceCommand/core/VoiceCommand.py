@@ -388,11 +388,10 @@ def set_active_conversation_response(text: str) -> None:
 
 def _stop_active_llm_stream() -> bool:
     assistant = _state.ai_assistant
-    stop_stream = getattr(assistant, "stop_stream", None)
-    if not callable(stop_stream):
+    if not hasattr(assistant, "stop_stream"):
         return False
     try:
-        return bool(stop_stream())
+        return bool(assistant.stop_stream())
     except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
         logging.debug("LLM 스트림 중단 생략: %s", exc)
         return False
@@ -412,8 +411,7 @@ def stop_speaking() -> bool:
     stream_stopped = _stop_active_llm_stream()
     thread = _state.tts_thread
     current_text = str(getattr(thread, "current_text", "") or "").strip()
-    clear = getattr(thread, "clear", None)
-    removed_count = clear() if callable(clear) else 0
+    removed_count = thread.clear() if hasattr(thread, "clear") else 0
     if was_playing:
         with _state.active_response_lock:
             full_response = _state.active_conversation_response.strip()
@@ -434,22 +432,20 @@ def stop_speaking() -> bool:
             except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
                 logging.debug("중단된 대화 기록 갱신 생략: %s", exc)
 
-            mark_interrupted = getattr(
-                _state.ai_assistant,
-                "mark_last_response_interrupted",
-                None,
-            )
-            if callable(mark_interrupted):
+            assistant = _state.ai_assistant
+            if hasattr(assistant, "mark_last_response_interrupted"):
                 try:
-                    mark_interrupted(full_response, interrupted_response)
+                    assistant.mark_last_response_interrupted(
+                        full_response,
+                        interrupted_response,
+                    )
                 except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                     logging.debug("LLM 대화 기록 갱신 생략: %s", exc)
 
     provider = _state.fish_tts
-    stop = getattr(provider, "stop", None)
-    if callable(stop):
+    if hasattr(provider, "stop"):
         try:
-            stop()
+            provider.stop()
         except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
             logging.debug("TTS 재생 중단 생략: %s", exc)
     else:
