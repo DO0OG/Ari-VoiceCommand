@@ -142,7 +142,8 @@ class CharacterWidgetHelperTests(unittest.TestCase):
     def test_emote_overlay_keeps_idle_frame_animation_running(self):
         widget = self._make_widget()
 
-        widget._change_emotion_slot("기쁨")
+        with patch("ui.character_widget._RNG.choices", return_value=["idle"]):
+            widget._change_emotion_slot("기쁨")
         widget._activity_away = True
         widget._refresh_activity_behavior()
 
