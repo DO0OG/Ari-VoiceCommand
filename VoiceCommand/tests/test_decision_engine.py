@@ -87,8 +87,16 @@ class DecisionEngineTests(unittest.TestCase):
 
         expected = registry_names()
         self.assertEqual(engine.candidate_names(), expected)
-        self.assertEqual(len(expected), 41)
-        for name in ("adjust_volume", "play_youtube", "mcp_call", "shutdown_computer"):
+        self.assertEqual(len(expected), 44)
+        for name in (
+            "adjust_volume",
+            "play_youtube",
+            "mcp_call",
+            "shutdown_computer",
+            "memory_search",
+            "memory_remember",
+            "memory_forget",
+        ):
             self.assertIn(name, expected)
 
     def test_registry_entries_are_immutable_and_policy_fields_are_explicit(self):
@@ -124,6 +132,9 @@ class DecisionEngineTests(unittest.TestCase):
                 "execute_python_code",
                 "shutdown_computer",
                 "api_call",
+                "memory_forget",
+                "memory_remember",
+                "memory_search",
                 "mcp_call",
                 "run_agent_task",
                 "delegate_to_subagent",

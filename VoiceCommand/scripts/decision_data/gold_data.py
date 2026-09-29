@@ -756,6 +756,93 @@ GOLD_FAMILIES: dict[str, tuple[dict[str, Any], ...]] = {
             },
         },
     ),
+    "memory_forget": (
+        {
+            "family": "old_movie_preference",
+            "bucket": "normal",
+            "texts": {
+                "ko": "저장된 내 예전 영화 취향을 프로필에서 삭제해줘",
+                "en": "Remove my former movie preference from the saved profile",
+                "ja": "保存済みプロフィールから以前の映画の好みを削除して",
+            },
+        },
+        {
+            "family": "former_workplace",
+            "bucket": "contextual",
+            "texts": {
+                "ko": "저장된 내 이전 직장 정보를 프로필에서 빼줘",
+                "en": "Take my previous workplace out of the saved profile",
+                "ja": "保存済みプロフィールから以前の勤務先の情報を消して",
+            },
+        },
+        {
+            "family": "hiking_hobby",
+            "bucket": "hard_negative",
+            "texts": {
+                "ko": "등록된 취미 목록에서 등산 항목을 지워줘",
+                "en": "Delete hiking from the hobbies listed in my profile",
+                "ja": "プロフィールに登録された趣味からハイキングを削除して",
+            },
+        },
+    ),
+    "memory_remember": (
+        {
+            "family": "birthday",
+            "bucket": "normal",
+            "texts": {
+                "ko": "내 생일은 5월 3일이라고 기억해 줘",
+                "en": "My birthday is May 3; remember that for me",
+                "ja": "私の誕生日は5月3日です。これを覚えておいて",
+            },
+        },
+        {
+            "family": "meeting_time_preference",
+            "bucket": "contextual",
+            "texts": {
+                "ko": "회의는 오전을 선호하니 이 내용을 다음 제안에 쓰도록 저장해 둬",
+                "en": "I prefer morning meetings; save that for future suggestions",
+                "ja": "会議は午前中が希望なので、今後の提案に使えるよう記録しておいて",
+            },
+        },
+        {
+            "family": "technical_language_preference",
+            "bucket": "hard_negative",
+            "texts": {
+                "ko": "기술 설명은 한국어가 편하니 이 선호를 저장해 둬",
+                "en": "Technical notes work best in Korean for me; save that preference for later",
+                "ja": "技術の説明は韓国語が助かるので、この好みを記録に残してください",
+            },
+        },
+    ),
+    "memory_search": (
+        {
+            "family": "prior_game_title",
+            "bucket": "normal",
+            "texts": {
+                "ko": "저번에 말한 게임 이름 뭐였지?",
+                "en": "What was the name of the game I mentioned before?",
+                "ja": "前に話したゲームの名前は何だった？",
+            },
+        },
+        {
+            "family": "saved_coffee_choice",
+            "bucket": "contextual",
+            "texts": {
+                "ko": "내가 좋아한다고 했던 커피가 어떤 종류였지?",
+                "en": "Which kind of coffee did I say I liked?",
+                "ja": "好きだと言っていたコーヒーは何だった？",
+            },
+        },
+        {
+            "family": "delivery_weekday",
+            "bucket": "hard_negative",
+            "texts": {
+                "ko": "등록해 둔 배송 요일이 언제인지 확인해줘",
+                "en": "Check which delivery day I selected earlier",
+                "ja": "登録済みの配達曜日を確認して",
+            },
+        },
+    ),
     "move_file": (
         {
             "family": "archive_report",
