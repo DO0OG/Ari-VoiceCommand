@@ -7075,7 +7075,7 @@
   "model_sha256": "8541d1f29b172f538558e053ba495efc90a81b5f5e8ea89426a83cb7d17b77ba",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "808c2ddc3959cfffd71953beb8c760aaa1effb3fbe84dba8819e28ce09035e9e",
+    "previous_artifact_sha256": "d7a1c9d6d6c5b46d06bff76768fdf1771afe0d6db7aa3cf4a2718a3821628a27",
     "major_pairs": [
       {
         "actual": "focus_window",

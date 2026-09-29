@@ -5231,7 +5231,7 @@
   "model_sha256": "8541d1f29b172f538558e053ba495efc90a81b5f5e8ea89426a83cb7d17b77ba",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "185a811388236f4cb63405c3d567111a1a2ab0c618916dbb3e4defd6e438a644",
+    "previous_artifact_sha256": "b153e2e2741b7d7a76dd502a3b3a8044a7e62c5bb18a41293da612ee54b122a3",
     "major_pairs": [
       {
         "actual": "run_agent_task",
