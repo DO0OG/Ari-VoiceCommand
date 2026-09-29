@@ -377,7 +377,9 @@ class VoiceRecognitionThread(QThread):
                         continue
 
                     if detected:
-                        self.handle_wake_word()
+                        self.handle_wake_word(
+                            getattr(self.wake_detector, "detected_command", None)
+                        )
                 except (OSError, RuntimeError, AssertionError, AttributeError, ValueError) as exc:
                     self._disable_microphone(exc, "음성 인식 중 마이크 오류가 발생했습니다")
                     continue
@@ -392,7 +394,7 @@ class VoiceRecognitionThread(QThread):
         finally:
             self.cleanup()
 
-    def handle_wake_word(self):
+    def handle_wake_word(self, command_text=None):
         from VoiceCommand import _state, is_session_lock_blocked, tts_wrapper
 
         if is_session_lock_blocked():
@@ -403,28 +405,36 @@ class VoiceRecognitionThread(QThread):
             self._command_listening = True
 
         logging.info("웨이크 워드 감지됨!")
+        if isinstance(command_text, str):
+            command_text = command_text.strip() or None
+        else:
+            command_text = None
 
         try:
-            response = _RNG.choice(get_wake_responses())
-            _state.tts_playback_finished_event.clear()
-            tts_wrapper(response)
+            if command_text is not None:
+                if not is_session_lock_blocked():
+                    self.result.emit(command_text)
+            else:
+                response = _RNG.choice(get_wake_responses())
+                _state.tts_playback_finished_event.clear()
+                tts_wrapper(response)
 
-            try:
-                from VoiceCommand import is_tts_playing
-                _wait_for_tts_playback_completion(
-                    is_tts_playing,
-                    _state.tts_playback_finished_event,
-                )
-                delay_ms = max(0, int(ConfigManager.get("post_tts_listen_delay_ms", 100)))
-                time.sleep(delay_ms / 1000)
-            except Exception as e:
-                logging.error("TTS 대기 중 오류: %s", e)
-                time.sleep(0.5)
+                try:
+                    from VoiceCommand import is_tts_playing
+                    _wait_for_tts_playback_completion(
+                        is_tts_playing,
+                        _state.tts_playback_finished_event,
+                    )
+                    delay_ms = max(0, int(ConfigManager.get("post_tts_listen_delay_ms", 100)))
+                    time.sleep(delay_ms / 1000)
+                except Exception as e:
+                    logging.error("TTS 대기 중 오류: %s", e)
+                    time.sleep(0.5)
 
-            self._discard_pending_voice_activation()
-            if is_session_lock_blocked():
-                return
-            self._listen_for_command()
+                self._discard_pending_voice_activation()
+                if is_session_lock_blocked():
+                    return
+                self._listen_for_command()
         finally:
             with self._voice_activation_lock:
                 self._command_listening = False

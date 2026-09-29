@@ -241,6 +241,26 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
             ],
         )
 
+    def test_one_shot_wake_command_skips_response_and_second_listen(self):
+        with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+            thread = VoiceRecognitionThread()
+        thread._microphone_source = lambda: nullcontext(object())
+        thread.wake_detector = MagicMock()
+        thread._listen_for_command = MagicMock()
+        received = []
+        thread.result.connect(received.append)
+
+        with (
+            patch("VoiceCommand.is_session_lock_blocked", return_value=False),
+            patch("VoiceCommand.tts_wrapper") as tts_wrapper,
+            patch("VoiceCommand.wake_detector_recalibrate_helper"),
+        ):
+            thread.handle_wake_word("불 꺼줘")
+
+        self.assertEqual(received, ["불 꺼줘"])
+        tts_wrapper.assert_not_called()
+        thread._listen_for_command.assert_not_called()
+
     def test_missing_microphone_waits_without_polling_and_stops(self):
         waiting = threading.Event()
         original_wait = threading.Event.wait

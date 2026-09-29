@@ -26,15 +26,16 @@ def _audio_from_envelope(envelope):
 
 
 class _FakeSttProvider:
-    def __init__(self):
+    def __init__(self, text="아리야"):
         self.modes = []
+        self.text = text
 
     def is_healthy(self):
         return True
 
     def transcribe(self, _audio, mode=None):
         self.modes.append(mode)
-        return "아리야"
+        return self.text
 
 
 class SimpleWakeWordTests(unittest.TestCase):
@@ -94,6 +95,41 @@ class SimpleWakeWordTests(unittest.TestCase):
         self.assertTrue(detector._matches_wake_word("아리야!", "아리야"))
         self.assertTrue(detector._matches_wake_word(" 시작... ", "시작"))
 
+    def test_matches_fuzzy_korean_wake_word(self):
+        detector = self._make_detector()
+
+        for transcript in ("아리야", "아리아", "아리 야"):
+            with self.subTest(transcript=transcript):
+                self.assertTrue(detector._matches_wake_word(transcript, "아리야"))
+
+    def test_matches_normalized_english_and_japanese_wake_words(self):
+        detector = self._make_detector()
+
+        self.assertTrue(detector._matches_wake_word("COMPUTR!", "computer"))
+        self.assertTrue(
+            detector._matches_wake_word("コンピュータ", "こんぴゅーたー")
+        )
+
+    def test_rejects_unrelated_wake_word_transcript(self):
+        detector = self._make_detector()
+
+        self.assertFalse(detector._matches_wake_word("おはようございます", "アリヤ"))
+
+    def test_extracts_japanese_command_without_spacing(self):
+        detector = self._make_detector()
+
+        cases = (
+            ("コンピュータ照明をつけて", "こんぴゅーたー", "照明をつけて"),
+            ("アリヤあかりをつけて", "ありや", "あかりをつけて"),
+            ("ありよあかりをつけて", "ありや", "あかりをつけて"),
+        )
+        for transcript, wake_word, command in cases:
+            with self.subTest(transcript=transcript):
+                self.assertEqual(
+                    detector._command_after_wake_word(transcript, wake_word),
+                    command,
+                )
+
     def test_wake_recognizer_uses_short_pause_threshold(self):
         settings = {
             "wake_words": ["아리야"],
@@ -138,8 +174,18 @@ class SimpleWakeWordTests(unittest.TestCase):
 
         self.assertTrue(should_transcribe_wake_audio(audio, 300))
 
+    def test_wake_audio_gate_accepts_longer_one_shot_utterance(self):
+        audio = _audio_from_envelope([0.25] * 20 + [0.75] * 40 + [0.4] * 60)
+
+        self.assertTrue(should_transcribe_wake_audio(audio, 300))
+
+    def test_wake_audio_gate_rejects_utterance_over_limit(self):
+        audio = _audio_from_envelope([0.25] * 100 + [0.75] * 100 + [0.4] * 50)
+
+        self.assertFalse(should_transcribe_wake_audio(audio, 300))
+
     def test_wake_audio_gate_ignores_trailing_silence_in_length(self):
-        # listen()은 말 끝 무음(약 0.8초)까지 녹음하므로 전체 길이가 1.5초를 넘을 수 있다.
+        # 말끝 무음은 발화 길이 계산에서 제외한다.
         envelope = (
             [0.0] * 10 + [0.9] * 10 + [0.0] * 3 + [0.4] * 9 + [0.0] * 5
             + [0.85] * 8 + [0.0] * 40
@@ -174,6 +220,35 @@ class SimpleWakeWordTests(unittest.TestCase):
             self.assertTrue(detector.listen_for_wake_word(object()))
 
         self.assertEqual(detector.stt_calls_per_hour, 1)
+        self.assertEqual(provider.modes, ["wake"])
+        self.assertIsNone(detector.detected_command)
+
+    def test_one_shot_transcript_stores_command_and_uses_wake_stt_mode(self):
+        settings = {
+            "wake_words": ["아리야"],
+            "stt_energy_threshold": 300,
+            "stt_dynamic_energy": True,
+            "stt_provider": "google",
+        }
+        provider = _FakeSttProvider("아리아, 불 꺼줘")
+        with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
+            detector = SimpleWakeWord(stt_provider=provider)
+        detector._calibrated = True
+        audio = _audio_from_envelope([0.25] * 20 + [0.75] * 40 + [0.4] * 60)
+        source = object()
+
+        with (
+            patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings),
+            patch.object(detector.recognizer, "listen", return_value=audio) as listen,
+        ):
+            self.assertTrue(detector.listen_for_wake_word(source))
+
+        listen.assert_called_once_with(
+            source,
+            timeout=2,
+            phrase_time_limit=4.0,
+        )
+        self.assertEqual(detector.detected_command, "불 꺼줘")
         self.assertEqual(provider.modes, ["wake"])
 
     def test_interrupt_discards_current_wake_audio_before_stt(self):
