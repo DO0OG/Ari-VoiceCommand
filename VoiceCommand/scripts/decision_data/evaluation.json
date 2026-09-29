@@ -49,7 +49,11 @@
       "write_file",
       "unknown_or_complex"
     ],
-    "unsupported_schema_tools": [],
+    "unsupported_schema_tools": [
+      "memory_forget",
+      "memory_remember",
+      "memory_search"
+    ],
     "stale_mapping_tools": [],
     "seed_family_count": 1010,
     "family_count": 351,
