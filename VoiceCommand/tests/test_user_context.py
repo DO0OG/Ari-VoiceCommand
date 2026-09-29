@@ -4,7 +4,7 @@ import tempfile
 import threading
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from memory.user_context import UserContextManager
@@ -160,18 +160,89 @@ class UserContextManagerTests(unittest.TestCase):
                 saved_context = handle.read()
             self.assertNotIn("You did great, Ari", saved_context)
 
+    def test_interaction_records_praise_and_late_night_long_use_for_character_mood(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            mood_state = Mock()
+            start = datetime(2026, 9, 29, 0, 0)
+
+            with patch("memory.user_context.get_mood_state", return_value=mood_state):
+                manager.record_interaction("You did great, Ari", now=start)
+                manager.record_interaction(
+                    "That's wrong, Ari",
+                    now=start + timedelta(minutes=1),
+                )
+                for minutes in range(30, 181, 30):
+                    now = start + timedelta(minutes=minutes)
+                    manager.record_interaction("ordinary request", now=now)
+
+            self.assertTrue(
+                mood_state.record_interaction.call_args_list[0].kwargs["praised"]
+            )
+            self.assertTrue(
+                mood_state.record_interaction.call_args_list[1].kwargs["criticized"]
+            )
+            self.assertTrue(
+                mood_state.record_interaction.call_args_list[-1].kwargs[
+                    "late_night_long_use"
+                ]
+            )
+            with open(manager.context_file, "r", encoding="utf-8") as handle:
+                saved_context = handle.read()
+            self.assertNotIn("You did great, Ari", saved_context)
+
+    def test_late_night_long_use_triggers_after_midnight_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            mood_state = Mock()
+            start = datetime(2026, 9, 28, 21, 0)
+
+            with patch("memory.user_context.get_mood_state", return_value=mood_state):
+                for minutes in range(0, 211, 30):
+                    manager.record_interaction(
+                        "ordinary request",
+                        now=start + timedelta(minutes=minutes),
+                    )
+                manager.record_interaction(
+                    "ordinary request",
+                    now=start + timedelta(hours=4),
+                )
+                manager.record_interaction(
+                    "ordinary request",
+                    now=start + timedelta(hours=4, minutes=30),
+                )
+
+            results = [
+                call.kwargs["late_night_long_use"]
+                for call in mood_state.record_interaction.call_args_list
+            ]
+            self.assertTrue(results[-2])
+            self.assertFalse(results[-1])
+
+    def test_negated_praise_markers_do_not_increase_mood(self):
+        self.assertFalse(UserContextManager._contains_praise("not great"))
+        self.assertFalse(UserContextManager._contains_praise("not good job"))
+        self.assertFalse(UserContextManager._contains_praise("대단하지 않아"))
+        self.assertFalse(UserContextManager._contains_praise("すごいわけではない"))
+        self.assertFalse(UserContextManager._contains_praise("最高ではない"))
+        self.assertTrue(UserContextManager._contains_praise("not great, thanks"))
+
     def test_praise_markers_cover_korean_english_and_japanese(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager = UserContextManager(
                 context_file=os.path.join(tmp, "user_context.json")
             )
             start = datetime(2026, 9, 29, 9, 0)
-            for minute, message in enumerate(("잘했어", "great job", "ありがとう")):
+            for minute, message in enumerate(("잘했어", "great job", "ありがとう", "👍")):
                 manager.record_interaction(message, now=start + timedelta(minutes=minute))
 
             metrics = manager.get_situation_metrics(now=start + timedelta(minutes=3))
 
-        self.assertEqual(metrics["recent_praise_count"], 3)
+        self.assertEqual(metrics["recent_praise_count"], 4)
 
     def test_update_bio_replaces_list_fields(self):
         with tempfile.TemporaryDirectory() as tmp:

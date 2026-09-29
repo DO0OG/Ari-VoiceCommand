@@ -3682,3 +3682,15 @@ msgstr "Evidence: {evidence}"
 
 msgid "거절"
 msgstr "Reject"
+
+msgid "좋음"
+msgstr "good"
+
+msgid "평온"
+msgstr "calm"
+
+msgid "가라앉음"
+msgstr "low"
+
+msgid " · 기분 {mood}"
+msgstr " · Mood {mood}"

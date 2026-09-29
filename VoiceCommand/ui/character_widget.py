@@ -18,6 +18,7 @@ from ui.speech_bubble import SpeechBubble, register_fonts
 from i18n.translator import _
 from core.emotions import EMOTION_CATALOG, PET_EMOTIONS
 from core.config_manager import ConfigManager
+from core.mood_state import get_mood_state
 from core import window_inspector
 from core.constants import (
     GRAVITY, BOUNCE_Y, BOUNCE_X, FRICTION_GROUND, FRICTION_AIR,
@@ -277,6 +278,16 @@ class CharacterWidget(QWidget):
         # 애니메이션 로드
         # 레이블 생성
         self.label = QLabel(self)
+        self.emote_overlay = QLabel(self)
+        self.emote_overlay.setAlignment(Qt.AlignCenter)
+        self.emote_overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.emote_overlay.setStyleSheet(
+            "background: transparent; font-size: 20px;"
+        )
+        self.emote_overlay.hide()
+        self.emote_overlay_timer = QTimer(self)
+        self.emote_overlay_timer.setSingleShot(True)
+        self.emote_overlay_timer.timeout.connect(self.emote_overlay.hide)
         self.load_animations()
         self.update_frame()
 
@@ -658,6 +669,8 @@ class CharacterWidget(QWidget):
 
         if self.speech_bubble:
             self.speech_bubble.update_position()
+        if self.emote_overlay.text():
+            self._position_emote_overlay()
 
     def next_frame(self):
         """다음 프레임으로 (불필요한 호출 방지)"""
@@ -886,19 +899,23 @@ class CharacterWidget(QWidget):
             self.start_behavior_timer()
             return
 
-        # 행동 선택 (확률 기반)
-        rand = _RNG.random()
-        if rand < 0.4:
+        # 기분에 따라 평상시 행동 비중만 조금 조정한다.
+        valence = 0.0
+        mood_state = get_mood_state()
+        if mood_state is not None:
+            valence, _arousal = mood_state.values()
+        weights = [0.4, 0.2, 0.15, 0.1, 0.15]
+        if valence >= 0.2:
+            weights = [0.3, 0.2, 0.25, 0.1, 0.15]
+        elif valence <= -0.2:
+            weights = [0.35, 0.3, 0.1, 0.1, 0.15]
+        behavior = _RNG.choices(
+            ("idle", "sit", "walk", "sleep", "ceiling"),
+            weights=weights,
+            k=1,
+        )[0]
+        if behavior == "ceiling" and not (at_left_edge or at_right_edge):
             behavior = "idle"
-        elif rand < 0.6:
-            behavior = "sit"
-        elif rand < 0.75: # 벽 제한 조건 제거
-            behavior = "walk"
-        elif rand < 0.85:
-            behavior = "sleep"
-        else:
-            # 벽에 붙어있을 때만 천장으로 올라감, 아니면 그냥 idle
-            behavior = "ceiling" if (at_left_edge or at_right_edge) else "idle"
 
         self.set_animation(behavior)
 
@@ -1554,6 +1571,13 @@ class CharacterWidget(QWidget):
         """감정 설정 (외부에서 호출 - 스레드 안전)"""
         self.change_emotion_signal.emit(emotion)
 
+    def _position_emote_overlay(self) -> None:
+        self.emote_overlay.adjustSize()
+        self.emote_overlay.move(
+            (self.width() - self.emote_overlay.width()) // 2,
+            max(0, self.height() // 12),
+        )
+
     @Slot(str)
     def _change_emotion_slot(self, emotion):
         """실제 감정 표현 처리 (메인 스레드)"""
@@ -1562,9 +1586,28 @@ class CharacterWidget(QWidget):
         details = EMOTION_CATALOG.get(emotion)
         if not details:
             return
-        self.set_animation(_RNG.choice(details["animations"]))
+        mood_state = get_mood_state()
+        valence = 0.0
+        if mood_state is not None:
+            valence, _arousal = mood_state.values()
+        animations = details["animations"]
+        weights = [
+            1 + max(0.0, valence) * 3 if animation == "walk" else
+            1 + max(0.0, -valence) * 3 if animation == "sit" else 1
+            for animation in animations
+        ]
+        self.set_animation(_RNG.choices(animations, weights=weights, k=1)[0])
+        self.emote_overlay.setText(details["emoji"])
+        self._position_emote_overlay()
+        self.emote_overlay.show()
+        self.emote_overlay.raise_()
+        self.emote_overlay_timer.start(1500)
 
-        if details.get("jump") and not self.is_falling:
+        if (
+            details.get("jump")
+            and not self.is_falling
+            and (mood_state is None or mood_state.claim_big_motion())
+        ):
             self.velocity_y = -8
             self.is_falling = True
 

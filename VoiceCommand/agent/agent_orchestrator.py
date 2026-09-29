@@ -21,6 +21,7 @@ from agent.autonomous_executor import AutonomousExecutor, ExecutionResult, get_e
 from agent.execution_engine import ExecutionEngine, StepResult  # StepResult는 여기서 정의
 from agent.verification_engine import VerificationEngine
 from agent.learning_engine import LearningEngine
+from core.mood_state import get_mood_state
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -321,6 +322,14 @@ class AgentOrchestrator:
                 lesson=lesson,
                 failure_kind_override=getattr(reflection, "root_cause", ""),
             )
+            try:
+                mood_state = get_mood_state()
+                if mood_state is not None and (
+                    run_result.achieved or not run_result.verification_unavailable
+                ):
+                    mood_state.record_task_result(run_result.achieved)
+            except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logger.debug("[Orchestrator] 기분 상태 갱신 생략: %s", exc)
             payload = {"goal": goal, "achieved": run_result.achieved, "summary": run_result.summary}
             self._emit_plugin_event("on_agent_complete", payload)
             if run_result.achieved:
