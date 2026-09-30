@@ -1,10 +1,13 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
+from PySide6.QtCore import Qt
 
+from audio.audio_manager import GlobalAudio
 from tts.tts_elevenlabs import (
     ElevenLabsTTS,
     create_voice_clone,
@@ -49,6 +52,149 @@ class ElevenLabsProviderTests(unittest.TestCase):
         self.assertEqual(payload["text"], "Hello")
         self.assertEqual(payload["voice_settings"]["style"], 0.08)
         self.assertAlmostEqual(payload["voice_settings"]["stability"], 0.45)
+
+    def test_speak_streams_pcm_before_download_finishes(self):
+        provider = ElevenLabsTTS(api_key="test-key")
+        writes = []
+
+        class _FakeAudioStream:
+            def write(self, data):
+                writes.append(data)
+
+        class _FakeResponse:
+            complete = False
+            first_write_before_complete = False
+            headers = {"Content-Type": "audio/pcm"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.closed = True
+
+            def close(self):
+                self.closed = True
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, chunk_size):
+                self.chunk_size = chunk_size
+                yield b"\x01"
+                yield b"\x02\x03"
+                self.first_write_before_complete = bool(writes) and not self.complete
+                yield b"\x04"
+                self.complete = True
+
+        response = _FakeResponse()
+        session = Mock()
+        session.post.return_value = response
+        provider._get_session = lambda: session
+        finished = []
+        provider.playback_finished.connect(lambda: finished.append(True))
+
+        with (
+            patch.object(
+                GlobalAudio, "open_stream", return_value=_FakeAudioStream()
+            ) as open_stream,
+            patch.object(GlobalAudio, "close_stream") as close_stream,
+            patch("audio.audio_manager.get_output_device_index", return_value=0),
+        ):
+            self.assertTrue(provider.speak("hello"))
+
+        self.assertEqual(b"".join(writes), b"\x01\x02\x03\x04")
+        self.assertTrue(response.first_write_before_complete)
+        self.assertEqual(response.chunk_size, 1024)
+        self.assertTrue(response.closed)
+        self.assertFalse(provider.is_playing)
+        self.assertEqual(finished, [True])
+        self.assertTrue(session.post.call_args.args[0].endswith("/stream"))
+        self.assertEqual(
+            session.post.call_args.kwargs["params"],
+            {"output_format": "pcm_24000"},
+        )
+        self.assertNotIn("Accept", session.post.call_args.kwargs["headers"])
+        self.assertEqual(open_stream.call_args.kwargs["rate"], 24000)
+        close_stream.assert_called_once()
+
+    def test_speak_rejects_non_audio_success_response(self):
+        provider = ElevenLabsTTS(api_key="test-key")
+
+        class _FakeResponse:
+            headers = {"Content-Type": "text/html; charset=utf-8"}
+
+            def __init__(self):
+                self.closed = False
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, chunk_size):
+                return iter([b"<html>not audio</html>"])
+
+            def close(self):
+                self.closed = True
+
+        response = _FakeResponse()
+        session = Mock()
+        session.post.return_value = response
+        provider._get_session = lambda: session
+
+        with patch.object(GlobalAudio, "open_stream") as open_stream:
+            self.assertFalse(provider.speak("hello"))
+
+        self.assertTrue(response.closed)
+        open_stream.assert_not_called()
+        self.assertFalse(provider.is_playing)
+
+    def test_cleanup_cancels_active_response_and_playback(self):
+        provider = ElevenLabsTTS(api_key="test-key")
+        response_closed = threading.Event()
+        response_reading = threading.Event()
+
+        class _FakeAudioStream:
+            def write(self, _data):
+                return None
+
+        class _FakeResponse:
+            headers = {"Content-Type": "audio/pcm"}
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, chunk_size):
+                response_reading.set()
+                response_closed.wait(timeout=2)
+                return iter(())
+
+            def close(self):
+                response_closed.set()
+
+        response = _FakeResponse()
+        session = Mock()
+        session.post.return_value = response
+        provider._get_session = lambda: session
+        finished = []
+        provider.playback_finished.connect(
+            lambda: finished.append(True), Qt.ConnectionType.DirectConnection
+        )
+        with (
+            patch.object(GlobalAudio, "open_stream", return_value=_FakeAudioStream()),
+            patch.object(GlobalAudio, "close_stream"),
+            patch("audio.audio_manager.get_output_device_index", return_value=0),
+        ):
+            worker = threading.Thread(target=lambda: provider.speak("hello"))
+            worker.start()
+            self.assertTrue(response_reading.wait(timeout=2))
+            active_stop_event = provider._active_stop_event
+            provider.cleanup()
+            worker.join(timeout=2)
+
+        self.assertFalse(worker.is_alive())
+        self.assertTrue(active_stop_event.is_set())
+        self.assertTrue(response_closed.is_set())
+        self.assertFalse(provider.is_playing)
+        self.assertEqual(finished, [True])
 
 
 class ElevenLabsSettingsApiTests(unittest.TestCase):
