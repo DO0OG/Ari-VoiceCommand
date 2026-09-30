@@ -3,13 +3,15 @@ TTS 설정 페이지 위젯
 """
 import logging
 import os
+import threading
+from types import SimpleNamespace
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QComboBox, QGroupBox,
     QScrollArea, QProgressDialog, QMessageBox, QFileDialog, QCheckBox,
 )
-from PySide6.QtCore import QThread, Qt, Signal
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from i18n.translator import _
 from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
@@ -23,22 +25,20 @@ from ui.local_installers import (
 from ui.tts_diagnostics import TTSDiagnosticPanel
 
 
-class _TTSActionThread(QThread):
-    """네트워크 요청을 UI 스레드 밖에서 실행한다."""
+class _TTSActionRelay(QObject):
+    """작업 스레드 결과를 GUI 스레드로 넘긴다. 설정 창보다 오래 살아야 해서 모듈에 하나만 둔다."""
 
-    completed = Signal(object, str)
+    completed = Signal(object, object, str)
 
-    def __init__(self, action, button, callback):
-        super().__init__()
-        self.action = action
-        self.button = button
-        self.callback = callback
 
-    def run(self):
-        try:
-            self.completed.emit(self.action(), "")
-        except Exception as exc:
-            self.completed.emit(None, str(exc))
+_ACTION_RELAY: _TTSActionRelay | None = None
+
+
+def _action_relay() -> _TTSActionRelay:
+    global _ACTION_RELAY
+    if _ACTION_RELAY is None:
+        _ACTION_RELAY = _TTSActionRelay()
+    return _ACTION_RELAY
 
 
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
@@ -65,7 +65,9 @@ class _TTSSettingsPage(QWidget):
         self._ollama_progress_dialog: QProgressDialog | None = None
         self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
         self._cosyvoice_progress_dialog: QProgressDialog | None = None
-        self._tts_action_threads: set[_TTSActionThread] = set()
+        self._tts_action_job: SimpleNamespace | None = None
+        # GUI 스레드에서 릴레이를 만들고 연결해 결과가 항상 GUI 스레드에서 처리되게 한다.
+        _action_relay().completed.connect(self._finish_elevenlabs_action)
         self._init_ui()
 
     # ── UI 구성 ───────────────────────────────────────────────────────────────
@@ -276,7 +278,7 @@ class _TTSSettingsPage(QWidget):
         self.elevenlabs_model_combo.setEditable(True)
         for model_id in ("eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_v3"):
             self.elevenlabs_model_combo.addItem(model_id, model_id)
-        self._set_combo(
+        self._select_or_add(
             self.elevenlabs_model_combo,
             self._settings.get("elevenlabs_model_id", "eleven_multilingual_v2"),
         )
@@ -292,9 +294,7 @@ class _TTSSettingsPage(QWidget):
         ell.addWidget(QLabel(_("음성:")))
         self.elevenlabs_voice_combo = QComboBox()
         self.elevenlabs_voice_combo.setEditable(True)
-        saved_voice_id = self._settings.get("elevenlabs_voice_id", "")
-        if saved_voice_id:
-            self.elevenlabs_voice_combo.addItem(saved_voice_id, saved_voice_id)
+        self._select_or_add(self.elevenlabs_voice_combo, self._settings.get("elevenlabs_voice_id", ""))
         ell.addWidget(self.elevenlabs_voice_combo)
         self.elevenlabs_clone_button = QPushButton(_("참조 음성으로 내 음성 만들기"))
         self.elevenlabs_clone_button.clicked.connect(self._create_elevenlabs_clone)
@@ -342,26 +342,34 @@ class _TTSSettingsPage(QWidget):
             self.tts_reference_wav_input.setText(selection[0])
 
     def _start_elevenlabs_action(self, button: QPushButton, action, callback):
-        if any(thread.isRunning() for thread in self._tts_action_threads):
+        if self._tts_action_job is not None:
             return
         button.setEnabled(False)
-        thread = _TTSActionThread(action, button, callback)
-        thread.completed.connect(self._finish_elevenlabs_action)
-        thread.finished.connect(self._discard_tts_action_thread)
-        self._tts_action_threads.add(thread)
-        thread.start()
+        job = SimpleNamespace(button=button, callback=callback)
+        self._tts_action_job = job
+        relay = _action_relay()
 
-    def _finish_elevenlabs_action(self, result, error: str):
-        thread = self.sender()
-        if thread is None:
+        def run():
+            try:
+                result, error = action(), ""
+            except Exception as exc:
+                result, error = None, str(exc)
+            try:
+                relay.completed.emit(job, result, error)
+            except RuntimeError:
+                pass  # 앱 종료 중이면 결과를 버린다.
+
+        # 데몬 스레드라 요청 중에 앱을 끝내도 종료를 막거나 Qt 스레드 파괴로 죽지 않는다.
+        threading.Thread(target=run, name="ElevenLabsAction", daemon=True).start()
+
+    @Slot(object, object, str)
+    def _finish_elevenlabs_action(self, job, result, error: str):
+        # 다른 설정 창의 작업이거나 창이 닫혀 정리된 작업이면 무시한다.
+        if job is not self._tts_action_job:
             return
-        thread.button.setEnabled(True)
-        thread.callback(result, error)
-
-    def _discard_tts_action_thread(self):
-        thread = self.sender()
-        if thread is not None:
-            self._tts_action_threads.discard(thread)
+        self._tts_action_job = None
+        job.button.setEnabled(True)
+        job.callback(result, error)
 
     def _load_elevenlabs_models(self):
         api_key = self.elevenlabs_key_input.text().strip()
@@ -373,14 +381,11 @@ class _TTSSettingsPage(QWidget):
             if error:
                 QMessageBox.warning(self, _("모델 불러오기 실패"), error)
                 return
-            selected = (
-                self.elevenlabs_model_combo.currentData()
-                or self.elevenlabs_model_combo.currentText().strip()
-            )
+            selected = self._combo_id(self.elevenlabs_model_combo)
             self.elevenlabs_model_combo.clear()
             for model in models:
                 self.elevenlabs_model_combo.addItem(model["name"], model["model_id"])
-            self._set_combo(self.elevenlabs_model_combo, selected)
+            self._select_or_add(self.elevenlabs_model_combo, selected)
 
         def fetch():
             from tts.tts_elevenlabs import fetch_models
@@ -399,14 +404,11 @@ class _TTSSettingsPage(QWidget):
             if error:
                 QMessageBox.warning(self, _("음성 불러오기 실패"), error)
                 return
-            selected = (
-                self.elevenlabs_voice_combo.currentData()
-                or self.elevenlabs_voice_combo.currentText()
-            )
+            selected = self._combo_id(self.elevenlabs_voice_combo)
             self.elevenlabs_voice_combo.clear()
             for voice in voices:
                 self.elevenlabs_voice_combo.addItem(voice["name"], voice["voice_id"])
-            self._set_combo(self.elevenlabs_voice_combo, selected)
+            self._select_or_add(self.elevenlabs_voice_combo, selected)
 
         def fetch():
             from tts.tts_elevenlabs import fetch_voices
@@ -651,6 +653,26 @@ class _TTSSettingsPage(QWidget):
                 return
 
     @staticmethod
+    def _select_or_add(combo: QComboBox, value: str):
+        """목록에 없는 저장 ID도 항목으로 추가해 선택을 유지한다."""
+        if not value:
+            return
+        index = combo.findData(value)
+        if index < 0:
+            combo.addItem(value, value)
+            index = combo.count() - 1
+        combo.setCurrentIndex(index)
+
+    @staticmethod
+    def _combo_id(combo: QComboBox) -> str:
+        """편집 가능 콤보에서 직접 입력한 ID를 선택 항목 데이터보다 우선한다."""
+        text = combo.currentText().strip()
+        data = combo.currentData()
+        if data and text == combo.itemText(combo.currentIndex()):
+            return data
+        return text
+
+    @staticmethod
     def _float(text: str, default: float) -> float:
         try:
             return float(text)
@@ -685,14 +707,9 @@ class _TTSSettingsPage(QWidget):
             "openai_tts_model": self.openai_tts_model_combo.currentData(),
             "openai_tts_custom_voice_id": self.openai_tts_custom_voice_input.text().strip(),
             "elevenlabs_api_key": self.elevenlabs_key_input.text().strip(),
-            "elevenlabs_voice_id": (
-                self.elevenlabs_voice_combo.currentData()
-                or self.elevenlabs_voice_combo.currentText().strip()
-            ),
-            "elevenlabs_model_id": (
-                self.elevenlabs_model_combo.currentData()
-                or self.elevenlabs_model_combo.currentText().strip()
-            ),
+            "elevenlabs_voice_id": self._combo_id(self.elevenlabs_voice_combo),
+            "elevenlabs_model_id": (self._combo_id(self.elevenlabs_model_combo)
+                                    or "eleven_multilingual_v2"),
             "edge_tts_voice": self.edge_voice_combo.currentData(),
             "edge_tts_rate": self.edge_rate_input.text().strip() or "+0%",
             "ollama_executable_path": self._ollama_executable_path,
@@ -702,11 +719,9 @@ class _TTSSettingsPage(QWidget):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
         self.local_install_section.stop_detection()
         self.tts_diagnostic_panel.cancel()
-        for thread in (
-            self._ollama_install_thread,
-            self._cosyvoice_install_thread,
-            *self._tts_action_threads,
-        ):
+        # ElevenLabs 요청은 중간에 멈출 수 없으니 기다리지 않고 결과 처리만 끊는다.
+        self._tts_action_job = None
+        for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
             if thread and thread.isRunning():
                 thread.quit()
                 thread.wait(2000)

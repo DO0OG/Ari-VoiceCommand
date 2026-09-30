@@ -2,6 +2,8 @@ import io
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 import urllib.error
 from unittest.mock import MagicMock, patch
@@ -134,6 +136,53 @@ class LocalInstallUiTests(unittest.TestCase):
             page._install_cosyvoice()
         self.assertIn(r"D:\CosyVoice", question.call_args.args[2])
         installer.assert_not_called()
+
+    def test_custom_elevenlabs_ids_survive_save_and_typed_id_wins(self):
+        page = _TTSSettingsPage({"elevenlabs_model_id": "eleven_custom", "elevenlabs_voice_id": "voice_saved"})
+        values = page.get_values()
+        self.assertEqual(values["elevenlabs_model_id"], "eleven_custom")
+        self.assertEqual(values["elevenlabs_voice_id"], "voice_saved")
+
+        page.elevenlabs_model_combo.setEditText("eleven_typed")
+        self.assertEqual(page.get_values()["elevenlabs_model_id"], "eleven_typed")
+
+    def _run_elevenlabs_action(self, page, callback, *, cleanup):
+        release, finished = threading.Event(), threading.Event()
+
+        def action():
+            release.wait(2)
+            finished.set()
+            return ["late"]
+
+        page._start_elevenlabs_action(page.elevenlabs_models_button, action, callback)
+        if cleanup:
+            page.cleanup_threads()
+        release.set()
+        self.assertTrue(finished.wait(2))
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and not callback.called:
+            QApplication.processEvents()
+            time.sleep(0.01)
+
+    def test_elevenlabs_result_is_handled_on_gui_thread(self):
+        page = _TTSSettingsPage({})
+        thread_ids = []
+        callback = MagicMock(side_effect=lambda *_: thread_ids.append(threading.get_ident()))
+        self._run_elevenlabs_action(page, callback, cleanup=False)
+        callback.assert_called_once_with(["late"], "")
+        self.assertEqual(thread_ids, [threading.get_ident()])
+        self.assertTrue(page.elevenlabs_models_button.isEnabled())
+
+    def test_cleanup_stops_elevenlabs_result_handling(self):
+        page = _TTSSettingsPage({})
+        callback = MagicMock()
+        self._run_elevenlabs_action(page, callback, cleanup=True)
+        callback.assert_not_called()
+
+    def test_empty_elevenlabs_model_falls_back_to_default(self):
+        page = _TTSSettingsPage({})
+        page.elevenlabs_model_combo.setEditText("")
+        self.assertEqual(page.get_values()["elevenlabs_model_id"], "eleven_multilingual_v2")
 
 
 if __name__ == "__main__":
