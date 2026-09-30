@@ -21,15 +21,20 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 # 자동 순환 GC가 작업 스레드에서 Qt 위젯을 수거하면 네이티브 크래시가 난다.
 # 자동 GC를 끄고 각 테스트 정리 뒤 메인 스레드에서만 수거한다.
+# 전체 수거는 큰 힙에서 비싸서 매번은 젊은 세대만, 일정 개수마다 전체를 수거한다.
 gc.disable()
 _original_do_cleanups = unittest.TestCase.doCleanups
+_FULL_COLLECT_EVERY = 100
+_cleanup_count = 0
 
 
 def _do_cleanups_and_collect(self):
+    global _cleanup_count
     try:
         return _original_do_cleanups(self)
     finally:
-        gc.collect()
+        _cleanup_count += 1
+        gc.collect(2 if _cleanup_count % _FULL_COLLECT_EVERY == 0 else 1)
 
 
 unittest.TestCase.doCleanups = _do_cleanups_and_collect
