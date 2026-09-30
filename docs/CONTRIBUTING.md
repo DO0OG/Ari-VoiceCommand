@@ -48,6 +48,8 @@
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 같이 돌려 보시길 권합니다.
 - Agent Skills/MCP를 건드렸다면 `test_skill_manager`, `test_skill_installer`, `test_mcp_client`, `test_llm_provider`, `test_ai_command`도 함께 확인해 주세요.
 - 자기개선 루프(ReflectionEngine / SkillLibrary / WeeklyReport / i18n)를 건드렸다면 `test_learning_engine`, `test_skill_library`, `test_episode_memory`, `test_learning_quality`, `test_weekly_report`, `test_agent_integration`, `test_skill_optimizer`를 먼저 확인해 주세요.
+- 임베더를 다루는 테스트는 실제 외부 API 호출이나 모델 다운로드 없이 실행되도록 유지해 주세요. OpenAI 클라이언트와 모델 다운로드 시작을 대역(mock) 처리하면 네트워크가 없는 환경에서도 검증할 수 있습니다.
+- 로컬 판정 엔진의 자료를 추가·수정할 때는 [`VoiceCommand/scripts/decision_data/README.md`](../VoiceCommand/scripts/decision_data/README.md)의 데이터·평가·배포 검사 순서를 먼저 따르고, 사람 검수가 필요한 항목은 [`LOCAL_DECISION_ACCEPTANCE.md`](./LOCAL_DECISION_ACCEPTANCE.md)에 기록해 주세요.
 
 ## i18n 변경 체크리스트
 
