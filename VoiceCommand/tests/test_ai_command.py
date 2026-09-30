@@ -534,6 +534,36 @@ class AICommandTests(unittest.TestCase):
                 self.assertEqual(assistant.recorded_results, [])
                 self.assertIn("후속 설명 응답입니다.", response)
 
+    def test_tool_exception_result_instructs_followup_not_to_claim_success(self):
+        command = AICommand(_FakeAssistant(), lambda message: None, {"enabled": False})
+        command._dispatch["launch_app"] = Mock(side_effect=FileNotFoundError("네이버"))
+
+        results = command._execute_tool_calls([{
+            "name": "launch_app",
+            "arguments": {"name": "네이버"},
+        }])
+
+        self.assertIn("도구 실행 실패", results[0])
+        self.assertIn("성공한 실행 결과가 확인되지 않았습니다", results[0])
+        self.assertIn("대체 동작을 했다고 말하지 마세요", results[0])
+        self.assertTrue(command._fast_handler_failed(results[0]))
+
+    def test_local_launch_app_response_describes_browser_fallback(self):
+        command = AICommand(_FakeAssistant(), lambda message: None, {"enabled": False})
+
+        response = command._build_local_tool_response(
+            "launch_app",
+            "https://www.naver.com",
+            True,
+        )
+
+        self.assertEqual(
+            response,
+            _("기본 브라우저로 웹사이트를 열었습니다: {url}").format(
+                url="https://www.naver.com"
+            ),
+        )
+
     def test_multiple_tool_calls_always_use_followup(self):
         assistant = _ToolCallAssistant([
             {"id": "tool_1", "name": "launch_app", "arguments": {"name": "앱"}},

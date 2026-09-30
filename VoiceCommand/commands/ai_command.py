@@ -1255,6 +1255,10 @@ class AICommand(FastPathMixin, BaseCommand):
         )
 
     def _build_local_tool_response(self, tool_name: str, result: object, has_preface: bool) -> str:
+        if tool_name == "launch_app":
+            result_text = str(result).strip()
+            if result_text.startswith(("http://", "https://")):
+                return _("기본 브라우저로 웹사이트를 열었습니다: {url}").format(url=result_text)
         if has_preface and tool_name != "get_weather":
             return _("요청을 처리했습니다.")
         if tool_name in {"set_timer", "cancel_timer", "adjust_volume"}:
@@ -2019,7 +2023,7 @@ class AICommand(FastPathMixin, BaseCommand):
                     result = handler(args)
                 except Exception as e:
                     logging.error("tool 핸들러 오류 (%s): %s", name, e, exc_info=True)
-                    result = f"오류: {e}"
+                    result = f"오류: 도구 실행 실패: {e}. 성공한 실행 결과가 확인되지 않았습니다. 실행했거나 대체 동작을 했다고 말하지 마세요."
                 else:
                     if tool_result_callback is not None:
                         tool_result_callback(name, result)
