@@ -37,6 +37,7 @@ def _audio_modules(endpoint, *, get_speakers=None):
 
     comtypes = types.ModuleType("comtypes")
     comtypes.CLSCTX_ALL = object()
+    comtypes.CoInitialize = lambda: None
     pycaw = types.ModuleType("pycaw")
     pycaw_impl = types.ModuleType("pycaw.pycaw")
     pycaw_impl.AudioUtilities = SimpleNamespace(GetSpeakers=get_speakers)

@@ -9,6 +9,7 @@ from ctypes import wintypes
 from PySide6.QtCore import QAbstractNativeEventFilter, QTimer
 
 from core.config_manager import ConfigManager
+from core.exception_logging import log_exception
 
 
 _MODIFIER_FLAGS = {
@@ -177,42 +178,44 @@ class GlobalVoiceHotkey(QAbstractNativeEventFilter):
 
     def nativeEventFilter(self, event_type, message):
         """WM_HOTKEY만 처리한다."""
-        native_type = (
-            event_type.encode("ascii", "ignore")
-            if isinstance(event_type, str)
-            else bytes(event_type)
-        )
-        if self._registered_id is None or native_type not in (
-            b"windows_generic_MSG",
-            b"windows_dispatcher_MSG",
-        ):
-            return False, 0
         try:
+            native_type = (
+                event_type.encode("ascii", "ignore")
+                if isinstance(event_type, str)
+                else bytes(event_type)
+            )
+            if self._registered_id is None or native_type not in (
+                b"windows_generic_MSG",
+                b"windows_dispatcher_MSG",
+            ):
+                return False, 0
             native_message = ctypes.cast(
                 int(message), ctypes.POINTER(wintypes.MSG)
             ).contents
-        except (TypeError, ValueError):
-            return False, 0
-        if (
-            native_message.message != _WM_HOTKEY
-            or native_message.wParam != self._registered_id
-        ):
-            return False, 0
+            if (
+                native_message.message != _WM_HOTKEY
+                or native_message.wParam != self._registered_id
+            ):
+                return False, 0
 
-        try:
-            from VoiceCommand import is_tts_playing, stop_speaking
-            if is_tts_playing():
-                stop_speaking()
-        except (ImportError, AttributeError, RuntimeError) as exc:
-            logging.debug("TTS 중단 처리 생략: %s", exc)
+            try:
+                from VoiceCommand import is_tts_playing, stop_speaking
+                if is_tts_playing():
+                    stop_speaking()
+            except (ImportError, AttributeError, RuntimeError) as exc:
+                logging.debug("TTS 중단 처리 생략: %s", exc)
 
-        if self._mode == "push_to_talk":
-            self._holding = self.voice_thread.request_listening(push_to_talk=True)
-            if self._holding:
-                self._timer.start()
-        else:
-            self.voice_thread.request_listening()
-        return True, 0
+            if self._mode == "push_to_talk":
+                self._holding = self.voice_thread.request_listening(push_to_talk=True)
+                if self._holding:
+                    self._timer.start()
+            else:
+                self.voice_thread.request_listening()
+            return True, 0
+        except Exception:
+            # 네이티브 이벤트 콜백에서 예외가 새면 앱이 종료될 수 있다.
+            log_exception("전역 단축키 네이티브 이벤트 처리 실패")
+            return False, 0
 
     def _check_key_release(self) -> None:
         if not self._holding or self._registered_key is None:

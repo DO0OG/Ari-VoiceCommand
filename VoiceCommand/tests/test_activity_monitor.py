@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from agent.llm_provider import LLMProvider
 from core.activity_monitor import ActivityMonitor, get_activity_context
+from core.exception_logging import get_error_count
 from core.settings_schema import DEFAULT_SETTINGS
 from core.VoiceCommand import (
     is_session_lock_blocked,
@@ -103,6 +104,40 @@ class ActivityMonitorTests(unittest.TestCase):
         quiet.assert_not_called()
         self.assertEqual(self.api.idle_calls, 0)
         self.assertEqual(self.api.quiet_calls, 0)
+
+    def test_start_failure_removes_partial_windows_registration(self):
+        app = Mock()
+        self.api.register_session_notifications = Mock(return_value=True)
+        self.api.unregister_session_notifications = Mock()
+        self.api.install_foreground_hook = Mock(
+            side_effect=RuntimeError("hook registration failed")
+        )
+
+        with (
+            patch("core.activity_monitor.sys.platform", "win32"),
+            patch("core.activity_monitor.QCoreApplication.instance", return_value=app),
+            patch("core.activity_monitor.QWidget") as window_type,
+        ):
+            window_type.return_value.winId.return_value = 123
+            with self.assertRaisesRegex(RuntimeError, "hook registration failed"):
+                self.monitor.start()
+
+        app.installNativeEventFilter.assert_called_once()
+        app.removeNativeEventFilter.assert_called_once()
+        self.api.unregister_session_notifications.assert_called_once_with(123)
+        self.assertFalse(self.monitor._started)
+
+    def test_timer_callback_logs_and_counts_exceptions(self):
+        error_count = get_error_count()
+        self.monitor._settings_provider = Mock(
+            side_effect=RuntimeError("settings unavailable")
+        )
+
+        with patch("core.exception_logging.logging.exception") as log_exception:
+            self.monitor._check_idle()
+
+        log_exception.assert_called_once()
+        self.assertEqual(get_error_count(), error_count + 1)
 
     def test_lock_events_are_edge_triggered(self):
         locked = Mock()

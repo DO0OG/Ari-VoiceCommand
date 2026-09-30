@@ -47,6 +47,22 @@ class GlobalHotkeyTests(unittest.TestCase):
         self.assertEqual(result, (True, 0))
         voice_thread.request_listening.assert_called_once_with()
 
+    def test_native_event_filter_catches_attribute_errors(self):
+        hotkey = GlobalVoiceHotkey(Mock(), api=Mock(), platform="win32")
+        hotkey._registered_id = 0xA191
+
+        with (
+            patch(
+                "ui.global_hotkey.ctypes.cast",
+                side_effect=AttributeError("invalid native message"),
+            ),
+            patch("ui.global_hotkey.log_exception") as log_exception,
+        ):
+            result = hotkey.nativeEventFilter(b"windows_dispatcher_MSG", 1)
+
+        self.assertEqual(result, (False, 0))
+        log_exception.assert_called_once()
+
     def test_native_event_stops_playback_before_starting_listening(self):
         calls = []
         voice_thread = Mock()

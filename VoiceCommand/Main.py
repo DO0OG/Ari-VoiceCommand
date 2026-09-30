@@ -3,6 +3,7 @@
 # ruff: noqa: E402
 
 import importlib
+import json
 import sys
 from core._whisper_worker import dispatch_worker_command
 
@@ -26,6 +27,7 @@ if _worker_exit_code is not None:
 import os
 import logging
 import faulthandler
+import time
 from datetime import datetime
 import warnings
 
@@ -82,6 +84,11 @@ from PySide6.QtCore import QEventLoop, QThread, Qt, QTimer
 from assistant.ai_assistant import get_ai_assistant
 from core.activity_monitor import ActivityMonitor
 from core.config_manager import ConfigManager
+from core.exception_logging import (
+    get_error_count,
+    install_exception_hooks,
+    log_exception,
+)
 from core.VoiceCommand import (
     _state,
     disable_game_mode,
@@ -360,17 +367,48 @@ def main():
     activity_monitor = None
     speech_scheduler = None
     mood_state = None
+    app = None
+    exit_code = 1
+    cleanup_failed = False
 
     def _show_character():
         if character is not None:
             character.show()
             character.raise_()
 
+    def _cleanup(label, callback):
+        nonlocal cleanup_failed, exit_code
+        try:
+            callback()
+        except Exception:
+            # 한 단계의 종료 오류가 원래 오류와 나머지 정리를 덮지 않게 한다.
+            log_exception("앱 정리 실패: %s", label)
+            cleanup_failed = True
+            exit_code = 1
+
     if not ensure_single_instance(sys.argv):
-        return
+        return 0
+
+    smoke_seconds_env = os.environ.get("ARI_SMOKE_SECONDS")
+    smoke_report_path = os.environ.get("ARI_SMOKE_REPORT")
+    smoke_enabled = smoke_seconds_env is not None and smoke_report_path is not None
+    smoke_seconds = None
+    smoke_heartbeat_timer = None
+    smoke_started_at = None
+    heartbeat_count = 0
+    gui_ready = False
+
+    def _record_smoke_heartbeat():
+        nonlocal heartbeat_count
+        heartbeat_count += 1
 
     try:
         setup_logging()
+        install_exception_hooks()
+        if smoke_enabled:
+            smoke_seconds = int(smoke_seconds_env)
+            if smoke_seconds < 1 or not smoke_report_path:
+                raise ValueError("스모크 실행 시간과 보고서 경로를 확인하세요.")
         record_last_run_version()
         icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
@@ -784,49 +822,82 @@ def main():
         elif plugin_manager is not None:
             logging.info("플러그인 핫 리로드 꺼짐")
 
+        if smoke_enabled:
+            smoke_heartbeat_timer = QTimer(app)
+            smoke_heartbeat_timer.timeout.connect(_record_smoke_heartbeat)
+            smoke_heartbeat_timer.start(1000)
+            smoke_started_at = time.monotonic()
+            QTimer.singleShot(smoke_seconds * 1000, app.quit)
+        gui_ready = True
+
         # 메인 이벤트 루프 실행
         exit_code = app.exec()  # Qt 표준 이벤트 루프 사용
         logging.info("Application exited with code: %s", exit_code)
 
     except KeyboardInterrupt:
         logging.info("프로그램 종료")
-    except Exception as e:
-        logging.error("예외 발생: %s", e, exc_info=True)
+        exit_code = 0
+    except Exception:
+        log_exception("예외 발생")
+        exit_code = 1
     finally:
         logging.info("=== 앱 종료 시작 ===")
+        if smoke_heartbeat_timer is not None:
+            _cleanup("스모크 타이머", smoke_heartbeat_timer.stop)
         if update_checker:
-            update_checker.stop()
+            _cleanup("업데이트 확인기", update_checker.stop)
         if activity_monitor:
-            activity_monitor.stop()
+            _cleanup("활동 감지", activity_monitor.stop)
         if speech_scheduler is not None:
-            try:
+            def _clear_speech_scheduler():
                 from agent.speech_scheduler import set_speech_scheduler
 
                 set_speech_scheduler(None)
-            except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-                logging.debug("발화 스케줄러 정리를 건너뜁니다: %s", exc)
-        flush_runtime_state()
+            _cleanup("발화 스케줄러", _clear_speech_scheduler)
+        _cleanup("런타임 상태", flush_runtime_state)
         if hotkey_filter:
-            try:
-                hotkey_filter.cleanup()
-            except (AttributeError, OSError, RuntimeError) as exc:
-                logging.warning("전역 단축키 정리 실패: %s", exc)
+            _cleanup("전역 단축키", hotkey_filter.cleanup)
         if text_interface:
-            text_interface.cleanup()
+            _cleanup("텍스트 인터페이스", text_interface.cleanup)
         if character:
-            character.cleanup()
-            character.close()
+            _cleanup("캐릭터 정리", character.cleanup)
+            _cleanup("캐릭터 창 닫기", character.close)
         if ari_core:
-            ari_core.cleanup()
+            _cleanup("AriCore", ari_core.cleanup)
         if plugin_flush_timer:
-            plugin_flush_timer.stop()
+            _cleanup("플러그인 타이머", plugin_flush_timer.stop)
         if plugin_watcher:
-            plugin_watcher.stop()
+            _cleanup("플러그인 감시", plugin_watcher.stop)
         if telegram_bridge:
-            telegram_bridge.stop()
+            _cleanup("Telegram 브리지", telegram_bridge.stop)
         if mcp_server_thread:
             logging.debug("MCP 서버 스레드는 데몬으로 종료됩니다.")
         logging.info("=== 앱 종료 완료 ===")
+
+    if smoke_enabled:
+        observed_seconds = (
+            round(max(0.0, time.monotonic() - smoke_started_at), 3)
+            if smoke_started_at is not None
+            else 0.0
+        )
+        smoke_report = {
+            "pid": os.getpid(),
+            "gui_ready": gui_ready,
+            "heartbeat_count": heartbeat_count,
+            "observed_seconds": observed_seconds,
+            "clean_exit": gui_ready and exit_code == 0 and not cleanup_failed,
+            "error_count": get_error_count(),
+        }
+        try:
+            report_dir = os.path.dirname(os.path.abspath(smoke_report_path))
+            os.makedirs(report_dir, exist_ok=True)
+            with open(smoke_report_path, "w", encoding="utf-8") as report_file:
+                json.dump(smoke_report, report_file, ensure_ascii=False)
+        except OSError:
+            log_exception("스모크 보고서 저장 실패")
+            exit_code = 1
+
+    return exit_code
 
 if __name__ == "__main__":
     # 릴리스 워크플로는 묶음 결정 모델의 로드를 확인하려고 패키징된 실행 파일을 이 플래그와 함께 실행한다.
@@ -835,4 +906,4 @@ if __name__ == "__main__":
         from agent.decision.self_test import run_self_test
 
         sys.exit(run_self_test(sys.argv[2]))
-    main()
+    sys.exit(main())
