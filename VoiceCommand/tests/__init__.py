@@ -1,6 +1,7 @@
 """Ari regression tests."""
 
 import atexit
+import importlib
 import os
 import shutil
 import tempfile
@@ -16,3 +17,9 @@ atexit.register(shutil.rmtree, _RUNTIME_DIR, ignore_errors=True)
 
 # 테스트가 실제 임베딩 모델(약 130MB)을 내려받지 않도록 Hugging Face를 오프라인으로 둔다.
 os.environ["HF_HUB_OFFLINE"] = "1"
+
+# Main.py처럼 Qt보다 onnxruntime을 먼저 불러 DLL 초기화 실패를 피한다.
+try:
+    importlib.import_module("onnxruntime")
+except ImportError:
+    pass
