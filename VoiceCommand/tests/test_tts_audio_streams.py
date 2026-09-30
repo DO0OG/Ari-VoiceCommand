@@ -61,15 +61,13 @@ class TTSStreamWrapperTests(unittest.TestCase):
         provider = ElevenLabsTTS(api_key="test-key")
         response = MagicMock()
         response.__enter__.return_value = response
-        response.iter_content.return_value = [b"mp3"]
+        response.headers = {"Content-Type": "audio/pcm"}
+        response.iter_content.return_value = [b"\x00\x00"]
         session = Mock()
         session.post.return_value = response
         provider._get_session = lambda: session
 
-        with (
-            patch.object(mp3_decoder, "decode_mp3_to_pcm", return_value=b"pcm"),
-            patch("audio.audio_manager.get_output_device_index", return_value=None),
-        ):
+        with patch("audio.audio_manager.get_output_device_index", return_value=None):
             self._assert_wrappers_close_after_write_failure(
                 lambda: provider.speak("hello")
             )

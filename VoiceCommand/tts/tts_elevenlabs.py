@@ -4,7 +4,6 @@ Fish Audio / CosyVoice3와 동일한 인터페이스: speak() / playback_finishe
 """
 import logging
 import threading
-import tempfile
 import time
 from pathlib import Path
 
@@ -13,10 +12,10 @@ from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
-from tts.pcm_playback import write_pcm_chunks
+from tts.pcm_playback import play_pcm_stream, response_pcm_chunks
 
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
-_SAMPLE_RATE = 22050
+_SAMPLE_RATE = 24000
 _API_URL = "https://api.elevenlabs.io"
 _LIST_TIMEOUT = (10, 30)
 _UPLOAD_TIMEOUT = (10, 60)
@@ -162,6 +161,7 @@ class ElevenLabsTTS(QObject):
         self._session = None
         self._state_lock = threading.Lock()
         self._active_stop_event = None
+        self._active_response = None
 
         logging.info("ElevenLabs TTS 초기화 완료 (voice_id=%s)", self.voice_id)
 
@@ -199,6 +199,94 @@ class ElevenLabsTTS(QObject):
             payload["voice_settings"] = self._voice_settings(emotion)
         return payload
 
+    def _close_response(self, response):
+        try:
+            response.close()
+        finally:
+            with self._state_lock:
+                if self._active_response is response:
+                    self._active_response = None
+
+    def _close_active_response(self):
+        with self._state_lock:
+            response = self._active_response
+        if response is not None:
+            try:
+                self._close_response(response)
+            except Exception as exc:
+                logging.debug("ElevenLabs response close failed: %s", exc)
+
+    def _finish_playback(self, stop_event):
+        with self._state_lock:
+            if self._active_stop_event is not stop_event:
+                return
+            self._active_stop_event = None
+            self.is_playing = False
+        self.playback_finished.emit()
+
+    def _complete_response(self, response, stop_event):
+        self._close_response(response)
+        self._finish_playback(stop_event)
+
+    def _play_response(self, response, stop_event, started_at):
+        from audio.audio_manager import get_output_device_index
+
+        chunks = response_pcm_chunks(response, "ElevenLabs", 1024)
+        bytes_received = 0
+        first_chunk_at = None
+
+        def pcm_chunks():
+            nonlocal bytes_received, first_chunk_at
+            for chunk in chunks:
+                if stop_event.is_set():
+                    return
+                if not chunk:
+                    continue
+                if first_chunk_at is None:
+                    first_chunk_at = time.time()
+                    logging.info(
+                        "[TTS] ElevenLabs 첫 청크: %.2fs",
+                        first_chunk_at - started_at,
+                    )
+                bytes_received += len(chunk)
+                yield chunk
+
+        def open_stream():
+            with get_audio_output_lock():
+                return GlobalAudio.open_stream(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=_SAMPLE_RATE,
+                    output=True,
+                    output_device_index=get_output_device_index(),
+                )
+
+        def close_stream(stream):
+            with get_audio_output_lock():
+                GlobalAudio.close_stream(stream)
+
+        def on_complete(_success):
+            self._complete_response(response, stop_event)
+
+        success = play_pcm_stream(
+            open_stream,
+            close_stream,
+            pcm_chunks(),
+            stop_event,
+            _SAMPLE_RATE,
+            on_start=lambda: logging.info("[TTS] ElevenLabs 재생 시작"),
+            on_complete=on_complete,
+        )
+        if not success or stop_event.is_set():
+            return False
+        logging.info(
+            "[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes (%.2fs PCM)",
+            time.time() - started_at,
+            f"{bytes_received:,}",
+            bytes_received / (_SAMPLE_RATE * 2),
+        )
+        return True
+
     def speak(
         self,
         text: str,
@@ -207,7 +295,6 @@ class ElevenLabsTTS(QObject):
     ) -> bool:
         if not text:
             return False
-
         session = self._get_session()
         if session is None:
             return False
@@ -216,93 +303,49 @@ class ElevenLabsTTS(QObject):
         with self._state_lock:
             self._active_stop_event = stop_event
             self.is_playing = True
-
+        response = None
         try:
-            t0 = time.time()
+            started_at = time.time()
             if stop_event.is_set():
                 return False
-
-            url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
-            headers = {
-                "xi-api-key": self.api_key,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            }
-            payload = self._speech_payload(text, emotion)
-
-            bytes_received = 0
-            first_chunk_at = None
-            with tempfile.SpooledTemporaryFile(max_size=2 * 1024 * 1024) as audio_buffer:
-                with session.post(
-                    url, json=payload, headers=headers, timeout=30, stream=True
-                ) as resp:
-                    resp.raise_for_status()
-                    for chunk in resp.iter_content(chunk_size=65536):
-                        if stop_event.is_set():
-                            return False
-                        if not chunk:
-                            continue
-                        if first_chunk_at is None:
-                            first_chunk_at = time.time()
-                        bytes_received += len(chunk)
-                        audio_buffer.write(chunk)
-                if stop_event.is_set():
-                    return False
-                audio_buffer.seek(0)
-
-                if first_chunk_at is not None:
-                    logging.info(
-                        "[TTS] ElevenLabs 첫 청크: %.2fs", first_chunk_at - t0
-                    )
-                logging.info(
-                    "[TTS] ElevenLabs 수신 완료: %.2fs, %s bytes",
-                    time.time() - t0,
-                    f"{bytes_received:,}",
-                )
-
-                # Decode MP3 to PCM with bundled PyAV codecs.
-                from audio.mp3_decoder import decode_mp3_to_pcm
-                pcm = decode_mp3_to_pcm(audio_buffer.read(), _SAMPLE_RATE)
-
-            from audio.audio_manager import get_output_device_index
-            if stop_event.is_set():
-                return False
-            stream = GlobalAudio.open_stream(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=_SAMPLE_RATE,
-                output=True,
-                output_device_index=get_output_device_index(),
+            url = f"{_API_URL}/v1/text-to-speech/{self.voice_id}/stream"
+            response = session.post(
+                url,
+                params={"output_format": "pcm_24000"},
+                json=self._speech_payload(text, emotion),
+                headers={
+                    "xi-api-key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+                stream=True,
             )
-            try:
-                success = write_pcm_chunks(stream, pcm, stop_event, _SAMPLE_RATE)
-            finally:
-                with get_audio_output_lock():
-                    GlobalAudio.close_stream(stream)
-
-            if not success:
-                return False
-            logging.info("[TTS] ElevenLabs 전체 완료: %.2fs", time.time() - t0)
-            return True
-
+            with self._state_lock:
+                self._active_response = response
+            response.raise_for_status()
+            return self._play_response(response, stop_event, started_at)
         except Exception as exc:
             detail = _redact_secret(str(exc), self.api_key)
             logging.error("ElevenLabs TTS speak 오류: %s", detail)
             return False
         finally:
-            with self._state_lock:
-                if self._active_stop_event is stop_event:
-                    self._active_stop_event = None
-                    self.is_playing = False
-            self.playback_finished.emit()
+            try:
+                if response is not None:
+                    self._close_response(response)
+            except Exception as exc:
+                logging.debug("ElevenLabs response cleanup failed: %s", exc)
+            self._finish_playback(stop_event)
 
     def stop(self) -> None:
         with self._state_lock:
             stop_event = self._active_stop_event
         if stop_event is not None:
             stop_event.set()
+        # 읽는 중인 응답을 닫으면 읽기 타임아웃까지 막힐 수 있어 호출 스레드를 붙잡지 않는다.
+        threading.Thread(target=self._close_active_response, daemon=True).start()
 
     def cleanup(self):
+        self.stop()
         try:
             if self._session is not None:
                 self._session.close()
