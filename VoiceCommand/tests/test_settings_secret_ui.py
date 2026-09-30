@@ -1,11 +1,24 @@
+import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication
 
 from ui.settings_dialog import SettingsDialog
 
 
 class SettingsSecretUITests(unittest.TestCase):
+    def test_real_dialog_builds_every_tab(self):
+        self._app = QApplication.instance() or QApplication([])
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+        self.assertIsNotNone(dialog.audio_diagnostic_panel)
+        dialog.reject()
+
     def test_page_credentials_use_config_gateway_and_failed_save_stays_open(self):
         field = Mock()
         field.text.return_value = "1.0"
