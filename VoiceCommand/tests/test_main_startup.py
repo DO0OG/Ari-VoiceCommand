@@ -14,22 +14,33 @@ from core.config_manager import ConfigManager
 
 
 MAIN_PATH = Path(__file__).resolve().parents[1] / "Main.py"
+MAIN_HELPERS = {
+    "_setup_application",
+    "_setup_scheduler_activity",
+    "_write_smoke_report",
+}
 
 
 def _load_main_function(function_name, namespace):
     tree = ast.parse(MAIN_PATH.read_text(encoding="utf-8"))
-    function = next(
+    functions = [
         node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == function_name
-    )
-    # Main.py는 가져오기만 해도 앱 초기화가 일어나므로, 대상 함수만 컴파일해 격리된 전역으로 만든다.
-    module = ast.Module(body=[function], type_ignores=[])
+        if isinstance(node, ast.FunctionDef)
+        and (
+            node.name == function_name
+            or (function_name == "main" and node.name in MAIN_HELPERS)
+        )
+    ]
+    # Main.py는 가져오기만 해도 앱 초기화가 일어나므로 대상과 시작 헬퍼만 격리 컴파일한다.
+    module = ast.Module(body=functions, type_ignores=[])
     module_code = compile(module, str(MAIN_PATH), "exec")
-    function_code = next(
-        const for const in module_code.co_consts
-        if isinstance(const, types.CodeType) and const.co_name == function_name
-    )
-    return types.FunctionType(function_code, namespace, function_name)
+    isolated_namespace = dict(namespace)
+    for const in module_code.co_consts:
+        if isinstance(const, types.CodeType):
+            isolated_namespace[const.co_name] = types.FunctionType(
+                const, isolated_namespace, const.co_name
+            )
+    return isolated_namespace[function_name]
 
 
 class _Signal:

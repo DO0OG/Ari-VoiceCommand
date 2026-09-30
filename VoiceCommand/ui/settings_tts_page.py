@@ -93,6 +93,18 @@ class _TTSSettingsPage(QWidget):
         self.local_install_section.detection_finished.connect(self._on_local_install_detected)
         vbox.addWidget(self.local_install_section)
 
+        tts_group = self._build_tts_group()
+        vbox.addWidget(tts_group)
+        vbox.addStretch()
+
+        scroll.setWidget(container)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+
+        self._on_tts_changed()
+
+    def _build_tts_group(self):
         # TTS 설정 그룹
         tts_group = QGroupBox(_("음성 합성 (TTS) 설정"))
         tts_vbox = QVBoxLayout(tts_group)
@@ -113,6 +125,17 @@ class _TTSSettingsPage(QWidget):
         )
         tts_vbox.addWidget(self.tts_emotion_checkbox)
 
+        self._build_general_group(tts_vbox)
+        self._build_voice_cloning_group(tts_vbox)
+        self._build_fish_group(tts_vbox)
+        self._build_cosyvoice_group(tts_vbox)
+        self._build_openai_compat_group(tts_vbox)
+        self._build_openai_tts_group(tts_vbox)
+        self._build_elevenlabs_group(tts_vbox)
+        self._build_edge_group(tts_vbox)
+        return tts_group
+
+    def _build_general_group(self, tts_vbox):
         general_grp = QGroupBox(_("공통 TTS 설정"))
         general_layout = QVBoxLayout(general_grp)
         general_layout.addWidget(QLabel(_("재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):")))
@@ -120,6 +143,7 @@ class _TTSSettingsPage(QWidget):
         general_layout.addWidget(self.tts_volume_input)
         tts_vbox.addWidget(general_grp)
 
+    def _build_voice_cloning_group(self, tts_vbox):
         self._voice_cloning_group = QGroupBox(_("보이스 클로닝"))
         cloning_layout = QVBoxLayout(self._voice_cloning_group)
         cloning_layout.addWidget(QLabel(_("참조 WAV 파일 (비워두면 기본 reference.wav 사용):")))
@@ -141,6 +165,7 @@ class _TTSSettingsPage(QWidget):
         cloning_layout.addWidget(self.cosyvoice_ref_text)
         tts_vbox.addWidget(self._voice_cloning_group)
 
+    def _build_fish_group(self, tts_vbox):
         # Fish Audio 설정
         fish_grp = QGroupBox(_("Fish Audio 설정"))
         fl = QVBoxLayout(fish_grp)
@@ -162,6 +187,7 @@ class _TTSSettingsPage(QWidget):
         tts_vbox.addWidget(fish_grp)
         self._tts_groups["fish"] = fish_grp
 
+    def _build_cosyvoice_group(self, tts_vbox):
         # CosyVoice3 설정
         cv_grp = QGroupBox(_("CosyVoice3 설정 (로컬 GPU)"))
         cvl = QVBoxLayout(cv_grp)
@@ -189,6 +215,7 @@ class _TTSSettingsPage(QWidget):
         tts_vbox.addWidget(cv_grp)
         self._tts_groups["local"] = cv_grp
 
+    def _build_openai_compat_group(self, tts_vbox):
         compat_grp = QGroupBox(_("OpenAI 호환 TTS 설정"))
         compat_layout = QVBoxLayout(compat_grp)
         compat_layout.addWidget(QLabel(_("서버 URL (예: http://127.0.0.1:8880/v1):")))
@@ -236,6 +263,7 @@ class _TTSSettingsPage(QWidget):
         tts_vbox.addWidget(compat_grp)
         self._tts_groups["openai_compat_tts"] = compat_grp
 
+    def _build_openai_tts_group(self, tts_vbox):
         # OpenAI TTS 설정
         oai_grp = QGroupBox(_("OpenAI TTS 설정"))
         oail = QVBoxLayout(oai_grp)
@@ -266,6 +294,7 @@ class _TTSSettingsPage(QWidget):
         tts_vbox.addWidget(oai_grp)
         self._tts_groups["openai_tts"] = oai_grp
 
+    def _build_elevenlabs_group(self, tts_vbox):
         # ElevenLabs 설정
         el_grp = QGroupBox(_("ElevenLabs 설정"))
         ell = QVBoxLayout(el_grp)
@@ -302,6 +331,7 @@ class _TTSSettingsPage(QWidget):
         tts_vbox.addWidget(el_grp)
         self._tts_groups["elevenlabs"] = el_grp
 
+    def _build_edge_group(self, tts_vbox):
         # Edge TTS 설정
         edge_grp = QGroupBox(_("Edge TTS 설정 (무료)"))
         edgel = QVBoxLayout(edge_grp)
@@ -320,16 +350,6 @@ class _TTSSettingsPage(QWidget):
         edgel.addWidget(self.edge_rate_input)
         tts_vbox.addWidget(edge_grp)
         self._tts_groups["edge"] = edge_grp
-
-        vbox.addWidget(tts_group)
-        vbox.addStretch()
-
-        scroll.setWidget(container)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(scroll)
-
-        self._on_tts_changed()
 
     def _browse_reference_wav(self):
         selection = QFileDialog.getOpenFileName(

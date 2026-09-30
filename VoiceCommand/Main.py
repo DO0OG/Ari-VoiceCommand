@@ -353,6 +353,91 @@ def flush_runtime_state() -> None:
     except Exception as exc:
         logging.debug("ConversationHistory flush 생략: %s", exc)
 
+
+def _setup_application():
+    # 리소스 추출
+    from core.resource_manager import ResourceManager, is_bundled
+    logging.info("리소스 추출 확인 중...")
+    ResourceManager.extract_resources()
+
+    # 기분 상태는 선택 기능이므로 저장소 초기화에 실패해도 앱을 시작한다.
+    mood_state = None
+    try:
+        from core.mood_state import initialize_mood_state
+
+        mood_state = initialize_mood_state()
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        logging.warning("기분 상태를 초기화하지 못했습니다: %s", exc)
+
+    if sys.platform == "win32" and not is_bundled():
+        # 소스 실행 시 작업 표시줄이 python.exe 아이콘으로 묶이지 않도록 앱 ID를 따로 둔다.
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DO0OG.Ari")
+    return mood_state
+
+
+def _setup_scheduler_activity(scheduler, activity_monitor):
+    if scheduler is not None:
+        if activity_monitor is not None:
+            scheduler.set_activity_state(
+                locked=activity_monitor.session_is_locked,
+                away=activity_monitor.is_user_away,
+                quiet=activity_monitor.quiet_reason != "none",
+            )
+            activity_monitor.session_locked.connect(
+                lambda: scheduler.set_activity_state(locked=True)
+            )
+            activity_monitor.session_unlocked.connect(
+                lambda: scheduler.set_activity_state(locked=False)
+            )
+            activity_monitor.user_away.connect(
+                lambda _seconds: scheduler.set_activity_state(away=True)
+            )
+            activity_monitor.user_returned.connect(
+                lambda _seconds: scheduler.set_activity_state(away=False)
+            )
+            activity_monitor.quiet_state_changed.connect(
+                lambda reason: scheduler.set_activity_state(quiet=reason != "none")
+            )
+        try:
+            register_background_learning_tasks(scheduler)
+        except Exception as exc:
+            logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
+
+
+def _write_smoke_report(
+    smoke_report_path,
+    gui_ready,
+    heartbeat_count,
+    smoke_started_at,
+    exit_code,
+    cleanup_failed,
+):
+    observed_seconds = (
+        round(max(0.0, time.monotonic() - smoke_started_at), 3)
+        if smoke_started_at is not None
+        else 0.0
+    )
+    smoke_report = {
+        "pid": os.getpid(),
+        "gui_ready": gui_ready,
+        "heartbeat_count": heartbeat_count,
+        "observed_seconds": observed_seconds,
+        "clean_exit": gui_ready and exit_code == 0 and not cleanup_failed,
+        "error_count": get_error_count(),
+    }
+    try:
+        report_dir = os.path.dirname(os.path.abspath(smoke_report_path))
+        os.makedirs(report_dir, exist_ok=True)
+        with open(smoke_report_path, "w", encoding="utf-8") as report_file:
+            json.dump(smoke_report, report_file, ensure_ascii=False)
+    except OSError:
+        log_exception("스모크 보고서 저장 실패")
+        exit_code = 1
+
+    return exit_code
+
+
 def main():
     global ai_assistant, icon_path
     ari_core = None
@@ -416,24 +501,7 @@ def main():
         icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
 
-        # 리소스 추출
-        from core.resource_manager import ResourceManager, is_bundled
-        logging.info("리소스 추출 확인 중...")
-        ResourceManager.extract_resources()
-
-        # 기분 상태는 선택 기능이므로 저장소 초기화에 실패해도 앱을 시작한다.
-        mood_state = None
-        try:
-            from core.mood_state import initialize_mood_state
-
-            mood_state = initialize_mood_state()
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-            logging.warning("기분 상태를 초기화하지 못했습니다: %s", exc)
-
-        if sys.platform == "win32" and not is_bundled():
-            # 소스 실행 시 작업 표시줄이 python.exe 아이콘으로 묶이지 않도록 앱 ID를 따로 둔다.
-            import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DO0OG.Ari")
+        mood_state = _setup_application()
         app = QApplication(sys.argv)
         auto_game_mode_applied = False
 
@@ -614,33 +682,7 @@ def main():
         except Exception as exc:
             logging.warning("발화 스케줄러 초기화 실패; 발화 기능을 사용할 수 없습니다: %s", exc)
 
-        if scheduler is not None:
-            if activity_monitor is not None:
-                scheduler.set_activity_state(
-                    locked=activity_monitor.session_is_locked,
-                    away=activity_monitor.is_user_away,
-                    quiet=activity_monitor.quiet_reason != "none",
-                )
-                activity_monitor.session_locked.connect(
-                    lambda: scheduler.set_activity_state(locked=True)
-                )
-                activity_monitor.session_unlocked.connect(
-                    lambda: scheduler.set_activity_state(locked=False)
-                )
-                activity_monitor.user_away.connect(
-                    lambda _seconds: scheduler.set_activity_state(away=True)
-                )
-                activity_monitor.user_returned.connect(
-                    lambda _seconds: scheduler.set_activity_state(away=False)
-                )
-                activity_monitor.quiet_state_changed.connect(
-                    lambda reason: scheduler.set_activity_state(quiet=reason != "none")
-                )
-            try:
-                register_background_learning_tasks(scheduler)
-            except Exception as exc:
-                logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
-
+        _setup_scheduler_activity(scheduler, activity_monitor)
         # 놓친 예약 작업 보충 실행 — TTS/오디오 초기화 완료 후 실행
         if scheduler is not None:
             try:
@@ -878,28 +920,14 @@ def main():
         logging.info("=== 앱 종료 완료 ===")
 
     if smoke_enabled:
-        observed_seconds = (
-            round(max(0.0, time.monotonic() - smoke_started_at), 3)
-            if smoke_started_at is not None
-            else 0.0
+        exit_code = _write_smoke_report(
+            smoke_report_path,
+            gui_ready,
+            heartbeat_count,
+            smoke_started_at,
+            exit_code,
+            cleanup_failed,
         )
-        smoke_report = {
-            "pid": os.getpid(),
-            "gui_ready": gui_ready,
-            "heartbeat_count": heartbeat_count,
-            "observed_seconds": observed_seconds,
-            "clean_exit": gui_ready and exit_code == 0 and not cleanup_failed,
-            "error_count": get_error_count(),
-        }
-        try:
-            report_dir = os.path.dirname(os.path.abspath(smoke_report_path))
-            os.makedirs(report_dir, exist_ok=True)
-            with open(smoke_report_path, "w", encoding="utf-8") as report_file:
-                json.dump(smoke_report, report_file, ensure_ascii=False)
-        except OSError:
-            log_exception("스모크 보고서 저장 실패")
-            exit_code = 1
-
     return exit_code
 
 if __name__ == "__main__":
