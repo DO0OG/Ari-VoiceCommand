@@ -50,6 +50,9 @@ msgstr "I've taken care of that."
 msgid "앱을 실행했습니다."
 msgstr "I launched the app."
 
+msgid "기본 브라우저로 웹사이트를 열었습니다: {url}"
+msgstr "Opened the website in the default browser: {url}"
+
 msgid "앱을 종료했습니다."
 msgstr "I closed the app."
 

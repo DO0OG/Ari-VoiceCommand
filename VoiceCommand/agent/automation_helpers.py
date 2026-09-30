@@ -33,6 +33,7 @@ from agent.automation_plan_utils import (
     token_overlap_score,
     workflow_succeeded,
 )
+from agent.site_aliases import _SITE_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,11 @@ class _AutomationHelpersCore:
                 return target
             except OSError:
                 continue
+
+        site_name = " ".join(normalized.split()).casefold()
+        for alias, url in _SITE_ALIASES.items():
+            if site_name == " ".join(alias.split()).casefold():
+                return self.open_url(url)
 
         raise FileNotFoundError(f"실행 가능한 앱을 찾지 못했습니다: {target}")
 

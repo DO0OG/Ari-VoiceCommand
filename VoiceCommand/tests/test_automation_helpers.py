@@ -68,6 +68,33 @@ class AutomationHelpersTests(unittest.TestCase):
         self.assertEqual(launched, "vscode")
         self.assertEqual(captured, [r"C:\Resolved\Code.exe"])
 
+    def test_launch_app_opens_exact_site_alias_in_default_browser(self):
+        helper = AutomationHelpers()
+        expected_url = "https://www.naver.com"
+        with (
+            patch("agent.automation_helpers.os.path.exists", return_value=False),
+            patch.object(helper, "_resolve_executable_target", return_value=""),
+            patch.object(helper, "_shell_open", side_effect=OSError("not an app")),
+            patch.object(helper, "open_url", return_value=expected_url) as open_url,
+        ):
+            result = helper.launch_app("  네이버  ")
+
+        self.assertEqual(result, expected_url)
+        open_url.assert_called_once_with(expected_url)
+
+    def test_launch_app_does_not_match_partial_site_alias(self):
+        helper = AutomationHelpers()
+        with (
+            patch("agent.automation_helpers.os.path.exists", return_value=False),
+            patch.object(helper, "_resolve_executable_target", return_value=""),
+            patch.object(helper, "_shell_open", side_effect=OSError("not an app")),
+            patch.object(helper, "open_url") as open_url,
+        ):
+            with self.assertRaises(FileNotFoundError):
+                helper.launch_app("네이버 웨일")
+
+        open_url.assert_not_called()
+
     def test_window_target_history_persists(self):
         with tempfile.TemporaryDirectory() as tmp:
             history_path = os.path.join(tmp, "window_targets.json")
