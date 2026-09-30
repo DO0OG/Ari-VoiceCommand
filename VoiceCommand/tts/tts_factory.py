@@ -28,9 +28,6 @@ _TTS_SIGNATURE_KEYS = (
     "elevenlabs_api_key",
     "elevenlabs_voice_id",
     "elevenlabs_model_id",
-    "local_gsv_device",
-    "local_gsv_reference_language",
-    "local_gsv_emotion_refs",
     "edge_tts_voice",
     "edge_tts_rate",
     "tts_emotion_enabled",
@@ -66,16 +63,6 @@ def create_tts_provider(settings=None):
             return provider, "local"
         except Exception as e:
             logging.error(f"CosyVoice3 초기화 실패, Edge TTS로 fallback: {e}")
-            tts_mode = "edge"
-
-    if tts_mode == "local_gsv":
-        try:
-            from tts.tts_local_gsv import LocalGSVTTS
-            provider = LocalGSVTTS(settings=settings)
-            logging.info("GPT-SoVITS 로컬 TTS 초기화 완료")
-            return provider, "local_gsv"
-        except Exception as e:
-            logging.error("GPT-SoVITS 로컬 TTS 초기화 실패, Edge TTS로 fallback: %s", e)
             tts_mode = "edge"
 
     if tts_mode == "openai_compat_tts":

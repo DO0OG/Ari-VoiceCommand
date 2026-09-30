@@ -10,7 +10,7 @@ from tts.tts_factory import build_tts_signature, create_tts_provider
 
 class TTSFactoryTests(unittest.TestCase):
     def test_new_provider_settings_are_in_tts_signature(self):
-        base = {"tts_mode": "local_gsv"}
+        base = {"tts_mode": "openai_compat_tts"}
         for key, value in (
             ("cosyvoice_dir", "C:/CosyVoice"),
             ("tts_volume", 0.5),
@@ -23,9 +23,6 @@ class TTSFactoryTests(unittest.TestCase):
             ("openai_compat_tts_emotion_mode", "none"),
             ("openai_tts_custom_voice_id", "voice_custom"),
             ("elevenlabs_model_id", "eleven_v3"),
-            ("local_gsv_device", "dml"),
-            ("local_gsv_reference_language", "ja"),
-            ("local_gsv_emotion_refs", {"기쁨": {"wav": "happy.wav", "text": "hello"}}),
         ):
             with self.subTest(key=key):
                 self.assertNotEqual(
@@ -94,35 +91,6 @@ class TTSFactoryTests(unittest.TestCase):
         self.assertIs(provider, edge_provider)
         self.assertEqual(mode, "edge")
         audio.assert_not_called()
-
-    def test_local_gsv_provider_is_created(self):
-        provider = object()
-        module = SimpleNamespace(LocalGSVTTS=Mock(return_value=provider))
-        settings = {"tts_mode": "local_gsv", "local_gsv_device": "cpu"}
-
-        with patch.dict(sys.modules, {"tts.tts_local_gsv": module}):
-            result, mode = create_tts_provider(settings)
-
-        self.assertIs(result, provider)
-        self.assertEqual(mode, "local_gsv")
-        module.LocalGSVTTS.assert_called_once_with(settings=settings)
-
-    def test_local_gsv_initialization_failure_falls_back_to_edge(self):
-        module = SimpleNamespace(LocalGSVTTS=Mock(side_effect=RuntimeError("not installed")))
-        edge_provider = object()
-
-        class FakeEdgeTTS:
-            def __new__(cls, **kwargs):
-                return edge_provider
-
-        with (
-            patch.dict(sys.modules, {"tts.tts_local_gsv": module}),
-            patch.dict(sys.modules, {"tts.tts_edge": SimpleNamespace(EdgeTTS=FakeEdgeTTS)}),
-        ):
-            result, mode = create_tts_provider({"tts_mode": "local_gsv"})
-
-        self.assertIs(result, edge_provider)
-        self.assertEqual(mode, "edge")
 
     def test_openai_compat_provider_receives_shared_reference_and_language(self):
         provider = object()

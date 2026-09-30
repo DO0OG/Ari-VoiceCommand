@@ -3994,12 +3994,6 @@ msgstr "OpenAI 호환 TTS"
 msgid "OpenAI 호환 TTS 설정"
 msgstr "OpenAI 호환 TTS 설정"
 
-msgid "로컬 경량 (GPT-SoVITS)"
-msgstr "로컬 경량 (GPT-SoVITS)"
-
-msgid "로컬 경량 (GPT-SoVITS) 설정"
-msgstr "로컬 경량 (GPT-SoVITS) 설정"
-
 msgid "공통 TTS 설정"
 msgstr "공통 TTS 설정"
 
@@ -4015,12 +4009,6 @@ msgstr "참조 WAV 대본:"
 msgid "참조 WAV 선택"
 msgstr "참조 WAV 선택"
 
-msgid "참조 대본"
-msgstr "참조 대본"
-
-msgid "참조 대본 언어:"
-msgstr "참조 대본 언어:"
-
 msgid "참조 음성 복제"
 msgstr "참조 음성 복제"
 
@@ -4033,62 +4021,11 @@ msgstr "클로닝:"
 msgid "감정 지시문 사용"
 msgstr "감정 지시문 사용"
 
-msgid "한영일 모델을 처음 사용할 때 약 750MB를 내려받습니다."
-msgstr "한영일 모델을 처음 사용할 때 약 750MB를 내려받습니다."
-
-msgid "본인 또는 동의를 받은 목소리만 복제하세요."
-msgstr "본인 또는 동의를 받은 목소리만 복제하세요."
-
-msgid "장치:"
-msgstr "장치:"
-
 msgid "자동"
 msgstr "자동"
 
-msgid "CPU"
-msgstr "CPU"
-
-msgid "DirectML"
-msgstr "DirectML"
-
 msgid "한국어"
 msgstr "한국어"
-
-msgid "영어"
-msgstr "영어"
-
-msgid "일본어"
-msgstr "일본어"
-
-msgid "GPT-SoVITS / Genie 모델 라이선스: MIT"
-msgstr "GPT-SoVITS / Genie 모델 라이선스: MIT"
-
-msgid "모델 설치"
-msgstr "모델 설치"
-
-msgid "모델이 설치되어 있습니다."
-msgstr "모델이 설치되어 있습니다."
-
-msgid "모델이 설치되지 않았습니다."
-msgstr "모델이 설치되지 않았습니다."
-
-msgid "로컬 TTS 모델을 내려받는 중입니다."
-msgstr "로컬 TTS 모델을 내려받는 중입니다."
-
-msgid "모델 설치 실패"
-msgstr "모델 설치 실패"
-
-msgid "로컬 TTS 모델 설치가 완료되었습니다."
-msgstr "로컬 TTS 모델 설치가 완료되었습니다."
-
-msgid "로컬 TTS 모델 설치 실패: {error}"
-msgstr "로컬 TTS 모델 설치 실패: {error}"
-
-msgid "로컬 TTS 모델을 내려받는 중입니다. {downloaded} / {total} MB"
-msgstr "로컬 TTS 모델을 내려받는 중입니다. {downloaded} / {total} MB"
-
-msgid "GPT-SoVITS 모델 설치"
-msgstr "GPT-SoVITS 모델 설치"
 
 msgid "서버 URL (예: http://127.0.0.1:8880/v1):"
 msgstr "서버 URL (예: http://127.0.0.1:8880/v1):"
@@ -4098,12 +4035,6 @@ msgstr "비워두면 not-needed를 보냅니다."
 
 msgid "감정:"
 msgstr "감정:"
-
-msgid "감정"
-msgstr "감정"
-
-msgid "참조 WAV"
-msgstr "참조 WAV"
 
 msgid "음성:"
 msgstr "음성:"
@@ -4128,9 +4059,6 @@ msgstr "음성 복제 실패"
 
 msgid "참조 음성으로 내 음성 만들기"
 msgstr "참조 음성으로 내 음성 만들기"
-
-msgid "감정 참조 WAV 선택"
-msgstr "감정 참조 WAV 선택"
 
 msgid "WAV 파일 (*.wav)"
 msgstr "WAV 파일 (*.wav)"

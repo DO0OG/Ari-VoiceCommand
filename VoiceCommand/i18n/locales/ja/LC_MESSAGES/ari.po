@@ -3994,12 +3994,6 @@ msgstr "OpenAI互換TTS"
 msgid "OpenAI 호환 TTS 설정"
 msgstr "OpenAI互換TTSの設定"
 
-msgid "로컬 경량 (GPT-SoVITS)"
-msgstr "軽量ローカル (GPT-SoVITS)"
-
-msgid "로컬 경량 (GPT-SoVITS) 설정"
-msgstr "軽量ローカル (GPT-SoVITS)の設定"
-
 msgid "공통 TTS 설정"
 msgstr "共通TTS設定"
 
@@ -4015,12 +4009,6 @@ msgstr "参照WAVの台本："
 msgid "참조 WAV 선택"
 msgstr "参照WAVを選択"
 
-msgid "참조 대본"
-msgstr "参照台本"
-
-msgid "참조 대본 언어:"
-msgstr "参照台本の言語："
-
 msgid "참조 음성 복제"
 msgstr "参照音声を複製"
 
@@ -4033,62 +4021,11 @@ msgstr "クローン："
 msgid "감정 지시문 사용"
 msgstr "感情指示を使用"
 
-msgid "한영일 모델을 처음 사용할 때 약 750MB를 내려받습니다."
-msgstr "韓国語・英語・日本語モデルの初回利用時に約750MBをダウンロードします。"
-
-msgid "본인 또는 동의를 받은 목소리만 복제하세요."
-msgstr "本人の声、または本人の同意を得た声だけを複製してください。"
-
-msgid "장치:"
-msgstr "デバイス："
-
 msgid "자동"
 msgstr "自動"
 
-msgid "CPU"
-msgstr "CPU"
-
-msgid "DirectML"
-msgstr "DirectML"
-
 msgid "한국어"
 msgstr "韓国語"
-
-msgid "영어"
-msgstr "英語"
-
-msgid "일본어"
-msgstr "日本語"
-
-msgid "GPT-SoVITS / Genie 모델 라이선스: MIT"
-msgstr "GPT-SoVITS / Genie モデルライセンス：MIT"
-
-msgid "모델 설치"
-msgstr "モデルをインストール"
-
-msgid "모델이 설치되어 있습니다."
-msgstr "モデルはインストール済みです。"
-
-msgid "모델이 설치되지 않았습니다."
-msgstr "モデルはインストールされていません。"
-
-msgid "로컬 TTS 모델을 내려받는 중입니다."
-msgstr "ローカルTTSモデルをダウンロードしています。"
-
-msgid "모델 설치 실패"
-msgstr "モデルのインストールに失敗しました"
-
-msgid "로컬 TTS 모델 설치가 완료되었습니다."
-msgstr "ローカルTTSモデルのインストールが完了しました。"
-
-msgid "로컬 TTS 모델 설치 실패: {error}"
-msgstr "ローカルTTSモデルのインストールに失敗しました：{error}"
-
-msgid "로컬 TTS 모델을 내려받는 중입니다. {downloaded} / {total} MB"
-msgstr "ローカルTTSモデルをダウンロードしています：{downloaded} / {total} MB"
-
-msgid "GPT-SoVITS 모델 설치"
-msgstr "GPT-SoVITS モデルをインストール"
 
 msgid "서버 URL (예: http://127.0.0.1:8880/v1):"
 msgstr "サーバーURL（例：http://127.0.0.1:8880/v1）："
@@ -4098,12 +4035,6 @@ msgstr "空欄の場合は not-needed を送信します。"
 
 msgid "감정:"
 msgstr "感情："
-
-msgid "감정"
-msgstr "感情"
-
-msgid "참조 WAV"
-msgstr "参照 WAV"
 
 msgid "음성:"
 msgstr "音声："
@@ -4128,9 +4059,6 @@ msgstr "音声の複製に失敗しました"
 
 msgid "참조 음성으로 내 음성 만들기"
 msgstr "参照音声から自分の音声を作成"
-
-msgid "감정 참조 WAV 선택"
-msgstr "感情参照WAVを選択"
 
 msgid "WAV 파일 (*.wav)"
 msgstr "WAVファイル (*.wav)"

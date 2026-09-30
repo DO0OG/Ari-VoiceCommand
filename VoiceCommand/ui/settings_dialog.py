@@ -56,7 +56,6 @@ class SettingsDialog(QDialog):
         "openai_compat_tts_base_url", "openai_compat_tts_api_key", "openai_compat_tts_model",
         "openai_compat_tts_voice", "openai_compat_tts_clone_mode", "openai_compat_tts_emotion_mode",
         "elevenlabs_api_key", "elevenlabs_voice_id", "elevenlabs_model_id",
-        "local_gsv_device", "local_gsv_reference_language", "local_gsv_emotion_refs",
         "edge_tts_voice", "edge_tts_rate",
         "tts_emotion_enabled",
     }

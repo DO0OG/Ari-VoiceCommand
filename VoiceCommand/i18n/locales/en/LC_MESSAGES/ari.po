@@ -3997,12 +3997,6 @@ msgstr "OpenAI-compatible TTS"
 msgid "OpenAI 호환 TTS 설정"
 msgstr "OpenAI-compatible TTS settings"
 
-msgid "로컬 경량 (GPT-SoVITS)"
-msgstr "Lightweight local (GPT-SoVITS)"
-
-msgid "로컬 경량 (GPT-SoVITS) 설정"
-msgstr "Lightweight local (GPT-SoVITS) settings"
-
 msgid "공통 TTS 설정"
 msgstr "Common TTS settings"
 
@@ -4018,12 +4012,6 @@ msgstr "Reference WAV transcript:"
 msgid "참조 WAV 선택"
 msgstr "Select reference WAV"
 
-msgid "참조 대본"
-msgstr "Reference transcript"
-
-msgid "참조 대본 언어:"
-msgstr "Reference transcript language:"
-
 msgid "참조 음성 복제"
 msgstr "Clone reference voice"
 
@@ -4036,62 +4024,11 @@ msgstr "Cloning:"
 msgid "감정 지시문 사용"
 msgstr "Use emotion instructions"
 
-msgid "한영일 모델을 처음 사용할 때 약 750MB를 내려받습니다."
-msgstr "The Korean, English, and Japanese models download about 750 MB on first use."
-
-msgid "본인 또는 동의를 받은 목소리만 복제하세요."
-msgstr "Only clone your own voice or a voice used with its owner's consent."
-
-msgid "장치:"
-msgstr "Device:"
-
 msgid "자동"
 msgstr "Auto"
 
-msgid "CPU"
-msgstr "CPU"
-
-msgid "DirectML"
-msgstr "DirectML"
-
 msgid "한국어"
 msgstr "Korean"
-
-msgid "영어"
-msgstr "English"
-
-msgid "일본어"
-msgstr "Japanese"
-
-msgid "GPT-SoVITS / Genie 모델 라이선스: MIT"
-msgstr "GPT-SoVITS / Genie model licenses: MIT"
-
-msgid "모델 설치"
-msgstr "Install model"
-
-msgid "모델이 설치되어 있습니다."
-msgstr "The model is installed."
-
-msgid "모델이 설치되지 않았습니다."
-msgstr "The model is not installed."
-
-msgid "로컬 TTS 모델을 내려받는 중입니다."
-msgstr "Downloading local TTS model."
-
-msgid "모델 설치 실패"
-msgstr "Model installation failed"
-
-msgid "로컬 TTS 모델 설치가 완료되었습니다."
-msgstr "Local TTS model installation is complete."
-
-msgid "로컬 TTS 모델 설치 실패: {error}"
-msgstr "Local TTS model installation failed: {error}"
-
-msgid "로컬 TTS 모델을 내려받는 중입니다. {downloaded} / {total} MB"
-msgstr "Downloading local TTS model: {downloaded} / {total} MB"
-
-msgid "GPT-SoVITS 모델 설치"
-msgstr "Install GPT-SoVITS model"
 
 msgid "서버 URL (예: http://127.0.0.1:8880/v1):"
 msgstr "Server URL (for example, http://127.0.0.1:8880/v1):"
@@ -4101,12 +4038,6 @@ msgstr "If blank, the request sends not-needed."
 
 msgid "감정:"
 msgstr "Emotion:"
-
-msgid "감정"
-msgstr "Emotion"
-
-msgid "참조 WAV"
-msgstr "Reference WAV"
 
 msgid "음성:"
 msgstr "Voice:"
@@ -4131,9 +4062,6 @@ msgstr "Voice cloning failed"
 
 msgid "참조 음성으로 내 음성 만들기"
 msgstr "Create a voice from reference audio"
-
-msgid "감정 참조 WAV 선택"
-msgstr "Select emotion reference WAV"
 
 msgid "WAV 파일 (*.wav)"
 msgstr "WAV files (*.wav)"

@@ -3,19 +3,14 @@ TTS 설정 페이지 위젯
 """
 import logging
 import os
-import threading
-import zipfile
 
-import requests
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QComboBox, QGroupBox,
     QScrollArea, QProgressDialog, QMessageBox, QFileDialog, QCheckBox,
-    QTableWidget, QTableWidgetItem, QHeaderView,
 )
 from PySide6.QtCore import QThread, Qt, Signal
 
-from core.emotions import EMOTION_NAMES
 from i18n.translator import _
 from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
 from ui.common import create_muted_label
@@ -46,38 +41,12 @@ class _TTSActionThread(QThread):
             self.completed.emit(None, str(exc))
 
 
-class _LocalGSVInstallThread(QThread):
-    progress = Signal(int, int)
-    completed = Signal(bool, str)
-
-    def __init__(self):
-        super().__init__()
-        self.cancel_event = threading.Event()
-
-    def run(self):
-        try:
-            from tts.gsv.model_store import install_model
-
-            install_model(self.progress.emit, self.cancel_event)
-            self.completed.emit(True, "")
-        except InterruptedError:
-            self.completed.emit(False, "cancelled")
-        except (
-            OSError,
-            requests.RequestException,
-            ValueError,
-            RuntimeError,
-            zipfile.BadZipFile,
-        ) as exc:
-            self.completed.emit(False, str(exc))
-
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
 
 def _tts_modes():
     return [
         (_("Fish Audio (API)"),    "fish"),
         (_("로컬 (CosyVoice3)"),   "local"),
-        (_("로컬 경량 (GPT-SoVITS)"), "local_gsv"),
         (_("OpenAI 호환 TTS"), "openai_compat_tts"),
         (_("OpenAI TTS"),          "openai_tts"),
         (_("ElevenLabs"),          "elevenlabs"),
@@ -96,8 +65,6 @@ class _TTSSettingsPage(QWidget):
         self._ollama_progress_dialog: QProgressDialog | None = None
         self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
         self._cosyvoice_progress_dialog: QProgressDialog | None = None
-        self._gsv_install_thread: _LocalGSVInstallThread | None = None
-        self._gsv_progress_dialog: QProgressDialog | None = None
         self._tts_action_threads: set[_TTSActionThread] = set()
         self._init_ui()
 
@@ -219,42 +186,6 @@ class _TTSSettingsPage(QWidget):
         cvl.addWidget(self.cosyvoice_speed_input)
         tts_vbox.addWidget(cv_grp)
         self._tts_groups["local"] = cv_grp
-
-        # GPT-SoVITS 로컬 TTS 설정
-        gsv_grp = QGroupBox(_("로컬 경량 (GPT-SoVITS) 설정"))
-        gsv_layout = QVBoxLayout(gsv_grp)
-        gsv_layout.addWidget(QLabel(_("한영일 모델을 처음 사용할 때 약 750MB를 내려받습니다.")))
-        gsv_layout.addWidget(QLabel(_("본인 또는 동의를 받은 목소리만 복제하세요.")))
-        self.local_gsv_install_status = create_muted_label("")
-        gsv_layout.addWidget(self.local_gsv_install_status)
-        install_row = QHBoxLayout()
-        self.local_gsv_install_button = QPushButton(_("모델 설치"))
-        self.local_gsv_install_button.clicked.connect(self._install_local_gsv)
-        install_row.addWidget(self.local_gsv_install_button)
-        self.local_gsv_device_combo = QComboBox()
-        for label, value in ((_("자동"), "auto"), (_("CPU"), "cpu"), (_("DirectML"), "dml")):
-            self.local_gsv_device_combo.addItem(label, value)
-        self._set_combo(self.local_gsv_device_combo, self._settings.get("local_gsv_device", "auto"))
-        install_row.addWidget(QLabel(_("장치:")))
-        install_row.addWidget(self.local_gsv_device_combo)
-        self.local_gsv_language_combo = QComboBox()
-        for label, value in ((_("한국어"), "ko"), (_("영어"), "en"), (_("일본어"), "ja")):
-            self.local_gsv_language_combo.addItem(label, value)
-        self._set_combo(
-            self.local_gsv_language_combo,
-            self._settings.get("local_gsv_reference_language", "ko"),
-        )
-        install_row.addWidget(QLabel(_("참조 대본 언어:")))
-        install_row.addWidget(self.local_gsv_language_combo)
-        gsv_layout.addLayout(install_row)
-        self.local_gsv_emotion_table = self._build_local_gsv_emotion_table(
-            self._settings.get("local_gsv_emotion_refs", {})
-        )
-        gsv_layout.addWidget(self.local_gsv_emotion_table)
-        gsv_layout.addWidget(QLabel(_("GPT-SoVITS / Genie 모델 라이선스: MIT")))
-        tts_vbox.addWidget(gsv_grp)
-        self._tts_groups["local_gsv"] = gsv_grp
-        self._refresh_local_gsv_status()
 
         compat_grp = QGroupBox(_("OpenAI 호환 TTS 설정"))
         compat_layout = QVBoxLayout(compat_grp)
@@ -400,43 +331,6 @@ class _TTSSettingsPage(QWidget):
 
         self._on_tts_changed()
 
-    def _build_local_gsv_emotion_table(self, emotion_refs: dict) -> QTableWidget:
-        table = QTableWidget(len(EMOTION_NAMES), 3)
-        table.setHorizontalHeaderLabels([_("감정"), _("참조 WAV"), _("참조 대본")])
-        table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        table.setMaximumHeight(320)
-        self._local_gsv_emotion_rows = {}
-        for row, emotion in enumerate(EMOTION_NAMES):
-            item = QTableWidgetItem(emotion)
-            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            table.setItem(row, 0, item)
-            values = emotion_refs.get(emotion, {})
-            wav_input = QLineEdit(str(values.get("wav", "")))
-            text_input = QLineEdit(str(values.get("text", "")))
-            path_cell = QWidget()
-            path_layout = QHBoxLayout(path_cell)
-            path_layout.setContentsMargins(0, 0, 0, 0)
-            path_layout.addWidget(wav_input)
-            browse_button = QPushButton(_("선택"))
-            browse_button.clicked.connect(
-                lambda checked=False, target=wav_input: self._browse_emotion_reference(target)
-            )
-            path_layout.addWidget(browse_button)
-            table.setCellWidget(row, 1, path_cell)
-            table.setCellWidget(row, 2, text_input)
-            self._local_gsv_emotion_rows[emotion] = (wav_input, text_input)
-        return table
-
-    def _browse_emotion_reference(self, target: QLineEdit):
-        selection = QFileDialog.getOpenFileName(
-            self, _("감정 참조 WAV 선택"), target.text() or "", _("WAV 파일 (*.wav)")
-        )
-        if selection[0]:
-            target.setText(selection[0])
-
     def _browse_reference_wav(self):
         selection = QFileDialog.getOpenFileName(
             self,
@@ -446,61 +340,6 @@ class _TTSSettingsPage(QWidget):
         )
         if selection[0]:
             self.tts_reference_wav_input.setText(selection[0])
-
-    def _refresh_local_gsv_status(self):
-        try:
-            from tts.gsv.model_store import is_model_installed
-
-            installed = is_model_installed(verify_hash=False)
-        except (ImportError, OSError, RuntimeError):
-            installed = False
-        self.local_gsv_install_status.setText(
-            _("모델이 설치되어 있습니다.") if installed else _("모델이 설치되지 않았습니다.")
-        )
-
-    def _install_local_gsv(self):
-        if self._gsv_install_thread is not None and self._gsv_install_thread.isRunning():
-            return
-        thread = _LocalGSVInstallThread()
-        thread.progress.connect(self._update_gsv_install_progress)
-        thread.completed.connect(self._on_gsv_install_completed)
-        self._gsv_install_thread = thread
-        self._gsv_progress_dialog = QProgressDialog(
-            _("로컬 TTS 모델을 내려받는 중입니다."), _("취소"), 0, 0, self
-        )
-        self._gsv_progress_dialog.setWindowTitle(_("GPT-SoVITS 모델 설치"))
-        self._gsv_progress_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
-        self._gsv_progress_dialog.setMinimumDuration(0)
-        self._gsv_progress_dialog.canceled.connect(thread.cancel_event.set)
-        self._gsv_progress_dialog.show()
-        thread.start()
-
-    def _update_gsv_install_progress(self, downloaded: int, total: int):
-        dialog = self._gsv_progress_dialog
-        if dialog is None:
-            return
-        dialog.setMaximum(max(total, 0))
-        dialog.setValue(min(downloaded, total) if total > 0 else downloaded)
-        if total > 0:
-            dialog.setLabelText(
-                _("로컬 TTS 모델을 내려받는 중입니다. {downloaded} / {total} MB").format(
-                    downloaded=downloaded // (1024 * 1024),
-                    total=total // (1024 * 1024),
-                )
-            )
-
-    def _on_gsv_install_completed(self, success: bool, error: str):
-        if self._gsv_progress_dialog is not None:
-            self._gsv_progress_dialog.close()
-            self._gsv_progress_dialog = None
-        self._refresh_local_gsv_status()
-        if success:
-            QMessageBox.information(self, _("모델 설치"), _("로컬 TTS 모델 설치가 완료되었습니다."))
-        elif error != "cancelled":
-            QMessageBox.warning(
-                self, _("모델 설치 실패"), _("로컬 TTS 모델 설치 실패: {error}").format(error=error)
-            )
-        self._gsv_install_thread = None
 
     def _start_elevenlabs_action(self, button: QPushButton, action, callback):
         if any(thread.isRunning() for thread in self._tts_action_threads):
@@ -612,7 +451,7 @@ class _TTSSettingsPage(QWidget):
             if grp:
                 grp.setVisible(key == selected)
         self._voice_cloning_group.setVisible(
-            selected in {"local", "local_gsv", "openai_compat_tts", "elevenlabs"}
+            selected in {"local", "openai_compat_tts", "elevenlabs"}
         )
 
     def _tts_diagnostic_values(self):
@@ -835,13 +674,6 @@ class _TTSSettingsPage(QWidget):
             "tts_reference_wav": self.tts_reference_wav_input.text().strip(),
             "cosyvoice_speed": self._float(self.cosyvoice_speed_input.text(), 0.9),
             "tts_volume": self._float(self.tts_volume_input.text(), 1.0),
-            "local_gsv_device": self.local_gsv_device_combo.currentData(),
-            "local_gsv_reference_language": self.local_gsv_language_combo.currentData(),
-            "local_gsv_emotion_refs": {
-                emotion: {"wav": wav.text().strip(), "text": text.text().strip()}
-                for emotion, (wav, text) in self._local_gsv_emotion_rows.items()
-                if wav.text().strip() or text.text().strip()
-            },
             "openai_compat_tts_base_url": self.openai_compat_base_url_input.text().strip(),
             "openai_compat_tts_api_key": self.openai_compat_api_key_input.text().strip(),
             "openai_compat_tts_model": self.openai_compat_model_input.text().strip(),
@@ -870,12 +702,9 @@ class _TTSSettingsPage(QWidget):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
         self.local_install_section.stop_detection()
         self.tts_diagnostic_panel.cancel()
-        if self._gsv_install_thread is not None:
-            self._gsv_install_thread.cancel_event.set()
         for thread in (
             self._ollama_install_thread,
             self._cosyvoice_install_thread,
-            self._gsv_install_thread,
             *self._tts_action_threads,
         ):
             if thread and thread.isRunning():

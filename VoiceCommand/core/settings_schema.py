@@ -60,8 +60,7 @@ DEFAULT_SETTINGS = {
     "embedding_remote_enabled": False,
     "max_context_tokens": 8000,
     # ── TTS 제공자 ──────────────────────────────────────────────────────
-    "tts_mode": "fish",            # fish | local | local_gsv | openai_compat_tts
-    # openai_tts | elevenlabs | edge
+    "tts_mode": "fish",            # fish | local | openai_compat_tts | openai_tts | elevenlabs | edge
     "fish_api_key": _UNSET_CREDENTIAL,
     "fish_reference_id": _UNSET_CREDENTIAL,
     "fish_model": "s2.1-pro-free",  # Fish Audio 백엔드 모델 (무료 등급)
@@ -82,9 +81,6 @@ DEFAULT_SETTINGS = {
     "elevenlabs_api_key": _UNSET_CREDENTIAL,
     "elevenlabs_voice_id": "",
     "elevenlabs_model_id": "eleven_multilingual_v2",
-    "local_gsv_device": "auto",
-    "local_gsv_reference_language": "ko",
-    "local_gsv_emotion_refs": {},
     "edge_tts_voice": "ko-KR-SunHiNeural",
     "edge_tts_rate": "+0%",
     "tts_emotion_enabled": True,

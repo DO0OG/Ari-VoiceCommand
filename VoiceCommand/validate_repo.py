@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import os
 import py_compile
@@ -107,29 +106,10 @@ COMPILE_TARGETS = [
     "tts/tts_base.py",
     "tts/tts_edge.py",
     "tts/tts_elevenlabs.py",
-    "tts/tts_local_gsv.py",
     "tts/tts_openai_compat.py",
     "tts/tts_openai.py",
     "tts/tts_factory.py",
     "tts/voice_reference.py",
-    "tts/gsv/__init__.py",
-    "tts/gsv/audio.py",
-    "tts/gsv/engine.py",
-    "tts/gsv/model_store.py",
-    "tts/gsv/paths.py",
-    "tts/gsv/text_splitter.py",
-    "tts/gsv/g2p/__init__.py",
-    "tts/gsv/g2p/english.py",
-    "tts/gsv/g2p/english_normalization.py",
-    "tts/gsv/g2p/japanese.py",
-    "tts/gsv/g2p/symbols.py",
-    "tts/gsv/g2p/word_segment.py",
-    "tts/gsv/ko_g2p/__init__.py",
-    "tts/gsv/ko_g2p/korean.py",
-    "tts/gsv/ko_g2p/numerals.py",
-    "tts/gsv/ko_g2p/regular.py",
-    "tts/gsv/ko_g2p/special.py",
-    "tts/gsv/ko_g2p/utils.py",
     "ui/character_widget.py",
     "ui/theme.py",
     "ui/theme_editor.py",
@@ -358,12 +338,7 @@ def _run_compile(paths: list[str]) -> None:
 
 
 def _run_tests() -> None:
-    # Main.py처럼 Qt보다 onnxruntime을 먼저 불러 DLL 초기화 실패를 피한다.
-    try:
-        importlib.import_module("onnxruntime")
-    except ImportError:
-        pass
-    suite =unittest.defaultTestLoader.discover(str(HERE / "tests"), pattern="test_*.py")
+    suite = unittest.defaultTestLoader.discover(str(HERE / "tests"), pattern="test_*.py")
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     if not result.wasSuccessful():
         raise SystemExit(1)
