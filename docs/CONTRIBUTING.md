@@ -44,6 +44,8 @@
   - 빠른 문법 검사만 필요하면 `VoiceCommand\.venv\Scripts\python.exe VoiceCommand\validate_repo.py --compile-only`
 - 기본 기준선은 **전체 unittest + smoke** 입니다.
 - `validate_repo.py`는 compile + unit test에 더해 clean runtime 환경과 marketplace SHA256 계약 smoke도 확인합니다.
+- 세션 알림·전역 단축키·창 감시처럼 Windows 네이티브 API를 다루는 코드를 건드렸다면 `test_native_runtime_smoke`를 꼭 확인해 주세요. 대역(mock) 대신 실제 `wintypes.MSG`와 Windows API를 거칩니다.
+- 릴리스 워크플로는 설치본을 설치한 뒤 `ARI_SMOKE_SECONDS`·`ARI_SMOKE_REPORT` 환경 변수로 앱을 65초 실행합니다. GUI 준비, 하트비트, 정상 종료, 오류 로그 0건을 모두 만족해야 릴리스가 올라갑니다. 로컬에서 빌드한 exe도 같은 환경 변수로 확인할 수 있습니다.
 - 기능 회귀만 빠르게 보고 싶다면 필요한 테스트만 골라 `VoiceCommand\.venv\Scripts\python.exe -m unittest ...` 형태로 부분 실행해도 됩니다.
 - 자율 실행 코어를 건드렸다면 `test_agent_integration`, `test_autonomous_executor`, `test_automation_helpers`, `test_real_verifier`, `test_episode_memory`까지 같이 돌려 보시길 권합니다.
 - Agent Skills/MCP를 건드렸다면 `test_skill_manager`, `test_skill_installer`, `test_mcp_client`, `test_llm_provider`, `test_ai_command`도 함께 확인해 주세요.
