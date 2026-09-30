@@ -17,7 +17,7 @@ class _SafeAudioDiagnosticThread(AudioDiagnosticThread):
 
 class AudioDiagnosticPanel(QGroupBox):
     def __init__(self, input_device, output_device, parent=None):
-        super().__init(_("마이크 및 스피커 진단"), parent)
+        super().__init__(_("마이크 및 스피커 진단"), parent)
         self._input_device = input_device
         self._output_device = output_device
         self._thread: AudioDiagnosticThread | None = None
