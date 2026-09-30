@@ -35,21 +35,21 @@
 
 ---
 
-## 4. 감정 표현 시스템 (Emoji + Animation)
+## 4. 감정 표현 시스템 (애니메이션)
 
-아리는 말풍선에 **이모지**를 띄워 조금 더 세밀한 감정을 표현합니다. 감정 태그는 설정된 언어에 따라 자동으로 바뀝니다.
+감정은 캐릭터 애니메이션과 음성 말투에 반영합니다. 캐릭터 말풍선에는 별도의 감정 이모지 오버레이나 응답 문장 앞 이모지를 표시하지 않습니다.
 
-| 감정 (ko / en / ja) | 표시 이모지 | 연결 애니메이션 |
-| :--- | :---: | :--- |
-| **기쁨 / joy / 喜び** | 😊 | walk / idle + 점프 |
-| **슬픔 / sad / 悲しみ** | 😭 | sit / sleep |
-| **화남 / angry / 怒り** | 💢 | surprised |
-| **놀람 / surprised / 驚き** | 😲 | surprised |
-| **평온 / calm / 穏やか** | ☕ | idle / sit |
-| **수줍 / shy / 恥ずかしい** | ☺️ | sit / idle |
-| **기대 / excited / 期待** | ✨ | walk / idle + 점프 |
-| **진지 / serious / 真剣** | 🧐 | sit |
-| **걱정 / worried / 心配** | 😟 | sit / idle |
+| 감정 (ko / en / ja) | 연결 애니메이션 |
+| :--- | :--- |
+| **기쁨 / joy / 喜び** | walk / idle + 점프 |
+| **슬픔 / sad / 悲しみ** | sit / sleep |
+| **화남 / angry / 怒り** | surprised |
+| **놀람 / surprised / 驚き** | surprised |
+| **평온 / calm / 穏やか** | idle / sit |
+| **수줍 / shy / 恥ずかしい** | sit / idle |
+| **기대 / excited / 期待** | walk / idle + 점프 |
+| **진지 / serious / 真剣** | sit |
+| **걱정 / worried / 心配** | sit / idle |
 
 ---
 
