@@ -37,7 +37,7 @@ It is designed for people who want a Windows voice assistant that can do more th
 | **Voice assistant** | Wake word, voice shortcut, character click, Google STT, offline Whisper STT, streamed speech output |
 | **Windows automation** | Supported local commands plus multi-step desktop tasks through tools and the autonomous agent |
 | **Fast local commands** | Optional high-confidence path for commands such as time, running apps, screenshots, and volume control |
-| **Local AI** | Ollama local LLMs, local CosyVoice3, local ONNX embeddings, and offline Whisper options |
+| **Local AI** | Ollama local LLMs, local CosyVoice3, lightweight GPT-SoVITS TTS, local ONNX embeddings, and offline Whisper options |
 | **Hosted AI** | OpenAI-compatible providers for models hosted locally or remotely |
 | **Memory** | Relevant fact and conversation retrieval, explicit remember/forget commands, reviewable memory suggestions |
 | **Agent workflows** | Plan, execute, verify, reflect, reuse strategies, interrupt active work, and resume supported flows |
@@ -102,6 +102,7 @@ Ari can use cloud services, but the project also supports a more local setup:
 - Ollama for local LLM inference
 - Offline Whisper for speech recognition
 - CosyVoice3 for local TTS
+- GPT-SoVITS (ONNX, no torch) for lightweight local TTS with voice cloning
 - Local ONNX embeddings for memory and strategy retrieval
 - Remote embeddings disabled by default
 - Telegram integration disabled by default
@@ -166,9 +167,10 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - Explicit remember/forget commands and improved multilingual memory retrieval
 - Persistent mood, conversational context, and event-based character speech
 - Update checks, notifications, and installer reliability improvements
-- v1.1.1: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
+- v1.2.0: voice cloning and emotional speech across TTS providers — new OpenAI-compatible TTS, a lightweight local GPT-SoVITS TTS (Korean/English/Japanese, runs on CPU), ElevenLabs voice cloning and v3 emotion tags, and OpenAI custom voices
+- v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
 
-See the **[v1.1.1 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.1)**.
+See the **[v1.2.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**.
 
 ## For developers
 

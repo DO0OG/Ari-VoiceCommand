@@ -37,7 +37,7 @@ Ari는 Python과 PySide6로 만든 **오픈소스 Windows AI 음성 비서이자
 | **음성 비서** | 웨이크워드, 음성 단축키, 캐릭터 클릭, Google STT, 오프라인 Whisper STT, 스트리밍 음성 출력 |
 | **Windows 자동화** | 지원 로컬 명령과 도구·자율 에이전트를 통한 여러 단계의 데스크톱 작업 |
 | **빠른 로컬 명령** | 시간, 실행 중 앱, 스크린샷, 볼륨 제어 등 확신이 높은 지원 명령을 위한 선택형 경로 |
-| **로컬 AI** | Ollama 로컬 LLM, 로컬 CosyVoice3, 로컬 ONNX 임베딩, 오프라인 Whisper |
+| **로컬 AI** | Ollama 로컬 LLM, 로컬 CosyVoice3, 가벼운 GPT-SoVITS TTS, 로컬 ONNX 임베딩, 오프라인 Whisper |
 | **호스팅 AI** | 로컬 또는 원격 서버의 OpenAI 호환 모델 제공자 |
 | **기억** | 관련 사실·대화 검색, 명시적 기억/잊기 명령, 검토 가능한 기억 후보 |
 | **에이전트 작업** | 계획, 실행, 검증, 반성, 전략 재사용, 작업 중단과 지원되는 흐름 재개 |
@@ -102,6 +102,7 @@ Ari는 클라우드 서비스를 사용할 수 있지만, 더 많은 처리를 �
 - Ollama 기반 로컬 LLM
 - 오프라인 Whisper 음성 인식
 - CosyVoice3 로컬 TTS
+- GPT-SoVITS(ONNX, torch 불필요) 가벼운 로컬 TTS와 보이스 클로닝
 - 기억·전략 검색용 로컬 ONNX 임베딩
 - 원격 임베딩 기본 꺼짐
 - Telegram 연동 기본 꺼짐
@@ -166,9 +167,10 @@ graph TD
 - 명시적 기억/잊기 명령과 다국어 기억 검색 개선
 - 지속되는 기분, 대화 상황, 사건 기반 캐릭터 발화
 - 업데이트 확인·알림과 설치본 안정성 개선
-- v1.1.1: 설치본이 시작 직후 종료되던 문제를 고치고, 릴리스 전에 설치본을 실제로 실행해 확인
+- v1.2.0: TTS 전반의 보이스 클로닝·감정 표현 — OpenAI 호환 TTS, 가벼운 로컬 GPT-SoVITS TTS(한국어·영어·일본어, CPU 동작), ElevenLabs 음성 복제와 v3 감정 태그, OpenAI 커스텀 보이스
+- v1.2.0: 설치본이 시작 직후 종료되던 문제를 고치고, 릴리스 전에 설치본을 실제로 실행해 확인
 
-자세한 내용은 **[v1.1.1 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.1)**에서 확인할 수 있습니다.
+자세한 내용은 **[v1.2.0 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**에서 확인할 수 있습니다.
 
 ## 개발자용 문서
 
