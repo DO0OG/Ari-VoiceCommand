@@ -6,7 +6,9 @@ import tempfile
 import unittest
 import wave
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, create_autospec, patch
+
+from openai.resources.audio.speech import Speech
 
 from audio.audio_manager import GlobalAudio
 from tts.tts_openai_compat import OpenAICompatTTS, _MAX_REFERENCE_BYTES, _parse_wav
@@ -24,12 +26,10 @@ def _wav_bytes(channels, sample_rate, sample_width, frames):
 
 class OpenAICompatTTSTests(unittest.TestCase):
     def _make_provider(self, **kwargs):
-        speech = SimpleNamespace(
-            create=Mock(
-                return_value=SimpleNamespace(
-                    content=_wav_bytes(1, 24000, 2, struct.pack("<hh", 10, -20))
-                )
-            )
+        # 실제 SDK 시그니처를 따르게 해서 필수 인자 누락을 잡는다.
+        speech = create_autospec(Speech, instance=True)
+        speech.create.return_value = SimpleNamespace(
+            content=_wav_bytes(1, 24000, 2, struct.pack("<hh", 10, -20))
         )
         client = SimpleNamespace(audio=SimpleNamespace(speech=speech))
         openai_module = SimpleNamespace(OpenAI=Mock(return_value=client))
@@ -78,7 +78,7 @@ class OpenAICompatTTSTests(unittest.TestCase):
             os.unlink(reference_path)
 
         options = create.call_args.kwargs
-        self.assertNotIn("voice", options)
+        self.assertIn("voice", options)
         self.assertEqual(
             options["extra_body"],
             {

@@ -126,8 +126,10 @@ class OpenAICompatTTS(QObject):
         return f"data:audio/wav;base64,{encoded}"
 
     def _speech_options(self, text: str, emotion: str) -> dict:
+        # openai SDK는 voice를 필수 인자로 받으므로 복제 모드에서도 항상 넘긴다.
         options = {
             "model": self.model,
+            "voice": self.voice,
             "input": text,
             "response_format": "wav",
         }
@@ -137,8 +139,6 @@ class OpenAICompatTTS(QObject):
                 "ref_text": self.reference_text,
                 "task_type": "Base",
             }
-        else:
-            options["voice"] = self.voice
         if self.emotion_enabled and self.emotion_mode == "instructions":
             language = self.language
             if language is None:
