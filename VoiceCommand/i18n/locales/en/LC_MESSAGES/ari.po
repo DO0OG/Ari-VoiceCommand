@@ -2111,52 +2111,76 @@ msgstr "State-aware automation"
 
 msgid "매일"
 msgstr "every day"
+
 msgid "매주"
 msgstr "every week"
+
 msgid "매시간"
 msgstr "every hour"
+
 msgid "오늘"
 msgstr "today"
+
 msgid "내일"
 msgstr "tomorrow"
+
 msgid "스케줄"
 msgstr "schedule"
+
 msgid "예약"
-msgstr "schedule"
+msgstr "book"
+
 msgid "반복"
 msgstr "repeat"
+
 msgid "알려줘"
 msgstr "tell me"
+
 msgid "확인해줘"
-msgstr "check it"
+msgstr "check"
+
 msgid "타이머 시간을 말씀해 주세요."
 msgstr "Please tell me the timer duration."
+
 msgid "'{when}' 시간 표현을 이해하지 못했어요. '5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
 msgstr "I couldn't understand '{when}' as a time expression. Please say it like 'in 5 minutes', 'at 11:30', or 'every day 9 AM'."
+
 msgid "예약할 작업과 시간을 알려주세요."
 msgstr "Please tell me what to schedule and when."
+
 msgid "스케줄러를 사용할 수 없습니다."
 msgstr "The scheduler is unavailable."
+
 msgid " (반복)"
 msgstr " (repeat)"
+
 msgid "작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다."
 msgstr "Scheduled task created (ID: {task_id}){repeat}. It will run at {formatted}."
+
 msgid "취소할 작업 ID를 알려주세요."
 msgstr "Please tell me the task ID to cancel."
+
 msgid "작업 {task_id}가 취소되었습니다."
 msgstr "Task {task_id} has been cancelled."
+
 msgid "ID '{task_id}'에 해당하는 작업을 찾을 수 없어요."
 msgstr "Couldn't find a task with ID '{task_id}'."
+
 msgid "현재 예약된 작업이 없습니다."
 msgstr "There are no scheduled tasks right now."
+
 msgid "예약된 작업 {count}개:"
 msgstr "{count} scheduled task(s):"
+
 msgid "  [{task_id}] {time}{repeat} — {goal}"
 msgstr "  [{task_id}] {time}{repeat} — {goal}"
+
 msgid "{month}월 {day}일 {time}"
 msgstr "{month}/{day} {time}"
+
 msgid "{when}에 컴퓨터 꺼줘"
 msgstr "Shut down the computer at {when}"
+
 msgid "{when}에 컴퓨터 재시작해줘"
 msgstr "Restart the computer at {when}"
 
@@ -4083,3 +4107,30 @@ msgstr "Could not load voices"
 
 msgid "TTS 감정 조절"
 msgstr "TTS emotion control"
+
+msgid "대화 검색"
+msgstr "Conversation Search"
+
+msgid "시작"
+msgstr "Start"
+
+msgid "끝"
+msgstr "End"
+
+msgid "검색 실패: {error}"
+msgstr "Search failed: {error}"
+
+msgid "관심사"
+msgstr "Interests"
+
+msgid "메모"
+msgstr "Notes"
+
+msgid "ctypes 저수준 DLL 로드"
+msgstr "Low-level ctypes DLL loading"
+
+msgid "ctypes 포인터 캐스팅"
+msgstr "ctypes pointer casting"
+
+msgid "게임 모드 해제. 원래 TTS로 복원되었습니다."
+msgstr "Game mode disabled. Original TTS has been restored."
