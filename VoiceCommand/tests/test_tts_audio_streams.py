@@ -75,7 +75,7 @@ class TTSStreamWrapperTests(unittest.TestCase):
             )
 
     def test_openai_tts_redacts_api_key_from_error_log(self):
-        secret = "openai-test-secret"
+        secret = "openai-test-secret"  # nosec B105  # nosec B105
         client = SimpleNamespace(
             audio=SimpleNamespace(
                 speech=SimpleNamespace(
