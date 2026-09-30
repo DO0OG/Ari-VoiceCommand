@@ -73,12 +73,12 @@ class ElevenLabsSettingsApiTests(unittest.TestCase):
         first = self._response({
             "voices": [{"voice_id": "one", "name": "First"}],
             "has_more": True,
-            "next_page_token": "next-token",
+            "next_page_token": "next-token",  # nosec B105
         })
         second = self._response({
             "voices": [{"voice_id": "two", "name": "Second"}],
             "has_more": False,
-            "next_page_token": None,
+            "next_page_token": None,  # nosec B105
         })
         with patch("requests.get", side_effect=[first, second]) as get:
             voices = fetch_voices("test-key")
