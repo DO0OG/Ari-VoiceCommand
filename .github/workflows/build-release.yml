@@ -2,8 +2,14 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    paths:
+      - "VoiceCommand/requirements.txt"
+      - "VoiceCommand/build_exe.py"
+      - ".github/workflows/build-release.yml"
   workflow_dispatch:
 
 env:
@@ -92,19 +98,60 @@ jobs:
           )
 
       # Nuitka 컴파일 결과를 보존해 다음 빌드에서는 바뀐 모듈만 다시 컴파일한다.
+      - name: Read Nuitka version
+        id: nuitka-version
+        working-directory: VoiceCommand
+        shell: pwsh
+        run: |
+          $version = .venv\Scripts\python.exe -c "import importlib.metadata; print(importlib.metadata.version('Nuitka'))"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
       - name: Restore Nuitka compile cache
-        uses: actions/cache@v4
+        id: restore-nuitka-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}\.nuitka-cache
-          key: nuitka-${{ runner.os }}-${{ hashFiles('VoiceCommand/requirements.txt', 'VoiceCommand/build_exe.py') }}
+          key: nuitka-v2-${{ runner.os }}-${{ runner.arch }}-n${{ steps.nuitka-version.outputs.version }}-${{ hashFiles('VoiceCommand/requirements.txt', 'VoiceCommand/build_exe.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            nuitka-${{ runner.os }}-
+            nuitka-v2-${{ runner.os }}-${{ runner.arch }}-n${{ steps.nuitka-version.outputs.version }}-${{ hashFiles('VoiceCommand/requirements.txt', 'VoiceCommand/build_exe.py') }}-
+            nuitka-v2-${{ runner.os }}-${{ runner.arch }}-n${{ steps.nuitka-version.outputs.version }}-
 
       - name: Build EXE (Standalone Folder)
+        id: build-exe
         working-directory: VoiceCommand
         env:
           NUITKA_CACHE_DIR: ${{ github.workspace }}\.nuitka-cache
+          CLCACHE_DIR: ${{ github.workspace }}\.nuitka-cache\clcache
         run: .venv\Scripts\python.exe build_exe.py --clean
+
+      - name: Report Nuitka cache size
+        if: always() && steps.build-exe.outcome != 'skipped'
+        shell: pwsh
+        run: |
+          $cacheRoot = Join-Path $env:GITHUB_WORKSPACE ".nuitka-cache"
+          if (Test-Path -LiteralPath $cacheRoot -PathType Container) {
+            $directories = @(Get-ChildItem -LiteralPath $cacheRoot -Directory -ErrorAction SilentlyContinue)
+            if ($directories.Count -eq 0) {
+              Write-Output ".nuitka-cache 하위 디렉터리가 없습니다."
+            }
+            foreach ($directory in $directories) {
+              $files = @(Get-ChildItem -LiteralPath $directory.FullName -File -Recurse -ErrorAction SilentlyContinue)
+              $bytes = ($files | Measure-Object -Property Length -Sum).Sum
+              if ($null -eq $bytes) { $bytes = 0 }
+              $mib = [math]::Round($bytes / 1MB, 2)
+              Write-Output ("{0}: {1} files, {2} MiB" -f $directory.Name, $files.Count, $mib)
+            }
+          } else {
+            Write-Output ".nuitka-cache 디렉터리가 없습니다."
+          }
+
+      # 태그 캐시는 다른 태그에서 재사용할 수 없어 저장하지 않습니다.
+      - name: Save Nuitka compile cache
+        if: always() && github.ref == 'refs/heads/main' && steps.build-exe.outcome != 'skipped' && steps.restore-nuitka-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}\.nuitka-cache
+          key: ${{ steps.restore-nuitka-cache.outputs.cache-primary-key }}
 
       - name: Smoke test bundled Whisper worker IPC (no model or audio device)
         working-directory: VoiceCommand
