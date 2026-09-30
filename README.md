@@ -168,8 +168,10 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - Update checks, notifications, and installer reliability improvements
 - v1.2.0: voice cloning and emotional speech across TTS providers — new OpenAI-compatible TTS, ElevenLabs voice cloning and v3 emotion tags, and OpenAI custom voices
 - v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
+- v1.2.1: Fish Audio and ElevenLabs TTS start playing from the first audio chunk, the TTS volume setting applies to every engine, and TTS failures are shown in the speech bubble
+- v1.2.1: speech bubble sits right above the character's head, "open Naver"-style requests fall back to the browser for known sites, and missing translations were filled in
 
-See the **[v1.2.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**.
+See the **[v1.2.1 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.1)**.
 
 ## For developers
 
