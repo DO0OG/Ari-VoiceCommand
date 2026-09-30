@@ -12,7 +12,7 @@ from ui.settings_dialog import SettingsDialog
 
 class SettingsSecretUITests(unittest.TestCase):
     def test_real_dialog_builds_every_tab(self):
-        QApplication.instance() or QApplication([])
+        self._app = QApplication.instance() or QApplication([])
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
             dialog = SettingsDialog()
         self.addCleanup(dialog.deleteLater)
