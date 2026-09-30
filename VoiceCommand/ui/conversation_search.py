@@ -16,14 +16,16 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from i18n.translator import _
+
 
 class ConversationSearchDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("대화 검색")
+        self.setWindowTitle(_("대화 검색"))
         self.resize(720, 520)
         self.search_input = QLineEdit(self)
-        self.search_input.setPlaceholderText("검색어")
+        self.search_input.setPlaceholderText(_("검색어"))
         self.start_date = QDateEdit(self)
         self.start_date.setCalendarPopup(True)
         self.end_date = QDateEdit(self)
@@ -34,12 +36,12 @@ class ConversationSearchDialog(QDialog):
         self.result_list = QListWidget(self)
         self.preview = QPlainTextEdit(self)
         self.preview.setReadOnly(True)
-        search_button = QPushButton("검색", self)
+        search_button = QPushButton(_("검색"), self)
         search_button.clicked.connect(self.search)
         filters = QHBoxLayout()
-        filters.addWidget(QLabel("시작"))
+        filters.addWidget(QLabel(_("시작")))
         filters.addWidget(self.start_date)
-        filters.addWidget(QLabel("끝"))
+        filters.addWidget(QLabel(_("끝")))
         filters.addWidget(self.end_date)
         filters.addWidget(search_button)
         layout = QVBoxLayout(self)
@@ -68,4 +70,4 @@ class ConversationSearchDialog(QDialog):
                 item = self.result_list.item(self.result_list.count() - 1)
                 item.setData(Qt.UserRole, result.content)
         except Exception as exc:
-            self.result_list.addItem(f"검색 실패: {exc}")
+            self.result_list.addItem(_("검색 실패: {error}").format(error=exc))
