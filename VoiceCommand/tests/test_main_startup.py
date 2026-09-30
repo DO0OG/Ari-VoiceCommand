@@ -307,6 +307,11 @@ class MainStartupTests(unittest.TestCase):
 
     def test_logging_permission_failure_keeps_console_free_startup(self):
         handlers = []
+        logger_levels = []
+
+        class FakeHubLogger:
+            def setLevel(self, level):
+                logger_levels.append(level)
 
         class FakeRoot:
             def __init__(self):
@@ -317,6 +322,7 @@ class MainStartupTests(unittest.TestCase):
 
         class FakeLogging:
             INFO = 20
+            ERROR = 40
             root = FakeRoot()
 
             def basicConfig(self, **kwargs):
@@ -325,13 +331,18 @@ class MainStartupTests(unittest.TestCase):
             def NullHandler(self):
                 return object()
 
+            def getLogger(self, name):
+                self.logger_name = name
+                return FakeHubLogger()
+
             def warning(self, *_args):
                 pass
 
+        fake_logging = FakeLogging()
         setup_logging = _load_main_function(
             "setup_logging",
             {
-                "logging": FakeLogging(),
+                "logging": fake_logging,
                 "sys": SimpleNamespace(stdout=None),
                 "os": os,
                 "datetime": datetime,
@@ -346,6 +357,8 @@ class MainStartupTests(unittest.TestCase):
             setup_logging()
 
         self.assertEqual(len(handlers), 1)
+        self.assertEqual(fake_logging.logger_name, "huggingface_hub")
+        self.assertEqual(logger_levels, [FakeLogging.ERROR])
 
 
 if __name__ == "__main__":

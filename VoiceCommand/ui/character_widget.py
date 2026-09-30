@@ -194,7 +194,9 @@ class CharacterWidget(QWidget):
         self._active_character_pack: Optional[str] = None
         self._base_images_dir = ""
         self.image_cache = LRUCache()
+        self.image_head_top_cache: dict[str, int] = {}
         self.image_scale = 1.0
+        self._current_head_top_offset = 0
         self.ground_offset = self.GROUND_OFFSET_DEFAULT
         self._load_display_settings()
         self.facing_right = True  # 캐릭터 방향
@@ -278,16 +280,6 @@ class CharacterWidget(QWidget):
         # 애니메이션 로드
         # 레이블 생성
         self.label = QLabel(self)
-        self.emote_overlay = QLabel(self)
-        self.emote_overlay.setAlignment(Qt.AlignCenter)
-        self.emote_overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.emote_overlay.setStyleSheet(
-            "background: transparent; font-size: 20px;"
-        )
-        self.emote_overlay.hide()
-        self.emote_overlay_timer = QTimer(self)
-        self.emote_overlay_timer.setSingleShot(True)
-        self.emote_overlay_timer.timeout.connect(self.emote_overlay.hide)
         self.load_animations()
         self.update_frame()
 
@@ -394,7 +386,20 @@ class CharacterWidget(QWidget):
 
         pixmap = QPixmap.fromImage(scaled_image)
         self.image_cache.put(cache_key, pixmap)
+        self.image_head_top_cache[cache_key] = self._opaque_top(scaled_image)
         return pixmap
+
+    @staticmethod
+    def _opaque_top(image: QImage) -> int:
+        """불투명 픽셀이 시작하는 첫 줄. 말풍선을 머리 바로 위에 붙이는 데 쓴다."""
+        if not image.hasAlphaChannel():
+            return 0
+        import numpy as np
+
+        argb = image.convertToFormat(QImage.Format.Format_ARGB32)
+        rows = np.frombuffer(argb.constBits(), np.uint8).reshape(argb.height(), argb.bytesPerLine())
+        opaque_rows = np.flatnonzero(rows[:, 3:argb.width() * 4:4].any(axis=1))
+        return int(opaque_rows[0]) if opaque_rows.size else 0
 
     @classmethod
     def _clamp(cls, value, low, high, default):
@@ -435,6 +440,7 @@ class CharacterWidget(QWidget):
                     ground_offset, self.GROUND_OFFSET_MIN, self.GROUND_OFFSET_MAX, self.ground_offset
                 ))
         self.image_cache.cache.clear()
+        self.image_head_top_cache.clear()
         self.update_frame()
 
     def load_animations(self):
@@ -471,6 +477,7 @@ class CharacterWidget(QWidget):
         if not loaded:
             return False
         self.image_cache.cache.clear()
+        self.image_head_top_cache.clear()
         self.animations = loaded
         if not self.animations:
             logging.error("캐릭터 애니메이션을 하나도 로드하지 못했습니다. images 경로를 확인하세요.")
@@ -633,6 +640,7 @@ class CharacterWidget(QWidget):
 
     def update_frame(self):
         """현재 프레임 업데이트 (레이아웃 호출 최소화로 최적화)"""
+        self._current_head_top_offset = 0
         if self.current_animation not in self.animations:
             return
             
@@ -646,6 +654,9 @@ class CharacterWidget(QWidget):
         
         if not pixmap:
             return
+
+        cache_key = f"{frame_path}_{'flip' if flip else 'normal'}_0"
+        self._current_head_top_offset = self.image_head_top_cache.get(cache_key, 0)
 
         # 크기 변경 여부 확인
         size_changed = (pixmap.size() != self.label.size())
@@ -669,8 +680,9 @@ class CharacterWidget(QWidget):
 
         if self.speech_bubble:
             self.speech_bubble.update_position()
-        if self.emote_overlay.text():
-            self._position_emote_overlay()
+
+    def head_top_offset(self) -> int:
+        return self._current_head_top_offset
 
     def next_frame(self):
         """다음 프레임으로 (불필요한 호출 방지)"""
@@ -1586,13 +1598,6 @@ class CharacterWidget(QWidget):
         """감정 설정 (외부에서 호출 - 스레드 안전)"""
         self.change_emotion_signal.emit(emotion)
 
-    def _position_emote_overlay(self) -> None:
-        self.emote_overlay.adjustSize()
-        self.emote_overlay.move(
-            (self.width() - self.emote_overlay.width()) // 2,
-            max(0, self.height() // 12),
-        )
-
     @Slot(str)
     def _change_emotion_slot(self, emotion):
         """실제 감정 표현 처리 (메인 스레드)"""
@@ -1612,11 +1617,6 @@ class CharacterWidget(QWidget):
             for animation in animations
         ]
         self.set_animation(_RNG.choices(animations, weights=weights, k=1)[0])
-        self.emote_overlay.setText(details["emoji"])
-        self._position_emote_overlay()
-        self.emote_overlay.show()
-        self.emote_overlay.raise_()
-        self.emote_overlay_timer.start(1500)
 
         if (
             details.get("jump")
@@ -1726,4 +1726,5 @@ class CharacterWidget(QWidget):
         if self.speech_bubble:
             self.speech_bubble.close()
         self.image_cache.cache.clear()
+        self.image_head_top_cache.clear()
         self.close()

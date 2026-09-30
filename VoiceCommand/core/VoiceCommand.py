@@ -13,7 +13,8 @@ from typing import TypedDict
 import speech_recognition as sr
 
 from core.resource_manager import is_bundled
-from core.emotions import EMOTION_EMOJI, parse_emotion_text
+from agent.assistant_text_utils import strip_trailing_symbol_tokens
+from core.emotions import parse_emotion_text
 
 # SSL 인증서 경로 설정 (PyInstaller/Nuitka 배포 환경)
 if is_bundled():
@@ -294,9 +295,8 @@ def reconnect_tts_signals():
 
 def _show_tts_bubble(text, duration: int = 0):
     """어떤 TTS 경로든 동일한 말풍선을 표시하되, 직전 중복 표시는 짧게 억제."""
-    emotion, pure_text = parse_emotion_text(text)
-    emoji = EMOTION_EMOJI.get(emotion, "")
-    display_text = f"{emoji} {pure_text}" if emoji and pure_text else (pure_text or text)
+    _, pure_text = parse_emotion_text(text)
+    display_text = strip_trailing_symbol_tokens(pure_text or text)
     now = time.monotonic()
     last_text, last_ts = _state.last_bubble_signature
     if display_text == last_text and (now - last_ts) < 0.5:
@@ -494,6 +494,7 @@ def text_to_speech(
     if stop_event is not None and stop_event.is_set():
         return False
     emotion, text = parse_emotion_text(text)
+    text = strip_trailing_symbol_tokens(text)
 
     if _quiet_bubble_only_enabled():
         if _state.character_widget:
@@ -564,6 +565,7 @@ def play_cached_tts(
     if not hasattr(provider, "speak_cached"):
         return False
     emotion, text = parse_emotion_text(text)
+    text = strip_trailing_symbol_tokens(text)
     try:
         return bool(
             provider.speak_cached(

@@ -5,6 +5,7 @@ import os
 import json
 
 from PySide6.QtCore import QPoint, QRect, QPropertyAnimation, Qt
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 
 from ui.character_widget import (
@@ -15,6 +16,7 @@ from ui.character_widget import (
     _load_random_custom_message,
     _sync_walk_animation_end_value,
 )
+from ui.speech_bubble import SpeechBubble
 
 
 class _FakeAnimation:
@@ -139,18 +141,52 @@ class CharacterWidgetHelperTests(unittest.TestCase):
 
         self.assertIsNone(widget.move_animation)
 
-    def test_emote_overlay_keeps_idle_frame_animation_running(self):
+    def test_emotion_keeps_idle_frame_animation_running_without_overlay(self):
         widget = self._make_widget()
 
         with patch("ui.character_widget._RNG.choices", return_value=["idle"]):
             widget._change_emotion_slot("기쁨")
-        widget._activity_away = True
-        widget._refresh_activity_behavior()
 
-        self.assertEqual(widget.emote_overlay.text(), "😊")
         self.assertEqual(widget.current_animation, "idle")
-        self.assertTrue(widget.emote_overlay_timer.isActive())
+        self.assertFalse(hasattr(widget, "emote_overlay"))
         self.assertTrue(widget.animation_timer.isActive())
+
+    def test_speech_bubble_anchors_to_cached_opaque_frame_top(self):
+        widget = self._make_widget()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            image_path = os.path.join(tmp, "transparent-top.png")
+            image = QImage(40, 40, QImage.Format_ARGB32)
+            image.fill(Qt.transparent)
+            image.setPixelColor(5, 12, QColor(255, 255, 255, 255))
+            self.assertTrue(image.save(image_path))
+
+            widget.image_scale = 1.0
+            widget.animations = {"idle": [image_path]}
+            widget.current_animation = "idle"
+            widget.frame_index = 0
+            widget.facing_right = True
+            widget.move(100, 200)
+            with (
+                patch.object(widget, "get_ground_y", return_value=200),
+                patch.object(
+                    widget,
+                    "get_screen_geometry",
+                    return_value=QRect(0, 0, 1920, 1080),
+                ),
+            ):
+                widget.update_frame()
+                bubble = SpeechBubble("hello", widget)
+
+            expected_y = (
+                widget.mapToGlobal(QPoint(0, 0)).y()
+                + 12
+                - bubble.height()
+                - 5
+            )
+            self.assertEqual(widget.head_top_offset(), 12)
+            self.assertEqual(bubble.y(), max(10, expected_y))
+            bubble.close()
 
     def test_mouse_release_restarts_animation_timer_at_70ms(self):
         widget = self._make_widget()
