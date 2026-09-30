@@ -168,8 +168,10 @@ graph TD
 - 업데이트 확인·알림과 설치본 안정성 개선
 - v1.2.0: TTS 전반의 보이스 클로닝·감정 표현 — OpenAI 호환 TTS, ElevenLabs 음성 복제와 v3 감정 태그, OpenAI 커스텀 보이스
 - v1.2.0: 설치본이 시작 직후 종료되던 문제를 고치고, 릴리스 전에 설치본을 실제로 실행해 확인
+- v1.2.1: Fish Audio·ElevenLabs TTS가 첫 음성 조각부터 재생되고, TTS 볼륨 설정이 모든 엔진에 적용되며, TTS 재생 실패를 말풍선으로 알림
+- v1.2.1: 말풍선이 캐릭터 머리 바로 위에 붙고, "네이버 열어줘"처럼 앱이 없으면 알려진 사이트를 브라우저로 열며, 누락된 번역을 채움
 
-자세한 내용은 **[v1.2.0 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**에서 확인할 수 있습니다.
+자세한 내용은 **[v1.2.1 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.1)**에서 확인할 수 있습니다.
 
 ## 개발자용 문서
 
