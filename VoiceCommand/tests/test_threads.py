@@ -16,6 +16,56 @@ from core.core_manager import start_file_watcher
 
 
 class TTSThreadTests(unittest.TestCase):
+    def _run_tts_results(self, results, queue_empty_results=None):
+        thread = TTSThread()
+        for index in range(len(results)):
+            thread.queue.put(f"speech {index}")
+        thread.queue.put(None)
+        thread._collect_batch = MagicMock(
+            side_effect=lambda text, _stop_event: (text, 1, False)
+        )
+        thread.queue.empty = MagicMock(
+            side_effect=queue_empty_results or [True] * len(results)
+        )
+        voice_command = ModuleType("VoiceCommand")
+        voice_command.text_to_speech = MagicMock(side_effect=results)
+        voice_command._handle_tts_playback_finished = MagicMock()
+        voice_command._show_tts_bubble = MagicMock()
+
+        with (
+            patch.dict(sys.modules, {"VoiceCommand": voice_command}),
+            patch("core.threads._", return_value="TTS failed"),
+        ):
+            thread.run()
+
+        return voice_command
+
+    def test_cancelled_tts_does_not_show_failure_notice(self):
+        def cancel_speech(_text, stop_event=None):
+            stop_event.set()
+            return False
+
+        voice_command = self._run_tts_results(
+            [False, cancel_speech], queue_empty_results=[False, True]
+        )
+
+        voice_command._show_tts_bubble.assert_not_called()
+
+    def test_consecutive_tts_failures_show_failure_notice_once(self):
+        voice_command = self._run_tts_results([False, False])
+
+        voice_command._show_tts_bubble.assert_called_once_with(
+            "TTS failed", duration=3000
+        )
+
+    def test_tts_success_resets_failure_notice_for_next_failure(self):
+        voice_command = self._run_tts_results([False, False, True, False])
+
+        self.assertEqual(voice_command._show_tts_bubble.call_count, 2)
+        voice_command._show_tts_bubble.assert_called_with(
+            "TTS failed", duration=3000
+        )
+
     def test_collect_batch_merges_immediately_queued_messages(self):
         thread = TTSThread()
         thread.queue.put("둘째 문장입니다.")

@@ -180,7 +180,11 @@ def resolve_agent_task_goal(goal: str, explanation: str) -> str:
 
 
 def strip_trailing_symbol_tokens(text: str) -> str:
-    return re.sub(r"(?:\s+[#\[\]{}<>|\\]+)+\s*$", "", text or "")
+    def remove_mixed_symbols(match):
+        symbols = re.sub(r"\s", "", match.group())
+        return "" if len(set(symbols)) > 1 else match.group()
+
+    return re.sub(r"(?:\s+[#\[\]{}<>|\\]+)+\s*$", remove_mixed_symbols, text or "")
 
 
 def clean_tool_artifact_text(

@@ -19,6 +19,7 @@ from core.constants import (
 )
 from core.config_manager import ConfigManager
 from core.stt_provider import create_stt_provider
+from i18n.translator import _
 
 _RNG = secrets.SystemRandom()
 
@@ -608,6 +609,8 @@ class TTSThread(QThread):
 
     def run(self):
         logging.info("TTSThread 구동 중")
+        tts_failure_pending = False
+        tts_failure_notice_shown = False
         while True:
             try:
                 with self._batch_lock:
@@ -632,9 +635,20 @@ class TTSThread(QThread):
                         and not stop_event.is_set()
                     ):
                         self.current_text = batch_text
-                        text_to_speech(batch_text, stop_event=stop_event)
+                        tts_succeeded = text_to_speech(
+                            batch_text, stop_event=stop_event
+                        )
+                        if stop_event.is_set():
+                            tts_failure_pending = False
+                        elif tts_succeeded:
+                            tts_failure_pending = False
+                            tts_failure_notice_shown = False
+                        else:
+                            tts_failure_pending = True
+                    elif stop_event.is_set():
+                        tts_failure_pending = False
                 finally:
-                    for _ in range(task_count):
+                    for _task in range(task_count):
                         self.queue.task_done()
                     with self._batch_lock:
                         self.current_text = ""
@@ -642,10 +656,25 @@ class TTSThread(QThread):
                             self._active_stop_event = None
                         self.is_processing = False
 
+                if stop_event.is_set():
+                    tts_failure_pending = False
+
                 # 큐가 완전히 비었을 때 현재 상태(STT 대기 포함)에 맞게 말풍선을 정리
                 if self.queue.empty():
-                    from VoiceCommand import _handle_tts_playback_finished
+                    from VoiceCommand import (
+                        _handle_tts_playback_finished,
+                        _show_tts_bubble,
+                    )
+
                     _handle_tts_playback_finished()
+                    if tts_failure_pending:
+                        if not tts_failure_notice_shown:
+                            _show_tts_bubble(
+                                _("TTS 재생에 실패했습니다. 로그에서 자세한 내용을 확인하세요."),
+                                duration=3000,
+                            )
+                            tts_failure_notice_shown = True
+                        tts_failure_pending = False
                 if stop_requested:
                     break
                     

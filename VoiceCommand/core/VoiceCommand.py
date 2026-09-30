@@ -880,6 +880,7 @@ def enable_game_mode():
                 api_key=settings.get("fish_api_key", ""),
                 reference_id=settings.get("fish_reference_id", ""),
                 model=settings.get("fish_model", "s2.1-pro-free"),
+                tts_volume=settings.get("tts_volume", 1.0),
             )
         else:
             initialize_tts()

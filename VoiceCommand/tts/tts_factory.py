@@ -78,6 +78,7 @@ def _create_openai_compat_tts(settings):
             reference_text=get_reference_text(settings),
             emotion_enabled=settings.get("tts_emotion_enabled", True),
             language=get_language(),
+            tts_volume=settings.get("tts_volume", 1.0),
         )
         logging.info("OpenAI 호환 TTS 초기화 완료")
         return provider, "openai_compat_tts"
@@ -95,6 +96,7 @@ def _create_openai_tts(settings):
             model=settings.get("openai_tts_model", "tts-1"),
             emotion_enabled=settings.get("tts_emotion_enabled", True),
             custom_voice_id=settings.get("openai_tts_custom_voice_id", ""),
+            tts_volume=settings.get("tts_volume", 1.0),
         )
         logging.info("OpenAI TTS 초기화 완료")
         return provider, "openai_tts"
@@ -111,6 +113,7 @@ def _create_elevenlabs(settings):
             voice_id=settings.get("elevenlabs_voice_id", ""),
             model_id=settings.get("elevenlabs_model_id", "eleven_multilingual_v2"),
             emotion_enabled=settings.get("tts_emotion_enabled", True),
+            tts_volume=settings.get("tts_volume", 1.0),
         )
         logging.info("ElevenLabs TTS 초기화 완료")
         return provider, "elevenlabs"
@@ -128,6 +131,7 @@ def _create_fish(settings):
                 api_key=api_key,
                 reference_id=settings.get("fish_reference_id", ""),
                 model=settings.get("fish_model", "s2.1-pro-free"),
+                tts_volume=settings.get("tts_volume", 1.0),
             )
             logging.info("Fish Audio TTS 초기화 완료")
             return provider, "fish"
@@ -149,6 +153,7 @@ def _create_edge(settings):
             emotion_enabled=settings.get("tts_emotion_enabled", True),
             synthesis_timeout_seconds=settings.get("tts_sentence_timeout_seconds", 10),
             cache_max_bytes=settings.get("tts_cache_max_bytes", 50 * 1024 * 1024),
+            tts_volume=settings.get("tts_volume", 1.0),
         )
         logging.info("Edge TTS 초기화 완료")
         return provider, "edge"

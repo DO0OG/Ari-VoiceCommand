@@ -102,14 +102,14 @@ class TextInterfaceThread(QThread):
 
         # 폴백: ai_assistant 직접 호출
         if hasattr(self.ai_assistant, "chat_with_tools"):
-            response, _ = self._invoke_with_optional_stream(
+            response, _meta = self._invoke_with_optional_stream(
                 self.ai_assistant.chat_with_tools,
                 self.query,
                 include_context=True,
             )
             return response
         if hasattr(self.ai_assistant, "process_query"):
-            response, _, _ = self.ai_assistant.process_query(self.query)
+            response, _meta, _extra = self.ai_assistant.process_query(self.query)
             return response
         if hasattr(self.ai_assistant, "chat"):
             return self._invoke_with_optional_stream(self.ai_assistant.chat, self.query)

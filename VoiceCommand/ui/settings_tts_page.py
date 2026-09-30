@@ -450,12 +450,19 @@ class _TTSSettingsPage(QWidget):
             return
         voice_name = os.path.splitext(os.path.basename(reference_wav))[0] or "Ari Voice"
 
-        def finish(voice_id, error):
+        def finish(result, error):
             if error:
                 QMessageBox.warning(self, _("음성 복제 실패"), error)
                 return
+            voice_id, requires_verification = result
             self.elevenlabs_voice_combo.addItem(voice_name, voice_id)
             self.elevenlabs_voice_combo.setCurrentIndex(self.elevenlabs_voice_combo.count() - 1)
+            if requires_verification:
+                QMessageBox.information(
+                    self,
+                    _("음성 복제"),
+                    _("ElevenLabs에서 추가 인증을 마쳐야 이 음성을 쓸 수 있습니다."),
+                )
 
         def clone():
             from tts.tts_elevenlabs import create_voice_clone

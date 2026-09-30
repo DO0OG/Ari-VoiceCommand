@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, Signal
 from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
 from tts.pcm_playback import write_pcm_chunks
+from tts.secret_utils import redact_secret
 
 VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 MODELS = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
@@ -25,15 +26,17 @@ class OpenAITTS(QObject):
 
     def __init__(
         self, api_key="", voice="nova", model="tts-1", speed=1.0,
-        emotion_enabled=True, custom_voice_id="",
+        emotion_enabled=True, custom_voice_id="", tts_volume=1.0,
     ):
         super().__init__()
         self.voice = {"id": custom_voice_id} if custom_voice_id else voice
         self.model = model
         self.speed = max(0.25, min(4.0, speed))  # OpenAI 허용 범위
         self.emotion_enabled = bool(emotion_enabled)
+        self.tts_volume = tts_volume
         self.is_playing = False
         self._client = None
+        self._api_key = api_key
         self._state_lock = threading.Lock()
         self._active_stop_event = None
 
@@ -45,7 +48,7 @@ class OpenAITTS(QObject):
             self._client = openai_module.OpenAI(api_key=api_key)
             logging.info("OpenAI TTS 초기화 완료 (voice=%s, model=%s)", voice, model)
         except Exception as e:
-            logging.error("OpenAI TTS 초기화 실패: %s", e)
+            logging.error("OpenAI TTS 초기화 실패: %s", redact_secret(str(e), api_key))
             raise RuntimeError("OpenAI TTS client initialization failed") from e
 
     def speak(
@@ -100,7 +103,8 @@ class OpenAITTS(QObject):
             )
             try:
                 success = write_pcm_chunks(
-                    stream, pcm_data, stop_event, _SAMPLE_RATE
+                    stream, pcm_data, stop_event, _SAMPLE_RATE,
+                    volume=self.tts_volume,
                 )
             finally:
                 with get_audio_output_lock():
@@ -112,7 +116,9 @@ class OpenAITTS(QObject):
             return True
 
         except Exception as exc:
-            logging.error("OpenAI TTS speak 오류: %s", exc)
+            logging.error(
+                "OpenAI TTS speak 오류: %s", redact_secret(str(exc), self._api_key)
+            )
             return False
         finally:
             with self._state_lock:

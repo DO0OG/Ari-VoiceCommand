@@ -248,14 +248,29 @@ class ElevenLabsSettingsApiTests(unittest.TestCase):
             wav_path = Path(directory) / "reference.wav"
             wav_path.write_bytes(b"wav-data")
             with patch("requests.post", return_value=response) as post:
-                voice_id = create_voice_clone("test-key", str(wav_path), "My Voice")
+                voice_id, requires_verification = create_voice_clone(
+                    "test-key", str(wav_path), "My Voice"
+                )
 
         self.assertEqual(voice_id, "cloned-voice")
+        self.assertFalse(requires_verification)
         self.assertEqual(post.call_args.kwargs["data"], {"name": "My Voice"})
         uploaded = post.call_args.kwargs["files"]["files"]
         self.assertEqual(uploaded[0], "reference.wav")
         self.assertEqual(uploaded[2], "audio/wav")
         self.assertEqual(post.call_args.kwargs["timeout"], (10, 60))
+
+    def test_clone_returns_additional_verification_requirement(self):
+        response = self._response(
+            {"voice_id": "cloned-voice", "requires_verification": True}
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / "reference.wav"
+            wav_path.write_bytes(b"wav-data")
+            with patch("requests.post", return_value=response):
+                result = create_voice_clone("test-key", str(wav_path), "My Voice")
+
+        self.assertEqual(result, ("cloned-voice", True))
 
     def test_clone_error_includes_server_detail_without_api_key(self):
         response = Mock()

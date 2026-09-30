@@ -171,6 +171,22 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         cache.get.assert_not_called()
         cache.put.assert_not_called()
 
+    def test_successful_speak_does_not_set_caller_stop_event(self):
+        provider = EdgeTTS(audio_cache=Mock())
+        stream = Mock()
+        stop_event = threading.Event()
+
+        async def synthesize(_text, _emotion=None):
+            return b"mp3"
+
+        with (
+            self._playback_patches(stream),
+            patch.object(provider, "_synthesize", new=synthesize),
+        ):
+            self.assertTrue(provider.speak("hello", stop_event=stop_event))
+
+        self.assertFalse(stop_event.is_set())
+
     def test_stop_closes_reused_stream_without_writing_remaining_chunks(self):
         provider = EdgeTTS(audio_cache=Mock())
         stream = Mock()
