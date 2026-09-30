@@ -3,6 +3,7 @@ from io import BytesIO
 import os
 import struct
 import tempfile
+import threading
 import unittest
 import wave
 from types import SimpleNamespace
@@ -118,6 +119,30 @@ class OpenAICompatTTSTests(unittest.TestCase):
         self.assertTrue(self._speak_with_mock_audio(provider))
 
         self.assertNotIn("instructions", create.call_args.kwargs)
+
+    def test_request_failure_logs_detail_without_api_key_and_ignores_cancel(self):
+        provider, _factory, create = self._make_provider(api_key="secret-key")
+        create.side_effect = RuntimeError("401 unauthorized secret-key")
+
+        with patch("tts.tts_openai_compat.logging.error") as log_error:
+            self.assertFalse(provider.speak("hello"))
+
+        detail = log_error.call_args.args[1]
+        self.assertIn("401 unauthorized", detail)
+        self.assertNotIn("secret-key", detail)
+
+        cancelled, _factory, create = self._make_provider(api_key="secret-key")
+        stop_event = threading.Event()
+
+        def cancel_then_fail(**_kwargs):
+            stop_event.set()
+            raise RuntimeError("request closed")
+
+        create.side_effect = cancel_then_fail
+        with patch("tts.tts_openai_compat.logging.error") as log_error:
+            self.assertFalse(cancelled.speak("hello", stop_event=stop_event))
+
+        log_error.assert_not_called()
 
     def test_reference_over_five_mib_fails_before_request(self):
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as reference:

@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject, Signal
 from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
 from tts.pcm_playback import play_pcm_stream, response_pcm_chunks
+from tts.secret_utils import redact_secret as _redact_secret
 
 _DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (다국어)
 _SAMPLE_RATE = 24000
@@ -24,10 +25,6 @@ _UPLOAD_TIMEOUT = (10, 60)
 def _require_api_key(api_key: str) -> None:
     if not api_key:
         raise ValueError("ElevenLabs API key is missing")
-
-
-def _redact_secret(value: str, api_key: str) -> str:
-    return value.replace(api_key, "[redacted]") if api_key else value
 
 
 def _check_response(response, requests, api_key: str) -> None:
@@ -108,8 +105,8 @@ def fetch_voices(api_key: str) -> list[dict]:
     return voices
 
 
-def create_voice_clone(api_key: str, wav_path: str, name: str) -> str:
-    """참조 WAV를 올려 클론 음성 ID를 반환한다."""
+def create_voice_clone(api_key: str, wav_path: str, name: str) -> tuple[str, bool]:
+    """참조 WAV를 올려 클론 음성 ID와 추가 인증 필요 여부를 반환한다."""
     _require_api_key(api_key)
     try:
         import requests
@@ -133,14 +130,20 @@ def create_voice_clone(api_key: str, wav_path: str, name: str) -> str:
         raise RuntimeError(f"ElevenLabs API request failed: {detail}") from None
     _check_response(response, requests, api_key)
     try:
-        voice_id = response.json().get("voice_id")
+        result = response.json()
+        voice_id = result.get("voice_id") if isinstance(result, dict) else None
+        requires_verification = (
+            result.get("requires_verification") is True
+            if isinstance(result, dict)
+            else False
+        )
     except (AttributeError, ValueError):
         voice_id = None
     if not isinstance(voice_id, str) or not voice_id:
         detail = _redact_secret(str(getattr(response, "text", "")), api_key).strip()
         detail = detail[:1000]
         raise RuntimeError(detail or "ElevenLabs did not return a voice ID")
-    return voice_id
+    return voice_id, requires_verification
 
 
 class ElevenLabsTTS(QObject):
@@ -148,7 +151,8 @@ class ElevenLabsTTS(QObject):
 
     def __init__(self, api_key="", voice_id="",
                  model_id="eleven_multilingual_v2",
-                 stability=0.5, similarity_boost=0.75, emotion_enabled=True):
+                 stability=0.5, similarity_boost=0.75, emotion_enabled=True,
+                 tts_volume=1.0):
         super().__init__()
         _require_api_key(api_key)
         self.api_key = api_key
@@ -157,6 +161,7 @@ class ElevenLabsTTS(QObject):
         self.stability = stability
         self.similarity_boost = similarity_boost
         self.emotion_enabled = bool(emotion_enabled)
+        self.tts_volume = tts_volume
         self.is_playing = False
         self._session = None
         self._state_lock = threading.Lock()
@@ -276,6 +281,7 @@ class ElevenLabsTTS(QObject):
             _SAMPLE_RATE,
             on_start=lambda: logging.info("[TTS] ElevenLabs 재생 시작"),
             on_complete=on_complete,
+            volume=self.tts_volume,
         )
         if not success or stop_event.is_set():
             return False

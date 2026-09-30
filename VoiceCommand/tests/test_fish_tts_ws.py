@@ -102,6 +102,20 @@ class FishTTSWebSocketTests(unittest.TestCase):
         self.assertEqual(finished, [True])
         open_stream.assert_not_called()
 
+    def test_speak_redacts_api_key_from_error_log(self):
+        provider = self._provider()
+
+        def fail_request(_text):
+            raise RuntimeError(f"failed with {provider.api_key}")
+
+        provider._stream_tts = fail_request
+
+        with self.assertLogs(level="ERROR") as captured:
+            self.assertFalse(provider.speak("hello"))
+
+        self.assertNotIn(provider.api_key, "\n".join(captured.output))
+        self.assertIn("[redacted]", "\n".join(captured.output))
+
     def test_stop_cancels_worker_speak_and_emits_once(self):
         read_started = threading.Event()
         response_closed = threading.Event()

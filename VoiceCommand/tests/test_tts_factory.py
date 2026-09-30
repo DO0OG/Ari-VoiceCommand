@@ -51,7 +51,11 @@ class TTSFactoryTests(unittest.TestCase):
     def test_edge_provider_receives_emotion_setting(self):
         with patch("tts.tts_edge.EdgeTTS") as edge_tts:
             provider, mode = create_tts_provider(
-                {"tts_mode": "edge", "tts_emotion_enabled": False}
+                {
+                    "tts_mode": "edge",
+                    "tts_emotion_enabled": False,
+                    "tts_volume": 0.5,
+                }
             )
 
         self.assertIs(provider, edge_tts.return_value)
@@ -62,6 +66,7 @@ class TTSFactoryTests(unittest.TestCase):
             emotion_enabled=False,
             synthesis_timeout_seconds=10,
             cache_max_bytes=50 * 1024 * 1024,
+            tts_volume=0.5,
         )
 
     def test_openai_client_initialization_failure_falls_back_to_edge(self):
@@ -112,6 +117,33 @@ class TTSFactoryTests(unittest.TestCase):
         self.assertEqual(constructor.call_args.kwargs["reference_wav"], "reference.wav")
         self.assertEqual(constructor.call_args.kwargs["reference_text"], "reference text")
         self.assertEqual(constructor.call_args.kwargs["language"], "ja")
+
+    def test_pcm_provider_factories_forward_shared_volume(self):
+        volume = 0.5
+        with (
+            patch("tts.tts_openai_compat.OpenAICompatTTS") as compat,
+            patch("tts.voice_reference.get_reference_wav", return_value=""),
+            patch("tts.voice_reference.get_reference_text", return_value=""),
+            patch("i18n.translator.get_language", return_value="ko"),
+        ):
+            create_tts_provider(
+                {"tts_mode": "openai_compat_tts", "tts_volume": volume}
+            )
+        self.assertEqual(compat.call_args.kwargs["tts_volume"], volume)
+
+        with patch("tts.tts_openai.OpenAITTS") as openai:
+            create_tts_provider({"tts_mode": "openai_tts", "tts_volume": volume})
+        self.assertEqual(openai.call_args.kwargs["tts_volume"], volume)
+
+        with patch("tts.tts_elevenlabs.ElevenLabsTTS") as elevenlabs:
+            create_tts_provider({"tts_mode": "elevenlabs", "tts_volume": volume})
+        self.assertEqual(elevenlabs.call_args.kwargs["tts_volume"], volume)
+
+        with patch("tts.fish_tts_ws.FishTTSWebSocket") as fish:
+            create_tts_provider(
+                {"tts_mode": "fish", "fish_api_key": "key", "tts_volume": volume}
+            )
+        self.assertEqual(fish.call_args.kwargs["tts_volume"], volume)
 
 
 if __name__ == "__main__":

@@ -4134,3 +4134,9 @@ msgstr "ctypes pointer casting"
 
 msgid "게임 모드 해제. 원래 TTS로 복원되었습니다."
 msgstr "Game mode disabled. Original TTS has been restored."
+
+msgid "ElevenLabs에서 추가 인증을 마쳐야 이 음성을 쓸 수 있습니다."
+msgstr "You must complete additional verification with ElevenLabs before you can use this voice."
+
+msgid "TTS 재생에 실패했습니다. 로그에서 자세한 내용을 확인하세요."
+msgstr "TTS playback failed. Check the logs for details."

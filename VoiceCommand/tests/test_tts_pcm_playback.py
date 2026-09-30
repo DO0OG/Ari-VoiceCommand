@@ -1,3 +1,4 @@
+import struct
 import threading
 import unittest
 from unittest.mock import Mock
@@ -10,6 +11,30 @@ from tts.pcm_playback import (
 
 
 class PCMPlaybackTests(unittest.TestCase):
+    def test_volume_scales_pcm_and_clips_to_int16(self):
+        samples = (1000, -1000, 20000, -20000)
+        cases = (
+            (0, (0, 0, 0, 0)),
+            (0.5, (500, -500, 10000, -10000)),
+            (1, samples),
+            (2, (2000, -2000, 32767, -32768)),
+        )
+        for volume, expected in cases:
+            with self.subTest(volume=volume):
+                stream = Mock()
+                pcm = struct.pack("<hhhh", *samples)
+
+                self.assertTrue(
+                    write_pcm_chunks(
+                        stream, pcm, threading.Event(), 24000, volume=volume
+                    )
+                )
+
+                self.assertEqual(
+                    b"".join(call.args[0] for call in stream.write.call_args_list),
+                    struct.pack("<hhhh", *expected),
+                )
+
     def test_cancel_stops_writing_after_current_chunk(self):
         stop_event = threading.Event()
         stream = Mock()
@@ -43,6 +68,24 @@ class PCMPlaybackTests(unittest.TestCase):
         self.assertEqual(
             b"".join(call.args[0] for call in stream.write.call_args_list),
             b"\x01\x02\x03\x04",
+        )
+
+    def test_stream_applies_volume_after_joining_split_samples(self):
+        stream = Mock()
+
+        self.assertTrue(
+            write_pcm_stream_chunks(
+                stream,
+                [b"\xe8", b"\x03\x18\xfc"],
+                threading.Event(),
+                24000,
+                volume=0.5,
+            )
+        )
+
+        self.assertEqual(
+            b"".join(call.args[0] for call in stream.write.call_args_list),
+            struct.pack("<hh", 500, -500),
         )
 
     def test_stream_stops_after_cancel_during_write(self):

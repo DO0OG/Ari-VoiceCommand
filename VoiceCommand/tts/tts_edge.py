@@ -126,11 +126,13 @@ class EdgeTTS(QObject):
         cache_max_bytes=DEFAULT_MAX_BYTES,
         audio_cache=None,
         emotion_enabled=True,
+        tts_volume=1.0,
     ):
         super().__init__()
         self.voice = voice
         self.rate = rate
         self.volume = volume
+        self.tts_volume = tts_volume
         self.emotion_enabled = bool(emotion_enabled)
         try:
             timeout = float(synthesis_timeout_seconds)
@@ -332,8 +334,12 @@ class EdgeTTS(QObject):
             self._put_synthesis_result(result_queue, None, stop_event)
 
     @staticmethod
-    def _write_pcm_chunks(stream, pcm: bytes, stop_event: threading.Event) -> bool:
-        return write_pcm_chunks(stream, pcm, stop_event, _SAMPLE_RATE)
+    def _write_pcm_chunks(
+        stream, pcm: bytes, stop_event: threading.Event, volume: float = 1.0
+    ) -> bool:
+        return write_pcm_chunks(
+            stream, pcm, stop_event, _SAMPLE_RATE, volume=volume
+        )
 
     def _create_output_stream(self):
         from audio.audio_manager import get_output_device_index
@@ -368,6 +374,7 @@ class EdgeTTS(QObject):
 
         started_at = time.monotonic()
         result_queue = queue.Queue(maxsize=1)
+        synthesis_stop_event = threading.Event()
         try:
             from i18n.translator import get_language
 
@@ -385,13 +392,14 @@ class EdgeTTS(QObject):
                 emotion,
                 cacheable_messages,
                 language,
-                stop_event,
+                synthesis_stop_event,
                 result_queue,
             ),
             name="EdgeTTS-Synthesis",
             daemon=True,
         )
-        producer.start()
+        if not stop_event.is_set():
+            producer.start()
 
         stream = None
         played_audio = False
@@ -408,7 +416,9 @@ class EdgeTTS(QObject):
                     break
                 if stream is None:
                     stream = self._create_output_stream()
-                if not self._write_pcm_chunks(stream, pcm, stop_event):
+                if not self._write_pcm_chunks(
+                    stream, pcm, stop_event, volume=self.tts_volume
+                ):
                     success = False
                     break
                 played_audio = True
@@ -418,14 +428,12 @@ class EdgeTTS(QObject):
         finally:
             if stop_event.is_set():
                 success = False
-            if not success:
-                stop_event.set()
+            synthesis_stop_event.set()
             if stream is not None:
                 with get_audio_output_lock():
                     GlobalAudio.close_stream(stream)
             if producer.is_alive():
                 producer.join(timeout=0.2)
-            stop_event.set()
             with self._state_lock:
                 if self._active_stop_event is stop_event:
                     self._active_stop_event = None
@@ -484,7 +492,9 @@ class EdgeTTS(QObject):
             if stop_event.is_set():
                 return False
             stream = self._create_output_stream()
-            return self._write_pcm_chunks(stream, pcm, stop_event)
+            return self._write_pcm_chunks(
+                stream, pcm, stop_event, volume=self.tts_volume
+            )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             logging.warning("Edge TTS 캐시 재생 실패: %s", type(exc).__name__)
             return False

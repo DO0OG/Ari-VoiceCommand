@@ -1,7 +1,10 @@
 """PCM 오디오를 취소 가능한 짧은 조각으로 재생한다."""
 
+import math
 import threading
 from collections.abc import Callable, Iterable
+
+import numpy as np
 
 from audio.audio_manager import get_audio_output_lock
 
@@ -12,8 +15,24 @@ def write_pcm_chunks(
     stop_event: threading.Event,
     sample_rate: int,
     on_write: Callable[[], None] | None = None,
+    volume: float = 1.0,
 ) -> bool:
     """모노 16비트 PCM을 최대 100ms 조각으로 쓴다."""
+    try:
+        volume = float(volume)
+    except (TypeError, ValueError):
+        volume = 1.0
+    if not math.isfinite(volume):
+        volume = 1.0
+    volume = min(max(volume, 0.0), 2.0)
+    sample_bytes = len(pcm) & ~1
+    if volume != 1.0 and sample_bytes:
+        samples = np.frombuffer(pcm[:sample_bytes], dtype=np.int16).astype(np.float32)
+        pcm = (
+            np.clip(samples * volume, -32768, 32767).astype(np.int16).tobytes()
+            + pcm[sample_bytes:]
+        )
+
     chunk_bytes = max(2, sample_rate * 2 // 10)
     for offset in range(0, len(pcm), chunk_bytes):
         if stop_event.is_set():
@@ -31,6 +50,7 @@ def write_pcm_stream_chunks(
     stop_event: threading.Event,
     sample_rate: int,
     on_start: Callable[[], None] | None = None,
+    volume: float = 1.0,
 ) -> bool:
     """스트리밍 모노 S16LE PCM을 쓰고 청크 경계의 홀수 바이트를 보관한다."""
     remainder = b""
@@ -58,6 +78,7 @@ def write_pcm_stream_chunks(
                 stop_event,
                 sample_rate,
                 on_write=on_first_write,
+                volume=volume,
             ):
                 return False
 
@@ -102,6 +123,7 @@ def play_pcm_stream(
     sample_rate: int,
     on_start: Callable[[], None] | None = None,
     on_complete: Callable[[bool], None] | None = None,
+    volume: float = 1.0,
 ) -> bool:
     """Open, stream, close, then report whether playback completed."""
     stream = None
@@ -110,7 +132,8 @@ def play_pcm_stream(
         if not stop_event.is_set():
             stream = open_stream()
             success = write_pcm_stream_chunks(
-                stream, chunks, stop_event, sample_rate, on_start=on_start
+                stream, chunks, stop_event, sample_rate, on_start=on_start,
+                volume=volume,
             )
         return success
     finally:

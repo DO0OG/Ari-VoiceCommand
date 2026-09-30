@@ -9,6 +9,7 @@ from PySide6.QtCore import QObject, Signal
 
 from core.emotions import DEFAULT_EMOTION
 from tts.pcm_playback import play_pcm_stream, response_pcm_chunks
+from tts.secret_utils import redact_secret
 
 
 class FishTTSWebSocket(QObject):
@@ -21,13 +22,14 @@ class FishTTSWebSocket(QObject):
     # __init__을 거치지 않는 경우에도 기본값을 유지한다.
     model = _DEFAULT_MODEL
 
-    def __init__(self, api_key="", reference_id="", model=""):
+    def __init__(self, api_key="", reference_id="", model="", tts_volume=1.0):
         super().__init__()
         from audio.audio_manager import GlobalAudio
 
         self.api_key = api_key
         self.reference_id = reference_id
         self.model = model or self._DEFAULT_MODEL
+        self.tts_volume = tts_volume
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False
         self._last_playback_success = None
@@ -131,6 +133,7 @@ class FishTTSWebSocket(QObject):
             stop_event,
             self._SAMPLE_RATE,
             on_start=lambda: logging.info("[TTS] Fish Audio playback started"),
+            volume=self.tts_volume,
         )
 
     def speak(
@@ -164,7 +167,10 @@ class FishTTSWebSocket(QObject):
                         success = self._play_response(response, stop_event)
             except Exception as exc:
                 if not stop_event.is_set():
-                    logging.error("Fish Audio TTS failed: %s", exc)
+                    logging.error(
+                        "Fish Audio TTS failed: %s",
+                        redact_secret(str(exc), self.api_key),
+                    )
             finally:
                 self._close_response(response)
                 with self._state_lock:

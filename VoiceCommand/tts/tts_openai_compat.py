@@ -80,6 +80,7 @@ class OpenAICompatTTS(QObject):
         reference_text="",
         emotion_enabled=True,
         language=None,
+        tts_volume=1.0,
     ):
         super().__init__()
         if not base_url or not str(base_url).strip():
@@ -93,10 +94,12 @@ class OpenAICompatTTS(QObject):
         self.voice = voice
         self.clone_mode = clone_mode
         self.emotion_mode = emotion_mode
+        self._api_key = str(api_key or "")
         self.reference_wav = reference_wav
         self.reference_text = reference_text
         self.emotion_enabled = bool(emotion_enabled)
         self.language = language
+        self.tts_volume = tts_volume
         self.is_playing = False
         self._state_lock = threading.Lock()
         self._active_stop_event = None
@@ -180,7 +183,9 @@ class OpenAICompatTTS(QObject):
                 output_device_index=get_output_device_index(),
             )
             try:
-                success = write_pcm_chunks(stream, pcm, stop_event, sample_rate)
+                success = write_pcm_chunks(
+                    stream, pcm, stop_event, sample_rate, volume=self.tts_volume
+                )
             finally:
                 with get_audio_output_lock():
                     GlobalAudio.close_stream(stream)
@@ -191,11 +196,12 @@ class OpenAICompatTTS(QObject):
                     time.time() - started_at,
                 )
             return success
-        except (OSError, ValueError, wave.Error, AttributeError, TypeError) as exc:
-            logging.warning("OpenAI-compatible TTS request failed: %s", exc)
-            return False
-        except Exception:
-            logging.warning("OpenAI-compatible TTS request failed")
+        except Exception as exc:
+            if not stop_event.is_set():
+                detail = str(exc)
+                if self._api_key:
+                    detail = detail.replace(self._api_key, "[redacted]")
+                logging.error("OpenAI-compatible TTS request failed: %s", detail)
             return False
         finally:
             with self._state_lock:
