@@ -44,6 +44,23 @@ class WindowInspectorTests(unittest.TestCase):
         self.assertIs(user32.GetForegroundWindow.restype, ctypes.c_void_p)
         self.assertIs(user32.MonitorFromWindow.restype, ctypes.c_void_p)
 
+    def test_foreground_callback_logs_and_swallows_callback_errors(self):
+        user32 = SimpleNamespace(SetWinEventHook=Mock(return_value=123))
+        with (
+            patch.object(window_inspector.sys, "platform", "win32"),
+            patch.object(window_inspector, "_dll", return_value=user32),
+            patch("core.window_inspector.log_exception") as log_exception,
+        ):
+            hook, native_callback = window_inspector.install_foreground_hook(
+                Mock(side_effect=RuntimeError("callback failed"))
+            )
+            callback = user32.SetWinEventHook.call_args.args[3]
+            callback(None, 3, 0, 0, 0, 0, 0)
+
+        self.assertEqual(hook, 123)
+        self.assertIsNotNone(native_callback)
+        log_exception.assert_called_once()
+
     @unittest.skipUnless(sys.platform == "win32", "Windows 전용")
     def test_helpers_do_not_change_shared_windll_prototypes(self):
         shared = ctypes.windll.user32.GetWindowRect

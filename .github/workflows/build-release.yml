@@ -255,6 +255,94 @@ jobs:
           $bundleResult = Get-Content -Raw -Encoding utf8 $bundleReport | ConvertFrom-Json
           if ($bundleTest.ExitCode -ne 0 -or -not $bundleResult.ok) { throw "Installed dependency import self-test failed: $($bundleResult | ConvertTo-Json -Depth 8)" }
 
+          # 설치 GUI가 이벤트 루프를 유지하는지 확인한다.
+          $smokeProfileName = "AriSmokeProfile-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $smokeProfile = Join-Path $env:RUNNER_TEMP $smokeProfileName
+          $appData = Join-Path $smokeProfile "Roaming"
+          $ariData = Join-Path $appData "Ari"
+          New-Item -ItemType Directory -Path $ariData -Force | Out-Null
+          New-Item -ItemType File -Path (Join-Path $ariData ".cosyvoice_asked") -Force | Out-Null
+          $smokeRun = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $smokeReport = Join-Path $env:RUNNER_TEMP "installed-gui-smoke-$smokeRun.json"
+          $smokeStderr = Join-Path $env:RUNNER_TEMP "installed-gui-smoke-$smokeRun.stderr.log"
+          $previousAppData = $env:APPDATA
+          $previousAppDataOverride = $env:ARI_APP_DATA_DIR
+          $env:APPDATA = $appData
+          Remove-Item Env:ARI_APP_DATA_DIR -ErrorAction SilentlyContinue
+          $env:ARI_SMOKE_SECONDS = "65"
+          $env:ARI_SMOKE_REPORT = $smokeReport
+          $smokePattern = '\b(ERROR|CRITICAL)\b|Traceback|Fatal Python error|Exception ignored'
+          try {
+            $startSmoke = @{
+              FilePath = "$dir\Ari.exe"
+              WindowStyle = "Hidden"
+              RedirectStandardError = $smokeStderr
+              PassThru = $true
+            }
+            $smoke = Start-Process @startSmoke
+            $null = $smoke.Handle
+            if (-not $smoke.WaitForExit(180000)) {
+              & taskkill.exe /PID $smoke.Id /T /F | Out-Null
+              $null = $smoke.WaitForExit(30000)
+              throw "Installed GUI smoke test timed out."
+            }
+            $smoke.Refresh()
+            if (-not (Test-Path $smokeReport)) {
+              throw "Installed GUI smoke test did not write its report."
+            }
+            $smokeResult = Get-Content -Raw -Encoding utf8 $smokeReport | ConvertFrom-Json
+            if (
+              $smoke.ExitCode -ne 0 -or -not $smokeResult.gui_ready -or
+              -not $smokeResult.clean_exit -or $smokeResult.heartbeat_count -lt 60 -or
+              $smokeResult.error_count -ne 0
+            ) {
+              $smokeDetails = $smokeResult | ConvertTo-Json -Depth 8
+              throw "Installed GUI smoke test returned an invalid report: $smokeDetails"
+            }
+            $appLogDir = Join-Path $ariData "logs"
+            $appLogs = @(
+              Get-ChildItem -Path $appLogDir -Filter "ari_log_*.log" -File `
+                -ErrorAction SilentlyContinue
+            )
+            if (-not $appLogs) { throw "Installed GUI smoke test did not create an app log." }
+            foreach ($appLog in $appLogs) {
+              if (Select-String -Path $appLog.FullName -Pattern $smokePattern) {
+                throw "Installed GUI smoke log contains an error: $($appLog.Name)"
+              }
+            }
+            if (Test-Path $smokeStderr) {
+              if (Select-String -Path $smokeStderr -Pattern $smokePattern) {
+                throw "Installed GUI smoke stderr contains an error."
+              }
+            }
+            Write-Output (
+              "Installed GUI smoke test passed: {0} heartbeats in {1} seconds." -f
+                $smokeResult.heartbeat_count, $smokeResult.observed_seconds
+            )
+          } catch {
+            Write-Output "Installed GUI smoke test failed: $_"
+            if (Test-Path $smokeReport) { Get-Content -Raw -Encoding utf8 $smokeReport }
+            if (Test-Path $smokeStderr) { Get-Content -Raw -Encoding utf8 $smokeStderr }
+            $failureLogs = @(
+              Get-ChildItem -Path (Join-Path $ariData "logs") `
+                -Filter "ari_log_*.log" -File -ErrorAction SilentlyContinue
+            )
+            foreach ($failureLog in $failureLogs) {
+              Write-Output "--- $($failureLog.FullName) ---"
+              Get-Content -Raw -Encoding utf8 $failureLog.FullName
+            }
+            throw
+          } finally {
+            Remove-Item Env:ARI_SMOKE_SECONDS -ErrorAction SilentlyContinue
+            Remove-Item Env:ARI_SMOKE_REPORT -ErrorAction SilentlyContinue
+            if ($null -ne $previousAppData) { $env:APPDATA = $previousAppData }
+            else { Remove-Item Env:APPDATA -ErrorAction SilentlyContinue }
+            if ($null -ne $previousAppDataOverride) {
+              $env:ARI_APP_DATA_DIR = $previousAppDataOverride
+            }
+            else { Remove-Item Env:ARI_APP_DATA_DIR -ErrorAction SilentlyContinue }
+          }
+
           # 자율 실행 파이썬 코드는 설치된 실행 파일의 숨은 워커 모드로 돈다.
           $script = Join-Path $env:RUNNER_TEMP "ari-script-smoke.py"
           Set-Content -Path $script -Encoding utf8 -Value @(

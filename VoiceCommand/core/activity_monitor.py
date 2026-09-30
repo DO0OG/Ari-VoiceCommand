@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QWidget
 
 from core import window_inspector
 from core.config_manager import ConfigManager
+from core.exception_logging import capture_callback_errors, log_exception
 
 
 _WTS_SESSION_LOCK = 0x7
@@ -28,14 +29,21 @@ class _SessionNativeEventFilter(QAbstractNativeEventFilter):
         self._hwnd = hwnd
 
     def nativeEventFilter(self, event_type, message):
-        if bytes(event_type) not in (b"windows_generic_MSG", b"windows_dispatcher_MSG"):
-            return False, 0
-        native_message = ctypes.cast(
-            int(message), ctypes.POINTER(wintypes.MSG)
-        ).contents
-        if native_message.hwnd != self._hwnd or native_message.message != 0x02B1:
-            return False, 0
-        self._monitor.handle_session_change(int(native_message.wParam))
+        try:
+            if bytes(event_type) not in (
+                b"windows_generic_MSG",
+                b"windows_dispatcher_MSG",
+            ):
+                return False, 0
+            native_message = ctypes.cast(
+                int(message), ctypes.POINTER(wintypes.MSG)
+            ).contents
+            if native_message.hWnd != self._hwnd or native_message.message != 0x02B1:
+                return False, 0
+            self._monitor.handle_session_change(int(native_message.wParam))
+        except Exception:
+            # 네이티브 이벤트 콜백에서 예외가 새면 앱이 종료될 수 있다.
+            log_exception("세션 네이티브 메시지 처리 실패")
         return False, 0
 
 
@@ -132,29 +140,37 @@ class ActivityMonitor(QObject):
             self._started = False
             return False
 
-        self._notification_window = QWidget()
-        self._notification_hwnd = int(self._notification_window.winId())
-        self._native_filter = _SessionNativeEventFilter(self, self._notification_hwnd)
-        app.installNativeEventFilter(self._native_filter)
-        self._lock_notifications_available = self._api.register_session_notifications(
-            self._notification_hwnd
-        )
-        if not self._lock_notifications_available:
-            app.removeNativeEventFilter(self._native_filter)
-            self._native_filter = None
-            logging.warning("세션 잠금 알림을 등록하지 못해 주기 확인으로 대신합니다.")
-        self._refresh_session_state()
+        try:
+            self._notification_window = QWidget()
+            self._notification_hwnd = int(self._notification_window.winId())
+            self._native_filter = _SessionNativeEventFilter(self, self._notification_hwnd)
+            app.installNativeEventFilter(self._native_filter)
+            self._lock_notifications_available = self._api.register_session_notifications(
+                self._notification_hwnd
+            )
+            if not self._lock_notifications_available:
+                app.removeNativeEventFilter(self._native_filter)
+                self._native_filter = None
+                logging.warning("세션 잠금 알림을 등록하지 못해 주기 확인으로 대신합니다.")
+            self._refresh_session_state()
 
-        self._foreground_hook, self._native_callback = self._api.install_foreground_hook(
-            self._on_foreground_event
-        )
-        if self._foreground_hook is None:
-            logging.warning("전경 창 이벤트를 등록하지 못했습니다.")
-        self._idle_timer.start(5000)
-        self._quiet_timer.start(30000)
-        self._display_timer.start(1000)
-        self._ide_long_use_timer.start(60000)
-        self._on_foreground_event()
+            self._foreground_hook, self._native_callback = self._api.install_foreground_hook(
+                self._on_foreground_event
+            )
+            if self._foreground_hook is None:
+                logging.warning("전경 창 이벤트를 등록하지 못했습니다.")
+            self._idle_timer.start(5000)
+            self._quiet_timer.start(30000)
+            self._display_timer.start(1000)
+            self._ide_long_use_timer.start(60000)
+            self._on_foreground_event()
+        except Exception:
+            # 부분 등록을 해제한 뒤 시작 오류는 호출부에서 처리한다.
+            try:
+                self.stop()
+            except Exception:
+                log_exception("활동 감지 시작 실패 후 부분 정리 실패")
+            raise
         return True
 
     def stop(self) -> None:
@@ -210,6 +226,7 @@ class ActivityMonitor(QObject):
         self._check_ide_long_use()
         self.settings_refreshed.emit()
 
+    @capture_callback_errors
     def _check_idle(self) -> None:
         settings = self._settings_provider()
         if not settings.get("activity_idle_reaction_enabled", True):
@@ -240,6 +257,7 @@ class ActivityMonitor(QObject):
                 self._ide_active_started_at = now
             self.user_returned.emit(away_seconds)
 
+    @capture_callback_errors
     def _check_quiet(self) -> None:
         settings = self._settings_provider()
         if not settings.get("activity_quiet_reaction_enabled", True):
@@ -265,6 +283,7 @@ class ActivityMonitor(QObject):
         self._category_enabled = category_enabled
         self._check_quiet()
 
+    @capture_callback_errors
     def _refresh_display_state(self) -> None:
         self._refresh_session_state()
         self._foreground_rect = self._api.get_foreground_window_rect()
@@ -282,6 +301,7 @@ class ActivityMonitor(QObject):
         )
         self.foreground_category_changed.emit(category)
 
+    @capture_callback_errors
     def _check_ide_long_use(self) -> None:
         settings = self._settings_provider()
         if (

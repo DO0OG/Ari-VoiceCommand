@@ -7,6 +7,7 @@ import sys
 from ctypes import wintypes
 from typing import Optional
 
+from core.exception_logging import log_exception
 
 
 @functools.lru_cache(maxsize=None)
@@ -153,10 +154,12 @@ def get_idle_seconds() -> int | None:
     user32 = _dll("user32")
     user32.GetLastInputInfo.argtypes = (ctypes.POINTER(_LastInputInfo),)
     user32.GetLastInputInfo.restype = wintypes.BOOL
-    user32.GetTickCount.restype = wintypes.DWORD
+    kernel32 = _dll("kernel32")
+    kernel32.GetTickCount.argtypes = ()
+    kernel32.GetTickCount.restype = wintypes.DWORD
     if not user32.GetLastInputInfo(ctypes.byref(info)):
         return None
-    elapsed_ms = (user32.GetTickCount() - info.dwTime) & 0xFFFFFFFF
+    elapsed_ms = (kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF
     return elapsed_ms // 1000
 
 
@@ -329,7 +332,14 @@ def install_foreground_hook(callback):
         wintypes.DWORD,
         wintypes.DWORD,
     )
-    native_callback = callback_type(lambda *_args: callback())
+    def handle_foreground_event(*_args):
+        try:
+            callback()
+        except Exception:
+            # 네이티브 이벤트 콜백에서 예외가 새면 앱이 종료될 수 있다.
+            log_exception("전경 창 네이티브 콜백 처리 실패")
+
+    native_callback = callback_type(handle_foreground_event)
     user32 = _dll("user32")
     user32.SetWinEventHook.argtypes = (
         wintypes.DWORD,

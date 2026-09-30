@@ -1,5 +1,6 @@
 ﻿"""애플리케이션 전역 상태와 음성/TTS 오케스트레이션 헬퍼."""
 
+import _ctypes
 import logging
 import inspect
 import os
@@ -751,12 +752,25 @@ def wake_detector_recalibrate_helper(detector, source):
 weather_service = WeatherService(api_key="")
 timer_manager = TimerManager(tts_callback=lambda text: tts_wrapper(text=text))
 
+# 스피커가 없으면 pycaw는 OSError가 아닌 COMError를 낸다. COMError는 Windows에만 있다.
+_COM_ERROR = getattr(_ctypes, "COMError", OSError)
+_com_thread_state = threading.local()
+
+
 def adjust_volume(change, *, amount=None, announce=True):
     """시스템 볼륨을 수치 또는 방향과 백분율로 조절한다."""
     try:
         from ctypes import cast, POINTER
+        import comtypes
         from comtypes import CLSCTX_ALL
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+        # 볼륨 조절은 여러 워커 스레드에서 불리는데 comtypes는 처음 import한 스레드만 COM을 초기화한다.
+        # ponytail: 스레드마다 한 번만 초기화하고 해제하지 않는다.
+        # 해제 뒤 COM 포인터가 늦게 풀리면 크래시가 날 수 있어서다.
+        if not getattr(_com_thread_state, "initialized", False):
+            comtypes.CoInitialize()
+            _com_thread_state.initialized = True
 
         mute = False
         unmute = False
@@ -813,7 +827,15 @@ def adjust_volume(change, *, amount=None, announce=True):
         if announce:
             tts_wrapper(_("볼륨을 {volume}%로 조절했습니다.").format(volume=int(new_v * 100)))
         return True
-    except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+    except (
+        AttributeError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        _COM_ERROR,
+    ) as exc:
         logging.warning("시스템 볼륨 조절 실패: %s", exc)
         if announce:
             tts_wrapper(_("볼륨 조절 실패"))

@@ -31,7 +31,8 @@ class GlobalAudio:
                     cls._instance = pyaudio.PyAudio()
                     logging.info("전역 PyAudio 인스턴스 생성 완료")
                 except Exception as e:
-                    logging.error(f"PyAudio 초기화 실패: {e}")
+                    # 오디오 장치가 없으면 호출부가 오디오 없이 계속 실행하므로 경고로 남긴다.
+                    logging.warning("PyAudio 초기화 실패: %s", e)
                     raise
             return cls._instance
 
