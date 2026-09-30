@@ -2128,7 +2128,7 @@ msgid "스케줄"
 msgstr "schedule"
 
 msgid "예약"
-msgstr "book"
+msgstr "schedule"
 
 msgid "반복"
 msgstr "repeat"
@@ -2137,7 +2137,7 @@ msgid "알려줘"
 msgstr "tell me"
 
 msgid "확인해줘"
-msgstr "check"
+msgstr "check it"
 
 msgid "타이머 시간을 말씀해 주세요."
 msgstr "Please tell me the timer duration."
