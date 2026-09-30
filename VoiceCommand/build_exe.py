@@ -271,6 +271,14 @@ nuitka_args = [
     "--include-data-files=icon.ico=icon.ico",
     *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
     f"--include-data-files={SETTINGS_TEMPLATE_FILE}={SETTINGS_TEMPLATE_FILE}",
+    *(
+        [
+            f"--include-data-files={os.path.join(HERE, '..', 'THIRD_PARTY_NOTICES')}"
+            "=THIRD_PARTY_NOTICES"
+        ]
+        if os.path.isfile(os.path.join(HERE, "..", "THIRD_PARTY_NOTICES"))
+        else []
+    ),
     "--include-data-files=tts/cosyvoice_worker.py=cosyvoice_worker.py",
     "--include-data-files=install_cosyvoice.py=install_cosyvoice.py",
 
@@ -342,6 +350,7 @@ nuitka_args = [
     "--include-package=services",
     "--include-package-data=agent",
     "--include-package-data=memory",
+    "--include-package-data=tts.gsv.ko_g2p",
     "--include-package-data=faster_whisper",
     *_optional_include_packages(
         "pycaw",
@@ -357,7 +366,14 @@ nuitka_args = [
         "httpx",
         "faster_whisper",
         "huggingface_hub",
+        "jamo",
+        "ko_pron",
+        "nltk",
+        "onnx",
         "onnxruntime",
+        "pyopenjtalk",
+        "scipy",
+        "sudachipy",
         "tokenizers",
         "cv2",
         "lxml",
@@ -383,6 +399,7 @@ nuitka_args = [
         "wmi",
         "win32api",
     ),
+    "--noinclude-data-files=pyopenjtalk/dictionary/**",
 
     # 데이터 분석·Excel·시각화·PDF는 패키지 모듈과 wheel 바이너리를 원본 복사한다.
     # Nuitka가 패키지 전체를 컴파일하는 시간을 추가하지 않는다. 서드파티 의존성

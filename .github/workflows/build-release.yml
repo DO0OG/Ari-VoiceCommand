@@ -36,8 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           py -3.11 -m venv VoiceCommand\.venv
-          VoiceCommand\.venv\Scripts\python.exe -m pip install --upgrade pip
-          VoiceCommand\.venv\Scripts\python.exe -m pip install -r VoiceCommand\requirements.txt
+          VoiceCommand\.venv\Scripts\python.exe VoiceCommand\install_dependencies.py --no-venv --skip-validate
           VoiceCommand\.venv\Scripts\python.exe -m pip install nuitka
 
       - name: Validate repository

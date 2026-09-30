@@ -202,7 +202,7 @@ def start_tts_background():
         from core.config_manager import ConfigManager
         tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
 
-        if tts_mode == "local":
+        if tts_mode in {"local", "local_gsv"}:
             def _run():
                 try:
                     initialize_tts()

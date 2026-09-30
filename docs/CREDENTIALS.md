@@ -18,9 +18,10 @@
 | fish_reference_id | ARI_FISH_REFERENCE_ID |
 | telegram_bot_token | ARI_TELEGRAM_BOT_TOKEN |
 | openai_tts_api_key | ARI_OPENAI_TTS_API_KEY |
+| openai_compat_tts_api_key | ARI_OPENAI_COMPAT_TTS_API_KEY |
 | elevenlabs_api_key | ARI_ELEVENLABS_API_KEY |
 
-기존 `SENSITIVE_SETTINGS_KEYS`의 13개 항목을 사용한다. API 인증값 외에 기존에
+기존 `SENSITIVE_SETTINGS_KEYS`의 14개 항목을 사용한다. API 인증값 외에 기존에
 민감값으로 분류한 `fish_reference_id`도 포함한다.
 
 설정의 LLM 페이지에서 추가한 OpenAI 호환 제공자의 키는 `custom_<id>_api_key`

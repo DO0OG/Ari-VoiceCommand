@@ -340,7 +340,15 @@ CosyVoice3를 쓰면 로컬에서 꽤 안정적인 TTS 파이프라인을 꾸릴
 - `reference.wav` 경로 우선순위는 다음과 같습니다.
   소스/테스트 실행: `VoiceCommand/.ari_runtime/reference.wav` → `VoiceCommand/reference.wav`
   빌드된 exe 실행: `%AppData%/Ari/reference.wav` → 번들된 `reference.wav`
+- 설정의 **보이스 클로닝 → 참조 WAV 파일**에 경로를 지정하면 위 기본 경로보다 우선합니다. 참조 대본은 CosyVoice와 로컬 GPT-SoVITS, OpenAI 호환 서버에서 함께 사용합니다.
 - 지원되는 TTS 엔진은 응답 감정에 맞춰 말투를 조정할 수 있습니다. 설정 → `AI & TTS`의 TTS 설정에서 **감정 조절**을 끌 수 있으며, `tts_emotion_enabled`의 기본값은 `true`입니다.
+
+### 추가 TTS 제공자
+
+- **OpenAI 호환 TTS**는 서버의 `/v1` 주소, 모델, 목소리를 입력합니다. 참조 음성 복제와 감정 지시문은 서버·모델이 해당 확장 필드를 지원할 때 사용할 수 있습니다.
+- **ElevenLabs**는 설정에서 모델과 음성을 불러올 수 있습니다. `eleven_v3`는 감정 태그를 사용하고, 음성 복제는 참조 WAV 업로드로 생성합니다. 복제 기능은 계정 요금제와 음성 슬롯 제한을 따릅니다.
+- **OpenAI TTS**의 커스텀 보이스 ID는 승인된 조직에서만 사용할 수 있습니다.
+- **로컬 경량 (GPT-SoVITS)**은 모델 설치 버튼으로 약 750MB를 받습니다. 한국어·영어·일본어 합성과 참조 음성 복제를 지원하며, 감정별 참조 음성은 제공자 설정 표에 지정합니다. 코드와 모델은 MIT 라이선스입니다.
 
 ### CosyVoice3 설치
 

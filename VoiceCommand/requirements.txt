@@ -53,6 +53,13 @@ tokenizers>=0.19.0
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
 ormsgpack>=1.5.0
 numpy>=1.26.0,<2  # NumPy 2.x는 shiboken6(PySide6), easyocr 등 C 확장과 충돌
+jamo>=0.4.1
+ko_pron>=1.3.0
+# 설치 스크립트가 쓰지 않는 sudachidict_core를 빼고 설치한다.
+pyopenjtalk-plus==0.4.1.post9
+sudachipy>=0.6.8
+nltk>=3.8.1
+onnx>=1.17.0
 websockets==12.0
 edge-tts>=7.2.8,<8
 # elevenlabs>=1.0.0

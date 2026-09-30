@@ -5,8 +5,10 @@ from __future__ import annotations
 # i18n package here could prevent setup from starting. Keep its messages local.
 import argparse
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import venv
 from pathlib import Path
 from typing import Sequence
@@ -18,6 +20,7 @@ VALIDATOR = HERE / "validate_repo.py"
 MAIN_VENV = HERE / ".venv"
 TTS_VENV = HERE / ".venv-tts"
 TTS_PACKAGES = ("huggingface_hub", "torch", "torchaudio")
+OPEN_JTALK_PACKAGE = "pyopenjtalk-plus==0.4.1.post9"
 
 
 def _venv_python_path(venv_dir: Path) -> Path:
@@ -50,7 +53,17 @@ def _run_pip(python_exe: Path, *arguments: str) -> None:
 def _install_main_dependencies(python_exe: Path) -> None:
     print("메인 의존성을 설치합니다...")
     _run_pip(python_exe, "install", "--upgrade", "pip")
-    _run_pip(python_exe, "install", "-r", str(REQUIREMENTS))
+    lines = REQUIREMENTS.read_text(encoding="utf-8").splitlines()
+    filtered_lines = [
+        line for line in lines
+        if not re.match(r"^\s*pyopenjtalk[-_]plus(?:\s|[<>=!~;\[])", line, re.IGNORECASE)
+    ]
+    with tempfile.TemporaryDirectory(prefix="ari-requirements-") as temp_dir:
+        filtered_requirements = Path(temp_dir) / "requirements.txt"
+        filtered_requirements.write_text("\n".join(filtered_lines), encoding="utf-8")
+        _run_pip(python_exe, "install", "-r", str(filtered_requirements))
+    # upstream 메타데이터가 쓰지 않는 193MB Sudachi 사전을 추가하므로 제외한다.
+    _run_pip(python_exe, "install", "--no-deps", OPEN_JTALK_PACKAGE)
 
 
 def _install_tts_dependencies() -> None:

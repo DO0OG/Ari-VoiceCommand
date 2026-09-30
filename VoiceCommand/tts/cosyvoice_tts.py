@@ -100,11 +100,9 @@ def _reset_cosyvoice_dir_cache() -> None:
 
 def _get_reference_wav() -> str:
     """reference.wav 경로: appdata 우선, 없으면 번들"""
-    from core.resource_manager import ResourceManager
-    appdata_path = ResourceManager.get_writable_path("reference.wav")
-    if os.path.exists(appdata_path):
-        return appdata_path
-    return ResourceManager.get_bundle_path("reference.wav")
+    from tts.voice_reference import get_reference_wav
+
+    return get_reference_wav()
 
 def _get_worker_script() -> str:
     """cosyvoice_worker.py 경로: 배포판이면 번들 폴더(PyInstaller는 _MEIPASS, Nuitka는 실행 파일 옆), 아니면 _HERE"""

@@ -14,6 +14,8 @@ EMOTION_CATALOG = {
         "edge_rate": 5,
         "edge_pitch": 3,
         "openai": "Speak with a cheerful, upbeat tone.",
+        "instruction_ko": "기쁘고 밝은 목소리로 말하세요.",
+        "elevenlabs_tag": "[happy]",
         "elevenlabs": (-0.05, 0.08),
     },
     "슬픔": {
@@ -24,6 +26,8 @@ EMOTION_CATALOG = {
         "edge_rate": -5,
         "edge_pitch": -2,
         "openai": "Speak gently with a subdued, sympathetic tone.",
+        "instruction_ko": "차분하고 안타까운 목소리로 부드럽게 말하세요.",
+        "elevenlabs_tag": "[sad]",
         "elevenlabs": (0.04, 0.02),
     },
     "화남": {
@@ -34,6 +38,8 @@ EMOTION_CATALOG = {
         "edge_rate": 3,
         "edge_pitch": 1,
         "openai": "Speak with restrained frustration.",
+        "instruction_ko": "억눌린 짜증과 단호함이 느껴지는 목소리로 말하세요.",
+        "elevenlabs_tag": "[angry]",
         "elevenlabs": (-0.04, 0.06),
     },
     "놀람": {
@@ -44,6 +50,8 @@ EMOTION_CATALOG = {
         "edge_rate": 3,
         "edge_pitch": 2,
         "openai": "Speak with a lightly surprised tone.",
+        "instruction_ko": "살짝 놀란 듯한 목소리로 말하세요.",
+        "elevenlabs_tag": "[surprised]",
         "elevenlabs": (-0.04, 0.06),
     },
     "평온": {
@@ -55,6 +63,8 @@ EMOTION_CATALOG = {
         "edge_rate": 0,
         "edge_pitch": 0,
         "openai": "Speak in a calm, neutral tone.",
+        "instruction_ko": "차분하고 중립적인 목소리로 말하세요.",
+        "elevenlabs_tag": "",
         "elevenlabs": (0.0, 0.0),
     },
     "수줍": {
@@ -66,6 +76,8 @@ EMOTION_CATALOG = {
         "edge_rate": -2,
         "edge_pitch": -1,
         "openai": "Speak softly and a little bashfully.",
+        "instruction_ko": "작은 목소리로 약간 부끄러워하며 말하세요.",
+        "elevenlabs_tag": "[whispers]",
         "elevenlabs": (0.02, 0.04),
     },
     "기대": {
@@ -77,6 +89,8 @@ EMOTION_CATALOG = {
         "edge_rate": 5,
         "edge_pitch": 3,
         "openai": "Speak with restrained anticipation.",
+        "instruction_ko": "기대감이 느껴지는 밝은 목소리로 말하세요.",
+        "elevenlabs_tag": "[excited]",
         "elevenlabs": (-0.05, 0.08),
     },
     "진지": {
@@ -87,6 +101,8 @@ EMOTION_CATALOG = {
         "edge_rate": -3,
         "edge_pitch": 0,
         "openai": "Speak in a measured, serious tone.",
+        "instruction_ko": "차분하고 신중하며 진지한 목소리로 말하세요.",
+        "elevenlabs_tag": "[thoughtful]",
         "elevenlabs": (0.06, 0.02),
     },
     "걱정": {
@@ -97,6 +113,8 @@ EMOTION_CATALOG = {
         "edge_rate": -5,
         "edge_pitch": -2,
         "openai": "Speak gently with concern.",
+        "instruction_ko": "걱정하는 마음이 묻어나는 부드러운 목소리로 말하세요.",
+        "elevenlabs_tag": "[sad]",
         "elevenlabs": (0.04, 0.02),
     },
 }
@@ -141,9 +159,14 @@ def get_emotion_details(emotion: str | None) -> dict:
     return EMOTION_CATALOG[normalize_emotion(emotion)]
 
 
-def get_emotion_instruction(language: str) -> str:
-    """언어별 감정 태그 지시문을 반환한다."""
-    return _EMOTION_INSTRUCTIONS.get(language, _EMOTION_INSTRUCTIONS["ko"])
+def get_emotion_instruction(emotion: str, language: str | None = None) -> str:
+    """감정 지시문을 반환한다. 인자 하나는 기존 프롬프트 호출과 호환된다."""
+    if language is None:
+        return _EMOTION_INSTRUCTIONS.get(emotion, _EMOTION_INSTRUCTIONS["ko"])
+    details = get_emotion_details(emotion)
+    if language == "ko":
+        return details["instruction_ko"]
+    return details["openai"]
 
 
 def parse_emotion_text(text: str) -> tuple[str, str]:
