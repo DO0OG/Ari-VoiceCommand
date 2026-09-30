@@ -115,6 +115,44 @@ def start_file_watcher():
     return observer
 
 
+def _cleanup_llm_clients():
+    llm_provider = sys.modules.get("agent.llm_provider")
+    if llm_provider is None:
+        gc.collect()
+        return
+
+    provider = getattr(llm_provider, "_instance", None)
+    if provider is None:
+        gc.collect()
+        return
+
+    closed_ids = set()
+    for name in (
+        "client",
+        "planner_client",
+        "execution_client",
+        "memory_extractor_client",
+    ):
+        client = getattr(provider, name, None)
+        try:
+            if client is not None and id(client) not in closed_ids:
+                closed_ids.add(id(client))
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+        except Exception as exc:
+            logging.debug("LLM 클라이언트 종료 생략: %s", exc)
+        finally:
+            try:
+                setattr(provider, name, None)
+            except Exception as exc:
+                logging.debug("LLM 클라이언트 참조 해제 생략: %s", exc)
+            del client
+
+    del provider
+    gc.collect()
+
+
 class AriCore(QObject):
     def __init__(self):
         super().__init__()
@@ -164,35 +202,38 @@ class AriCore(QObject):
         logging.info("=== AriCore cleanup 시작 ===")
 
         # Step 1: 음성 인식 먼저 중지 (새 명령 차단)
-        logging.info("Step 1/6: 음성 인식 중지")
+        logging.info("Step 1/7: 음성 인식 중지")
         self.voice_thread.stop()
         if not self.voice_thread.wait(5000):
             logging.warning("음성 인식 스레드 타임아웃")
 
         # Step 2: 파일 감시자 중지
-        logging.info("Step 2/6: 파일 감시자 중지")
+        logging.info("Step 2/7: 파일 감시자 중지")
         if hasattr(self, 'file_observer') and self.file_observer:
             self.file_observer.stop()
             self.file_observer.join(timeout=2)
 
         # Step 3: TTS 스레드 중지
-        logging.info("Step 3/6: TTS 스레드 중지")
+        logging.info("Step 3/7: TTS 스레드 중지")
         self.tts_thread.stop()
         if not self.tts_thread.wait(5000):
             logging.warning("TTS 스레드 타임아웃")
 
         # Step 4: 명령 실행 스레드 중지
-        logging.info("Step 4/6: 명령 실행 스레드 중지")
+        logging.info("Step 4/7: 명령 실행 스레드 중지")
         self.command_thread.queue.put(None)
         if not self.command_thread.wait(5000):
             logging.warning("명령 실행 스레드 타임아웃")
 
-        # Step 5: 리소스 모니터 중지
-        logging.info("Step 5/6: 리소스 모니터 중지")
+        logging.info("Step 5/7: LLM 클라이언트 정리")
+        _cleanup_llm_clients()
+
+        # Step 6: 리소스 모니터 중지
+        logging.info("Step 6/7: 리소스 모니터 중지")
         self.resource_monitor.stop()
 
-        # Step 6: TTS 리소스 정리
-        logging.info("Step 6/6: TTS 리소스 정리")
+        # Step 7: TTS 리소스 정리
+        logging.info("Step 7/7: TTS 리소스 정리")
         from core.VoiceCommand import _state
         from audio.audio_manager import GlobalAudio
         if _state.fish_tts:

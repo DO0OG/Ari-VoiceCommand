@@ -179,6 +179,10 @@ def resolve_agent_task_goal(goal: str, explanation: str) -> str:
     return normalized_goal
 
 
+def strip_trailing_symbol_tokens(text: str) -> str:
+    return re.sub(r"(?:\s+[#\[\]{}<>|\\]+)+\s*$", "", text or "")
+
+
 def clean_tool_artifact_text(
     text: str,
     *,
@@ -209,6 +213,7 @@ def clean_tool_artifact_text(
     if remove_memory_tags:
         cleaned = re.sub(r"\[(FACT|BIO|PREF|CMD):[^\]]*\]", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = strip_trailing_symbol_tokens(cleaned)
     if discard_short_text and len(cleaned) <= 1:
         return ""
     return cleaned

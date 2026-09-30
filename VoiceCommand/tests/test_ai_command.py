@@ -420,6 +420,44 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(cleaned, "(진지) 알겠습니다. 이제 진행할게요.")
 
+    def test_sanitize_user_facing_text_removes_trailing_symbol_tokens(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        self.assertEqual(
+            command._sanitize_user_facing_text(r"The time is 23:09. #]# [<>|{}] \\"),
+            "The time is 23:09.",
+        )
+
+    def test_sanitize_user_facing_text_keeps_normal_trailing_punctuation(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+
+        for text in (
+            "Sure~",
+            "Really!?",
+            "Done...",
+            "(\uC6C3\uC74C)",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(command._sanitize_user_facing_text(text), text)
+
+    def test_run_interaction_strips_trailing_symbol_tokens_before_history(self):
+        class _Assistant:
+            def chat_with_tools(self, text, include_context=True):
+                del text, include_context
+                return "The time is 23:09. #]#", []
+
+        command = AICommand(_Assistant(), lambda msg: None, {"enabled": False})
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.conversation_history.add_conversation") as add_conversation,
+        ):
+            response = command.run_interaction("What time is it?")
+
+        self.assertEqual(response, "The time is 23:09.")
+        self.assertEqual(add_conversation.call_args.args[1], "The time is 23:09.")
+
     def test_sanitize_user_facing_text_discards_json_and_code_fences(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
 

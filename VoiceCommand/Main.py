@@ -187,6 +187,7 @@ def setup_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=handlers,
     )
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
     if log_error is not None:
         logging.warning("로그 파일을 만들 수 없습니다. 파일 로그 없이 계속 실행합니다: %s", log_error)
 

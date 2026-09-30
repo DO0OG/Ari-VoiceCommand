@@ -1,4 +1,6 @@
 import unittest
+import os
+import tempfile
 import threading
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
@@ -10,6 +12,31 @@ from agent.embedder import Embedder
 
 
 class EmbedderTests(unittest.TestCase):
+    def test_resolves_relative_symlink_to_target(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            snapshots = os.path.join(temp_dir, "snapshots", "revision")
+            blobs = os.path.join(temp_dir, "blobs")
+            os.makedirs(snapshots)
+            os.makedirs(blobs)
+            target = os.path.join(blobs, "tokenizer.json")
+            link = os.path.join(snapshots, "tokenizer.json")
+            with open(target, "w", encoding="utf-8"):
+                pass
+            try:
+                os.symlink(os.path.relpath(target, snapshots), link)
+            except (NotImplementedError, OSError) as exc:
+                self.skipTest(f"symbolic links unavailable: {exc}")
+
+            self.assertEqual(embedder_module._resolve_symlink_path(link), target)
+
+    def test_regular_path_is_returned_unchanged(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "tokenizer.json")
+            with open(path, "w", encoding="utf-8"):
+                pass
+
+            self.assertEqual(embedder_module._resolve_symlink_path(path), path)
+
     def test_openai_client_uses_configured_timeout_and_retry_limit(self):
         embedder = Embedder.__new__(Embedder)
         embedder._ready_event = threading.Event()

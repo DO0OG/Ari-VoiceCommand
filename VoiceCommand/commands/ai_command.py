@@ -19,6 +19,7 @@ from agent.assistant_text_utils import (
     contains_specific_goal_markers,
     is_generic_agent_explanation,
     resolve_agent_task_goal,
+    strip_trailing_symbol_tokens,
 )
 from agent.instant_ack import InstantAckTimer, should_acknowledge
 from agent.autonomous_executor import get_executor, ExecutionResult
@@ -1920,10 +1921,13 @@ class AICommand(FastPathMixin, BaseCommand):
                 self._emit_user_message(response)
 
             if response:
+                response = strip_trailing_symbol_tokens(response)
                 logging.info("AI 응답: %s...", response[:50])
 
             if cancel_event.is_set():
-                partial = "".join(streamed_parts).strip()
+                partial = strip_trailing_symbol_tokens(
+                    "".join(streamed_parts).strip()
+                )
                 if partial:
                     interrupted_response = f"{partial}\n\n{_('(응답 중단)')}"
                     try:

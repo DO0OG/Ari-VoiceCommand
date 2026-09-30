@@ -24,7 +24,22 @@ _LOCAL_MODEL = (
     384,
 )
 _EMBED_DIM_FALLBACK = 64
+_SYMLINK_HOP_LIMIT = 8
 log = logging.getLogger(__name__)
+
+
+def _resolve_symlink_path(path: str) -> str:
+    current = os.fspath(path)
+    for _ in range(_SYMLINK_HOP_LIMIT):
+        if not os.path.islink(current):
+            return current
+        target = os.readlink(current)
+        if not os.path.isabs(target):
+            target = os.path.join(os.path.dirname(current), target)
+        current = os.path.normpath(target)
+    if os.path.islink(current):
+        raise OSError(f"Too many symbolic links: {path}")
+    return current
 
 
 class Embedder:
@@ -177,8 +192,12 @@ class Embedder:
                 "cache_dir": cache_dir,
                 "tqdm_class": _ProgressTqdm,
             }
-            model_path = hf_hub_download(filename=model_file, **common)
-            tokenizer_path = hf_hub_download(filename=tokenizer_file, **common)
+            model_path = _resolve_symlink_path(
+                hf_hub_download(filename=model_file, **common)
+            )
+            tokenizer_path = _resolve_symlink_path(
+                hf_hub_download(filename=tokenizer_file, **common)
+            )
             self._set_status("loading", 1.0)
             from tokenizers import Tokenizer
             runtime = importlib.import_module("onnxruntime")

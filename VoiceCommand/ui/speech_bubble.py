@@ -116,8 +116,9 @@ class SpeechBubble(QWidget):
         # 가로 중앙 정렬
         x = parent_pos.x() + (parent_rect.width() - self.bubble_width) // 2
 
-        # 캐릭터 위쪽에 표시 (15px 간격)
-        y = parent_pos.y() - self.bubble_height - 15
+        head_top_offset = getattr(self.parent_widget, "head_top_offset", None)
+        head_top_offset = int(head_top_offset() or 0) if callable(head_top_offset) else 0
+        y = parent_pos.y() + head_top_offset - self.bubble_height - 5
 
         # 화면 경계 체크
         y = max(10, y)
