@@ -166,8 +166,10 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - Explicit remember/forget commands and improved multilingual memory retrieval
 - Persistent mood, conversational context, and event-based character speech
 - Update checks, notifications, and installer reliability improvements
+- v1.2.0: voice cloning and emotional speech across TTS providers — new OpenAI-compatible TTS, ElevenLabs voice cloning and v3 emotion tags, and OpenAI custom voices
+- v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
 
-See the **[full v1.1.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.0)**.
+See the **[v1.2.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**.
 
 ## For developers
 

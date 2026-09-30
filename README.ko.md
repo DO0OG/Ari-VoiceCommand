@@ -166,8 +166,10 @@ graph TD
 - 명시적 기억/잊기 명령과 다국어 기억 검색 개선
 - 지속되는 기분, 대화 상황, 사건 기반 캐릭터 발화
 - 업데이트 확인·알림과 설치본 안정성 개선
+- v1.2.0: TTS 전반의 보이스 클로닝·감정 표현 — OpenAI 호환 TTS, ElevenLabs 음성 복제와 v3 감정 태그, OpenAI 커스텀 보이스
+- v1.2.0: 설치본이 시작 직후 종료되던 문제를 고치고, 릴리스 전에 설치본을 실제로 실행해 확인
 
-자세한 내용은 **[v1.1.0 전체 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.0)**에서 확인할 수 있습니다.
+자세한 내용은 **[v1.2.0 릴리스 노트](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.0)**에서 확인할 수 있습니다.
 
 ## 개발자용 문서
 
