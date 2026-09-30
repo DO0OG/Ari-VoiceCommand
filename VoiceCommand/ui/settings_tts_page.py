@@ -3,13 +3,15 @@ TTS 설정 페이지 위젯
 """
 import logging
 import os
+import threading
+from types import SimpleNamespace
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QComboBox, QGroupBox,
     QScrollArea, QProgressDialog, QMessageBox, QFileDialog, QCheckBox,
 )
-from PySide6.QtCore import QCoreApplication, QThread, Qt, Signal
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from i18n.translator import _
 from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
@@ -23,22 +25,20 @@ from ui.local_installers import (
 from ui.tts_diagnostics import TTSDiagnosticPanel
 
 
-class _TTSActionThread(QThread):
-    """네트워크 요청을 UI 스레드 밖에서 실행한다."""
+class _TTSActionRelay(QObject):
+    """작업 스레드 결과를 GUI 스레드로 넘긴다. 설정 창보다 오래 살아야 해서 모듈에 하나만 둔다."""
 
-    completed = Signal(object, str)
+    completed = Signal(object, object, str)
 
-    def __init__(self, action, button, callback):
-        super().__init__()
-        self.action = action
-        self.button = button
-        self.callback = callback
 
-    def run(self):
-        try:
-            self.completed.emit(self.action(), "")
-        except Exception as exc:
-            self.completed.emit(None, str(exc))
+_ACTION_RELAY: _TTSActionRelay | None = None
+
+
+def _action_relay() -> _TTSActionRelay:
+    global _ACTION_RELAY
+    if _ACTION_RELAY is None:
+        _ACTION_RELAY = _TTSActionRelay()
+    return _ACTION_RELAY
 
 
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
@@ -65,7 +65,9 @@ class _TTSSettingsPage(QWidget):
         self._ollama_progress_dialog: QProgressDialog | None = None
         self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
         self._cosyvoice_progress_dialog: QProgressDialog | None = None
-        self._tts_action_threads: set[_TTSActionThread] = set()
+        self._tts_action_job: SimpleNamespace | None = None
+        # GUI 스레드에서 릴레이를 만들고 연결해 결과가 항상 GUI 스레드에서 처리되게 한다.
+        _action_relay().completed.connect(self._finish_elevenlabs_action)
         self._init_ui()
 
     # ── UI 구성 ───────────────────────────────────────────────────────────────
@@ -340,29 +342,34 @@ class _TTSSettingsPage(QWidget):
             self.tts_reference_wav_input.setText(selection[0])
 
     def _start_elevenlabs_action(self, button: QPushButton, action, callback):
-        if any(thread.isRunning() for thread in self._tts_action_threads):
+        if self._tts_action_job is not None:
             return
         button.setEnabled(False)
-        thread = _TTSActionThread(action, button, callback)
-        # 설정 창이 먼저 닫혀도 요청이 끝날 때까지 스레드 객체가 살아 있게 앱에 맡긴다.
-        thread.setParent(QCoreApplication.instance())
-        thread.finished.connect(thread.deleteLater)
-        thread.completed.connect(self._finish_elevenlabs_action)
-        thread.finished.connect(self._discard_tts_action_thread)
-        self._tts_action_threads.add(thread)
-        thread.start()
+        job = SimpleNamespace(button=button, callback=callback)
+        self._tts_action_job = job
+        relay = _action_relay()
 
-    def _finish_elevenlabs_action(self, result, error: str):
-        thread = self.sender()
-        if thread is None or thread.callback is None:
+        def run():
+            try:
+                result, error = action(), ""
+            except Exception as exc:
+                result, error = None, str(exc)
+            try:
+                relay.completed.emit(job, result, error)
+            except RuntimeError:
+                pass  # 앱 종료 중이면 결과를 버린다.
+
+        # 데몬 스레드라 요청 중에 앱을 끝내도 종료를 막거나 Qt 스레드 파괴로 죽지 않는다.
+        threading.Thread(target=run, name="ElevenLabsAction", daemon=True).start()
+
+    @Slot(object, object, str)
+    def _finish_elevenlabs_action(self, job, result, error: str):
+        # 다른 설정 창의 작업이거나 창이 닫혀 정리된 작업이면 무시한다.
+        if job is not self._tts_action_job:
             return
-        thread.button.setEnabled(True)
-        thread.callback(result, error)
-
-    def _discard_tts_action_thread(self):
-        thread = self.sender()
-        if thread is not None:
-            self._tts_action_threads.discard(thread)
+        self._tts_action_job = None
+        job.button.setEnabled(True)
+        job.callback(result, error)
 
     def _load_elevenlabs_models(self):
         api_key = self.elevenlabs_key_input.text().strip()
@@ -701,7 +708,8 @@ class _TTSSettingsPage(QWidget):
             "openai_tts_custom_voice_id": self.openai_tts_custom_voice_input.text().strip(),
             "elevenlabs_api_key": self.elevenlabs_key_input.text().strip(),
             "elevenlabs_voice_id": self._combo_id(self.elevenlabs_voice_combo),
-            "elevenlabs_model_id": self._combo_id(self.elevenlabs_model_combo),
+            "elevenlabs_model_id": (self._combo_id(self.elevenlabs_model_combo)
+                                    or "eleven_multilingual_v2"),
             "edge_tts_voice": self.edge_voice_combo.currentData(),
             "edge_tts_rate": self.edge_rate_input.text().strip() or "+0%",
             "ollama_executable_path": self._ollama_executable_path,
@@ -712,12 +720,7 @@ class _TTSSettingsPage(QWidget):
         self.local_install_section.stop_detection()
         self.tts_diagnostic_panel.cancel()
         # ElevenLabs 요청은 중간에 멈출 수 없으니 기다리지 않고 결과 처리만 끊는다.
-        for thread in self._tts_action_threads:
-            thread.callback = None
-            try:
-                thread.completed.disconnect(self._finish_elevenlabs_action)
-            except (RuntimeError, TypeError):
-                pass
+        self._tts_action_job = None
         for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
             if thread and thread.isRunning():
                 thread.quit()
