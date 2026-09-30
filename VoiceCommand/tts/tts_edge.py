@@ -398,7 +398,8 @@ class EdgeTTS(QObject):
             name="EdgeTTS-Synthesis",
             daemon=True,
         )
-        producer.start()
+        if not stop_event.is_set():
+            producer.start()
 
         stream = None
         played_audio = False

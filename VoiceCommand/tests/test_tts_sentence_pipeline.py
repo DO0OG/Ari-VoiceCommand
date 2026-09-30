@@ -187,6 +187,21 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
 
         self.assertFalse(stop_event.is_set())
 
+    def test_already_cancelled_speak_never_synthesizes(self):
+        provider = EdgeTTS(audio_cache=Mock())
+        stop_event = threading.Event()
+        stop_event.set()
+        synthesize = Mock()
+
+        with (
+            self._playback_patches(Mock()),
+            patch.object(provider, "_synthesize", new=synthesize),
+        ):
+            self.assertFalse(provider.speak("hello", stop_event=stop_event))
+
+        synthesize.assert_not_called()
+        self.assertFalse(provider.is_playing)
+
     def test_stop_closes_reused_stream_without_writing_remaining_chunks(self):
         provider = EdgeTTS(audio_cache=Mock())
         stream = Mock()
