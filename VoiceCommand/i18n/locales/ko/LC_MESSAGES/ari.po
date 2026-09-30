@@ -3987,3 +3987,93 @@ msgstr "곧 확인하겠습니다."
 
 msgid "조금만 기다려 주세요."
 msgstr "조금만 기다려 주세요."
+
+msgid "OpenAI 호환 TTS"
+msgstr "OpenAI 호환 TTS"
+
+msgid "OpenAI 호환 TTS 설정"
+msgstr "OpenAI 호환 TTS 설정"
+
+msgid "공통 TTS 설정"
+msgstr "공통 TTS 설정"
+
+msgid "보이스 클로닝"
+msgstr "보이스 클로닝"
+
+msgid "참조 WAV 파일 (비워두면 기본 reference.wav 사용):"
+msgstr "참조 WAV 파일 (비워두면 기본 reference.wav 사용):"
+
+msgid "참조 WAV 대본:"
+msgstr "참조 WAV 대본:"
+
+msgid "참조 WAV 선택"
+msgstr "참조 WAV 선택"
+
+msgid "참조 음성 복제"
+msgstr "참조 음성 복제"
+
+msgid "기본 음성"
+msgstr "기본 음성"
+
+msgid "클로닝:"
+msgstr "클로닝:"
+
+msgid "감정 지시문 사용"
+msgstr "감정 지시문 사용"
+
+msgid "자동"
+msgstr "자동"
+
+msgid "한국어"
+msgstr "한국어"
+
+msgid "서버 URL (예: http://127.0.0.1:8880/v1):"
+msgstr "서버 URL (예: http://127.0.0.1:8880/v1):"
+
+msgid "비워두면 not-needed를 보냅니다."
+msgstr "비워두면 not-needed를 보냅니다."
+
+msgid "감정:"
+msgstr "감정:"
+
+msgid "음성:"
+msgstr "음성:"
+
+msgid "사용 안 함"
+msgstr "사용 안 함"
+
+msgid "승인된 조직만 사용 가능: 커스텀 보이스 ID (voice_...):"
+msgstr "승인된 조직만 사용 가능: 커스텀 보이스 ID (voice_...):"
+
+msgid "모델 불러오기"
+msgstr "모델 불러오기"
+
+msgid "음성 불러오기"
+msgstr "음성 불러오기"
+
+msgid "음성 복제"
+msgstr "음성 복제"
+
+msgid "음성 복제 실패"
+msgstr "음성 복제 실패"
+
+msgid "참조 음성으로 내 음성 만들기"
+msgstr "참조 음성으로 내 음성 만들기"
+
+msgid "WAV 파일 (*.wav)"
+msgstr "WAV 파일 (*.wav)"
+
+msgid "참조 WAV 파일을 찾을 수 없습니다."
+msgstr "참조 WAV 파일을 찾을 수 없습니다."
+
+msgid "API Key를 입력하세요."
+msgstr "API Key를 입력하세요."
+
+msgid "모델 불러오기 실패"
+msgstr "모델 불러오기 실패"
+
+msgid "음성 불러오기 실패"
+msgstr "음성 불러오기 실패"
+
+msgid "TTS 감정 조절"
+msgstr "TTS 감정 조절"

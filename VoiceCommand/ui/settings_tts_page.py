@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QTextEdit, QPushButton, QComboBox, QGroupBox,
     QScrollArea, QProgressDialog, QMessageBox, QFileDialog, QCheckBox,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, Qt, Signal
 
 from i18n.translator import _
 from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
@@ -22,12 +22,32 @@ from ui.local_installers import (
 )
 from ui.tts_diagnostics import TTSDiagnosticPanel
 
+
+class _TTSActionThread(QThread):
+    """네트워크 요청을 UI 스레드 밖에서 실행한다."""
+
+    completed = Signal(object, str)
+
+    def __init__(self, action, button, callback):
+        super().__init__()
+        self.action = action
+        self.button = button
+        self.callback = callback
+
+    def run(self):
+        try:
+            self.completed.emit(self.action(), "")
+        except Exception as exc:
+            self.completed.emit(None, str(exc))
+
+
 # ── TTS 엔진 정의 ──────────────────────────────────────────────────────────────
 
 def _tts_modes():
     return [
         (_("Fish Audio (API)"),    "fish"),
         (_("로컬 (CosyVoice3)"),   "local"),
+        (_("OpenAI 호환 TTS"), "openai_compat_tts"),
         (_("OpenAI TTS"),          "openai_tts"),
         (_("ElevenLabs"),          "elevenlabs"),
         (_("Edge TTS (무료)"),     "edge"),
@@ -45,6 +65,7 @@ class _TTSSettingsPage(QWidget):
         self._ollama_progress_dialog: QProgressDialog | None = None
         self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
         self._cosyvoice_progress_dialog: QProgressDialog | None = None
+        self._tts_action_threads: set[_TTSActionThread] = set()
         self._init_ui()
 
     # ── UI 구성 ───────────────────────────────────────────────────────────────
@@ -84,11 +105,39 @@ class _TTSSettingsPage(QWidget):
 
         self.tts_diagnostic_panel = TTSDiagnosticPanel(self._tts_diagnostic_values, self)
         tts_vbox.addWidget(self.tts_diagnostic_panel)
-        self.tts_emotion_checkbox = QCheckBox(_("Edge/OpenAI/ElevenLabs 감정 조절"))
+        self.tts_emotion_checkbox = QCheckBox(_("TTS 감정 조절"))
         self.tts_emotion_checkbox.setChecked(
             bool(self._settings.get("tts_emotion_enabled", True))
         )
         tts_vbox.addWidget(self.tts_emotion_checkbox)
+
+        general_grp = QGroupBox(_("공통 TTS 설정"))
+        general_layout = QVBoxLayout(general_grp)
+        general_layout.addWidget(QLabel(_("재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):")))
+        self.tts_volume_input = QLineEdit(str(self._settings.get("tts_volume", 1.0)))
+        general_layout.addWidget(self.tts_volume_input)
+        tts_vbox.addWidget(general_grp)
+
+        self._voice_cloning_group = QGroupBox(_("보이스 클로닝"))
+        cloning_layout = QVBoxLayout(self._voice_cloning_group)
+        cloning_layout.addWidget(QLabel(_("참조 WAV 파일 (비워두면 기본 reference.wav 사용):")))
+        reference_row = QHBoxLayout()
+        self.tts_reference_wav_input = QLineEdit(
+            self._settings.get("tts_reference_wav", "")
+        )
+        reference_row.addWidget(self.tts_reference_wav_input)
+        reference_button = QPushButton(_("찾아보기"))
+        reference_button.clicked.connect(self._browse_reference_wav)
+        reference_row.addWidget(reference_button)
+        cloning_layout.addLayout(reference_row)
+        cloning_layout.addWidget(QLabel(_("참조 WAV 대본:")))
+        self.cosyvoice_ref_text = QTextEdit()
+        self.cosyvoice_ref_text.setPlainText(
+            self._settings.get("cosyvoice_reference_text", "")
+        )
+        self.cosyvoice_ref_text.setMaximumHeight(60)
+        cloning_layout.addWidget(self.cosyvoice_ref_text)
+        tts_vbox.addWidget(self._voice_cloning_group)
 
         # Fish Audio 설정
         fish_grp = QGroupBox(_("Fish Audio 설정"))
@@ -132,19 +181,58 @@ class _TTSSettingsPage(QWidget):
         cvl.addLayout(dir_row)
         self.cosyvoice_dir_status = create_muted_label("")
         cvl.addWidget(self.cosyvoice_dir_status)
-        cvl.addWidget(QLabel(_("Reference WAV 텍스트 (Cross-lingual 시 비움):")))
-        self.cosyvoice_ref_text = QTextEdit()
-        self.cosyvoice_ref_text.setPlainText(self._settings.get("cosyvoice_reference_text", ""))
-        self.cosyvoice_ref_text.setMaximumHeight(60)
-        cvl.addWidget(self.cosyvoice_ref_text)
         cvl.addWidget(QLabel(_("말하기 속도 (0.7 ~ 1.2):")))
         self.cosyvoice_speed_input = QLineEdit(str(self._settings.get("cosyvoice_speed", 0.9)))
         cvl.addWidget(self.cosyvoice_speed_input)
-        cvl.addWidget(QLabel(_("재생 볼륨 배율 (0.0 ~ 2.0, 1.0 = 원본):")))
-        self.tts_volume_input = QLineEdit(str(self._settings.get("tts_volume", 1.0)))
-        cvl.addWidget(self.tts_volume_input)
         tts_vbox.addWidget(cv_grp)
         self._tts_groups["local"] = cv_grp
+
+        compat_grp = QGroupBox(_("OpenAI 호환 TTS 설정"))
+        compat_layout = QVBoxLayout(compat_grp)
+        compat_layout.addWidget(QLabel(_("서버 URL (예: http://127.0.0.1:8880/v1):")))
+        self.openai_compat_base_url_input = QLineEdit(
+            self._settings.get("openai_compat_tts_base_url", "")
+        )
+        compat_layout.addWidget(self.openai_compat_base_url_input)
+        compat_layout.addWidget(QLabel(_("API Key (선택):")))
+        self.openai_compat_api_key_input = QLineEdit(
+            self._settings.get("openai_compat_tts_api_key", "")
+        )
+        self.openai_compat_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.openai_compat_api_key_input.setPlaceholderText(_("비워두면 not-needed를 보냅니다."))
+        compat_layout.addWidget(self.openai_compat_api_key_input)
+        compat_layout.addWidget(QLabel(_("모델:")))
+        self.openai_compat_model_input = QLineEdit(
+            self._settings.get("openai_compat_tts_model", "")
+        )
+        compat_layout.addWidget(self.openai_compat_model_input)
+        compat_layout.addWidget(QLabel(_("목소리:")))
+        self.openai_compat_voice_input = QLineEdit(
+            self._settings.get("openai_compat_tts_voice", "")
+        )
+        compat_layout.addWidget(self.openai_compat_voice_input)
+        compat_options = QHBoxLayout()
+        self.openai_compat_clone_combo = QComboBox()
+        self.openai_compat_clone_combo.addItem(_("기본 음성"), "none")
+        self.openai_compat_clone_combo.addItem(_("참조 음성 복제"), "ref_audio")
+        self._set_combo(
+            self.openai_compat_clone_combo,
+            self._settings.get("openai_compat_tts_clone_mode", "none"),
+        )
+        compat_options.addWidget(QLabel(_("클로닝:")))
+        compat_options.addWidget(self.openai_compat_clone_combo)
+        self.openai_compat_emotion_combo = QComboBox()
+        self.openai_compat_emotion_combo.addItem(_("감정 지시문 사용"), "instructions")
+        self.openai_compat_emotion_combo.addItem(_("사용 안 함"), "none")
+        self._set_combo(
+            self.openai_compat_emotion_combo,
+            self._settings.get("openai_compat_tts_emotion_mode", "instructions"),
+        )
+        compat_options.addWidget(QLabel(_("감정:")))
+        compat_options.addWidget(self.openai_compat_emotion_combo)
+        compat_layout.addLayout(compat_options)
+        tts_vbox.addWidget(compat_grp)
+        self._tts_groups["openai_compat_tts"] = compat_grp
 
         # OpenAI TTS 설정
         oai_grp = QGroupBox(_("OpenAI TTS 설정"))
@@ -168,6 +256,11 @@ class _TTSSettingsPage(QWidget):
         self._set_combo(self.openai_tts_model_combo, self._settings.get("openai_tts_model", "tts-1"))
         row.addWidget(self.openai_tts_model_combo)
         oail.addLayout(row)
+        oail.addWidget(QLabel(_("승인된 조직만 사용 가능: 커스텀 보이스 ID (voice_...):")))
+        self.openai_tts_custom_voice_input = QLineEdit(
+            self._settings.get("openai_tts_custom_voice_id", "")
+        )
+        oail.addWidget(self.openai_tts_custom_voice_input)
         tts_vbox.addWidget(oai_grp)
         self._tts_groups["openai_tts"] = oai_grp
 
@@ -178,9 +271,34 @@ class _TTSSettingsPage(QWidget):
         self.elevenlabs_key_input = QLineEdit(self._settings.get("elevenlabs_api_key", ""))
         self.elevenlabs_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         ell.addWidget(self.elevenlabs_key_input)
-        ell.addWidget(QLabel(_("Voice ID:")))
-        self.elevenlabs_voice_id_input = QLineEdit(self._settings.get("elevenlabs_voice_id", ""))
-        ell.addWidget(self.elevenlabs_voice_id_input)
+        ell.addWidget(QLabel(_("모델:")))
+        self.elevenlabs_model_combo = QComboBox()
+        self.elevenlabs_model_combo.setEditable(True)
+        for model_id in ("eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_v3"):
+            self.elevenlabs_model_combo.addItem(model_id, model_id)
+        self._set_combo(
+            self.elevenlabs_model_combo,
+            self._settings.get("elevenlabs_model_id", "eleven_multilingual_v2"),
+        )
+        ell.addWidget(self.elevenlabs_model_combo)
+        eleven_button_row = QHBoxLayout()
+        self.elevenlabs_models_button = QPushButton(_("모델 불러오기"))
+        self.elevenlabs_models_button.clicked.connect(self._load_elevenlabs_models)
+        eleven_button_row.addWidget(self.elevenlabs_models_button)
+        self.elevenlabs_voices_button = QPushButton(_("음성 불러오기"))
+        self.elevenlabs_voices_button.clicked.connect(self._load_elevenlabs_voices)
+        eleven_button_row.addWidget(self.elevenlabs_voices_button)
+        ell.addLayout(eleven_button_row)
+        ell.addWidget(QLabel(_("음성:")))
+        self.elevenlabs_voice_combo = QComboBox()
+        self.elevenlabs_voice_combo.setEditable(True)
+        saved_voice_id = self._settings.get("elevenlabs_voice_id", "")
+        if saved_voice_id:
+            self.elevenlabs_voice_combo.addItem(saved_voice_id, saved_voice_id)
+        ell.addWidget(self.elevenlabs_voice_combo)
+        self.elevenlabs_clone_button = QPushButton(_("참조 음성으로 내 음성 만들기"))
+        self.elevenlabs_clone_button.clicked.connect(self._create_elevenlabs_clone)
+        ell.addWidget(self.elevenlabs_clone_button)
         tts_vbox.addWidget(el_grp)
         self._tts_groups["elevenlabs"] = el_grp
 
@@ -213,6 +331,117 @@ class _TTSSettingsPage(QWidget):
 
         self._on_tts_changed()
 
+    def _browse_reference_wav(self):
+        selection = QFileDialog.getOpenFileName(
+            self,
+            _("참조 WAV 선택"),
+            self.tts_reference_wav_input.text() or "",
+            _("WAV 파일 (*.wav)"),
+        )
+        if selection[0]:
+            self.tts_reference_wav_input.setText(selection[0])
+
+    def _start_elevenlabs_action(self, button: QPushButton, action, callback):
+        if any(thread.isRunning() for thread in self._tts_action_threads):
+            return
+        button.setEnabled(False)
+        thread = _TTSActionThread(action, button, callback)
+        thread.completed.connect(self._finish_elevenlabs_action)
+        thread.finished.connect(self._discard_tts_action_thread)
+        self._tts_action_threads.add(thread)
+        thread.start()
+
+    def _finish_elevenlabs_action(self, result, error: str):
+        thread = self.sender()
+        if thread is None:
+            return
+        thread.button.setEnabled(True)
+        thread.callback(result, error)
+
+    def _discard_tts_action_thread(self):
+        thread = self.sender()
+        if thread is not None:
+            self._tts_action_threads.discard(thread)
+
+    def _load_elevenlabs_models(self):
+        api_key = self.elevenlabs_key_input.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, _("ElevenLabs"), _("API Key를 입력하세요."))
+            return
+
+        def finish(models, error):
+            if error:
+                QMessageBox.warning(self, _("모델 불러오기 실패"), error)
+                return
+            selected = (
+                self.elevenlabs_model_combo.currentData()
+                or self.elevenlabs_model_combo.currentText().strip()
+            )
+            self.elevenlabs_model_combo.clear()
+            for model in models:
+                self.elevenlabs_model_combo.addItem(model["name"], model["model_id"])
+            self._set_combo(self.elevenlabs_model_combo, selected)
+
+        def fetch():
+            from tts.tts_elevenlabs import fetch_models
+
+            return fetch_models(api_key)
+
+        self._start_elevenlabs_action(self.elevenlabs_models_button, fetch, finish)
+
+    def _load_elevenlabs_voices(self):
+        api_key = self.elevenlabs_key_input.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, _("ElevenLabs"), _("API Key를 입력하세요."))
+            return
+
+        def finish(voices, error):
+            if error:
+                QMessageBox.warning(self, _("음성 불러오기 실패"), error)
+                return
+            selected = (
+                self.elevenlabs_voice_combo.currentData()
+                or self.elevenlabs_voice_combo.currentText()
+            )
+            self.elevenlabs_voice_combo.clear()
+            for voice in voices:
+                self.elevenlabs_voice_combo.addItem(voice["name"], voice["voice_id"])
+            self._set_combo(self.elevenlabs_voice_combo, selected)
+
+        def fetch():
+            from tts.tts_elevenlabs import fetch_voices
+
+            return fetch_voices(api_key)
+
+        self._start_elevenlabs_action(self.elevenlabs_voices_button, fetch, finish)
+
+    def _create_elevenlabs_clone(self):
+        api_key = self.elevenlabs_key_input.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, _("ElevenLabs"), _("API Key를 입력하세요."))
+            return
+        from tts.voice_reference import get_reference_wav
+
+        reference_wav = get_reference_wav(self.get_values())
+        if not os.path.isfile(reference_wav):
+            QMessageBox.warning(self, _("음성 복제"), _("참조 WAV 파일을 찾을 수 없습니다."))
+            return
+        voice_name = os.path.splitext(os.path.basename(reference_wav))[0] or "Ari Voice"
+
+        def finish(voice_id, error):
+            if error:
+                QMessageBox.warning(self, _("음성 복제 실패"), error)
+                return
+            self.elevenlabs_voice_combo.addItem(voice_name, voice_id)
+            self.elevenlabs_voice_combo.setCurrentIndex(self.elevenlabs_voice_combo.count() - 1)
+
+        def clone():
+            from tts.tts_elevenlabs import create_voice_clone
+
+            return create_voice_clone(api_key, reference_wav, voice_name)
+
+        self._start_elevenlabs_action(self.elevenlabs_clone_button, clone, finish)
+
     # ── 이벤트 핸들러 ─────────────────────────────────────────────────────────
 
     def _on_tts_changed(self):
@@ -221,6 +450,9 @@ class _TTSSettingsPage(QWidget):
             grp = self._tts_groups.get(key)
             if grp:
                 grp.setVisible(key == selected)
+        self._voice_cloning_group.setVisible(
+            selected in {"local", "openai_compat_tts", "elevenlabs"}
+        )
 
     def _tts_diagnostic_values(self):
         selected_mode = self.tts_mode_combo.currentData()
@@ -439,13 +671,28 @@ class _TTSSettingsPage(QWidget):
                            or "s2.1-pro-free"),
             "cosyvoice_dir": self.cosyvoice_dir_input.text().strip(),
             "cosyvoice_reference_text": self.cosyvoice_ref_text.toPlainText().strip(),
+            "tts_reference_wav": self.tts_reference_wav_input.text().strip(),
             "cosyvoice_speed": self._float(self.cosyvoice_speed_input.text(), 0.9),
             "tts_volume": self._float(self.tts_volume_input.text(), 1.0),
+            "openai_compat_tts_base_url": self.openai_compat_base_url_input.text().strip(),
+            "openai_compat_tts_api_key": self.openai_compat_api_key_input.text().strip(),
+            "openai_compat_tts_model": self.openai_compat_model_input.text().strip(),
+            "openai_compat_tts_voice": self.openai_compat_voice_input.text().strip(),
+            "openai_compat_tts_clone_mode": self.openai_compat_clone_combo.currentData(),
+            "openai_compat_tts_emotion_mode": self.openai_compat_emotion_combo.currentData(),
             "openai_tts_api_key": self.openai_tts_key_input.text().strip(),
             "openai_tts_voice": self.openai_tts_voice_combo.currentData(),
             "openai_tts_model": self.openai_tts_model_combo.currentData(),
+            "openai_tts_custom_voice_id": self.openai_tts_custom_voice_input.text().strip(),
             "elevenlabs_api_key": self.elevenlabs_key_input.text().strip(),
-            "elevenlabs_voice_id": self.elevenlabs_voice_id_input.text().strip(),
+            "elevenlabs_voice_id": (
+                self.elevenlabs_voice_combo.currentData()
+                or self.elevenlabs_voice_combo.currentText().strip()
+            ),
+            "elevenlabs_model_id": (
+                self.elevenlabs_model_combo.currentData()
+                or self.elevenlabs_model_combo.currentText().strip()
+            ),
             "edge_tts_voice": self.edge_voice_combo.currentData(),
             "edge_tts_rate": self.edge_rate_input.text().strip() or "+0%",
             "ollama_executable_path": self._ollama_executable_path,
@@ -455,7 +702,11 @@ class _TTSSettingsPage(QWidget):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
         self.local_install_section.stop_detection()
         self.tts_diagnostic_panel.cancel()
-        for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
+        for thread in (
+            self._ollama_install_thread,
+            self._cosyvoice_install_thread,
+            *self._tts_action_threads,
+        ):
             if thread and thread.isRunning():
                 thread.quit()
                 thread.wait(2000)

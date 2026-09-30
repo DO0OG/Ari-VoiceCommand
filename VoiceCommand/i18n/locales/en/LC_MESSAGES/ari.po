@@ -3990,3 +3990,93 @@ msgstr "I'll check shortly."
 
 msgid "조금만 기다려 주세요."
 msgstr "Please wait a moment."
+
+msgid "OpenAI 호환 TTS"
+msgstr "OpenAI-compatible TTS"
+
+msgid "OpenAI 호환 TTS 설정"
+msgstr "OpenAI-compatible TTS settings"
+
+msgid "공통 TTS 설정"
+msgstr "Common TTS settings"
+
+msgid "보이스 클로닝"
+msgstr "Voice cloning"
+
+msgid "참조 WAV 파일 (비워두면 기본 reference.wav 사용):"
+msgstr "Reference WAV file (leave blank to use the default reference.wav):"
+
+msgid "참조 WAV 대본:"
+msgstr "Reference WAV transcript:"
+
+msgid "참조 WAV 선택"
+msgstr "Select reference WAV"
+
+msgid "참조 음성 복제"
+msgstr "Clone reference voice"
+
+msgid "기본 음성"
+msgstr "Default voice"
+
+msgid "클로닝:"
+msgstr "Cloning:"
+
+msgid "감정 지시문 사용"
+msgstr "Use emotion instructions"
+
+msgid "자동"
+msgstr "Auto"
+
+msgid "한국어"
+msgstr "Korean"
+
+msgid "서버 URL (예: http://127.0.0.1:8880/v1):"
+msgstr "Server URL (for example, http://127.0.0.1:8880/v1):"
+
+msgid "비워두면 not-needed를 보냅니다."
+msgstr "If blank, the request sends not-needed."
+
+msgid "감정:"
+msgstr "Emotion:"
+
+msgid "음성:"
+msgstr "Voice:"
+
+msgid "사용 안 함"
+msgstr "Disabled"
+
+msgid "승인된 조직만 사용 가능: 커스텀 보이스 ID (voice_...):"
+msgstr "Available to approved organizations only: custom voice ID (voice_...):"
+
+msgid "모델 불러오기"
+msgstr "Load models"
+
+msgid "음성 불러오기"
+msgstr "Load voices"
+
+msgid "음성 복제"
+msgstr "Clone voice"
+
+msgid "음성 복제 실패"
+msgstr "Voice cloning failed"
+
+msgid "참조 음성으로 내 음성 만들기"
+msgstr "Create a voice from reference audio"
+
+msgid "WAV 파일 (*.wav)"
+msgstr "WAV files (*.wav)"
+
+msgid "참조 WAV 파일을 찾을 수 없습니다."
+msgstr "The reference WAV file could not be found."
+
+msgid "API Key를 입력하세요."
+msgstr "Enter an API key."
+
+msgid "모델 불러오기 실패"
+msgstr "Could not load models"
+
+msgid "음성 불러오기 실패"
+msgstr "Could not load voices"
+
+msgid "TTS 감정 조절"
+msgstr "TTS emotion control"

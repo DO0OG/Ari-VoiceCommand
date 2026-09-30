@@ -12,6 +12,23 @@ from tts.tts_openai import OpenAITTS
 
 
 class EmotionCatalogTests(unittest.TestCase):
+    def test_provider_instructions_follow_ui_language(self):
+        self.assertEqual(
+            get_emotion_instruction("기쁨", "ko"),
+            "기쁘고 밝은 목소리로 말하세요.",
+        )
+        self.assertEqual(
+            get_emotion_instruction("기쁨", "ja"),
+            EMOTION_CATALOG["기쁨"]["openai"],
+        )
+
+    def test_new_provider_emotion_fields_exist_without_changing_cosyvoice_mapping(self):
+        for details in EMOTION_CATALOG.values():
+            self.assertIn("instruction_ko", details)
+            self.assertIn("elevenlabs_tag", details)
+        self.assertEqual(EMOTION_CATALOG["화남"]["cosyvoice"], "bright")
+        self.assertEqual(EMOTION_CATALOG["평온"]["elevenlabs_tag"], "")
+
     def test_prompt_uses_canonical_korean_tags_for_every_language(self):
         expected = " ".join(f"({name})" for name in EMOTION_NAMES)
 
@@ -98,8 +115,10 @@ class OpenAIEmotionProsodyTests(unittest.TestCase):
 
 class ElevenLabsEmotionProsodyTests(unittest.TestCase):
     def test_settings_offsets_are_small_clamped_and_disableable(self):
-        enabled = ElevenLabsTTS(stability=0.98)
-        disabled = ElevenLabsTTS(stability=0.98, emotion_enabled=False)
+        enabled = ElevenLabsTTS(api_key="test-key", stability=0.98)
+        disabled = ElevenLabsTTS(
+            api_key="test-key", stability=0.98, emotion_enabled=False
+        )
 
         self.assertAlmostEqual(enabled._voice_settings("기쁨")["stability"], 0.93)
         self.assertAlmostEqual(enabled._voice_settings("기쁨")["style"], 0.08)
@@ -109,7 +128,7 @@ class ElevenLabsEmotionProsodyTests(unittest.TestCase):
 
 
     def test_negative_style_offset_is_represented_by_a_small_valid_adjustment(self):
-        provider = ElevenLabsTTS()
+        provider = ElevenLabsTTS(api_key="test-key")
 
         self.assertEqual(provider._voice_settings("worried")["style"], 0.02)
 

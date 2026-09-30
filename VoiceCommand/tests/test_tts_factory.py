@@ -9,6 +9,26 @@ from tts.tts_factory import build_tts_signature, create_tts_provider
 
 
 class TTSFactoryTests(unittest.TestCase):
+    def test_new_provider_settings_are_in_tts_signature(self):
+        base = {"tts_mode": "openai_compat_tts"}
+        for key, value in (
+            ("cosyvoice_dir", "C:/CosyVoice"),
+            ("tts_volume", 0.5),
+            ("tts_reference_wav", "C:/voice.wav"),
+            ("openai_compat_tts_base_url", "http://127.0.0.1:8880/v1"),
+            ("openai_compat_tts_api_key", "secret"),
+            ("openai_compat_tts_model", "model"),
+            ("openai_compat_tts_voice", "voice"),
+            ("openai_compat_tts_clone_mode", "ref_audio"),
+            ("openai_compat_tts_emotion_mode", "none"),
+            ("openai_tts_custom_voice_id", "voice_custom"),
+            ("elevenlabs_model_id", "eleven_v3"),
+        ):
+            with self.subTest(key=key):
+                self.assertNotEqual(
+                    build_tts_signature(base), build_tts_signature({**base, key: value})
+                )
+
     def test_tts_signature_changes_only_with_tts_related_fields(self):
         base = {
             "tts_mode": "fish",
@@ -71,6 +91,27 @@ class TTSFactoryTests(unittest.TestCase):
         self.assertIs(provider, edge_provider)
         self.assertEqual(mode, "edge")
         audio.assert_not_called()
+
+    def test_openai_compat_provider_receives_shared_reference_and_language(self):
+        provider = object()
+        settings = {
+            "tts_mode": "openai_compat_tts",
+            "openai_compat_tts_base_url": "http://127.0.0.1:8880/v1",
+            "openai_compat_tts_clone_mode": "ref_audio",
+        }
+        with (
+            patch("tts.voice_reference.get_reference_wav", return_value="reference.wav"),
+            patch("tts.voice_reference.get_reference_text", return_value="reference text"),
+            patch("tts.tts_openai_compat.OpenAICompatTTS", return_value=provider) as constructor,
+            patch("i18n.translator.get_language", return_value="ja"),
+        ):
+            result, mode = create_tts_provider(settings)
+
+        self.assertIs(result, provider)
+        self.assertEqual(mode, "openai_compat_tts")
+        self.assertEqual(constructor.call_args.kwargs["reference_wav"], "reference.wav")
+        self.assertEqual(constructor.call_args.kwargs["reference_text"], "reference text")
+        self.assertEqual(constructor.call_args.kwargs["language"], "ja")
 
 
 if __name__ == "__main__":

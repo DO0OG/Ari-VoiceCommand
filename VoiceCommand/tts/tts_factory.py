@@ -10,11 +10,21 @@ _TTS_SIGNATURE_KEYS = (
     "fish_reference_id",
     "cosyvoice_reference_text",
     "cosyvoice_speed",
+    "cosyvoice_dir",
+    "tts_reference_wav",
+    "tts_volume",
+    "openai_compat_tts_base_url",
+    "openai_compat_tts_api_key",
+    "openai_compat_tts_model",
+    "openai_compat_tts_voice",
+    "openai_compat_tts_clone_mode",
+    "openai_compat_tts_emotion_mode",
     "fish_model",
     "openai_tts_api_key",
     "openai_api_key",
     "openai_tts_voice",
     "openai_tts_model",
+    "openai_tts_custom_voice_id",
     "elevenlabs_api_key",
     "elevenlabs_voice_id",
     "elevenlabs_model_id",
@@ -40,10 +50,12 @@ def create_tts_provider(settings=None):
     if tts_mode == "local":
         try:
             from tts.cosyvoice_tts import CosyVoiceTTS
+            from tts.voice_reference import get_reference_text, get_reference_wav
             # 설정 화면에서 아직 저장하지 않은 경로로 시험 재생할 때도 그 경로를 쓴다.
             configured_dir = settings.get("cosyvoice_dir", "")
             provider = CosyVoiceTTS(
-                reference_text=settings.get("cosyvoice_reference_text", ""),
+                reference_wav=get_reference_wav(settings),
+                reference_text=get_reference_text(settings),
                 speed=float(settings.get("cosyvoice_speed", 0.9)),
                 cosyvoice_dir=configured_dir if configured_dir and os.path.isdir(configured_dir) else None,
             )
@@ -51,6 +63,30 @@ def create_tts_provider(settings=None):
             return provider, "local"
         except Exception as e:
             logging.error(f"CosyVoice3 초기화 실패, Edge TTS로 fallback: {e}")
+            tts_mode = "edge"
+
+    if tts_mode == "openai_compat_tts":
+        try:
+            from i18n.translator import get_language
+            from tts.tts_openai_compat import OpenAICompatTTS
+            from tts.voice_reference import get_reference_text, get_reference_wav
+
+            provider = OpenAICompatTTS(
+                base_url=settings.get("openai_compat_tts_base_url", ""),
+                api_key=settings.get("openai_compat_tts_api_key", ""),
+                model=settings.get("openai_compat_tts_model", ""),
+                voice=settings.get("openai_compat_tts_voice", ""),
+                clone_mode=settings.get("openai_compat_tts_clone_mode", "none"),
+                emotion_mode=settings.get("openai_compat_tts_emotion_mode", "instructions"),
+                reference_wav=get_reference_wav(settings),
+                reference_text=get_reference_text(settings),
+                emotion_enabled=settings.get("tts_emotion_enabled", True),
+                language=get_language(),
+            )
+            logging.info("OpenAI 호환 TTS 초기화 완료")
+            return provider, "openai_compat_tts"
+        except Exception as e:
+            logging.error("OpenAI 호환 TTS 초기화 실패, Edge TTS로 fallback: %s", e)
             tts_mode = "edge"
 
     if tts_mode == "openai_tts":
@@ -61,6 +97,7 @@ def create_tts_provider(settings=None):
                 voice=settings.get("openai_tts_voice", "nova"),
                 model=settings.get("openai_tts_model", "tts-1"),
                 emotion_enabled=settings.get("tts_emotion_enabled", True),
+                custom_voice_id=settings.get("openai_tts_custom_voice_id", ""),
             )
             logging.info("OpenAI TTS 초기화 완료")
             return provider, "openai_tts"

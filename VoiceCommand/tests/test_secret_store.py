@@ -120,7 +120,7 @@ class SecretStoreTests(unittest.TestCase):
 
         with _isolated_settings() as path:
             with _opaque_crypto():
-                self.assertEqual(len(SENSITIVE_SETTINGS_KEYS), 13)
+                self.assertEqual(len(SENSITIVE_SETTINGS_KEYS), 14)
                 self.assertTrue(
                     ConfigManager.save_settings({"llm_provider": "openai", **values})
                 )

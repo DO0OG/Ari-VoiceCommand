@@ -25,10 +25,10 @@ class OpenAITTS(QObject):
 
     def __init__(
         self, api_key="", voice="nova", model="tts-1", speed=1.0,
-        emotion_enabled=True,
+        emotion_enabled=True, custom_voice_id="",
     ):
         super().__init__()
-        self.voice = voice
+        self.voice = {"id": custom_voice_id} if custom_voice_id else voice
         self.model = model
         self.speed = max(0.25, min(4.0, speed))  # OpenAI 허용 범위
         self.emotion_enabled = bool(emotion_enabled)

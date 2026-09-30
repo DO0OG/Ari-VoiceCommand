@@ -5221,7 +5221,7 @@
     "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
-    "settings_schema_sha256": "d98bd82d5e31f90aa7d985d46e07f62be58009a3a7f41db838dadef17599e42c",
+    "settings_schema_sha256": "1c3aa563ed68cb8672cc9c3d1027418cd09c2712f64b914114016d652ce109b0",
     "split_manifest_sha256": "b92011b21fa1c967e5068784364c814800eb16861acc23f80bf5ca9f35c64c58",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
@@ -5231,7 +5231,7 @@
   "model_sha256": "8541d1f29b172f538558e053ba495efc90a81b5f5e8ea89426a83cb7d17b77ba",
   "confusion_comparison": {
     "scope": "classifier_top1",
-    "previous_artifact_sha256": "d991613910a38f97a9dc066161e9a3f87c994a54d99b73fc648925b371b8b456",
+    "previous_artifact_sha256": "e68765fb263505b6c596d7049f30043a2175f5d0c6ba3e3a7145e4611258d569",
     "major_pairs": [
       {
         "actual": "run_agent_task",
