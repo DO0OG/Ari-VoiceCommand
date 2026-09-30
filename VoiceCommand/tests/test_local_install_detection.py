@@ -135,6 +135,26 @@ class LocalInstallUiTests(unittest.TestCase):
         self.assertIn(r"D:\CosyVoice", question.call_args.args[2])
         installer.assert_not_called()
 
+    def test_custom_elevenlabs_ids_survive_save_and_typed_id_wins(self):
+        page = _TTSSettingsPage({"elevenlabs_model_id": "eleven_custom", "elevenlabs_voice_id": "voice_saved"})
+        values = page.get_values()
+        self.assertEqual(values["elevenlabs_model_id"], "eleven_custom")
+        self.assertEqual(values["elevenlabs_voice_id"], "voice_saved")
+
+        page.elevenlabs_model_combo.setEditText("eleven_typed")
+        self.assertEqual(page.get_values()["elevenlabs_model_id"], "eleven_typed")
+
+    def test_cleanup_stops_elevenlabs_result_handling(self):
+        page = _TTSSettingsPage({})
+        callback = MagicMock()
+        page._start_elevenlabs_action(page.elevenlabs_models_button, lambda: ["late"], callback)
+        threads = list(page._tts_action_threads)
+        page.cleanup_threads()
+        for thread in threads:
+            thread.wait(2000)
+        QApplication.processEvents()
+        callback.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
