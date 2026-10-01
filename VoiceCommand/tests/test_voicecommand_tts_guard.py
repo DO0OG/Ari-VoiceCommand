@@ -177,7 +177,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             provider.cleanup.assert_called_once_with()
             self.assertEqual(
                 create_provider.call_args_list,
-                [call(), call({**settings, "tts_mode": "openai_tts"})],
+                [call(wait_ready=False), call({**settings, "tts_mode": "openai_tts"})],
             )
         finally:
             VoiceCommand._state.fish_tts = previous_provider
@@ -219,6 +219,10 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
     def test_local_provider_is_registered_before_warmup_finishes(self):
         provider = Mock()
         registered_during_warmup = []
+        lock_held_while_waiting = []
+        provider.wait_until_ready.side_effect = lambda: (
+            lock_held_while_waiting.append(VoiceCommand._TTS_INIT_LOCK.locked()) or True
+        )
         provider.wait_until_warmup_done.side_effect = lambda: (
             registered_during_warmup.append(
                 VoiceCommand._state.fish_tts is provider
@@ -232,6 +236,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         self._run_initialize_tts({"tts_mode": "local"}, [(provider, "local")])
 
         self.assertEqual(registered_during_warmup, [True])
+        self.assertEqual(lock_held_while_waiting, [False])
         self.assertIs(VoiceCommand._state.fish_tts, provider)
         provider.cleanup.assert_not_called()
 
@@ -252,6 +257,28 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
 
         self.assertIs(VoiceCommand._state.fish_tts, newer_provider)
         self.assertEqual(create_provider.call_count, 1)
+
+    def test_failed_fallback_does_not_leave_cleaned_provider_registered(self):
+        settings = {"tts_mode": "openai_tts", "tts_fallback_provider": "edge"}
+
+        with self.assertRaises(RuntimeError):
+            self._run_initialize_tts(settings, [RuntimeError("no key"), RuntimeError("edge down")])
+
+        self.assertIsNone(VoiceCommand._state.fish_tts)
+        self.assertIsNone(VoiceCommand._state.tts_signature)
+
+    def test_warmup_failure_skips_fallback_when_provider_was_stopped(self):
+        provider = Mock()
+        provider._stopping = True
+        provider.wait_until_ready.return_value = False
+
+        create_provider = self._run_initialize_tts(
+            {"tts_mode": "local", "tts_fallback_provider": "edge"},
+            [(provider, "local")],
+        )
+
+        self.assertEqual(create_provider.call_count, 1)
+        provider.cleanup.assert_not_called()
 
     def test_fallback_same_as_primary_uses_edge(self):
         fallback_provider = object()

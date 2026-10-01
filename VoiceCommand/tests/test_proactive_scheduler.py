@@ -63,6 +63,42 @@ class ProactiveSchedulerTests(unittest.TestCase):
         scheduler._check_due_tasks()
         scheduler._claim_due_tasks.assert_called_once()
 
+    def test_one_shot_completion_mark_follows_scheduled_run_and_toggle(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._save = Mock()
+        now = datetime.now()
+        scheduler._tasks = {
+            "once": ScheduledTask(
+                task_id="once",
+                goal="알림",
+                schedule_expr="1분 뒤",
+                next_run=(now - timedelta(minutes=1)).isoformat(),
+            ),
+        }
+
+        scheduler._claim_due_tasks(now)
+        self.assertTrue(scheduler._tasks["once"].completed)
+        self.assertFalse(scheduler._tasks["once"].enabled)
+
+        scheduler.toggle_task("once")
+        self.assertFalse(scheduler._tasks["once"].completed)
+
+    def test_legacy_finished_one_shot_is_loaded_as_completed(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        legacy = {
+            "task_id": "old",
+            "goal": "알림",
+            "schedule_expr": "어제",
+            "next_run": "2026-03-24T09:00:00",
+            "enabled": False,
+            "last_run": "2026-03-24T09:00:00",
+        }
+
+        self.assertTrue(scheduler._normalize_task(legacy).completed)
+        self.assertFalse(scheduler._normalize_task({**legacy, "last_run": ""}).completed)
+        self.assertFalse(scheduler._normalize_task({**legacy, "completed": False}).completed)
+
     def test_activity_return_summary_reports_waiting_and_upcoming_tasks(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         scheduler._lock = threading.Lock()
@@ -188,9 +224,11 @@ class ProactiveSchedulerTests(unittest.TestCase):
                 task_id=str(number),
                 goal="작업",
                 schedule_expr="매일 9시",
+                # 0번은 예정대로 끝난 예약, 1번은 수동 실행한 뒤 일시중지해 시각이 지난 예약이다.
                 next_run="2026-03-25T09:00:00",
                 enabled=number not in (0, 1),
-                last_run="2026-03-24T09:00:00" if number == 0 else "",
+                last_run="2026-03-24T09:00:00" if number in (0, 1) else "",
+                completed=number == 0,
             )
             for number in range(50)
         }
