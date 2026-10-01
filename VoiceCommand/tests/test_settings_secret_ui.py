@@ -5,12 +5,24 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QScrollArea
 
 from ui.settings_dialog import SettingsDialog
 
 
 class SettingsSecretUITests(unittest.TestCase):
+    def test_device_tab_uses_scroll_area(self):
+        self._app = QApplication.instance() or QApplication([])
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+
+        device_tab = dialog.tabs.widget(3)
+        self.assertIsInstance(device_tab, QScrollArea)
+        self.assertTrue(device_tab.widgetResizable())
+        self.assertEqual(device_tab.frameShape(), QScrollArea.Shape.NoFrame)
+        dialog.reject()
+
     def test_real_dialog_builds_every_tab(self):
         self._app = QApplication.instance() or QApplication([])
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
