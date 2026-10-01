@@ -1,5 +1,6 @@
 import unittest
 import threading
+from contextlib import contextmanager
 from collections import deque
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
@@ -9,6 +10,43 @@ from core import VoiceCommand
 
 
 class VoiceCommandSpeechTests(unittest.TestCase):
+    def test_provider_transcribes_after_microphone_context_releases(self):
+        microphone_locked = False
+        source = object()
+        recognizer = Mock()
+        recognizer.listen.return_value = object()
+        provider = Mock()
+
+        def transcribe(audio, mode=None):
+            self.assertFalse(microphone_locked)
+            return "볼륨 올려줘"
+
+        provider.transcribe.side_effect = transcribe
+        signal = Mock()
+
+        @contextmanager
+        def microphone_source():
+            nonlocal microphone_locked
+            microphone_locked = True
+            try:
+                yield source
+            finally:
+                microphone_locked = False
+
+        with patch("core.VoiceCommand.time.monotonic", return_value=1.0):
+            VoiceCommand.recognize_speech_helper(
+                recognizer,
+                None,
+                signal,
+                stt_provider=provider,
+                source_context=microphone_source,
+            )
+
+        provider.transcribe.assert_called_once_with(
+            recognizer.listen.return_value,
+            mode="command",
+        )
+
     def test_recognize_speech_uses_fifteen_second_phrase_limit(self):
         recognizer = Mock()
         recognizer.listen.return_value = object()

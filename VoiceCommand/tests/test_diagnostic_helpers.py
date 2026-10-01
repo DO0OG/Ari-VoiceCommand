@@ -1,6 +1,6 @@
 import struct
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, Mock, patch
 
 from audio.audio_manager import get_configured_output_device_name, output_device_override
 from ui.diagnostic_helpers import (
@@ -9,6 +9,7 @@ from ui.diagnostic_helpers import (
     run_tts_diagnostic,
     transcribe_diagnostic_sample,
 )
+from ui.stt_diagnostics import STTSampleThread
 
 
 class _Provider:
@@ -28,6 +29,35 @@ class _Provider:
 
 
 class DiagnosticHelperTests(unittest.TestCase):
+    def test_stt_diagnostic_does_not_recalibrate_manual_threshold(self):
+        audio_lock = Mock()
+        audio_lock.acquire.return_value = True
+        audio_data = object()
+        recognizer = Mock()
+        recognizer.listen.return_value = audio_data
+        audio_interface = Mock()
+        audio_interface.get_device_count.return_value = 0
+        microphone = MagicMock()
+        microphone.stream = object()
+        sample_thread = STTSampleThread(
+            {"stt_energy_threshold": 7, "stt_dynamic_energy": False},
+            "Mic",
+        )
+
+        with (
+            patch("speech_recognition.Recognizer", return_value=recognizer),
+            patch("audio.audio_manager.get_audio_lock", return_value=audio_lock),
+            patch("audio.audio_manager.GlobalAudio.get_instance", return_value=audio_interface),
+            patch("ui.stt_diagnostics.resolve_input_device_index", return_value=1),
+            patch("VoiceCommand.SharedMicrophone", return_value=microphone),
+            patch("ui.stt_diagnostics.transcribe_diagnostic_sample", return_value=(True, "ok")),
+        ):
+            sample_thread.run()
+
+        self.assertEqual(recognizer.energy_threshold, 7)
+        recognizer.adjust_for_ambient_noise.assert_not_called()
+        audio_lock.release.assert_called_once_with()
+
     def test_pcm_level_percent_scales_rms(self):
         self.assertEqual(pcm_level_percent(b""), 0)
         self.assertEqual(pcm_level_percent(struct.pack("<4h", 0, 0, 0, 0)), 0)

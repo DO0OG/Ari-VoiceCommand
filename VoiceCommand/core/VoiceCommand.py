@@ -9,6 +9,7 @@ import sys
 import time
 import threading
 from collections import deque
+from contextlib import nullcontext
 from typing import TypedDict
 import speech_recognition as sr
 
@@ -678,29 +679,34 @@ def recognize_speech_helper(
     previous_texts=None,
     continue_check=None,
     push_to_talk_released=None,
+    source_context=None,
 ) -> str | None:
+    audio_capture_active = source_context is not None
     try:
         if continue_check is not None and not continue_check():
             return None
         logging.info("말씀해 주세요...")
-        original_stream = None
-        if push_to_talk_released is not None:
-            original_stream = source.stream
-            source.stream = _PushToTalkAudioStream(
-                original_stream,
-                push_to_talk_released,
-                source.SAMPLE_RATE,
-                source.SAMPLE_WIDTH,
-            )
-        try:
-            audio = recognizer.listen(
-                source,
-                timeout=SPEECH_TIMEOUT,
-                phrase_time_limit=SPEECH_PHRASE_LIMIT,
-            )
-        finally:
-            if original_stream is not None:
-                source.stream = original_stream
+        source_manager = source_context() if source_context is not None else nullcontext(source)
+        with source_manager as source:
+            original_stream = None
+            if push_to_talk_released is not None:
+                original_stream = source.stream
+                source.stream = _PushToTalkAudioStream(
+                    original_stream,
+                    push_to_talk_released,
+                    source.SAMPLE_RATE,
+                    source.SAMPLE_WIDTH,
+                )
+            try:
+                audio = recognizer.listen(
+                    source,
+                    timeout=SPEECH_TIMEOUT,
+                    phrase_time_limit=SPEECH_PHRASE_LIMIT,
+                )
+            finally:
+                if original_stream is not None:
+                    source.stream = original_stream
+        audio_capture_active = False
         if continue_check is not None and not continue_check():
             return None
         provider = stt_provider
@@ -737,6 +743,8 @@ def recognize_speech_helper(
     except sr.UnknownValueError:
         logging.warning("음성 인식 불가")
     except (sr.RequestError, OSError, RuntimeError, ValueError) as e:
+        if audio_capture_active:
+            raise
         logging.error("음성 인식 오류: %s", e)
     return None
 

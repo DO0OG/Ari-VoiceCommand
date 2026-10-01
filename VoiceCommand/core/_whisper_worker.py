@@ -1,7 +1,7 @@
 """
 Whisper STT 워커 프로세스.
 메인 프로세스와 stdin/stdout IPC로 통신:
-  - 초기화 완료 시 stdout에 "READY\\n" 출력
+  - IPC 연결 시 "PREPARING\\n", 모델 준비 완료 시 "READY\\n" 출력
   - 입력: base64 WAV와 인식 모드가 담긴 JSON 한 줄 (구형 base64 입력도 허용)
   - 출력: 전사 텍스트 한 줄, 결과 없으면 "__NONE__"
   - "QUIT" 수신 시 종료
@@ -199,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     model_size, device, compute_type = args[:3]
     language = normalize_language(args[3] if len(args) > 3 else "ko")
 
+    sys.stdout.write("PREPARING\n")
+    sys.stdout.flush()
     try:
         from faster_whisper import WhisperModel
         model = WhisperModel(model_size, device=device, compute_type=compute_type)

@@ -106,6 +106,7 @@ class VoiceRecognitionThread(QThread):
             if not self._microphone_active:
                 self._set_microphone_status(None)
             self._microphone_wakeup.set()
+            self._voice_wakeup.set()
 
     def request_listening(self, push_to_talk=False) -> bool:
         """음성 입력 시작을 대기 루프에 전달한다."""
@@ -254,6 +255,7 @@ class VoiceRecognitionThread(QThread):
         if self.speech_recognizer is not None and (
             not initialize_wake_detector or self.wake_detector is not None
         ):
+            self._voice_setup_failed = False
             return True
         try:
             if self.speech_recognizer is None:
@@ -268,6 +270,7 @@ class VoiceRecognitionThread(QThread):
                     stt_provider=self._stt,
                     provider_signature=self._stt_signature,
                 )
+            self._voice_setup_failed = False
             return True
         except Exception as exc:
             self.wake_detector = None
@@ -277,7 +280,7 @@ class VoiceRecognitionThread(QThread):
 
     def _apply_recognizer_settings(self):
         self.speech_recognizer.energy_threshold = int(ConfigManager.get("stt_energy_threshold", 300))
-        self.speech_recognizer.dynamic_energy_threshold = bool(ConfigManager.get("stt_dynamic_energy", True))
+        self.speech_recognizer.dynamic_energy_threshold = bool(ConfigManager.get("stt_dynamic_energy", False))
         pause_threshold = max(0.0, float(ConfigManager.get("stt_pause_threshold", 0.6)))
         self.speech_recognizer.pause_threshold = pause_threshold
         self.speech_recognizer.non_speaking_duration = min(
@@ -315,8 +318,23 @@ class VoiceRecognitionThread(QThread):
                 self._apply_pending_microphone()
                 if not self.running:
                     break
-                if self.microphone is None or self._voice_setup_failed:
+                if self.microphone is None:
                     self._microphone_wakeup.wait()
+                    continue
+                if self._voice_setup_failed:
+                    self._voice_wakeup.wait()
+                    if not self.running:
+                        break
+                    self._take_voice_activation()
+                    wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
+                    if not self._initialize_voice_recognition(wake_word_enabled):
+                        continue
+                    try:
+                        self._apply_recognizer_settings()
+                        self._refresh_stt_provider()
+                    except Exception as exc:
+                        self._voice_setup_failed = True
+                        logging.warning("음성 인식 설정을 적용하지 못했습니다: %s", exc, exc_info=True)
                     continue
 
                 wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
@@ -337,7 +355,6 @@ class VoiceRecognitionThread(QThread):
                         continue
 
                 if not self._initialize_voice_recognition():
-                    self._microphone_wakeup.wait()
                     continue
 
                 try:
@@ -475,16 +492,16 @@ class VoiceRecognitionThread(QThread):
         self.listening_state_changed.emit(True)
         duplicate_notice = None
         try:
-            with self._microphone_source() as source:
-                duplicate_notice = recognize_speech_helper(
-                    self.speech_recognizer,
-                    source,
-                    self.result,
-                    stt_provider=self._stt,
-                    previous_texts=self._last_texts,
-                    continue_check=lambda: not is_session_lock_blocked(),
-                    push_to_talk_released=push_to_talk_released,
-                )
+            duplicate_notice = recognize_speech_helper(
+                self.speech_recognizer,
+                None,
+                self.result,
+                stt_provider=self._stt,
+                previous_texts=self._last_texts,
+                continue_check=lambda: not is_session_lock_blocked(),
+                push_to_talk_released=push_to_talk_released,
+                source_context=self._microphone_source,
+            )
         finally:
             set_listening_indicator(False)
             self.listening_state_changed.emit(False)
@@ -505,6 +522,9 @@ class VoiceRecognitionThread(QThread):
         )
 
         try:
+            self._apply_pending_microphone()
+            if self.microphone is None or not self._microphone_active:
+                return
             if is_session_lock_blocked():
                 logging.info("잠금 상태에서 음성 입력 시작을 무시합니다.")
                 return
@@ -532,7 +552,6 @@ class VoiceRecognitionThread(QThread):
         if hasattr(self, 'wake_detector'):
             if self.wake_detector is not None:
                 self.wake_detector.should_stop = True
-                self.wake_detector.flush_pending_settings()
         self.microphone = None
 
     def stop(self):

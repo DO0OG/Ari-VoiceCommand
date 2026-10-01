@@ -21,7 +21,6 @@ _WAKE_MAX_AUDIO_SECONDS = 4.0
 _SHORT_WAKE_WORD_MAX_LENGTH = 3
 _SHORT_WAKE_WORD_EDIT_DISTANCE = 1
 _LONG_WAKE_WORD_EDIT_DISTANCE = 2
-_ENERGY_SAVE_DELAY_SECONDS = 1.0
 
 
 def _edit_distance(left, right, max_distance):
@@ -123,9 +122,6 @@ class SimpleWakeWord:
         self.should_stop = False
         self._calibrated = False  # 첫 listen 시 lazy 캘리브레이션
         self._configured_energy_threshold = None
-        self._saved_energy_threshold = None
-        self._pending_energy_threshold = None
-        self._pending_energy_since = None
         self._stt_call_times = deque()
         self._last_stt_metric_log = time.monotonic()
         self._provider_signature = provider_signature
@@ -136,13 +132,13 @@ class SimpleWakeWord:
         settings = ConfigManager.load_settings()
         self.wake_words = list(settings.get("wake_words", self.wake_words) or ["아리야", "시작"])
         energy_threshold = int(settings.get("stt_energy_threshold", 300))
-        if energy_threshold != self._configured_energy_threshold:
+        dynamic_energy = bool(settings.get("stt_dynamic_energy", False))
+        if energy_threshold != self._configured_energy_threshold or not dynamic_energy:
             self.recognizer.energy_threshold = energy_threshold
             self._configured_energy_threshold = energy_threshold
-            self._saved_energy_threshold = energy_threshold
-            self._pending_energy_threshold = None
-            self._pending_energy_since = None
-        self.recognizer.dynamic_energy_threshold = bool(settings.get("stt_dynamic_energy", True))
+        if dynamic_energy != self.recognizer.dynamic_energy_threshold:
+            self.recognizer.dynamic_energy_threshold = dynamic_energy
+            self._calibrated = False
         pause_threshold = max(0.0, float(settings.get("wake_pause_threshold", 0.4)))
         self.recognizer.pause_threshold = pause_threshold
         self.recognizer.non_speaking_duration = min(
@@ -247,9 +243,11 @@ class SimpleWakeWord:
 
     def recalibrate(self, source):
         """TTS 이후 환경 변화 시 임계값 재조정"""
+        self.refresh_settings(initialize_provider=False)
+        if not self.recognizer.dynamic_energy_threshold:
+            return
         try:
             self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            self._save_energy_threshold()
             logging.debug(f"재캘리브레이션 완료 (energy_threshold={self.recognizer.energy_threshold:.1f})")
         except Exception as e:
             logging.debug(f"재캘리브레이션 실패: {e}")
@@ -262,19 +260,15 @@ class SimpleWakeWord:
         try:
             self._log_stt_call_rate()
             self.refresh_settings()
-            self._flush_pending_energy_threshold()
             if not self._calibrated:
-                self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                if self.recognizer.dynamic_energy_threshold:
+                    self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
                 self._calibrated = True
-                self._save_energy_threshold()
-                logging.info(
-                    "웨이크워드 캘리브레이션 완료 (energy_threshold=%.1f)",
-                    self.recognizer.energy_threshold,
-                )
             original_stream = None
             if interrupt_event is not None:
                 original_stream = source.stream
                 source.stream = _WakeListenStream(original_stream, interrupt_event)
+            gate_energy_threshold = self.recognizer.energy_threshold
             try:
                 audio = self.recognizer.listen(
                     source,
@@ -286,7 +280,13 @@ class SimpleWakeWord:
                     source.stream = original_stream
             if interrupt_event is not None and interrupt_event.is_set():
                 return False
-            if not should_transcribe_wake_audio(audio, self.recognizer.energy_threshold):
+            # 자동 임계값이 높아져도 수동 설정값보다 강한 게이트가 되지 않게 한다.
+            gate_energy_threshold = min(
+                gate_energy_threshold,
+                self.recognizer.energy_threshold,
+                self._configured_energy_threshold,
+            )
+            if not should_transcribe_wake_audio(audio, gate_energy_threshold):
                 logging.debug("[WakeWord] 길이/에너지 게이트에서 오디오 구간을 제외했습니다")
                 return False
             text = self._transcribe(audio)
@@ -331,36 +331,6 @@ class SimpleWakeWord:
             return
         self._last_stt_metric_log = now
         logging.info("[WakeWord] stt_calls_per_hour=%d", self.stt_calls_per_hour)
-
-    def _save_energy_threshold(self) -> None:
-        energy_threshold = int(self.recognizer.energy_threshold)
-        if energy_threshold == self._pending_energy_threshold:
-            return
-        if energy_threshold == self._saved_energy_threshold:
-            self._pending_energy_threshold = None
-            self._pending_energy_since = None
-            return
-        self._pending_energy_threshold = energy_threshold
-        self._pending_energy_since = time.monotonic()
-
-    def _flush_pending_energy_threshold(self, force=False) -> None:
-        energy_threshold = self._pending_energy_threshold
-        if energy_threshold is None:
-            return
-        if not force and time.monotonic() - self._pending_energy_since < _ENERGY_SAVE_DELAY_SECONDS:
-            return
-        if ConfigManager.set_value("stt_energy_threshold", energy_threshold):
-            self._configured_energy_threshold = energy_threshold
-            self._saved_energy_threshold = energy_threshold
-            self._pending_energy_threshold = None
-            self._pending_energy_since = None
-        else:
-            logging.debug("STT 임계값 저장 실패: %s", energy_threshold)
-
-    def flush_pending_settings(self) -> None:
-        """종료 시 대기 중인 임계값을 저장한다."""
-        self._flush_pending_energy_threshold(force=True)
-
 
 class _WakeListenStream:
     def __init__(self, stream, interrupt_event):

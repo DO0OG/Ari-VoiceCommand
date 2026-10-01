@@ -302,35 +302,68 @@ class SimpleWakeWordTests(unittest.TestCase):
 
         log_info.assert_called_once_with("[WakeWord] stt_calls_per_hour=%d", 0)
 
-    def test_energy_threshold_updates_are_debounced_and_skip_unchanged_values(self):
-        detector = self._make_detector()
+    def test_manual_energy_threshold_skips_calibration_and_recalibration(self):
+        settings = {
+            "wake_words": ["아리야"],
+            "stt_energy_threshold": 7,
+            "stt_dynamic_energy": False,
+            "stt_provider": "google",
+        }
+        with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
+            detector = SimpleWakeWord(stt_provider=_FakeSttProvider())
+        detector.recognizer.listen = Mock(return_value=object())
+
         with (
-            patch("audio.simple_wake.time.monotonic", side_effect=[10, 10.5, 11.4, 11.5]),
-            patch("audio.simple_wake.ConfigManager.set_value", return_value=True) as set_value,
+            patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings),
+            patch.object(detector.recognizer, "adjust_for_ambient_noise") as calibrate,
+            patch("audio.simple_wake.should_transcribe_wake_audio", return_value=True),
+            patch("audio.simple_wake.ConfigManager.set_value") as set_value,
         ):
-            detector._save_energy_threshold()
-            detector.recognizer.energy_threshold = 450
-            detector._save_energy_threshold()
-            detector.recognizer.energy_threshold = 475
-            detector._save_energy_threshold()
+            detector.listen_for_wake_word(object())
+            detector.recalibrate(object())
 
-            detector._flush_pending_energy_threshold()
-            set_value.assert_not_called()
-            detector._flush_pending_energy_threshold()
+        self.assertEqual(detector.recognizer.energy_threshold, 7)
+        calibrate.assert_not_called()
+        set_value.assert_not_called()
 
-        set_value.assert_called_once_with("stt_energy_threshold", 475)
-        self.assertEqual(detector._saved_energy_threshold, 475)
+    def test_dynamic_energy_is_runtime_only_and_gate_uses_prelisten_threshold(self):
+        settings = {
+            "wake_words": ["아리야"],
+            "stt_energy_threshold": 300,
+            "stt_dynamic_energy": True,
+            "stt_provider": "google",
+        }
+        provider = _FakeSttProvider()
+        with patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings):
+            detector = SimpleWakeWord(stt_provider=provider)
 
-    def test_flush_pending_settings_persists_threshold_on_shutdown(self):
-        detector = self._make_detector()
-        detector.recognizer.energy_threshold = 450
+        audio = object()
+        source = object()
+        detector.recognizer.energy_threshold = 6000
 
-        with patch("audio.simple_wake.ConfigManager.set_value", return_value=True) as set_value:
-            detector._save_energy_threshold()
-            detector.flush_pending_settings()
+        def listen(*_args, **_kwargs):
+            detector.recognizer.energy_threshold = 9000
+            return audio
 
-        set_value.assert_called_once_with("stt_energy_threshold", 450)
-        self.assertIsNone(detector._pending_energy_threshold)
+        detector.recognizer.listen = Mock(side_effect=listen)
+        with (
+            patch("audio.simple_wake.ConfigManager.load_settings", return_value=settings),
+            patch.object(detector.recognizer, "adjust_for_ambient_noise") as calibrate,
+            patch("audio.simple_wake.should_transcribe_wake_audio", return_value=True) as gate,
+            patch("audio.simple_wake.ConfigManager.set_value") as set_value,
+        ):
+            self.assertTrue(detector.listen_for_wake_word(source))
+            detector.recalibrate(source)
+
+        self.assertEqual(calibrate.call_count, 2)
+        self.assertEqual(calibrate.call_args_list[0].args, (source,))
+        self.assertEqual(calibrate.call_args_list[0].kwargs, {"duration": 1.0})
+        self.assertEqual(calibrate.call_args_list[1].args, (source,))
+        self.assertEqual(calibrate.call_args_list[1].kwargs, {"duration": 0.5})
+        gate.assert_called_once_with(audio, 300)
+        self.assertEqual(detector._configured_energy_threshold, 300)
+        self.assertEqual(provider.modes, ["wake"])
+        set_value.assert_not_called()
 
     def test_refresh_settings_preserves_calibrated_threshold_until_config_changes(self):
         detector = self._make_detector()

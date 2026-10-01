@@ -34,6 +34,7 @@ class GoogleSTTProvider(STTProvider):
 
         self._language = language
         self._recognizer = sr.Recognizer()
+        self._recognizer.operation_timeout = 10
 
     def transcribe(self, audio_data, mode: str | None = None) -> Optional[str]:
         import speech_recognition as sr
@@ -43,7 +44,7 @@ class GoogleSTTProvider(STTProvider):
             return self._recognizer.recognize_google(audio_data, language=self._language)
         except sr.UnknownValueError:
             return None
-        except sr.RequestError as exc:
+        except (sr.RequestError, TimeoutError) as exc:
             logging.error("[GoogleSTT] request failed: %s", exc)
             return None
 
@@ -58,6 +59,7 @@ class WhisperSTTProvider(STTProvider):
 
     _WORKER = os.path.join(os.path.dirname(__file__), "_whisper_worker.py")
     _STARTUP_TIMEOUT_SECONDS = 30.0
+    _MODEL_PREPARATION_TIMEOUT_SECONDS = 300.0
     _TRANSCRIBE_TIMEOUT_SECONDS = 20.0
 
     def __init__(
@@ -144,7 +146,12 @@ class WhisperSTTProvider(STTProvider):
             stderr=subprocess.PIPE,
             env=env,
         )
-        ready_line = self._read_process_line(self._proc.stdout, self._STARTUP_TIMEOUT_SECONDS) if self._proc.stdout else None
+        startup_line = self._read_process_line(self._proc.stdout, self._STARTUP_TIMEOUT_SECONDS) if self._proc.stdout else None
+        ready_line = (
+            self._read_process_line(self._proc.stdout, self._MODEL_PREPARATION_TIMEOUT_SECONDS)
+            if startup_line == "PREPARING" and self._proc.stdout
+            else None
+        )
         if ready_line != "READY":
             failed_proc = self._proc
             self._terminate_worker_locked()

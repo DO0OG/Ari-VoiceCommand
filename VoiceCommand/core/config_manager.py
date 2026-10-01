@@ -10,6 +10,7 @@ from typing import Callable, Optional, cast
 from core.atomic_io import write_json_atomic
 from core.settings_schema import (
     migrate_local_decision_settings,
+    migrate_stt_settings,
     normalize_local_decision_settings,
     DEFAULT_SETTINGS as SETTINGS_DEFAULTS,
     SETTINGS_FILE as SETTINGS_FILENAME,
@@ -97,20 +98,26 @@ class ConfigManager:
             normalize_custom_provider_settings(cls._cached_settings)
             # 예전 파일은 병합된 기본값이 아니라 파일 자체의 버전으로 구분한다.
             cls._cached_settings["local_decision_settings_version"] = public.get("local_decision_settings_version")
+            cls._cached_settings["stt_settings_version"] = public.get("stt_settings_version")
             # 인증값이 아직 파일에 남아 있거나 암호화 저장소를 읽을 수 없으면 파일을 그대로 둔다.
             # 공개 사본에서 인증값이 빠질 수 있기 때문이다. 이때 변경은 이번 실행에만
             # 적용된다.
+            local_settings_migrated = migrate_local_decision_settings(cls._cached_settings)
+            stt_settings_migrated = migrate_stt_settings(cls._cached_settings)
             if (
-                migrate_local_decision_settings(cls._cached_settings)
+                (local_settings_migrated or stt_settings_migrated)
                 and original
                 and store_readable
                 and not any(cls._is_secret_key(key) for key in settings)
             ):
                 try:
                     cls._write_public_settings(path, cls._cached_settings)
-                    logging.info("로컬 판단 설정을 현재 기본 규칙으로 옮겼습니다.")
+                    if local_settings_migrated:
+                        logging.info("로컬 판단 설정을 현재 기본 규칙으로 옮겼습니다.")
+                    if stt_settings_migrated:
+                        logging.info("STT 설정을 현재 기본 규칙으로 옮겼습니다.")
                 except Exception:
-                    logging.warning("로컬 판단 설정 이전을 저장하지 못해 이번 실행에만 적용합니다.")
+                    logging.warning("설정 이전을 저장하지 못해 이번 실행에만 적용합니다.")
             return cls._effective_settings()
 
     @staticmethod

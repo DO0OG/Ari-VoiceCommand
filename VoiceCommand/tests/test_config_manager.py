@@ -97,6 +97,31 @@ class ConfigManagerTests(unittest.TestCase):
             finally:
                 ConfigManager._cached_settings = previous
 
+    def test_legacy_auto_energy_is_disabled_once_without_changing_manual_threshold(self):
+        previous = ConfigManager._cached_settings
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "settings.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"stt_dynamic_energy": True, "stt_energy_threshold": 7}, handle)
+            try:
+                with patch("core.config_manager._settings_path", return_value=path):
+                    ConfigManager._cached_settings = None
+                    self.assertFalse(ConfigManager.get("stt_dynamic_energy"))
+                    self.assertEqual(ConfigManager.get("stt_energy_threshold"), 7)
+                    with open(path, encoding="utf-8") as handle:
+                        stored = json.load(handle)
+                    self.assertFalse(stored["stt_dynamic_energy"])
+                    self.assertEqual(stored["stt_energy_threshold"], 7)
+                    self.assertEqual(stored["stt_settings_version"], 1)
+
+                    stored["stt_dynamic_energy"] = True
+                    with open(path, "w", encoding="utf-8") as handle:
+                        json.dump(stored, handle)
+                    ConfigManager._cached_settings = None
+                    self.assertTrue(ConfigManager.get("stt_dynamic_energy"))
+            finally:
+                ConfigManager._cached_settings = previous
+
     def test_explicit_fast_choice_survives_migration(self):
         from core.settings_schema import migrate_local_decision_settings
 
