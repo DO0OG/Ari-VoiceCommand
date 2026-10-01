@@ -350,9 +350,47 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any
         path = _normalize_path(file_path)
         if not os.path.isfile(path):
             return {"error": _("파일이 존재하지 않습니다."), "file_path": path}
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-        count = content.count(old_string)
+        raw_content = Path(path).read_bytes()
+        has_utf8_bom = raw_content[:3] == bytes((239, 187, 191))
+        if has_utf8_bom:
+            try:
+                content = raw_content[3:].decode("utf-8")
+            except UnicodeDecodeError:
+                return {
+                    "error": _("파일 인코딩을 확인할 수 없어 편집하지 않았습니다."),
+                    "file_path": path,
+                }
+            encoding = "utf-8"
+        else:
+            try:
+                content = raw_content.decode("utf-8")
+                encoding = "utf-8"
+            except UnicodeDecodeError:
+                try:
+                    content = raw_content.decode("cp949")
+                    encoding = "cp949"
+                except UnicodeDecodeError:
+                    return {
+                        "error": _("파일 인코딩을 확인할 수 없어 편집하지 않았습니다."),
+                        "file_path": path,
+                    }
+
+        normalized_chars = []
+        offsets = [0]
+        source_index = 0
+        while source_index < len(content):
+            char = content[source_index]
+            if char == "\r":
+                if source_index + 1 < len(content) and content[source_index + 1] == "\n":
+                    source_index += 1
+                char = "\n"
+            normalized_chars.append(char)
+            source_index += 1
+            offsets.append(source_index)
+        normalized_content = "".join(normalized_chars)
+        normalized_old = old_string.replace("\r\n", "\n").replace("\r", "\n")
+        normalized_new = (new_string or "").replace("\r\n", "\n").replace("\r", "\n")
+        count = normalized_content.count(normalized_old)
         if count != 1:
             return {
                 "error": _(
@@ -361,8 +399,17 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any
                 ),
                 "matches": count,
             }
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content.replace(old_string, new_string, 1))
+        match_start = normalized_content.index(normalized_old)
+        match_end = match_start + len(normalized_old)
+        newline = "\r\n" if "\r\n" in content else ("\r" if "\r" in content else "\n")
+        replacement = normalized_new.replace("\n", newline)
+        updated_content = (
+            content[:offsets[match_start]]
+            + replacement
+            + content[offsets[match_end]:]
+        )
+        output = (bytes((239, 187, 191)) if has_utf8_bom else b"") + updated_content.encode(encoding)
+        Path(path).write_bytes(output)
         return {
             "file_path": path,
             "replaced": True,

@@ -157,7 +157,7 @@ _OPPOSITE_DIRECTION = {"up": "down", "down": "up"}
 def _configured_mode() -> str:
     from core.config_manager import ConfigManager
 
-    mode = ConfigManager.get("local_decision_mode", "off")
+    mode = ConfigManager.get("local_decision_mode", "fast")
     return mode if isinstance(mode, str) and mode in _MODES else "off"
 
 
@@ -172,7 +172,7 @@ def _disabled_reason() -> str:
         return "engine_disabled"
     if mode == "shadow":
         return "shadow_mode"
-    if ConfigManager.get("local_decision_direct_execution", False) is not True:
+    if ConfigManager.get("local_decision_direct_execution", True) is not True:
         return "direct_execution_off"
     return ""
 
@@ -309,7 +309,7 @@ class LocalDecisionEngine:
             if mode == "shadow":
                 return self._fallback()
             # 모드와 별개로 직접 실행 설정이 명시적으로 켜져 있어야 한다.
-            if ConfigManager.get("local_decision_direct_execution", False) is not True:
+            if ConfigManager.get("local_decision_direct_execution", True) is not True:
                 return self._fallback()
             direct_allowed = is_direct_allowed(decision.choice, mode)
             if (

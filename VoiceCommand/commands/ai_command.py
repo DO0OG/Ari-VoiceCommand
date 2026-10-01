@@ -1754,6 +1754,7 @@ class AICommand(FastPathMixin, BaseCommand):
         with self._response_cancel_lock:
             self._active_response_cancel = cancel_event
         streamed_parts: List[str] = []
+        emitted_messages: List[str] = []
         instant_ack = None
         llm_request_started = None
         first_response_reported = False
@@ -1772,6 +1773,7 @@ class AICommand(FastPathMixin, BaseCommand):
         def emit_output(message: str) -> None:
             if cancel_event.is_set():
                 return
+            emitted_messages.append(str(message or ""))
             if output_callback is original_tts:
                 try:
                     from core.VoiceCommand import set_active_conversation_response
@@ -1805,6 +1807,30 @@ class AICommand(FastPathMixin, BaseCommand):
                 fast_result,
                 tool_result_callback=tool_result_callback,
             ):
+                response = "\n".join(
+                    message.strip() for message in emitted_messages if message.strip()
+                )
+                if self.learning_mode_ref.get("enabled"):
+                    self._record_user_pattern(text)
+                if response:
+                    history_recorder = getattr(self.ai_assistant, "add_to_history", None)
+                    if callable(history_recorder):
+                        try:
+                            history_recorder("user", text)
+                            history_recorder("assistant", response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("빠른 처리 대화 이력 기록 생략: %s", exc)
+                    lang = self._get_current_language()
+                    try:
+                        from memory.conversation_history import add_conversation
+                        add_conversation(text, response, data_source="local", lang=lang)
+                    except Exception as exc:
+                        logging.debug("빠른 처리 대화 기록 저장 생략: %s", exc)
+                    try:
+                        from core.VoiceCommand import emit_plugin_event
+                        emit_plugin_event("on_voice_command", {"text": text, "response": response})
+                    except Exception as exc:
+                        logging.debug("빠른 처리 음성 명령 이벤트 발행 생략: %s", exc)
                 return
 
             self._current_goal = text
@@ -1858,6 +1884,14 @@ class AICommand(FastPathMixin, BaseCommand):
                         self._emit_user_message(response)
 
                     results = self._execute_tool_calls(tool_calls, tool_result_callback=tool_result_callback)
+                    history_results = [
+                        result if result is not None else (
+                            _("작업은 완료됐지만 확인 가능한 결과를 받지 못했습니다.")
+                            if tool_call.get("name") in self._dispatch
+                            else _("등록되지 않은 도구라 실행하지 못했습니다.")
+                        )
+                        for tool_call, result in zip(tool_calls, results)
+                    ]
 
                     non_none = [r for r in results if r is not None]
                     followup = None
@@ -1868,6 +1902,7 @@ class AICommand(FastPathMixin, BaseCommand):
                         skip_followup = (
                             ConfigManager.get("tool_followup_policy_enabled", True) is not False
                         )
+                    local_response = ""
                     if skip_followup:
                         tool_name = str(tool_calls[0].get("name", "") or "")
                         local_response = self._build_local_tool_response(
@@ -1875,12 +1910,13 @@ class AICommand(FastPathMixin, BaseCommand):
                             results[0],
                             has_preface,
                         )
-                        recorder = getattr(self.ai_assistant, "record_tool_result", None)
-                        if callable(recorder):
-                            try:
-                                recorder(tool_calls, results, local_response)
-                            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
-                                logging.warning("로컬 도구 결과 기록 실패: %s", exc)
+                    recorder = getattr(self.ai_assistant, "record_tool_result", None)
+                    if callable(recorder):
+                        try:
+                            recorder(tool_calls, history_results, local_response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.warning("도구 결과 기록 실패: %s", exc)
+                    if skip_followup:
                         if stream_callback:
                             stream_callback(local_response)
                         self._emit_user_message(local_response)
@@ -1893,7 +1929,7 @@ class AICommand(FastPathMixin, BaseCommand):
                         followup = self._run_agentic_followup(
                             text,
                             tool_calls,
-                            results,
+                            history_results,
                             stream_callback=emit_stream if stream_callback else None,
                             cancel_event=cancel_event,
                         )
@@ -1906,6 +1942,16 @@ class AICommand(FastPathMixin, BaseCommand):
                             self._emit_user_message(result)
                         response = "\n".join(rendered_results)
                 else:
+                    if tool_calls:
+                        cancelled_results = [
+                            _("요청이 취소되어 도구를 실행하지 않았습니다.")
+                        ] * len(tool_calls)
+                        recorder = getattr(self.ai_assistant, "record_tool_result", None)
+                        if callable(recorder):
+                            try:
+                                recorder(tool_calls, cancelled_results, "")
+                            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                                logging.warning("취소된 도구 결과 기록 실패: %s", exc)
                     if response:
                         self._emit_user_message(response)
 

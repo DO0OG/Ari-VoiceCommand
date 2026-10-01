@@ -51,16 +51,23 @@ class SafeFastPathTests(unittest.TestCase):
         for handler in self.handlers.values():
             handler.assert_not_called()
 
-    def test_success_dispatches_once_without_followup_recovery_or_raw_history(self):
+    def test_success_dispatches_once_and_records_user_and_assistant_history(self):
         self.predict("get_current_time")
-        self.command.run_interaction("what time is it")
+        response = self.command.run_interaction("what time is it")
         self.handlers["get_current_time"].assert_called_once_with({})
         self.assistant.chat_with_tools.assert_not_called()
         self.assistant.feed_tool_result.assert_not_called()
         self.command._recover_tool_calls_from_response.assert_not_called()
-        self.command._record_user_pattern.assert_not_called()
-        self.history.assert_not_called()
-        self.events.assert_not_called()
+        self.command._record_user_pattern.assert_called_once_with("what time is it")
+        self.assistant.add_to_history.assert_any_call("user", "what time is it")
+        self.assistant.add_to_history.assert_any_call("assistant", "처리 결과")
+        self.history.assert_called_once_with(
+            "what time is it", "처리 결과", data_source="local", lang=ANY
+        )
+        self.events.assert_called_once_with(
+            "on_voice_command", {"text": "what time is it", "response": "처리 결과"}
+        )
+        self.assertEqual(response, "처리 결과")
         self.assertFalse(self.command._exec_lock.locked())
 
     def test_low_confidence_uses_existing_path_once(self):
@@ -234,7 +241,7 @@ class SafeFastPathTests(unittest.TestCase):
         audit.assert_called_once()
         self.assertNotIn("take a screenshot", str(audit.call_args))
         self.assistant.chat_with_tools.assert_not_called()
-        self.history.assert_not_called()
+        self.history.assert_called_once()
 
     def test_all_candidates_abstain_on_unsafe_or_compound_sentences(self):
         from agent.decision.candidates import DIRECT_ALLOWLIST

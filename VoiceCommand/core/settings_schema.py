@@ -53,9 +53,9 @@ DEFAULT_SETTINGS = {
     "local_decision_engine_enabled": True,
     "local_decision_backend": "linear",
     "local_decision_threshold": 0.92,
-    "local_decision_mode": "off",
-    "local_decision_direct_execution": False,
-    "local_decision_settings_version": 2,
+    "local_decision_mode": "fast",
+    "local_decision_direct_execution": True,
+    "local_decision_settings_version": 3,
     "vision_enabled": True,
     "embedding_remote_enabled": False,
     "max_context_tokens": 8000,
@@ -170,7 +170,7 @@ DEFAULT_SETTINGS = {
     "image_gen_provider": "openai",
 }
 
-LOCAL_DECISION_SETTINGS_VERSION = 2
+LOCAL_DECISION_SETTINGS_VERSION = 3
 STT_SETTINGS_VERSION = 1
 LOCAL_DECISION_MODES = ("off", "shadow", "fast")
 
@@ -199,19 +199,21 @@ def normalize_local_decision_settings(settings: dict) -> bool:
 
 
 def migrate_local_decision_settings(settings: dict) -> bool:
-    """저장된 설정을 배포 기본값으로 한 번 옮기고, 바뀐 것이 있으면 True를 반환한다.
-
-    예전 빌드는 직접 실행이 꺼진 ``shadow``를 기본값으로 저장했다. 배포 검사를 아직
-    통과하지 않았으므로 정확히 그 조합만 ``off``로 바꾼다. 이 버전이 기록된 뒤
-    사용자가 일부러 고른 값은 건드리지 않는다.
-    """
+    """저장된 기본값을 단계별로 한 번 옮기고 바뀐 것이 있으면 True를 반환한다."""
     changed = False
-    if settings.get("local_decision_settings_version") != LOCAL_DECISION_SETTINGS_VERSION:
-        if (
-            settings.get("local_decision_mode") == "shadow"
-            and settings.get("local_decision_direct_execution") is not True
-        ):
-            settings["local_decision_mode"] = "off"
+    try:
+        version = int(settings.get("local_decision_settings_version") or 0)
+    except (TypeError, ValueError):
+        version = 0
+
+    if version < 2:
+        settings["local_decision_settings_version"] = 2
+        version = 2
+        changed = True
+    if version < LOCAL_DECISION_SETTINGS_VERSION:
+        if settings.get("local_decision_mode") == "off":
+            settings["local_decision_mode"] = "fast"
+            settings["local_decision_direct_execution"] = True
         settings["local_decision_settings_version"] = LOCAL_DECISION_SETTINGS_VERSION
         changed = True
     return normalize_local_decision_settings(settings) or changed

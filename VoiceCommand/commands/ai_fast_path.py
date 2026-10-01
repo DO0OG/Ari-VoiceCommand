@@ -45,7 +45,7 @@ class FastPathMixin:
         try:
             from core.config_manager import ConfigManager
 
-            mode = ConfigManager.get("local_decision_mode", "off")
+            mode = ConfigManager.get("local_decision_mode", "fast")
             if not isinstance(mode, str) or mode not in {"shadow", "fast", "adaptive"}:
                 return None
             if ConfigManager.get("local_decision_engine_enabled", True) is not True:

@@ -454,9 +454,11 @@ class SmartBrowser:
                 size = os.path.getsize(path)
                 prev = last_seen.get(path)
                 now = time.time()
-                if prev and prev[0] == size and now - prev[1] >= stable_seconds:
-                    return path
-                last_seen[path] = (size, now)
+                if prev and prev[0] == size:
+                    if now - prev[1] >= stable_seconds:
+                        return path
+                else:
+                    last_seen[path] = (size, now)
             time.sleep(0.5)
         raise TimeoutError(_("다운로드 완료 파일을 찾지 못했습니다."))
 

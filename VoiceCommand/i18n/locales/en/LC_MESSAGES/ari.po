@@ -3068,8 +3068,23 @@ msgstr "Fast local handling"
 msgid "간단한 명령을 로컬에서 바로 처리"
 msgstr "Handle simple commands locally"
 
-msgid "사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."
-msgstr "Off by default until human review and real-use testing are complete."
+msgid "빠른 처리는 기본으로 켜져 있습니다. 진단용 기록 모드는 별도로 선택할 수 있습니다."
+msgstr "Fast processing is enabled by default. Diagnostic-only logging can be selected separately."
+
+msgid "파일 인코딩을 확인할 수 없어 편집하지 않았습니다."
+msgstr "Could not determine the file encoding, so the edit was not written."
+
+msgid "작업은 완료됐지만 확인 가능한 결과를 받지 못했습니다."
+msgstr "The task completed, but no verifiable result was returned."
+
+msgid "등록되지 않은 도구라 실행하지 못했습니다."
+msgstr "The tool is not registered, so it could not be executed."
+
+msgid "요청이 취소되어 도구를 실행하지 않았습니다."
+msgstr "The request was canceled, so the tool was not executed."
+
+msgid "도구가 완료됐지만 반환값이 없습니다."
+msgstr "The tool completed without returning a value."
 
 msgid "고급: 동작 모드"
 msgstr "Advanced: mode"
