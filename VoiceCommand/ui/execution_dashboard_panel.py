@@ -74,7 +74,12 @@ class ExecutionDashboardPanel(QFrame):
             self._title_lbl.setText(_("🤖 계획 {count}단계").format(count=len(steps)))
             self._iter_lbl.setText(_("시도 {count}회").format(count=iteration + 1))
             for s in steps:
-                self._steps[s["id"]] = {"desc": s["desc"], "type": s["type"], "status": "pending"}
+                # 오케스트레이터는 ActionStep을 asdict()로 넘긴다.
+                self._steps[s["step_id"]] = {
+                    "desc": s.get("description_kr", ""),
+                    "type": s.get("step_type", ""),
+                    "status": "pending",
+                }
             self._rebuild_steps()
             self._summary_lbl.setText("")
             self.show()
