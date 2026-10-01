@@ -65,9 +65,14 @@ class TTSStreamWrapperTests(unittest.TestCase):
                 )
             )
         )
-        openai_module = SimpleNamespace(OpenAI=lambda **_kwargs: client)
+        openai_factory = Mock(return_value=client)
+        openai_module = SimpleNamespace(OpenAI=openai_factory)
         with patch("tts.tts_openai.importlib.import_module", return_value=openai_module):
             provider = OpenAITTS(api_key="test-key")
+
+        openai_factory.assert_called_once_with(
+            api_key="test-key", timeout=30, max_retries=0
+        )
 
         with patch("audio.audio_manager.get_output_device_index", return_value=None):
             self._assert_wrappers_close_after_write_failure(

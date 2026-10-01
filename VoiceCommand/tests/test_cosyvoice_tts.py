@@ -1,6 +1,9 @@
 import os
+import queue
 import struct
 import threading
+import time
+from collections import deque
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -104,6 +107,69 @@ class _FakeProc:
         return None
 
 
+class _PipeStdout:
+    def __init__(self):
+        self._chunks = queue.Queue()
+        self._rest = b""
+        self.reads = 0
+
+    def feed(self, *chunks):
+        for chunk in chunks:
+            self._chunks.put(chunk)
+
+    def read(self, size):
+        if not self._rest:
+            self.reads += 1
+            try:
+                self._rest = self._chunks.get(timeout=3)
+            except queue.Empty:
+                return b""
+        out, self._rest = self._rest[:size], self._rest[size:]
+        return out
+
+
+class _PipeProc:
+    """워커 흉내: 요청마다 stdout에 길이 접두 PCM을 흘린다."""
+
+    def __init__(self):
+        self.stdout = _PipeStdout()
+        self.stdin = self
+        self.on_write = None
+        self.kill_calls = 0
+        self.killed = False
+
+    def write(self, _data):
+        if self.on_write:
+            self.on_write()
+
+    def flush(self):
+        pass
+
+    def feed(self, *chunks):
+        self.stdout.feed(*chunks)
+
+    def wait_for_reads(self, count, timeout=2):
+        deadline = time.monotonic() + timeout
+        while self.stdout.reads < count and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return self.stdout.reads >= count
+
+    def poll(self):
+        return -9 if self.killed else None
+
+    def kill(self):
+        self.kill_calls += 1
+        self.killed = True
+        self.stdout.feed(b"")
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def _pcm(data):
+    return struct.pack("<I", len(data)) + data
+
+
 class CosyVoiceTTSSpeakTests(unittest.TestCase):
     def test_speak_streams_worker_output_and_emits_completion(self):
         with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
@@ -112,7 +178,14 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         tts._ready.set()
         tts._proc = _FakeProc()
         tts._speak_lock = threading.Lock()
+        tts._state_lock = threading.Lock()
+        tts._active_stop_event = None
+        tts._request_id = 0
+        tts._active_request_id = None
+        tts._restart_required = False
         tts._stopping = False
+        tts._ctrl_lock = threading.Lock()
+        tts._ctrl_q = []
         tts._pcm_lock = threading.Lock()
         tts._pcm_buffer = _PCMChunkBuffer()
         tts._pcm_done = threading.Event()
@@ -120,11 +193,12 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         tts.is_playing = False
         tts._clear_pcm_state = lambda: None
         tts._close_stream = lambda: None
+        tts._ensure_worker = lambda _stop_event: True
         fake_stream = _FakeStream()
         tts._ensure_stream = lambda: fake_stream
-        tts._wait_ctrl = lambda timeout=60: "DONE:ok"
+        tts._wait_ctrl = lambda timeout=60, proc=None, stop_event=None: "DONE:ok"
         payloads = iter([struct.pack("<I", 4), b"data", struct.pack("<I", 0)])
-        tts._read_exact = lambda _n: next(payloads, None)
+        tts._read_exact = lambda _n, proc=None, stop_event=None: next(payloads, None)
 
         result = tts.speak("테스트 문장")
 
@@ -133,6 +207,108 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         self.assertEqual(tts.playback_finished.emitted, 1)
         self.assertEqual(tts._proc.stdin.flush_calls, 1)
         self.assertEqual(tts._proc.stdin.writes, ["테스트 문장\n".encode("utf-8")])
+
+    def _make_pipe_tts(self):
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
+        tts._proc = _PipeProc()
+        tts._ready = threading.Event()
+        tts._ready.set()
+        tts._worker_error = None
+        tts._state_lock = threading.Lock()
+        tts._speak_lock = threading.Lock()
+        tts._active_stop_event = None
+        tts._request_id = 0
+        tts._active_request_id = None
+        tts._restart_required = False
+        tts._drain_event = threading.Event()
+        tts._drain_event.set()
+        tts._drain_proc = None
+        tts._drain_request_id = None
+        tts._drain_cancelled_at = None
+        tts._stopping = False
+        tts._ctrl_lock = threading.Lock()
+        tts._ctrl_q = deque()
+        tts._pcm_lock = threading.Lock()
+        tts._pcm_buffer = _PCMChunkBuffer()
+        tts._pcm_done = threading.Event()
+        tts.volume = 1.0
+        tts.is_playing = False
+        tts.playback_finished = _DummySignal()
+        tts._ensure_stream = lambda: _FakeStream()
+        tts._close_stream = lambda: None
+        tts._start_worker = Mock()
+        return tts
+
+    def _start_speak(self, tts, text, stop_event):
+        result = []
+        thread = threading.Thread(
+            target=lambda: result.append(tts.speak(text, stop_event=stop_event))
+        )
+        thread.start()
+        return thread, result
+
+    def test_cancel_keeps_worker_and_drains_remaining_output(self):
+        tts = self._make_pipe_tts()
+        proc = tts._proc
+        stop_event = threading.Event()
+        thread, result = self._start_speak(tts, "취소할 문장", stop_event)
+        proc.feed(_pcm(b"aaaa"))
+        self.assertTrue(proc.wait_for_reads(1))
+
+        tts.stop()
+        thread.join(2)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result, [False])
+        self.assertFalse(tts._drain_event.wait(0.2))  # 종료 표시 전에는 배출 중
+        proc.feed(_pcm(b"bbbb"), _pcm(b""))
+        tts._ctrl_q.append((proc, "DONE:2"))
+
+        self.assertTrue(tts._drain_event.wait(2))
+        self.assertEqual(proc.kill_calls, 0)
+        self.assertFalse(tts._restart_required)
+        self.assertEqual(tts._pcm_buffer.size, 0)
+
+    def test_next_speak_after_cancel_plays_only_new_request(self):
+        tts = self._make_pipe_tts()
+        proc = tts._proc
+        first_stop = threading.Event()
+        thread, _result = self._start_speak(tts, "첫 문장", first_stop)
+        proc.feed(_pcm(b"old!"))
+        self.assertTrue(proc.wait_for_reads(1))
+        tts.stop()
+        thread.join(2)
+        proc.feed(_pcm(b"old2"), _pcm(b""))
+        tts._ctrl_q.append((proc, "DONE:2"))
+
+        proc.on_write = lambda: (
+            proc.feed(_pcm(b"new"), _pcm(b"")),
+            tts._ctrl_q.append((proc, "DONE:1")),
+        )
+        result = tts.speak("둘째 문장", stop_event=threading.Event())
+
+        self.assertTrue(result)
+        self.assertEqual(proc.kill_calls, 0)
+        tts._start_worker.assert_not_called()
+        self.assertEqual(tts._pcm_buffer.pop_bytes(100), b"new")
+
+    def test_drain_timeout_restarts_worker(self):
+        tts = self._make_pipe_tts()
+        tts._DRAIN_TIMEOUT = 0.2
+        proc = tts._proc
+        stop_event = threading.Event()
+        thread, _result = self._start_speak(tts, "취소할 문장", stop_event)
+        proc.feed(_pcm(b"aaaa"))
+        self.assertTrue(proc.wait_for_reads(1))
+        tts.stop()
+        thread.join(2)
+        tts.wait_until_ready = lambda stop_event=None: True
+
+        self.assertTrue(tts._ensure_worker(threading.Event()))
+
+        self.assertEqual(proc.kill_calls, 1)
+        tts._start_worker.assert_called_once()
 
     def test_explicit_cosyvoice_dir_avoids_cached_discovery(self):
         cosyvoice_dir = os.path.abspath("selected-cosyvoice")

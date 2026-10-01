@@ -45,7 +45,9 @@ class OpenAITTS(QObject):
 
         try:
             openai_module = importlib.import_module("openai")
-            self._client = openai_module.OpenAI(api_key=api_key)
+            self._client = openai_module.OpenAI(
+                api_key=api_key, timeout=30, max_retries=0
+            )
             logging.info("OpenAI TTS 초기화 완료 (voice=%s, model=%s)", voice, model)
         except Exception as e:
             logging.error("OpenAI TTS 초기화 실패: %s", redact_secret(str(e), api_key))

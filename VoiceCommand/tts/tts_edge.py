@@ -291,6 +291,7 @@ class EdgeTTS(QObject):
         language: str,
         stop_event: threading.Event,
         result_queue,
+        synthesis_failures: list[tuple[int, str]],
     ) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -308,11 +309,13 @@ class EdgeTTS(QObject):
                         stop_event,
                     )
                 except asyncio.TimeoutError:
+                    synthesis_failures.append((index, "TimeoutError"))
                     logging.warning(
                         "Edge TTS 문장 합성 타임아웃 (%d/%d)", index, len(sentences)
                     )
                     continue
                 except Exception as exc:
+                    synthesis_failures.append((index, type(exc).__name__))
                     logging.warning(
                         "Edge TTS 문장 합성 실패 (%d/%d): %s",
                         index,
@@ -321,10 +324,16 @@ class EdgeTTS(QObject):
                     )
                     continue
 
-                if pcm and not self._put_synthesis_result(
-                    result_queue, pcm, stop_event
-                ):
-                    break
+                if pcm:
+                    if not self._put_synthesis_result(result_queue, pcm, stop_event):
+                        break
+                elif not stop_event.is_set():
+                    synthesis_failures.append((index, "empty audio"))
+                    logging.warning(
+                        "Edge TTS 문장 합성 결과가 비었습니다 (%d/%d)",
+                        index,
+                        len(sentences),
+                    )
         finally:
             try:
                 loop.run_until_complete(loop.shutdown_asyncgens())
@@ -374,6 +383,7 @@ class EdgeTTS(QObject):
 
         started_at = time.monotonic()
         result_queue = queue.Queue(maxsize=1)
+        synthesis_failures = []
         synthesis_stop_event = threading.Event()
         try:
             from i18n.translator import get_language
@@ -394,6 +404,7 @@ class EdgeTTS(QObject):
                 language,
                 synthesis_stop_event,
                 result_queue,
+                synthesis_failures,
             ),
             name="EdgeTTS-Synthesis",
             daemon=True,
@@ -441,6 +452,19 @@ class EdgeTTS(QObject):
                 self.is_playing = False
                 self._speak_finished.set()
             self.playback_finished.emit()
+
+        if synthesis_failures and not stop_event.is_set():
+            failed_sentences = ", ".join(
+                f"{index}/{len(sentences)}:{reason}"
+                for index, reason in synthesis_failures
+            )
+            logging.warning(
+                "Edge TTS 문장 합성 결과: %d/%d 실패 (%s)",
+                len(synthesis_failures),
+                len(sentences),
+                failed_sentences,
+            )
+            success = False
 
         if played_audio and success:
             logging.info(

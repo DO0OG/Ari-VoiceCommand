@@ -91,10 +91,12 @@ class EdgeTTSSentencePipelineTests(unittest.TestCase):
         with (
             self._playback_patches(stream),
             patch.object(provider, "_synthesize", new=synthesize),
+            self.assertLogs("root", level="WARNING") as captured,
         ):
-            self.assertTrue(provider.speak("느린 문장입니다. 다음 문장입니다."))
+            self.assertFalse(provider.speak("느린 문장입니다. 다음 문장입니다."))
 
         stream.write.assert_called_once_with(b"second")
+        self.assertIn("1/2:TimeoutError", "\n".join(captured.output))
 
     def test_cached_wake_response_plays_without_synthesizing(self):
         text = get_wake_responses()[0]
