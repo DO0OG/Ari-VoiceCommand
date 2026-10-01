@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1322113,
-    "additional_steady_rss_bytes": 14446592,
-    "warm_p95_ms": 0.1014199999417542,
+    "additional_steady_rss_bytes": 14483456,
+    "warm_p95_ms": 0.12402000174915882,
     "gpu_used": false
   },
   "review": {
@@ -117,7 +117,7 @@
     "engine_sha256": "69153c45a1872c46021231d33f354bf70f6e4f9f758a22cfa5d4ac9de52349ba",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
     "runtime_settings_sha256": "6387f9f5fadbed77d0cea89686e3fc9252915d74e811c53d8757413734b4b9cd",
-    "settings_schema_sha256": "d250ee2cf993e7a74e501a47ce6ebcba420c877443779f79a291f97030370950",
+    "settings_schema_sha256": "3027d5fd4381f8e2265077be3eda35b7f5b9a92c8019c305a5f3733b7e80a687",
     "split_manifest_sha256": "b92011b21fa1c967e5068784364c814800eb16861acc23f80bf5ca9f35c64c58",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",
