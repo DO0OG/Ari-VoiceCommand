@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton,
     QComboBox, QGroupBox, QWidget, QCheckBox,
-    QTabWidget, QMessageBox, QFrame, QSlider, QSpinBox,
+    QTabWidget, QMessageBox, QFrame, QSlider, QSpinBox, QScrollArea,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -23,7 +23,7 @@ from core.custom_llm_providers import is_custom_secret_key
 from i18n.translator import _, set_language, get_language
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
-    TAB_STYLE, INPUT_STYLE,
+    TAB_STYLE, INPUT_STYLE, SCROLLBAR_STYLE,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
 from ui.theme_editor import ThemeEditorDialog
@@ -235,7 +235,12 @@ class SettingsDialog(QDialog):
         gvbox.addWidget(self.verbosity_combo)
 
         vbox.addWidget(group, 1)
-        return widget
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setWidget(widget)
+        return scroll
 
     def _create_activity_tab(self):
         widget = QWidget()
@@ -436,7 +441,12 @@ class SettingsDialog(QDialog):
         vbox.addWidget(import_btn)
 
         vbox.addStretch()
-        return widget
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setWidget(widget)
+        return scroll
 
     def _create_update_tab(self):
         widget = QWidget()
