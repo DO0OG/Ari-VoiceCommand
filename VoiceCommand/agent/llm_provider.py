@@ -88,6 +88,8 @@ class LLMProvider:
         self.router_enabled = bool(router_enabled)
         self.conversation_history = []
         self._history_lock = threading.RLock()
+        # 설정 재구성 도중 제공자·모델·client가 섞여 읽히지 않게 한다.
+        self._config_lock = threading.RLock()
         self._active_stream_lock = threading.Lock()
         self._active_stream = None
         self._active_stream_cancel_event = None
@@ -458,10 +460,21 @@ class LLMProvider:
             compacted["content"] = f"[도구 결과 요약: {len(content)}자]"
         return compacted
 
-    def _history_for_context(self, max_tokens: int | None = None) -> list[dict]:
+    @staticmethod
+    def _has_tool_blocks(message: dict) -> bool:
+        content = message.get("content")
+        return isinstance(content, list) and any(
+            isinstance(block, dict) and block.get("type") in ("tool_use", "tool_result")
+            for block in content
+        )
+
+    def _history_for_context(self, max_tokens: int | None = None, tool_blocks: bool = True) -> list[dict]:
         budget = int(max_tokens or self.max_context_tokens or 8000)
         with self._history_lock:
             history = list(self.conversation_history)
+        if not tool_blocks:
+            # Anthropic 형식의 도구 블록은 다른 제공자가 받지 못한다.
+            history = [message for message in history if not self._has_tool_blocks(message)]
         cleaned_history = []
         index = 0
         while index < len(history):
@@ -810,6 +823,10 @@ class LLMProvider:
         return f"{label} {role_label} 모델이 설정되지 않았습니다. 설정에서 선택한 모델을 지정해주세요."
 
     def _get_role_target(self, role: str) -> tuple[Any, str, str]:
+        with self._config_lock:
+            return self._read_role_target(role)
+
+    def _read_role_target(self, role: str) -> tuple[Any, str, str]:
         if role == "planner":
             provider = self.planner_provider
             model = self.planner_model
@@ -917,9 +934,10 @@ class LLMProvider:
         return {}
 
     def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:
-        provider = self.provider
-        model = model_override or self.model
-        client = self.client
+        with self._config_lock:
+            provider = self.provider
+            model = model_override or self.model
+            client = self.client
         if model_override or not self.router_enabled:
             return client, provider, model
         try:
@@ -988,7 +1006,7 @@ class LLMProvider:
             )
             messages = [{"role": "system", "content": system_content}]
             if include_history:
-                messages.extend(self._history_for_context())
+                messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             messages.append({"role": "user", "content": user_message})
             if save_history:
                 self.add_to_history("user", user_message)
@@ -1069,7 +1087,7 @@ class LLMProvider:
                     situation_prompt=situation_prompt,
                 ),
             }]
-            messages.extend(self._history_for_context())
+            messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             
             request_ctx = self._analyze_request(user_message)
             if skill_ctx.get("force_web_search"):
@@ -1450,7 +1468,7 @@ class LLMProvider:
                     if part
                 ),
             }]
-            messages.extend(self._history_for_context())
+            messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
@@ -2180,7 +2198,7 @@ def reload_llm_provider() -> None:
         replacement = _build_llm_provider()
 
         preserved = {
-            "conversation_history", "_history_lock",
+            "conversation_history", "_history_lock", "_config_lock",
             "_active_stream_lock", "_active_stream", "_active_stream_cancel_event",
             "_plugin_tools", "_plugin_tool_intents",
         }
@@ -2191,13 +2209,14 @@ def reload_llm_provider() -> None:
             "memory_extractor_provider", "memory_extractor_model",
         )
         # 진행 중인 호출이 기존 기록과 스트림 상태를 계속 사용하도록 보존한다.
-        for name in config:
-            setattr(instance, name, getattr(replacement, name))
-        for name, value in replacement.__dict__.items():
-            if name not in preserved and name not in clients and name not in config:
-                setattr(instance, name, value)
-        for name in clients:
-            setattr(instance, name, getattr(replacement, name))
+        with instance._config_lock:
+            for name in config:
+                setattr(instance, name, getattr(replacement, name))
+            for name, value in replacement.__dict__.items():
+                if name not in preserved and name not in clients and name not in config:
+                    setattr(instance, name, value)
+            for name in clients:
+                setattr(instance, name, getattr(replacement, name))
 
 
 def reset_llm_provider():

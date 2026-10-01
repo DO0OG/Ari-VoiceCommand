@@ -102,6 +102,33 @@ class CustomLLMProviderTests(unittest.TestCase):
             self.assertIs(get_llm_provider(), provider)
         self.assertEqual(provider.provider, "groq")
 
+    def test_tool_block_history_is_withheld_from_other_providers_after_reload(self):
+        settings = {"llm_provider": "anthropic", "anthropic_api_key": ""}
+        custom = {CUSTOM_A: _config("Local", "https://llm.example/v1", "local-model")}
+        with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module(custom)}), \
+             patch.dict(sys.modules, {"openai": _openai_module(Mock(return_value=Mock()))}), \
+             patch("core.config_manager.ConfigManager.load_settings", side_effect=lambda: dict(settings)), \
+             patch("agent.llm_provider.ConfigManager.get", side_effect=lambda key, default: default), \
+             patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
+             patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
+            provider = get_llm_provider()
+            provider.add_to_history("user", "hi")
+            provider.add_to_history("assistant", [{"type": "tool_use", "id": "t1", "name": "x", "input": {}}])
+            provider.add_to_history("user", [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}])
+            provider.add_to_history("assistant", "done")
+            config_lock = provider._config_lock
+            settings.update({"llm_provider": CUSTOM_A})
+
+            reload_llm_provider()
+
+        self.assertEqual(provider.provider, CUSTOM_A)
+        self.assertIs(provider._config_lock, config_lock)
+        self.assertEqual(len(provider._history_for_context()), 4)
+        self.assertEqual(provider._history_for_context(tool_blocks=False), [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "done"},
+        ])
+
     def test_provider_configs_merge_builtins_with_validated_custom_entries(self):
         custom = {CUSTOM_A: _config("Local", "http://localhost:1234/v1", "local-model")}
         with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module(custom)}):
