@@ -82,6 +82,7 @@ class AutonomousExecutorTests(unittest.TestCase):
         kwargs = executor._build_subprocess_kwargs()
 
         self.assertEqual(kwargs["cwd"], executor._get_repo_root())
+        self.assertEqual(kwargs["stdin"], autonomous_executor_module.subprocess.DEVNULL)
         if sys.platform == "win32":
             self.assertEqual(
                 kwargs["creationflags"],

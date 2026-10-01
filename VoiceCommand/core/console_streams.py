@@ -1,5 +1,6 @@
 """콘솔 창 숨기기와 표준 출력 스트림 정리."""
 
+import ctypes
 import os
 import sys
 
@@ -23,6 +24,12 @@ def hide_console(kernel32, user32) -> None:
     if not kernel32.FreeConsole():
         user32.ShowWindow(kernel32.GetConsoleWindow(), 0)
         return
+    # 분리된 콘솔 핸들이 자식 프로세스에 상속되지 않도록 비운다.
+    set_std_handle = kernel32.SetStdHandle
+    set_std_handle.argtypes = (ctypes.c_uint32, ctypes.c_void_p)
+    set_std_handle.restype = ctypes.c_int
+    for handle in (-10, -11, -12):
+        set_std_handle(handle, None)
     for name in console_streams:
         # 프로세스가 끝날 때까지 쓰는 표준 스트림이라 닫지 않는다.
         setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
