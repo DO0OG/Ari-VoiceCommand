@@ -237,6 +237,8 @@ class CharacterWidget(QWidget):
 
         # 트레이 공유 메뉴 (set_tray_menu로 주입)
         self._tray_menu = None
+        # 트레이 없이 연 설정 창에도 넘길 업데이트 확인기
+        self._update_checker = None
         # 플러그인이 우클릭 컨텍스트 메뉴를 억제할 수 있는 플래그
         self._context_menu_enabled = True
 
@@ -1283,6 +1285,10 @@ class CharacterWidget(QWidget):
         """트레이 아이콘 메뉴를 공유한다. 이후 우클릭 시 해당 메뉴를 표시한다."""
         self._tray_menu = menu
 
+    def set_update_checker(self, update_checker) -> None:
+        """설정 창에 전달할 업데이트 확인기를 보관한다."""
+        self._update_checker = update_checker
+
     def set_context_menu_enabled(self, enabled: bool) -> None:
         """캐릭터 우클릭 컨텍스트 메뉴 표시 여부를 설정한다.
         플러그인에서 context.set_character_menu_enabled(False)로 억제할 수 있다."""
@@ -1363,14 +1369,15 @@ class CharacterWidget(QWidget):
 
     def open_settings(self):
         """설정 창 열기"""
-        from ui.settings_dialog import SettingsDialog, should_apply_microphone
-        dialog = SettingsDialog(self)
+        from ui.settings_dialog import (
+            SettingsDialog, reinitialize_tts_async, should_apply_microphone,
+        )
+        dialog = SettingsDialog(self, update_checker=self._update_checker)
         if dialog.exec():
             if should_apply_microphone(dialog, self):
                 self.apply_microphone_settings()
             if dialog.tts_settings_changed():
-                from VoiceCommand import initialize_tts
-                initialize_tts()
+                reinitialize_tts_async()
             if dialog.theme_settings_changed():
                 try:
                     from ui.theme_runtime import apply_live_theme
@@ -1638,7 +1645,8 @@ class CharacterWidget(QWidget):
         if self.speech_bubble and self.speech_bubble.isVisible():
             self.speech_bubble.update_text(self._stream_buffer)
         else:
-            self.show_speech_bubble_signal.emit(self._stream_buffer, 0)
+            # 시그널 경유 슬롯은 버퍼를 비우므로 버퍼를 유지한 채 직접 표시한다
+            self._present_speech_bubble(self._stream_buffer, 0)
 
     def _reset_stream_buffer(self) -> None:
         """스트리밍 완료 후 버퍼를 초기화합니다."""
@@ -1648,6 +1656,10 @@ class CharacterWidget(QWidget):
     def _show_speech_bubble_slot(self, text, duration):
         """실제 말풍선 표시 (메인 스레드에서만 실행)"""
         self._stream_buffer = ""
+        self._present_speech_bubble(text, duration)
+
+    def _present_speech_bubble(self, text, duration):
+        """말풍선을 새로 만들어 표시한다 (스트림 버퍼는 건드리지 않음)."""
         # 기존 타이머 정지
         self.bubble_hide_timer.stop()
 

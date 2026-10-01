@@ -188,6 +188,42 @@ class CharacterWidgetHelperTests(unittest.TestCase):
             self.assertEqual(bubble.y(), max(10, expected_y))
             bubble.close()
 
+    def test_speech_bubble_fits_newline_text_and_stays_on_screen(self):
+        widget = self._make_widget()
+        widget.move(-500, 300)
+        one = SpeechBubble("a", widget)
+        two = SpeechBubble("a\nb", widget)
+        self.addCleanup(one.close)
+        self.addCleanup(two.close)
+        self.assertGreaterEqual(two.height() - one.height(), one.fm.height() - 1)
+        area = widget.screen().availableGeometry()
+        self.assertGreaterEqual(two.x(), area.left())
+
+    def test_first_stream_token_survives_without_existing_bubble(self):
+        widget = self._make_widget()
+        widget._on_stream_token_slot("안")
+        widget._on_stream_token_slot("녕")
+        self.assertEqual(widget._stream_buffer, "안녕")
+        self.assertEqual(widget.speech_bubble.text, "안녕")
+        widget._hide_speech_bubble_slot()
+
+    def test_open_settings_passes_update_checker_and_reinits_tts_async(self):
+        widget = self._make_widget()
+        checker = object()
+        widget.set_update_checker(checker)
+        dialog = MagicMock()
+        dialog.exec.return_value = True
+        dialog.tts_settings_changed.return_value = True
+        dialog.theme_settings_changed.return_value = False
+        with (
+            patch("ui.settings_dialog.SettingsDialog", return_value=dialog) as cls,
+            patch("ui.settings_dialog.should_apply_microphone", return_value=False),
+            patch("ui.settings_dialog.reinitialize_tts_async") as reinit,
+        ):
+            widget.open_settings()
+        cls.assert_called_once_with(widget, update_checker=checker)
+        reinit.assert_called_once()
+
     def test_mouse_release_restarts_animation_timer_at_70ms(self):
         widget = self._make_widget()
         widget.dragging = True

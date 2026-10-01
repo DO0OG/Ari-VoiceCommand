@@ -775,6 +775,7 @@ def main():
             )
             if tray_icon:
                 tray_icon.set_update_checker(update_checker)
+            character.set_update_checker(update_checker)
             update_checker.notify_installed_update()
             update_checker.start()
 

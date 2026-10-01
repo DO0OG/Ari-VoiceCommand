@@ -3,7 +3,7 @@
 import logging
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QDialog
-from ui.settings_dialog import SettingsDialog, should_apply_microphone
+from ui.settings_dialog import SettingsDialog, reinitialize_tts_async, should_apply_microphone
 from i18n.translator import _
 
 class SystemTrayIcon(QSystemTrayIcon):
@@ -134,18 +134,7 @@ class SystemTrayIcon(QSystemTrayIcon):
                     logging.warning("캐릭터 위젯이 없어 마이크 설정을 적용할 수 없습니다.")
 
             if dialog.tts_settings_changed():
-                from VoiceCommand import initialize_tts, _tts_init_event
-                import threading
-                _tts_init_event.clear()
-
-                def _reinit():
-                    try:
-                        initialize_tts()
-                    except Exception as e:
-                        logging.error(f"TTS 재초기화 실패: {e}")
-
-                threading.Thread(target=_reinit, daemon=True, name="TTS-Reinit").start()
-                logging.info("TTS 관련 설정이 변경되어 TTS 재초기화를 시작했습니다.")
+                reinitialize_tts_async()
 
             if dialog.theme_settings_changed():
                 try:
