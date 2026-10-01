@@ -56,6 +56,26 @@ class SettingsSecretUITests(unittest.TestCase):
         )
         dialog.reject()
 
+    def test_plugin_lists_keep_several_rows_when_dialog_is_reduced(self):
+        self._app = QApplication.instance() or QApplication([])
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+
+        dialog.resize(605, 550)
+        dialog.show()
+        # 선택된 탭만 배치되므로 탭을 고른 뒤 높이를 잰다.
+        dialog.tabs.setCurrentIndex(next(
+            index for index in range(dialog.tabs.count())
+            if dialog.tabs.tabText(index) == "확장"
+        ))
+        self._app.processEvents()
+
+        page = dialog._plugin_page
+        for list_widget in (page.marketplace_list, page.plugin_list, page.skill_list_widget):
+            self.assertGreaterEqual(list_widget.height(), 96)
+        dialog.reject()
+
     def test_real_dialog_builds_every_tab(self):
         self._app = QApplication.instance() or QApplication([])
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):

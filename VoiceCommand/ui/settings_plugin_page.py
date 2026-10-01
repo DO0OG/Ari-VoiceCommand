@@ -29,6 +29,8 @@ class _PluginSettingsPage(QWidget):
     """플러그인 관리 및 마켓플레이스 탭 위젯."""
 
     _ACTION_BUTTON_HEIGHT = BUTTON_LG + 6
+    # 창이 작아 탭이 스크롤될 때도 목록이 몇 줄은 보이게 한다.
+    _LIST_MIN_HEIGHT = 96
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,6 +65,7 @@ class _PluginSettingsPage(QWidget):
         mvbox.addLayout(search_row)
 
         self.marketplace_list = QListWidget()
+        self.marketplace_list.setMinimumHeight(self._LIST_MIN_HEIGHT)
         mvbox.addWidget(self.marketplace_list)
 
         self.marketplace_status_label = create_muted_label("")
@@ -106,6 +109,7 @@ class _PluginSettingsPage(QWidget):
         pvbox.addWidget(self.plugin_dir_input)
 
         self.plugin_list = QListWidget()
+        self.plugin_list.setMinimumHeight(self._LIST_MIN_HEIGHT)
         pvbox.addWidget(self.plugin_list)
 
         btn_row = QHBoxLayout()
@@ -143,6 +147,7 @@ class _PluginSettingsPage(QWidget):
         svbox.addLayout(skill_row)
 
         self.skill_list_widget = QListWidget()
+        self.skill_list_widget.setMinimumHeight(self._LIST_MIN_HEIGHT)
         self.skill_list_widget.setMaximumHeight(120)
         svbox.addWidget(self.skill_list_widget)
 
