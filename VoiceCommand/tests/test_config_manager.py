@@ -136,7 +136,11 @@ class ConfigManagerTests(unittest.TestCase):
         reenabled = {"stt_dynamic_energy": True, "stt_settings_version": 1}
         migrate_stt_settings(reenabled)
         self.assertTrue(reenabled["stt_dynamic_energy"])
-        self.assertFalse(migrate_stt_settings({"stt_energy_threshold": 0, "stt_settings_version": 2}))
+        self.assertFalse(migrate_stt_settings({"stt_energy_threshold": 15, "stt_settings_version": 2}))
+        # 이전 버전이 남긴 값은 설정 버전이 같아도 되돌린다.
+        stale = {"stt_energy_threshold": 0, "stt_settings_version": 2}
+        self.assertTrue(migrate_stt_settings(stale))
+        self.assertEqual(stale["stt_energy_threshold"], 300)
 
     def test_legacy_auto_energy_is_disabled_once_without_changing_manual_threshold(self):
         previous = ConfigManager._cached_settings

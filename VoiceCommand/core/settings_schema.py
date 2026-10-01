@@ -221,20 +221,23 @@ def migrate_local_decision_settings(settings: dict) -> bool:
 
 def migrate_stt_settings(settings: dict) -> bool:
     """자동 감도 기본값을 한 번만 끄고 사용자 수동 임계값을 보존한다."""
-    version = settings.get("stt_settings_version")
-    if version == STT_SETTINGS_VERSION:
-        return False
-    # 버전 1에서 이미 한 번 껐으므로, 그 뒤 사용자가 다시 켠 자동 감도는 건드리지 않는다.
-    if version != 1 and settings.get("stt_dynamic_energy") is True:
-        settings["stt_dynamic_energy"] = False
+    changed = False
     if "stt_energy_threshold" in settings:
         try:
             threshold = float(settings["stt_energy_threshold"])
         except (TypeError, ValueError, OverflowError):
             threshold = 0.0
         # 1 미만이면 모든 소리가 말소리로 잡혀 발화 끝을 찾지 못한다. 그 밖의 값은 보존한다.
+        # 이전 버전을 다시 실행하면 보정값이 저장돼 또 생길 수 있어 불러올 때마다 확인한다.
         if not 1 <= threshold < float("inf"):
             settings["stt_energy_threshold"] = DEFAULT_SETTINGS["stt_energy_threshold"]
+            changed = True
+    version = settings.get("stt_settings_version")
+    if version == STT_SETTINGS_VERSION:
+        return changed
+    # 버전 1에서 이미 한 번 껐으므로, 그 뒤 사용자가 다시 켠 자동 감도는 건드리지 않는다.
+    if version != 1 and settings.get("stt_dynamic_energy") is True:
+        settings["stt_dynamic_energy"] = False
     settings["stt_settings_version"] = STT_SETTINGS_VERSION
     return True
 
