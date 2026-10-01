@@ -230,8 +230,13 @@ class ProactiveScheduler:
         )
         with self._lock:
             if len(self._tasks) >= _MAX_TASKS:
-                for inactive_id in [task_id for task_id, current in self._tasks.items() if not current.enabled]:
-                    del self._tasks[inactive_id]
+                # 일시중지한 예약은 남기고, 실행을 마친 일회성 예약만 정리한다.
+                finished_ids = [
+                    task_id for task_id, current in self._tasks.items()
+                    if not current.enabled and not current.repeat and current.last_run
+                ]
+                for finished_id in finished_ids:
+                    del self._tasks[finished_id]
                     if len(self._tasks) < _MAX_TASKS:
                         break
             if len(self._tasks) >= _MAX_TASKS:

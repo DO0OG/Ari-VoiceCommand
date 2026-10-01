@@ -335,8 +335,14 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
             thread.start()
 
             self.assertTrue(initialization_failed.wait(1))
+            released = threading.Event()
+            with thread._voice_activation_lock:
+                thread._pending_voice_activation = {"released": released}
             thread.refresh_voice_settings()
             self.assertTrue(recovered_listening.wait(1))
+            self.assertTrue(released.wait(1))
+            self.assertIsNone(thread._active_voice_activation)
+            self.assertFalse(thread._command_listening)
             thread.stop()
             self.assertTrue(thread.wait(1000))
 

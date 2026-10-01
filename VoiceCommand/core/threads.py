@@ -325,7 +325,7 @@ class VoiceRecognitionThread(QThread):
                     self._voice_wakeup.wait()
                     if not self.running:
                         break
-                    self._take_voice_activation()
+                    self._discard_pending_voice_activation()
                     wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
                     if not self._initialize_voice_recognition(wake_word_enabled):
                         continue

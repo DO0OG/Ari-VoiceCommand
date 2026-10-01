@@ -736,7 +736,10 @@ class UserContextManager:
 
                 memory_index = get_memory_index()
                 for key in removed_fact_keys:
-                    memory_index.delete_fact(key)
+                    try:
+                        memory_index.delete_fact(key)
+                    except Exception as exc:
+                        logger.warning("[UserContext] 메모리 인덱스 정리 실패 (%s): %s", key, exc)
 
     # ── 유틸리티 ───────────────────────────────────────────────────────────────
 
