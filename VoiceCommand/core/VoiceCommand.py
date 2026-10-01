@@ -71,6 +71,8 @@ class AppState:
         self.activity_quiet = False
 
 _state = AppState()
+# 시작 시 초기화와 설정 저장의 재초기화가 겹쳐 프로바이더가 둘 생기지 않게 한다.
+_TTS_INIT_LOCK = threading.Lock()
 _TTS_WAKE_GUARD_SECONDS = 1.2
 
 
@@ -227,54 +229,68 @@ def start_tts_background():
         _state.tts_init_event.set()
 
 
+def _cleanup_tts_provider(provider) -> None:
+    if provider is not None and hasattr(provider, "cleanup"):
+        try:
+            provider.cleanup()
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("TTS 프로바이더 정리 중 무시된 오류: %s", exc)
+
+
+def _create_fallback_tts(settings: dict):
+    from tts.tts_factory import create_tts_provider
+    fallback = settings.get("tts_fallback_provider", "edge")
+    if fallback == settings.get("tts_mode"):
+        fallback = "edge"
+    fallback_settings = dict(settings)
+    fallback_settings["tts_mode"] = fallback
+    logging.warning("[TTS] 폴백으로 전환: %s", fallback)
+    return create_tts_provider(fallback_settings)[0]
+
+
 def initialize_tts():
     from core.config_manager import ConfigManager
     from tts.tts_factory import create_tts_provider, build_tts_signature
     settings = ConfigManager.load_settings()
     next_signature = build_tts_signature(settings)
-    if _state.fish_tts is not None and _state.tts_signature == next_signature:
-        logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
-    else:
-        if _state.fish_tts and hasattr(_state.fish_tts, "cleanup"):
+    warming_provider = None
+    # 교체 구간만 잠근다. 로컬 엔진 warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
+    with _TTS_INIT_LOCK:
+        if _state.fish_tts is not None and _state.tts_signature == next_signature:
+            logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
+        else:
+            _cleanup_tts_provider(_state.fish_tts)
             try:
-                _state.fish_tts.cleanup()
-            except (AttributeError, OSError, RuntimeError) as e:
-                logging.debug("기존 TTS 정리 중 무시된 오류: %s", e)
-        provider = None
-        try:
-            provider, provider_mode = create_tts_provider()
-            if (
-                provider_mode == "local"
-                and hasattr(provider, "wait_until_warmup_done")
-            ):
-                if not provider.wait_until_warmup_done():
-                    reason = (
-                        getattr(provider, "_warmup_error", None)
-                        or getattr(provider, "_worker_error", None)
-                        or "CosyVoice3 warmup did not complete"
-                    )
-                    raise RuntimeError(reason)
-            _state.fish_tts = provider
-        except (ImportError, OSError, RuntimeError, ValueError) as exc:
-            logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
-            if provider is not None and hasattr(provider, "cleanup"):
-                try:
-                    provider.cleanup()
-                except (
-                    AttributeError,
-                    OSError,
-                    RuntimeError,
-                    TypeError,
-                    ValueError,
-                ) as cleanup_error:
-                    logging.debug("실패한 TTS 프로바이더 정리 생략: %s", cleanup_error)
-            fallback = settings.get("tts_fallback_provider", "edge")
-            fallback_settings = dict(settings)
-            fallback_settings["tts_mode"] = fallback
-            logging.warning("[TTS] 폴백으로 전환: %s", fallback)
-            _state.fish_tts = create_tts_provider(fallback_settings)[0]
-        _state.tts_signature = next_signature
+                provider, provider_mode = create_tts_provider()
+                # 준비 중에도 등록해 둔다. 로컬 엔진의 speak()는 READY까지 기다린다.
+                _state.fish_tts = provider
+                if provider_mode == "local" and hasattr(provider, "wait_until_warmup_done"):
+                    warming_provider = provider
+            except (ImportError, OSError, RuntimeError, ValueError) as exc:
+                logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
+                _state.fish_tts = _create_fallback_tts(settings)
+            _state.tts_signature = next_signature
 
+    # 준비 중 발화도 종료 시그널과 말투 설정을 쓰도록 warmup 대기 전에 마친다.
+    _finish_tts_setup(settings)
+
+    if warming_provider is not None and not warming_provider.wait_until_warmup_done():
+        reason = (
+            getattr(warming_provider, "_warmup_error", None)
+            or getattr(warming_provider, "_worker_error", None)
+            or "CosyVoice3 warmup did not complete"
+        )
+        logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", reason)
+        with _TTS_INIT_LOCK:
+            if _state.fish_tts is not warming_provider:
+                # 그사이 다른 초기화가 프로바이더를 교체했다.
+                return
+            _cleanup_tts_provider(warming_provider)
+            _state.fish_tts = _create_fallback_tts(settings)
+        _finish_tts_setup(settings)
+
+
+def _finish_tts_setup(settings: dict) -> None:
     if _state.character_widget and hasattr(_state.fish_tts, 'playback_finished'):
         try:
             try:

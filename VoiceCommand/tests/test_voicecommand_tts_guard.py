@@ -185,6 +185,86 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand._state.rp_gen = previous_generator
             VoiceCommand._state.character_widget = previous_widget
 
+    def _run_initialize_tts(self, settings, providers):
+        from types import SimpleNamespace
+
+        saved = (
+            VoiceCommand._state.fish_tts,
+            VoiceCommand._state.tts_signature,
+            VoiceCommand._state.rp_gen,
+            VoiceCommand._state.character_widget,
+        )
+        VoiceCommand._state.fish_tts = None
+        VoiceCommand._state.tts_signature = None
+        VoiceCommand._state.character_widget = None
+        self.addCleanup(self._restore_tts_state, saved)
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value=settings),
+            patch("tts.tts_factory.build_tts_signature", return_value=("sig",)),
+            patch("tts.tts_factory.create_tts_provider", side_effect=providers) as create_provider,
+            patch.object(VoiceCommand, "RPGenerator", return_value=SimpleNamespace(set_config=Mock())),
+        ):
+            VoiceCommand.initialize_tts()
+        return create_provider
+
+    @staticmethod
+    def _restore_tts_state(saved):
+        (
+            VoiceCommand._state.fish_tts,
+            VoiceCommand._state.tts_signature,
+            VoiceCommand._state.rp_gen,
+            VoiceCommand._state.character_widget,
+        ) = saved
+
+    def test_local_provider_is_registered_before_warmup_finishes(self):
+        provider = Mock()
+        registered_during_warmup = []
+        provider.wait_until_warmup_done.side_effect = lambda: (
+            registered_during_warmup.append(
+                VoiceCommand._state.fish_tts is provider
+                and VoiceCommand._state.rp_gen is not None
+            )
+            or True
+        )
+        self.addCleanup(setattr, VoiceCommand._state, "rp_gen", VoiceCommand._state.rp_gen)
+        VoiceCommand._state.rp_gen = None
+
+        self._run_initialize_tts({"tts_mode": "local"}, [(provider, "local")])
+
+        self.assertEqual(registered_during_warmup, [True])
+        self.assertIs(VoiceCommand._state.fish_tts, provider)
+        provider.cleanup.assert_not_called()
+
+    def test_failed_warmup_keeps_provider_replaced_by_newer_initialization(self):
+        provider = Mock()
+        newer_provider = object()
+
+        def replaced_during_warmup():
+            VoiceCommand._state.fish_tts = newer_provider
+            return False
+
+        provider.wait_until_warmup_done.side_effect = replaced_during_warmup
+
+        create_provider = self._run_initialize_tts(
+            {"tts_mode": "local", "tts_fallback_provider": "edge"},
+            [(provider, "local")],
+        )
+
+        self.assertIs(VoiceCommand._state.fish_tts, newer_provider)
+        self.assertEqual(create_provider.call_count, 1)
+
+    def test_fallback_same_as_primary_uses_edge(self):
+        fallback_provider = object()
+        settings = {"tts_mode": "openai_tts", "tts_fallback_provider": "openai_tts"}
+
+        create_provider = self._run_initialize_tts(
+            settings,
+            [RuntimeError("no key"), (fallback_provider, "edge")],
+        )
+
+        self.assertIs(VoiceCommand._state.fish_tts, fallback_provider)
+        self.assertEqual(create_provider.call_args_list[1], call({**settings, "tts_mode": "edge"}))
+
     def test_character_widget_startup_survives_orchestrator_storage_failure(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
