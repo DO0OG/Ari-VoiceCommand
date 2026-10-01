@@ -3,12 +3,21 @@
 """
 import os
 import logging
+import re
 import threading
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QRect, QPoint
 from PySide6.QtGui import QPainter, QColor, QFont, QFontMetrics, QFontDatabase, QPolygon
 
 from ui import theme as theme_module
+
+_MARKDOWN_MARKS = re.compile(r"\*\*|__|`+|^\s{0,3}#{1,6}\s+", re.MULTILINE)
+
+
+def _plain_bubble_text(text: str) -> str:
+    """말풍선에는 마크다운 강조·제목·코드 기호를 빼고 보여 준다."""
+    return _MARKDOWN_MARKS.sub("", text or "")
+
 
 _font_family = None  # 전역 폰트 패밀리 이름 캐시
 _font_family_lock = threading.Lock()
@@ -50,6 +59,8 @@ def register_fonts():
 class SpeechBubble(QWidget):
     """말풍선 위젯"""
 
+    MAX_LINES = 8
+
     def __init__(self, text, parent):
         super().__init__(parent)
         self.text = text
@@ -73,22 +84,43 @@ class SpeechBubble(QWidget):
         except Exception as e:
             logging.error(f"SpeechBubble 초기화 중 오류: {e}")
 
+    def _text_height(self, text: str, width: int) -> int:
+        # 그리기와 같은 폭·flags로 높이를 잰다
+        return self.fm.boundingRect(
+            QRect(0, 0, width, 100000),
+            Qt.TextWordWrap | Qt.AlignCenter,
+            text,
+        ).height()
+
+    def _fit_tail(self, text: str, width: int, max_height: int) -> str:
+        """넘치는 긴 응답은 앞부분을 줄이고 최신 내용을 남긴다."""
+        if self._text_height(text, width) <= max_height:
+            return text
+        low, high = 1, len(text)
+        while low < high:
+            middle = (low + high) // 2
+            if self._text_height("…" + text[middle:].lstrip(), width) <= max_height:
+                high = middle
+            else:
+                low = middle + 1
+        return "…" + text[low:].lstrip()
+
     def calculate_size(self):
         """말풍선 크기 계산"""
         max_width = 250
+        plain_text = _plain_bubble_text(self.text)
         # 개행이 있어도 가장 긴 줄 기준으로 폭을 정한다
         text_width = max(
-            (self.fm.horizontalAdvance(line) for line in self.text.split("\n")),
+            (self.fm.horizontalAdvance(line) for line in plain_text.split("\n")),
             default=0,
         )
         self.bubble_width = min(text_width + self.padding * 2, max_width)
-        # 그리기와 같은 폭·flags로 전체 높이를 계산한다
-        rect = self.fm.boundingRect(
-            QRect(0, 0, self.bubble_width - self.padding * 2, 1000),
-            Qt.TextWordWrap | Qt.AlignCenter,
-            self.text
+        inner_width = self.bubble_width - self.padding * 2
+        self.display_text = self._fit_tail(
+            plain_text, inner_width, self.fm.lineSpacing() * self.MAX_LINES
         )
-        self.bubble_height = max(rect.height(), self.fm.height()) + self.padding * 2
+        text_height = self._text_height(self.display_text, inner_width)
+        self.bubble_height = max(text_height, self.fm.height()) + self.padding * 2
 
         # 꼬리 공간 추가
         self.bubble_height += 15
@@ -164,4 +196,6 @@ class SpeechBubble(QWidget):
         painter.setPen(QColor(theme_module.COLOR_TEXT_PRIMARY))
         painter.setFont(self.font)
         text_rect = bubble_rect.adjusted(self.padding, self.padding, -self.padding, -self.padding)
-        painter.drawText(text_rect, Qt.TextWordWrap | Qt.AlignCenter, self.text)
+        painter.drawText(
+            text_rect, Qt.TextWordWrap | Qt.AlignCenter, getattr(self, "display_text", self.text)
+        )

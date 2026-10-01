@@ -199,6 +199,22 @@ class CharacterWidgetHelperTests(unittest.TestCase):
         area = widget.screen().availableGeometry()
         self.assertGreaterEqual(two.x(), area.left())
 
+    def test_speech_bubble_caps_long_text_and_hides_markdown(self):
+        widget = self._make_widget()
+        short = SpeechBubble("짧은 말", widget)
+        long = SpeechBubble("**가을:** " + "선선한 바람과 함께 산책하기 좋은 계절입니다. " * 40 + "마지막 문장", widget)
+        self.addCleanup(short.close)
+        self.addCleanup(long.close)
+
+        self.assertLessEqual(
+            long.height(),
+            long.fm.lineSpacing() * SpeechBubble.MAX_LINES + long.padding * 2 + 15,
+        )
+        self.assertTrue(long.display_text.startswith("…"))
+        self.assertTrue(long.display_text.endswith("마지막 문장"))
+        self.assertNotIn("**", long.display_text)
+        self.assertEqual(short.display_text, "짧은 말")
+
     def test_first_stream_token_survives_without_existing_bubble(self):
         widget = self._make_widget()
         widget._on_stream_token_slot("안")
