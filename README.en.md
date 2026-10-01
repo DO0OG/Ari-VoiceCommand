@@ -170,8 +170,10 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
 - v1.2.1: Fish Audio and ElevenLabs TTS start playing from the first audio chunk, the TTS volume setting applies to every engine, and TTS failures are shown in the speech bubble
 - v1.2.1: speech bubble sits right above the character's head, "open Naver"-style requests fall back to the browser for known sites, and missing translations were filled in
+- v1.2.2: microphone auto-sensitivity is now off by default so quiet microphones are recognized, and fast local handling is on by default
+- v1.2.2: fixed Python tool runs failing with WinError 6, settings tabs that squashed their inputs, CosyVoice reloading after a stop, scheduled tasks and skills updates, and speech bubbles going off screen
 
-See the **[v1.2.1 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.1)**.
+See the **[v1.2.2 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.2)**.
 
 ## For developers
 
