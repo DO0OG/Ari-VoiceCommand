@@ -2,7 +2,7 @@ import io
 import os
 import sys
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from core.console_streams import hide_console
 
@@ -21,6 +21,11 @@ class ConsoleStreamsTests(unittest.TestCase):
             hide_console(kernel32, Mock())
             self.assertEqual(sys.stdout.name, os.devnull)
             self.assertIs(sys.stderr, redirected)
+            kernel32.SetStdHandle.assert_has_calls([
+                call(-10, None),
+                call(-11, None),
+                call(-12, None),
+            ])
             sys.stdout.write("로그")
             sys.stdout.close()
 
@@ -34,6 +39,7 @@ class ConsoleStreamsTests(unittest.TestCase):
             hide_console(kernel32, user32)
             self.assertIs(sys.stdout, console)
         user32.ShowWindow.assert_called_once_with(0x10, 0)
+        kernel32.SetStdHandle.assert_not_called()
 
 
 if __name__ == "__main__":

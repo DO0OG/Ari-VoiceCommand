@@ -1147,7 +1147,7 @@ except Exception:
         return os.path.dirname(self._get_module_dir())
 
     def _build_subprocess_kwargs(self) -> dict:
-        kwargs = {"cwd": self._get_repo_root()}
+        kwargs = {"cwd": self._get_repo_root(), "stdin": subprocess.DEVNULL}
         if sys.platform == "win32":
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
