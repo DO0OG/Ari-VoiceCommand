@@ -135,11 +135,11 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._create_device_tab(), _("장치 설정"))
 
         # 5. 활동 반응 탭
-        self.tabs.addTab(self._create_activity_tab(), _("활동 반응"))
+        self.tabs.addTab(self._create_scroll_area(self._create_activity_tab()), _("활동 반응"))
 
         # 6. 확장 탭
         self._agent_page = _AgentSettingsPage(self.settings, self)
-        self.tabs.addTab(self._agent_page, _("에이전트"))
+        self.tabs.addTab(self._create_scroll_area(self._agent_page), _("에이전트"))
 
         try:
             from ui.settings_learning_page import _LearningSettingsPage
@@ -148,14 +148,14 @@ class SettingsDialog(QDialog):
         except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
             logging.warning("[SettingsDialog] 학습 페이지 로드 실패: %s", exc)
         else:
-            self.tabs.addTab(self._learning_page, _("학습"))
+            self.tabs.addTab(self._create_scroll_area(self._learning_page), _("학습"))
 
         # 7. 확장 탭
         self._plugin_page = _PluginSettingsPage(self)
-        self.tabs.addTab(self._plugin_page, _("확장"))
+        self.tabs.addTab(self._create_scroll_area(self._plugin_page), _("확장"))
 
         self._update_page = self._create_update_tab()
-        self.tabs.addTab(self._update_page, _("정보·업데이트"))
+        self.tabs.addTab(self._create_scroll_area(self._update_page), _("정보·업데이트"))
 
         build_info = get_build_info()
         commit = build_info["commit"][:7] or "—"
@@ -214,6 +214,15 @@ class SettingsDialog(QDialog):
 
     # ── 탭 생성 ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _create_scroll_area(widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setWidget(widget)
+        return scroll
+
     def _create_rp_tab(self):
         widget = QWidget()
         vbox = QVBoxLayout(widget)
@@ -254,12 +263,7 @@ class SettingsDialog(QDialog):
         gvbox.addWidget(self.verbosity_combo)
 
         vbox.addWidget(group, 1)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
-        scroll.setWidget(widget)
-        return scroll
+        return self._create_scroll_area(widget)
 
     def _create_activity_tab(self):
         widget = QWidget()
@@ -460,12 +464,7 @@ class SettingsDialog(QDialog):
         vbox.addWidget(import_btn)
 
         vbox.addStretch()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
-        scroll.setWidget(widget)
-        return scroll
+        return self._create_scroll_area(widget)
 
     def _create_update_tab(self):
         widget = QWidget()
