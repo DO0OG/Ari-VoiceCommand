@@ -76,21 +76,19 @@ class SpeechBubble(QWidget):
     def calculate_size(self):
         """말풍선 크기 계산"""
         max_width = 250
-        text_width = self.fm.horizontalAdvance(self.text)
-
-        if text_width <= max_width:
-            # 한 줄
-            self.bubble_width = text_width + self.padding * 2
-            self.bubble_height = self.fm.height() + self.padding * 2
-        else:
-            # 여러 줄
-            self.bubble_width = max_width
-            rect = self.fm.boundingRect(
-                QRect(0, 0, max_width - self.padding * 2, 1000),
-                Qt.TextWordWrap,
-                self.text
-            )
-            self.bubble_height = rect.height() + self.padding * 2
+        # 개행이 있어도 가장 긴 줄 기준으로 폭을 정한다
+        text_width = max(
+            (self.fm.horizontalAdvance(line) for line in self.text.split("\n")),
+            default=0,
+        )
+        self.bubble_width = min(text_width + self.padding * 2, max_width)
+        # 그리기와 같은 폭·flags로 전체 높이를 계산한다
+        rect = self.fm.boundingRect(
+            QRect(0, 0, self.bubble_width - self.padding * 2, 1000),
+            Qt.TextWordWrap | Qt.AlignCenter,
+            self.text
+        )
+        self.bubble_height = max(rect.height(), self.fm.height()) + self.padding * 2
 
         # 꼬리 공간 추가
         self.bubble_height += 15
@@ -120,8 +118,14 @@ class SpeechBubble(QWidget):
         head_top_offset = int(head_top_offset() or 0) if callable(head_top_offset) else 0
         y = parent_pos.y() + head_top_offset - self.bubble_height - 5
 
-        # 화면 경계 체크
-        y = max(10, y)
+        # 캐릭터가 있는 화면의 작업 영역 안으로 제한 (머리 위 배치는 유지)
+        screen = self.parent_widget.screen()
+        if screen is not None:
+            area = screen.availableGeometry()
+            x = max(area.left(), min(x, area.right() - self.bubble_width + 1))
+            y = max(area.top() + 10, y)
+        else:
+            y = max(10, y)
 
         self.move(x, y)
 

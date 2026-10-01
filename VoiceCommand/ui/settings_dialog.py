@@ -47,6 +47,22 @@ def should_apply_microphone(dialog, character_widget) -> bool:
     return getattr(voice_thread, "microphone_available", None) is False
 
 
+def reinitialize_tts_async() -> None:
+    """TTS 설정 변경 후 GUI를 막지 않도록 백그라운드에서 TTS를 다시 초기화한다."""
+    import threading
+    from VoiceCommand import initialize_tts, _tts_init_event
+    _tts_init_event.clear()
+
+    def _reinit():
+        try:
+            initialize_tts()
+        except Exception as e:
+            logging.error(f"TTS 재초기화 실패: {e}")
+
+    threading.Thread(target=_reinit, daemon=True, name="TTS-Reinit").start()
+    logging.info("TTS 관련 설정이 변경되어 TTS 재초기화를 시작했습니다.")
+
+
 class SettingsDialog(QDialog):
     TTS_KEYS = {
         "tts_mode", "fish_api_key", "fish_reference_id", "fish_model", "tts_volume",
