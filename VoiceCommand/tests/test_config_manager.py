@@ -122,6 +122,7 @@ class ConfigManagerTests(unittest.TestCase):
             ({"stt_energy_threshold": 0}, 300),
             ({"stt_energy_threshold": 0, "stt_settings_version": 1}, 300),
             ({"stt_energy_threshold": "x"}, 300),
+            ({"stt_energy_threshold": "NaN"}, 300),
             ({"stt_energy_threshold": 7}, 7),
             ({"stt_energy_threshold": 15, "stt_settings_version": 1}, 15),
         )

@@ -233,7 +233,7 @@ def migrate_stt_settings(settings: dict) -> bool:
         except (TypeError, ValueError):
             threshold = 0.0
         # 1 미만이면 모든 소리가 말소리로 잡혀 발화 끝을 찾지 못한다. 그 밖의 값은 보존한다.
-        if threshold < 1:
+        if not 1 <= threshold < float("inf"):
             settings["stt_energy_threshold"] = DEFAULT_SETTINGS["stt_energy_threshold"]
     settings["stt_settings_version"] = STT_SETTINGS_VERSION
     return True
