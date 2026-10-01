@@ -30,6 +30,8 @@ def clear_layout(layout: QLayout) -> None:
     while layout.count():
         item = layout.takeAt(0)
         if item and item.widget():
+            # 삭제 전까지 이전 위젯이 겹쳐 그려지지 않도록 먼저 숨긴다.
+            item.widget().hide()
             item.widget().deleteLater()
 
 

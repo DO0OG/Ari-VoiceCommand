@@ -49,12 +49,26 @@ class ChatWidget(QFrame):
         )
         if len(self.history) > self.MAX_MESSAGES:
             self.history = self.history[-self.MAX_MESSAGES:]
-        self.render_history()
+            self.render_history()
+            return
+        # 스트리밍 중 매번 전체를 다시 만들면 채팅창이 깜박이므로 새 줄만 붙인다.
+        self._add_message_widget(self.history[-1])
 
     def update_message(self, index: int, message: str) -> None:
-        if 0 <= index < len(self.history):
-            self.history[index]["message"] = message
+        if not 0 <= index < len(self.history):
+            return
+        self.history[index]["message"] = message
+        layout = self.layout()
+        position = index - (len(self.history) - min(len(self.history), self.MAX_MESSAGES))
+        if not 0 <= position < layout.count():
             self.render_history()
+            return
+        item = layout.takeAt(position)
+        old_row = item.widget() if item else None
+        if old_row is not None:
+            old_row.hide()
+            old_row.deleteLater()
+        self._add_message_widget(self.history[index], position)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -68,7 +82,7 @@ class ChatWidget(QFrame):
         proportional = int(max(self.width(), self.MIN_BUBBLE_WIDTH) * self.BUBBLE_WIDTH_RATIO)
         return max(1, min(available, proportional))
 
-    def _add_message_widget(self, item: dict) -> None:
+    def _add_message_widget(self, item: dict, position: int = -1) -> None:
         message = str(item.get("message", ""))
         is_user = bool(item.get("is_user"))
         timestamp = str(item.get("timestamp") or datetime.now().strftime("%H:%M:%S"))
@@ -184,7 +198,7 @@ class ChatWidget(QFrame):
             row_layout.addWidget(msg_frame)
             row_layout.addStretch()
         row_widget.setMinimumHeight(row_layout.sizeHint().height())
-        self.layout().addWidget(row_widget)
+        self.layout().insertWidget(position, row_widget)
 
     def refresh_theme(self) -> None:
         self.layout().setSpacing(theme_module.SPACING_LG)
