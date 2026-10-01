@@ -208,8 +208,6 @@ def start_tts_background():
             def _run():
                 try:
                     initialize_tts()
-                    if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
-                        _state.fish_tts.wait_until_warmup_done()
                     _state.tts_init_event.set()
                     tts_wrapper(_("로딩이 완료되었습니다. 이제 대화할 수 있어요!"))
                 except Exception as e:
@@ -242,10 +240,34 @@ def initialize_tts():
                 _state.fish_tts.cleanup()
             except (AttributeError, OSError, RuntimeError) as e:
                 logging.debug("기존 TTS 정리 중 무시된 오류: %s", e)
+        provider = None
         try:
-            _state.fish_tts = create_tts_provider()[0]
+            provider, provider_mode = create_tts_provider()
+            if (
+                provider_mode == "local"
+                and hasattr(provider, "wait_until_warmup_done")
+            ):
+                if not provider.wait_until_warmup_done():
+                    reason = (
+                        getattr(provider, "_warmup_error", None)
+                        or getattr(provider, "_worker_error", None)
+                        or "CosyVoice3 warmup did not complete"
+                    )
+                    raise RuntimeError(reason)
+            _state.fish_tts = provider
         except (ImportError, OSError, RuntimeError, ValueError) as exc:
             logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
+            if provider is not None and hasattr(provider, "cleanup"):
+                try:
+                    provider.cleanup()
+                except (
+                    AttributeError,
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                ) as cleanup_error:
+                    logging.debug("실패한 TTS 프로바이더 정리 생략: %s", cleanup_error)
             fallback = settings.get("tts_fallback_provider", "edge")
             fallback_settings = dict(settings)
             fallback_settings["tts_mode"] = fallback
@@ -930,8 +952,6 @@ def disable_game_mode():
     def _reinit():
         try:
             initialize_tts()
-            if _state.fish_tts and hasattr(_state.fish_tts, 'wait_until_warmup_done'):
-                _state.fish_tts.wait_until_warmup_done()
             tts_wrapper(_("게임 모드 해제. 원래 TTS로 복원되었습니다."))
         except Exception as e:
             logging.error("TTS 복원 실패: %s", e)

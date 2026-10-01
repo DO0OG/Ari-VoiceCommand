@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 
 from core import VoiceCommand
@@ -145,6 +145,45 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                 event.clear()
 
         self.assertTrue(initialized_event)
+
+    def test_cosyvoice_warmup_failure_uses_configured_fallback(self):
+        from types import SimpleNamespace
+
+        previous_provider = VoiceCommand._state.fish_tts
+        previous_signature = VoiceCommand._state.tts_signature
+        previous_generator = VoiceCommand._state.rp_gen
+        previous_widget = VoiceCommand._state.character_widget
+        VoiceCommand._state.fish_tts = None
+        VoiceCommand._state.tts_signature = None
+        VoiceCommand._state.character_widget = None
+        provider = Mock()
+        provider.wait_until_warmup_done.return_value = False
+        provider._warmup_error = "GPU warmup failed"
+        fallback_provider = object()
+        settings = {"tts_mode": "local", "tts_fallback_provider": "openai_tts"}
+        try:
+            with (
+                patch("core.config_manager.ConfigManager.load_settings", return_value=settings),
+                patch("tts.tts_factory.build_tts_signature", return_value=("local",)),
+                patch(
+                    "tts.tts_factory.create_tts_provider",
+                    side_effect=[(provider, "local"), (fallback_provider, "openai_tts")],
+                ) as create_provider,
+                patch.object(VoiceCommand, "RPGenerator", return_value=SimpleNamespace(set_config=Mock())),
+            ):
+                VoiceCommand.initialize_tts()
+
+            self.assertIs(VoiceCommand._state.fish_tts, fallback_provider)
+            provider.cleanup.assert_called_once_with()
+            self.assertEqual(
+                create_provider.call_args_list,
+                [call(), call({**settings, "tts_mode": "openai_tts"})],
+            )
+        finally:
+            VoiceCommand._state.fish_tts = previous_provider
+            VoiceCommand._state.tts_signature = previous_signature
+            VoiceCommand._state.rp_gen = previous_generator
+            VoiceCommand._state.character_widget = previous_widget
 
     def test_character_widget_startup_survives_orchestrator_storage_failure(self):
         from types import SimpleNamespace

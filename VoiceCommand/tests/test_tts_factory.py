@@ -42,6 +42,30 @@ class TTSFactoryTests(unittest.TestCase):
         self.assertEqual(build_tts_signature(base), build_tts_signature(same))
         self.assertNotEqual(build_tts_signature(base), build_tts_signature(changed))
 
+    def test_cosyvoice_worker_readiness_failure_raises_and_cleans_up(self):
+        provider = Mock()
+        provider.wait_until_ready.return_value = False
+        provider._worker_error = "worker exited before READY"
+        reference_module = SimpleNamespace(
+            get_reference_text=Mock(return_value=""),
+            get_reference_wav=Mock(return_value="reference.wav"),
+        )
+        cosyvoice_module = SimpleNamespace(
+            CosyVoiceTTS=Mock(return_value=provider)
+        )
+
+        with patch.dict(
+            sys.modules,
+            {
+                "tts.cosyvoice_tts": cosyvoice_module,
+                "tts.voice_reference": reference_module,
+            },
+        ):
+            with self.assertRaisesRegex(RuntimeError, "worker initialization failed"):
+                create_tts_provider({"tts_mode": "local"})
+
+        provider.cleanup.assert_called_once_with()
+
     def test_emotion_setting_is_part_of_the_tts_signature(self):
         enabled = {"tts_mode": "edge", "tts_emotion_enabled": True}
         disabled = {"tts_mode": "edge", "tts_emotion_enabled": False}

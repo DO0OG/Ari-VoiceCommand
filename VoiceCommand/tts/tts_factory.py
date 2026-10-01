@@ -43,6 +43,7 @@ def build_tts_signature(settings=None):
 
 
 def _create_local(settings):
+    provider = None
     try:
         from tts.cosyvoice_tts import CosyVoiceTTS
         from tts.voice_reference import get_reference_text, get_reference_wav
@@ -54,11 +55,27 @@ def _create_local(settings):
             speed=float(settings.get("cosyvoice_speed", 0.9)),
             cosyvoice_dir=configured_dir if configured_dir and os.path.isdir(configured_dir) else None,
         )
+        if not provider.wait_until_ready():
+            raise RuntimeError(
+                getattr(provider, "_worker_error", None)
+                or "CosyVoice3 worker did not become ready"
+            )
         logging.info("CosyVoice3 로컬 TTS 초기화 완료")
         return provider, "local"
     except Exception as e:
-        logging.error(f"CosyVoice3 초기화 실패, Edge TTS로 fallback: {e}")
-        return None
+        if provider is not None:
+            try:
+                provider.cleanup()
+            except (
+                AttributeError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as cleanup_error:
+                logging.debug("실패한 CosyVoice3 워커 정리 실패: %s", cleanup_error)
+        logging.error("CosyVoice3 워커 초기화 실패: %s", e)
+        raise RuntimeError("CosyVoice3 worker initialization failed") from e
 
 
 def _create_openai_compat_tts(settings):
