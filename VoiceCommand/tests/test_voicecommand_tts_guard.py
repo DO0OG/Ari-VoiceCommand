@@ -220,8 +220,14 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         provider = Mock()
         registered_during_warmup = []
         provider.wait_until_warmup_done.side_effect = lambda: (
-            registered_during_warmup.append(VoiceCommand._state.fish_tts is provider) or True
+            registered_during_warmup.append(
+                VoiceCommand._state.fish_tts is provider
+                and VoiceCommand._state.rp_gen is not None
+            )
+            or True
         )
+        self.addCleanup(setattr, VoiceCommand._state, "rp_gen", VoiceCommand._state.rp_gen)
+        VoiceCommand._state.rp_gen = None
 
         self._run_initialize_tts({"tts_mode": "local"}, [(provider, "local")])
 

@@ -271,6 +271,9 @@ def initialize_tts():
                 _state.fish_tts = _create_fallback_tts(settings)
             _state.tts_signature = next_signature
 
+    # 준비 중 발화도 종료 시그널과 말투 설정을 쓰도록 warmup 대기 전에 마친다.
+    _finish_tts_setup(settings)
+
     if warming_provider is not None and not warming_provider.wait_until_warmup_done():
         reason = (
             getattr(warming_provider, "_warmup_error", None)
@@ -284,7 +287,10 @@ def initialize_tts():
                 return
             _cleanup_tts_provider(warming_provider)
             _state.fish_tts = _create_fallback_tts(settings)
+        _finish_tts_setup(settings)
 
+
+def _finish_tts_setup(settings: dict) -> None:
     if _state.character_widget and hasattr(_state.fish_tts, 'playback_finished'):
         try:
             try:
