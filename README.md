@@ -28,7 +28,7 @@ Ari is an **open-source Windows AI voice assistant and autonomous desktop agent*
 It is designed for people who want a Windows voice assistant that can do more than chat: Ari can route supported commands locally, hand complex goals to an agent workflow, use tools, verify results, remember useful context, and speak the result back.
 
 > [!NOTE]
-> Ari currently targets **Windows 10/11 (64-bit)**. Optional direct local execution, Telegram remote commands, and remote embeddings are disabled by default.
+> Ari currently targets **Windows 10/11 (64-bit)**. Telegram remote commands and remote embeddings are disabled by default.
 
 ## What Ari can do
 
@@ -36,7 +36,7 @@ It is designed for people who want a Windows voice assistant that can do more th
 | :--- | :--- |
 | **Voice assistant** | Wake word, voice shortcut, character click, Google STT, offline Whisper STT, streamed speech output |
 | **Windows automation** | Supported local commands plus multi-step desktop tasks through tools and the autonomous agent |
-| **Fast local commands** | Optional high-confidence path for commands such as time, running apps, screenshots, and volume control |
+| **Fast local commands** | High-confidence supported commands use this path by default; it can be disabled in Settings → Agent |
 | **Local AI** | Ollama local LLMs, local CosyVoice3, local ONNX embeddings, and offline Whisper options |
 | **Hosted AI** | OpenAI-compatible providers for models hosted locally or remotely |
 | **Memory** | Relevant fact and conversation retrieval, explicit remember/forget commands, reviewable memory suggestions |
@@ -49,7 +49,7 @@ It is designed for people who want a Windows voice assistant that can do more th
 
 - **Windows-first, not browser-first.** Ari is built around desktop interaction, voice control, system commands, and Windows automation.
 - **Local-first options.** Use Ollama, Whisper, CosyVoice3, and local embeddings when you want more of the stack to stay on-device.
-- **Fast when a full model is unnecessary.** Supported high-confidence commands can use the optional local decision path instead of waiting on an LLM.
+- **Fast when a full model is unnecessary.** Supported high-confidence commands can use the local decision path without waiting on an LLM.
 - **More than a chatbot.** Complex requests can enter a plan → execute → verify → reflect loop and use tools or reusable strategies.
 - **A visible assistant.** The desktop character reflects activity and mood, supports event-based speech, and can be clicked to start talking.
 - **Built to extend.** Add plugins, `SKILL.md` packages, MCP tools, or OpenAI-compatible model providers without replacing the core app.
@@ -105,7 +105,7 @@ Ari can use cloud services, but the project also supports a more local setup:
 - Local ONNX embeddings for memory and strategy retrieval
 - Remote embeddings disabled by default
 - Telegram integration disabled by default
-- Direct local command execution disabled by default
+- Direct local handling applies only to allow-listed high-confidence commands and can be disabled in Settings → Agent
 - Plugins are not automatically loaded without user consent
 
 The exact data flow depends on the providers and optional integrations you enable.
@@ -146,7 +146,7 @@ graph TD
 
 ## Verified local-decision evaluation
 
-The optional local decision engine has a separate held-out evaluation for its supported command path:
+The local decision engine has a separate held-out evaluation for its supported command path:
 
 - **7,407** generated evaluation examples
 - **367** parser-confirmed direct selections
@@ -170,10 +170,10 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
 - v1.2.1: Fish Audio and ElevenLabs TTS start playing from the first audio chunk, the TTS volume setting applies to every engine, and TTS failures are shown in the speech bubble
 - v1.2.1: speech bubble sits right above the character's head, "open Naver"-style requests fall back to the browser for known sites, and missing translations were filled in
-- v1.2.2: microphone auto-sensitivity is now off by default so quiet microphones are recognized, and fast local handling is on by default
-- v1.2.2: fixed Python tool runs failing with WinError 6, settings tabs that squashed their inputs, CosyVoice reloading after a stop, scheduled tasks and skills updates, and speech bubbles going off screen
+- v1.2.2: microphone auto-sensitivity is off and fast local handling is on by default; fixed chat flicker and widening, Python tool WinError 6, CosyVoice reloading after a stop, and paused schedules being removed
+- v1.2.3: settings tabs scroll when the window is small, LLM provider changes apply without a restart, and the CosyVoice installer finds Python 3.10/3.11 on its own
 
-See the **[v1.2.2 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.2)**.
+See the **[v1.2.3 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.3)**.
 
 ## For developers
 

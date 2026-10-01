@@ -1379,6 +1379,7 @@ Linear과 동일 test set으로 비교한다.
 템플릿에 없는 키를 코드에서만 참조하면 신규 설치 환경에서 기본값이 누락된다.
 
 기본값은 초기 베타 동안 direct execution을 보수적으로 설정할 수 있다.
+현재 코드의 기본값은 `true`이다.
 `local_decision_direct_execution`의 초기 기본값은 `false`로 두고, Phase 4 shadow mode 결과가
 채택 기준을 만족한 뒤에 `true`로 전환한다.
 
