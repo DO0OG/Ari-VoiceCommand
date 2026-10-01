@@ -160,6 +160,10 @@ def _inspect_python(candidate: list[str]) -> tuple[str, tuple[int, int], bool] |
     env = os.environ.copy()
     env.pop("PYTHONHOME", None)
     env.pop("PYTHONPATH", None)
+    # 버전 확인만 하는 실행이 py 런처의 자동 설치를 시작하지 않게 한다.
+    env["PYTHON_MANAGER_AUTOMATIC_INSTALL"] = "false"
+    env.pop("PYLAUNCHER_ALLOW_INSTALL", None)
+    env.pop("PYLAUNCHER_ALWAYS_INSTALL", None)
     try:
         result = subprocess.run(
             [*candidate, "-c", code],

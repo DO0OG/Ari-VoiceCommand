@@ -193,8 +193,12 @@ class CosyVoiceInstallerTests(unittest.TestCase):
 
     def test_bundled_install_uses_python_from_py_launcher(self):
         patches = self._mock_python_discovery({"py": "C:/Launcher/py.exe"}, {"C:/Launcher/py.exe": (3, 11)})
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        with patches[0], patches[1], patches[2], patches[3] as run, patches[4], \
+             patch.dict(os.environ, {"PYLAUNCHER_ALLOW_INSTALL": "1"}):
             self.assertEqual(cosyvoice_installer._base_python_executable(), "C:/Python311/python.exe")
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(env["PYTHON_MANAGER_AUTOMATIC_INSTALL"], "false")
+        self.assertNotIn("PYLAUNCHER_ALLOW_INSTALL", env)
 
     def test_bundled_install_reports_found_unsupported_python(self):
         patches = self._mock_python_discovery({"python": "C:/Python314/python.exe"}, {"C:/Python314/python.exe": (3, 14)})
