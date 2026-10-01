@@ -1,6 +1,6 @@
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from ui.common import clear_layout
 from ui.theme import (
     FONT_KO, FONT_SIZE_SMALL, COLOR_PRIMARY, COLOR_MUTED,
@@ -133,6 +133,9 @@ class ExecutionDashboardPanel(QFrame):
             lbl = QLabel(f"{icon} {info['desc'][:60]}")
             lbl.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
             lbl.setStyleSheet(f"color: {color};")
+            # 긴 단계 설명이 채팅창의 최소 폭을 넓히지 않게 줄바꿈한다.
+            lbl.setWordWrap(True)
+            lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             self._steps_lay.addWidget(lbl)
 
     def reset(self) -> None:
