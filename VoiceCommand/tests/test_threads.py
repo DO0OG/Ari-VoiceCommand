@@ -267,6 +267,81 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
         thread._listen_for_command.assert_called_once_with(request["released"])
         self.assertFalse(thread._command_listening)
 
+    def test_manual_activation_applies_pending_microphone_before_capture(self):
+        previous_microphone = MagicMock()
+        selected_microphone = MagicMock()
+        with patch(
+            "VoiceCommand.SharedMicrophone",
+            side_effect=[previous_microphone, selected_microphone],
+        ):
+            thread = VoiceRecognitionThread()
+        thread.set_microphone("USB Microphone")
+        thread._initialize_voice_recognition = MagicMock(return_value=True)
+        thread._apply_recognizer_settings = MagicMock()
+        thread._refresh_stt_provider = MagicMock()
+        thread._listen_for_command = MagicMock(
+            side_effect=lambda _released: self.assertIs(thread.microphone, selected_microphone)
+        )
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", return_value=selected_microphone),
+            patch("VoiceCommand.get_microphone_index_helper", return_value=4),
+            patch(
+                "core.threads.ConfigManager.get",
+                side_effect=lambda key, default=None: False if key == "wake_word_enabled" else default,
+            ),
+            patch("VoiceCommand.is_session_lock_blocked", return_value=False),
+            patch("VoiceCommand.is_tts_playing", return_value=False),
+        ):
+            thread._listen_for_manual_activation({"released": None})
+
+        thread._listen_for_command.assert_called_once_with(None)
+
+    def test_voice_settings_change_retries_failed_initialization(self):
+        initialization_failed = threading.Event()
+        recovered_listening = threading.Event()
+        detector = MagicMock()
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()),
+            patch("VoiceCommand.should_pause_wake_detection", return_value=False),
+            patch("VoiceCommand.is_session_lock_blocked", return_value=False),
+            patch("core.threads.ConfigManager.get", return_value=True),
+        ):
+            thread = VoiceRecognitionThread()
+            self.addCleanup(thread.stop)
+            thread._probe_microphone = MagicMock()
+            thread._microphone_source = lambda: nullcontext(object())
+            thread._apply_recognizer_settings = MagicMock()
+            thread._refresh_stt_provider = MagicMock()
+            attempts = []
+
+            def initialize_voice_recognition(_initialize_wake_detector=True):
+                attempts.append(True)
+                if len(attempts) == 1:
+                    thread._voice_setup_failed = True
+                    initialization_failed.set()
+                    return False
+                thread._voice_setup_failed = False
+                thread.wake_detector = detector
+                return True
+
+            def listen_for_wake_word(*_args, **_kwargs):
+                recovered_listening.set()
+                return False
+
+            detector.listen_for_wake_word.side_effect = listen_for_wake_word
+            thread._initialize_voice_recognition = initialize_voice_recognition
+            thread.start()
+
+            self.assertTrue(initialization_failed.wait(1))
+            thread.refresh_voice_settings()
+            self.assertTrue(recovered_listening.wait(1))
+            thread.stop()
+            self.assertTrue(thread.wait(1000))
+
+        self.assertGreaterEqual(len(attempts), 2)
+
     def test_manual_activation_is_ignored_during_tts_playback(self):
         with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
             thread = VoiceRecognitionThread()

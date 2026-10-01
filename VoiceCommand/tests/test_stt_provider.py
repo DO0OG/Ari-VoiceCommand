@@ -80,6 +80,15 @@ class _ExplodingProcess(_FakeProcess):
 
 
 class STTProviderTests(unittest.TestCase):
+    def test_google_provider_limits_network_timeout_and_returns_none(self):
+        recognizer = Mock()
+        with patch("speech_recognition.Recognizer", return_value=recognizer):
+            provider = GoogleSTTProvider()
+
+        self.assertEqual(provider._recognizer.operation_timeout, 10)
+        provider._recognizer.recognize_google.side_effect = TimeoutError("timed out")
+        self.assertIsNone(provider.transcribe(_FakeAudioData()))
+
     def test_google_provider_accepts_and_ignores_mode(self):
         provider = GoogleSTTProvider.__new__(GoogleSTTProvider)
         provider._language = "ko-KR"
@@ -120,7 +129,11 @@ class STTProviderTests(unittest.TestCase):
         second_proc = _FakeProcess()
 
         with patch("core.stt_provider.subprocess.Popen", side_effect=[first_proc, second_proc]):
-            with patch.object(WhisperSTTProvider, "_read_process_line", side_effect=["READY", None, "READY"]):
+            with patch.object(
+                WhisperSTTProvider,
+                "_read_process_line",
+                side_effect=["PREPARING", "READY", None, "PREPARING", "READY"],
+            ):
                 provider = WhisperSTTProvider(device="cpu")
                 result = provider.transcribe(_FakeAudioData())
 
@@ -134,7 +147,7 @@ class STTProviderTests(unittest.TestCase):
             with patch.object(
                 WhisperSTTProvider,
                 "_read_process_line",
-                side_effect=["READY", "recognized text"],
+                side_effect=["PREPARING", "READY", "recognized text"],
             ):
                 provider = WhisperSTTProvider(device="cpu")
                 result = provider.transcribe(_FakeAudioData(), mode="wake")
@@ -142,6 +155,25 @@ class STTProviderTests(unittest.TestCase):
         request = json.loads(fake_proc.stdin.writes[0].decode("ascii"))
         self.assertEqual(result, "recognized text")
         self.assertEqual(request, {"audio": "d2F2LWJ5dGVz", "mode": "wake"})
+        provider._terminate_worker_locked()
+
+    def test_whisper_separates_worker_startup_and_model_preparation_timeouts(self):
+        fake_proc = _FakeProcess()
+        with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc):
+            with patch.object(
+                WhisperSTTProvider,
+                "_read_process_line",
+                side_effect=["PREPARING", "READY"],
+            ) as read_line:
+                provider = WhisperSTTProvider(device="cpu")
+
+        self.assertEqual(
+            [entry.args[1] for entry in read_line.call_args_list],
+            [
+                WhisperSTTProvider._STARTUP_TIMEOUT_SECONDS,
+                WhisperSTTProvider._MODEL_PREPARATION_TIMEOUT_SECONDS,
+            ],
+        )
         provider._terminate_worker_locked()
 
     def test_wake_word_refresh_recreates_unhealthy_provider(self):
@@ -208,7 +240,7 @@ class STTProviderTests(unittest.TestCase):
         fake_proc = _FakeProcess()
 
         with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc) as popen:
-            with patch.object(WhisperSTTProvider, "_read_process_line", return_value="READY"):
+            with patch.object(WhisperSTTProvider, "_read_process_line", side_effect=["PREPARING", "READY"]):
                 provider = WhisperSTTProvider(device="cpu", language="en-US")
 
         self.assertEqual(
@@ -228,7 +260,7 @@ class STTProviderTests(unittest.TestCase):
         fake_proc = _FakeProcess()
 
         with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc) as popen:
-            with patch.object(WhisperSTTProvider, "_read_process_line", return_value="READY"):
+            with patch.object(WhisperSTTProvider, "_read_process_line", side_effect=["PREPARING", "READY"]):
                 with patch.object(sys, "frozen", True, create=True):
                     provider = WhisperSTTProvider(device="cpu", language="ja-JP")
 
@@ -249,7 +281,7 @@ class STTProviderTests(unittest.TestCase):
         fake_proc = _FakeProcess()
 
         with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc) as popen:
-            with patch.object(WhisperSTTProvider, "_read_process_line", return_value="READY"):
+            with patch.object(WhisperSTTProvider, "_read_process_line", side_effect=["PREPARING", "READY"]):
                 with patch.dict("core.stt_provider.__dict__", {"__compiled__": object()}):
                     provider = WhisperSTTProvider(device="cpu", language="ko-KR")
 
@@ -304,7 +336,7 @@ class STTProviderTests(unittest.TestCase):
             self.assertEqual(transcribe_calls[0]["beam_size"], 5)
             self.assertNotIn("condition_on_previous_text", transcribe_calls[0])
             self.assertNotIn("without_timestamps", transcribe_calls[0])
-            self.assertEqual(stdout.getvalue().splitlines(), ["READY", "ok"])
+        self.assertEqual(stdout.getvalue().splitlines(), ["PREPARING", "READY", "ok"])
 
     def test_worker_uses_fast_options_for_wake_and_command_modes(self):
         import core._whisper_worker as worker
@@ -343,7 +375,7 @@ class STTProviderTests(unittest.TestCase):
                     "without_timestamps": True,
                 },
             )
-            self.assertEqual(stdout.getvalue().splitlines(), ["READY", "ok"])
+        self.assertEqual(stdout.getvalue().splitlines(), ["PREPARING", "READY", "ok"])
 
     def test_worker_dictation_mode_preserves_default_options(self):
         import core._whisper_worker as worker

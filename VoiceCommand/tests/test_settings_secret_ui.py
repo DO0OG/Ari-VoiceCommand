@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QScrollArea
 
 from ui.settings_dialog import SettingsDialog
+from ui.stt_settings_dialog import STTSettingsDialog
 
 
 class SettingsSecretUITests(unittest.TestCase):
@@ -30,6 +31,21 @@ class SettingsSecretUITests(unittest.TestCase):
         self.addCleanup(dialog.deleteLater)
         self.assertIsNotNone(dialog.audio_diagnostic_panel)
         dialog.reject()
+
+    def test_stt_energy_slider_preserves_low_and_large_saved_thresholds(self):
+        self._app = QApplication.instance() or QApplication([])
+        for threshold in (7, 5000):
+            with patch(
+                "ui.stt_settings_dialog.ConfigManager.load_settings",
+                return_value={"stt_energy_threshold": threshold},
+            ):
+                dialog = STTSettingsDialog()
+
+            self.assertEqual(dialog.stt_energy_slider.minimum(), 1)
+            self.assertGreaterEqual(dialog.stt_energy_slider.maximum(), threshold)
+            self.assertEqual(dialog.stt_energy_slider.value(), threshold)
+            self.assertFalse(dialog.stt_dynamic_checkbox.isChecked())
+            dialog.deleteLater()
 
     def test_page_credentials_use_config_gateway_and_failed_save_stays_open(self):
         field = Mock()
