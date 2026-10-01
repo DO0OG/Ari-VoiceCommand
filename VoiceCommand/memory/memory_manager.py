@@ -344,7 +344,13 @@ class MemoryManager:
                     if self.context_manager.record_fact(
                         k, value.strip(), source="assistant_tag", confidence=0.75
                     ):
-                        get_memory_index().index_fact(k, value.strip(), 0.75)
+                        fact = self.context_manager.get_facts_snapshot().get(k)
+                        if fact:
+                            get_memory_index().index_fact(
+                                k,
+                                str(fact.get("value", "")),
+                                float(fact.get("confidence", 0.7)),
+                            )
                 else:
                     logging.info("[MemoryManager] 일시적 FACT 무시 (비저장): %s=%s", k, value.strip())
 

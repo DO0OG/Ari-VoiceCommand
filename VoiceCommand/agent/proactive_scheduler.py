@@ -229,6 +229,13 @@ class ProactiveScheduler:
             enabled=enabled,
         )
         with self._lock:
+            if len(self._tasks) >= _MAX_TASKS:
+                for inactive_id in [task_id for task_id, current in self._tasks.items() if not current.enabled]:
+                    del self._tasks[inactive_id]
+                    if len(self._tasks) < _MAX_TASKS:
+                        break
+            if len(self._tasks) >= _MAX_TASKS:
+                raise ValueError(_("예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정리한 뒤 다시 시도해주세요."))
             self._tasks[task_id] = task
             self._save()
         logging.info("[Scheduler] 새 작업 등록: %s (%s)", task_id, desc)
@@ -240,7 +247,10 @@ class ProactiveScheduler:
         repeat = bool(re.search(r"매일|매주|평일|\d+분마다|\d+시간마다", schedule_expr))
         repeat_rule = ""
         repeat_sec = 0
-        if re.search(r"매일|평일", schedule_expr):
+        if re.search(r"평일", schedule_expr):
+            repeat_rule = "weekdays"
+            repeat_sec = 86400
+        elif re.search(r"매일", schedule_expr):
             repeat_rule = "daily"
             repeat_sec = 86400
         elif re.search(r"매주", schedule_expr):
@@ -575,7 +585,7 @@ class ProactiveScheduler:
         try:
             schedule_file = self._get_schedule_file()
             os.makedirs(os.path.dirname(schedule_file), exist_ok=True)
-            data = [asdict(t) for t in list(self._tasks.values())[:_MAX_TASKS]]
+            data = [asdict(t) for t in self._tasks.values()]
             with open(schedule_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
@@ -639,7 +649,10 @@ class ProactiveScheduler:
         return date_text in set(task.except_dates or [])
 
     def _compute_next_run(self, task: ScheduledTask, last_due: datetime, now: datetime) -> datetime:
-        if task.repeat_rule == "daily":
+        weekday_repeat = task.repeat_rule == "weekdays" or (
+            task.repeat_rule == "daily" and "평일" in task.schedule_expr
+        )
+        if task.repeat_rule == "daily" or weekday_repeat:
             next_run = last_due + timedelta(days=1)
         elif task.repeat_rule == "weekly":
             next_run = last_due + timedelta(days=7)
@@ -649,7 +662,12 @@ class ProactiveScheduler:
             next_run = last_due + timedelta(seconds=task.repeat_seconds)
         else:
             next_run = now + timedelta(days=1)
-        while next_run <= now:
+        while True:
+            if weekday_repeat:
+                while next_run.weekday() >= 5:
+                    next_run += timedelta(days=1)
+            if next_run > now and not self._is_except_date(task, next_run.date().isoformat()):
+                return next_run
             if task.repeat_rule == "weekly":
                 next_run += timedelta(days=7)
             elif task.repeat_rule == "hourly":
@@ -658,14 +676,6 @@ class ProactiveScheduler:
                 next_run += timedelta(seconds=task.repeat_seconds)
             else:
                 next_run += timedelta(days=1)
-        while self._is_except_date(task, next_run.date().isoformat()):
-            if task.repeat_rule == "weekly":
-                next_run += timedelta(days=7)
-            elif task.repeat_rule == "hourly":
-                next_run += timedelta(hours=1)
-            else:
-                next_run += timedelta(days=1)
-        return next_run
 
     def _claim_due_tasks(self, now: datetime) -> List[tuple[ScheduledTask, Dict[str, str]]]:
         claimed: List[tuple[ScheduledTask, Dict[str, str]]] = []

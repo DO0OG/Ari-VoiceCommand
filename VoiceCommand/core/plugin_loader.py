@@ -383,7 +383,6 @@ class PluginManager:
                 if not (name.endswith(".py") or name.endswith(".zip")):
                     continue
                 discovered.append(self._plugin_stub(path))
-            self._plugins = discovered
             return list(discovered)
 
     def load_plugins(self, context: Optional[PluginContext] = None) -> List[PluginInfo]:

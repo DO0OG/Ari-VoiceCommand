@@ -65,8 +65,9 @@ class SkillInstaller:
             return self._install_from_github(normalized, normalized)
         raise ValueError(f"지원하지 않는 스킬 원본입니다: {source}")
 
-    def update(self, skill_name: str) -> bool:
-        skill_dir = os.path.join(self.skills_dir, skill_name)
+    def update(self, skill_dir: str) -> bool:
+        if not os.path.isabs(skill_dir):
+            skill_dir = os.path.join(self.skills_dir, skill_dir)
         meta_path = os.path.join(skill_dir, _META_FILE_NAME)
         try:
             with open(meta_path, "r", encoding="utf-8") as handle:
@@ -76,6 +77,7 @@ class SkillInstaller:
         source = str(metadata.get("source", "") or "").strip()
         if not source:
             return False
+        was_enabled = bool(metadata.get("enabled", True))
 
         with tempfile.TemporaryDirectory() as temp_root:
             current_backup = os.path.join(temp_root, "backup")
@@ -83,7 +85,10 @@ class SkillInstaller:
                 shutil.copytree(skill_dir, current_backup)
             try:
                 shutil.rmtree(skill_dir, ignore_errors=True)
-                self.install(source)
+                installed_names = self.install(source)
+                folder_name = os.path.basename(os.path.normpath(skill_dir))
+                if folder_name in installed_names:
+                    self._write_metadata(skill_dir, source, enabled=was_enabled)
                 return True
             except Exception:
                 shutil.rmtree(skill_dir, ignore_errors=True)
@@ -93,7 +98,7 @@ class SkillInstaller:
 
     def _install_from_url(self, url: str, source_label: str) -> List[str]:
         validated = _require_https_url(url)
-        with urllib.request.urlopen(urllib.request.Request(validated)) as response:  # nosec B310
+        with urllib.request.urlopen(urllib.request.Request(validated), timeout=30) as response:  # nosec B310
             content = response.read()
         if validated.lower().endswith(".zip"):
             return self._install_from_zip_bytes(content, source_label, None)
@@ -118,7 +123,7 @@ class SkillInstaller:
         branch = match.group("branch") or "main"
         subpath = match.group("path") or ""
         zip_url = f"https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{branch}"
-        with urllib.request.urlopen(urllib.request.Request(_require_https_url(zip_url))) as response:  # nosec B310
+        with urllib.request.urlopen(urllib.request.Request(_require_https_url(zip_url)), timeout=30) as response:  # nosec B310
             content = response.read()
         return self._install_from_zip_bytes(content, source_label, subpath)
 
@@ -163,9 +168,9 @@ class SkillInstaller:
         logger.info("[SkillInstaller] 스킬 설치 완료: %s", folder_name)
         return [folder_name]
 
-    def _write_metadata(self, skill_dir: str, source_label: str) -> None:
+    def _write_metadata(self, skill_dir: str, source_label: str, enabled: bool = True) -> None:
         metadata = {
-            "enabled": True,
+            "enabled": enabled,
             "source": source_label,
             "installed_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         }

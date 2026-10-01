@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 import tempfile
@@ -178,6 +179,111 @@ class ProactiveSchedulerTests(unittest.TestCase):
         )
 
         self.assertEqual(next_run, datetime(2026, 3, 27, 9, 0, 0))
+
+    def test_schedule_cleans_inactive_tasks_before_enforcing_limit(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._tasks = {
+            str(number): ScheduledTask(
+                task_id=str(number),
+                goal="작업",
+                schedule_expr="매일 9시",
+                next_run="2026-03-25T09:00:00",
+                enabled=number != 0,
+            )
+            for number in range(50)
+        }
+        scheduler._save = Mock()
+
+        task_id = scheduler.schedule("새 작업", datetime(2026, 3, 25, 10), "10시")
+
+        self.assertEqual(len(scheduler._tasks), 50)
+        self.assertNotIn("0", scheduler._tasks)
+        self.assertIn(task_id, scheduler._tasks)
+        scheduler._save.assert_called_once()
+
+    def test_schedule_reports_limit_when_all_existing_tasks_are_active(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._tasks = {
+            str(number): ScheduledTask(
+                task_id=str(number),
+                goal="작업",
+                schedule_expr="매일 9시",
+                next_run="2026-03-25T09:00:00",
+            )
+            for number in range(50)
+        }
+        scheduler._save = Mock()
+
+        with self.assertRaisesRegex(ValueError, "예약 작업이 가득 찼습니다"):
+            scheduler.schedule("새 작업", datetime(2026, 3, 25, 10), "10시")
+
+        self.assertEqual(len(scheduler._tasks), 50)
+        scheduler._save.assert_not_called()
+
+    def test_save_keeps_all_legacy_tasks_above_limit(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_file = os.path.join(tmp, "scheduled_tasks.json")
+            scheduler._tasks = {
+                str(number): ScheduledTask(
+                    task_id=str(number),
+                    goal="작업",
+                    schedule_expr="매일 9시",
+                    next_run="2026-03-25T09:00:00",
+                )
+                for number in range(51)
+            }
+
+            scheduler._save()
+
+            with open(scheduler._schedule_file, encoding="utf-8") as handle:
+                self.assertEqual(len(json.load(handle)), 51)
+
+    def test_add_task_persists_weekday_repeat_rule(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._tasks = {}
+        scheduler._save = Mock()
+
+        task = scheduler.add_task("평일 알림", "알림", "평일 9시")
+
+        self.assertEqual(task.repeat_rule, "weekdays")
+
+    def test_weekday_repeat_skips_weekends_and_reads_legacy_daily_rule(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        tasks = [
+            ScheduledTask(
+                task_id="weekdays",
+                goal="평일 알림",
+                schedule_expr="평일 9시",
+                next_run="2026-03-27T09:00:00",
+                repeat=True,
+                repeat_seconds=86400,
+                repeat_rule="weekdays",
+            ),
+            ScheduledTask(
+                task_id="legacy-weekdays",
+                goal="평일 알림",
+                schedule_expr="평일 9시",
+                next_run="2026-03-27T09:00:00",
+                repeat=True,
+                repeat_seconds=86400,
+                repeat_rule="daily",
+            ),
+        ]
+
+        for task in tasks:
+            with self.subTest(task_id=task.task_id):
+                self.assertEqual(
+                    scheduler._compute_next_run(
+                        task,
+                        datetime(2026, 3, 27, 9),
+                        datetime(2026, 3, 27, 9),
+                    ),
+                    datetime(2026, 3, 30, 9),
+                )
 
     def test_normalize_task_adds_alarm_metadata_defaults(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)

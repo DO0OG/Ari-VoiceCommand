@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QGroupBox, QListWidget, QListWidgetItem,
     QMessageBox, QSizePolicy,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 
@@ -16,6 +16,13 @@ from i18n.translator import _
 from ui.theme import secondary_btn_style, BUTTON_LG
 from ui.common import create_muted_label
 from ui.marketplace_browser import MarketplaceFetchThread, MarketplaceInstallThread
+
+_live_marketplace_threads: set[QThread] = set()
+
+
+def _track_marketplace_thread(thread: QThread) -> None:
+    _live_marketplace_threads.add(thread)
+    thread.finished.connect(lambda tracked=thread: _live_marketplace_threads.discard(tracked))
 
 
 class _PluginSettingsPage(QWidget):
@@ -29,6 +36,7 @@ class _PluginSettingsPage(QWidget):
         self._market_install_thread: MarketplaceInstallThread | None = None
         self._market_items: list[dict] = []
         self._market_installing_plugin_name = ""
+        self._closed = False
         self._init_ui()
 
     # ── UI 구성 ───────────────────────────────────────────────────────────────
@@ -217,10 +225,13 @@ class _PluginSettingsPage(QWidget):
         self._market_fetch_thread = MarketplaceFetchThread(
             search=self.market_search_input.text(),
         )
+        _track_marketplace_thread(self._market_fetch_thread)
         self._market_fetch_thread.done.connect(self._on_marketplace_fetch_done)
         self._market_fetch_thread.start()
 
     def _on_marketplace_fetch_done(self, success: bool, items: object, message: str):
+        if self._closed:
+            return
         self._market_fetch_thread = None
         self.marketplace_list.clear()
         self._market_items = list(items) if isinstance(items, list) else []
@@ -286,10 +297,13 @@ class _PluginSettingsPage(QWidget):
             plugin_id,
             self.plugin_dir_input.text().strip(),
         )
+        _track_marketplace_thread(self._market_install_thread)
         self._market_install_thread.done.connect(self._on_marketplace_install_done)
         self._market_install_thread.start()
 
     def _on_marketplace_install_done(self, success: bool, message: str):
+        if self._closed:
+            return
         self._market_install_thread = None
         if success:
             try:
@@ -355,7 +369,7 @@ class _PluginSettingsPage(QWidget):
 
     def cleanup_threads(self):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
+        self._closed = True
         for thread in (self._market_fetch_thread, self._market_install_thread):
             if thread and thread.isRunning():
                 thread.quit()
-                thread.wait(2000)

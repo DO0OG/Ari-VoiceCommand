@@ -8,7 +8,17 @@ import json
 from pathlib import Path
 from unittest import mock
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import QThread
+from PySide6.QtWidgets import QApplication
+
 from core import marketplace_client
+from ui.settings_plugin_page import (
+    _PluginSettingsPage,
+    _live_marketplace_threads,
+    _track_marketplace_thread,
+)
 
 
 VOICECOMMAND_ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +26,44 @@ REPO_ROOT = VOICECOMMAND_ROOT.parent
 
 
 class MarketplaceClientTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def test_closing_plugin_page_keeps_marketplace_thread_until_finished(self):
+        import threading
+
+        class BlockingThread(QThread):
+            def __init__(self):
+                super().__init__()
+                self.started_event = threading.Event()
+                self.release_event = threading.Event()
+
+            def run(self):
+                self.started_event.set()
+                self.release_event.wait(2)
+
+        with mock.patch.object(_PluginSettingsPage, "_init_ui", lambda page: None):
+            page = _PluginSettingsPage()
+        thread = BlockingThread()
+        page._market_fetch_thread = thread
+        _track_marketplace_thread(thread)
+        thread.start()
+        try:
+            self.assertTrue(thread.started_event.wait(1))
+            page.cleanup_threads()
+
+            self.assertTrue(page._closed)
+            self.assertIs(page._market_fetch_thread, thread)
+            self.assertIn(thread, _live_marketplace_threads)
+            page._on_marketplace_fetch_done(True, [], "")
+        finally:
+            thread.release_event.set()
+            thread.wait(1000)
+            QApplication.processEvents()
+
+        self.assertNotIn(thread, _live_marketplace_threads)
+
     def _build_archive_bytes(self, plugin_name: str = "sample_plugin", entry: str = "main.py") -> bytes:
         archive_buffer = io.BytesIO()
         with zipfile.ZipFile(archive_buffer, "w") as archive:
