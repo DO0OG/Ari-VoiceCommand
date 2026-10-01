@@ -58,6 +58,9 @@ def reinitialize_tts_async() -> None:
             initialize_tts()
         except Exception as e:
             logging.error(f"TTS 재초기화 실패: {e}")
+        finally:
+            # 실패해도 이후 발화 요청이 초기화 완료를 기다리며 멈추지 않게 한다.
+            _tts_init_event.set()
 
     threading.Thread(target=_reinit, daemon=True, name="TTS-Reinit").start()
     logging.info("TTS 관련 설정이 변경되어 TTS 재초기화를 시작했습니다.")

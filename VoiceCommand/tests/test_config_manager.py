@@ -115,6 +115,27 @@ class ConfigManagerTests(unittest.TestCase):
             finally:
                 ConfigManager._cached_settings = previous
 
+    def test_stt_migration_resets_only_unusable_threshold(self):
+        from core.settings_schema import migrate_stt_settings
+
+        cases = (
+            ({"stt_energy_threshold": 0}, 300),
+            ({"stt_energy_threshold": 0, "stt_settings_version": 1}, 300),
+            ({"stt_energy_threshold": "x"}, 300),
+            ({"stt_energy_threshold": 7}, 7),
+            ({"stt_energy_threshold": 15, "stt_settings_version": 1}, 15),
+        )
+        for settings, expected in cases:
+            with self.subTest(settings=settings):
+                self.assertTrue(migrate_stt_settings(settings))
+                self.assertEqual(settings["stt_energy_threshold"], expected)
+                self.assertEqual(settings["stt_settings_version"], 2)
+
+        reenabled = {"stt_dynamic_energy": True, "stt_settings_version": 1}
+        migrate_stt_settings(reenabled)
+        self.assertTrue(reenabled["stt_dynamic_energy"])
+        self.assertFalse(migrate_stt_settings({"stt_energy_threshold": 0, "stt_settings_version": 2}))
+
     def test_legacy_auto_energy_is_disabled_once_without_changing_manual_threshold(self):
         previous = ConfigManager._cached_settings
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,7 +151,7 @@ class ConfigManagerTests(unittest.TestCase):
                         stored = json.load(handle)
                     self.assertFalse(stored["stt_dynamic_energy"])
                     self.assertEqual(stored["stt_energy_threshold"], 7)
-                    self.assertEqual(stored["stt_settings_version"], 1)
+                    self.assertEqual(stored["stt_settings_version"], 2)
 
                     stored["stt_dynamic_energy"] = True
                     with open(path, "w", encoding="utf-8") as handle:

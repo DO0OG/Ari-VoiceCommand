@@ -108,7 +108,7 @@ DEFAULT_SETTINGS = {
     "voice_activation_mode": "push_to_talk",
     "stt_energy_threshold": 300,
     "stt_dynamic_energy": False,
-    "stt_settings_version": 1,
+    "stt_settings_version": 2,
     "stt_pause_threshold": 0.6,
     "wake_pause_threshold": 0.4,
     "post_tts_listen_delay_ms": 100,
@@ -171,7 +171,7 @@ DEFAULT_SETTINGS = {
 }
 
 LOCAL_DECISION_SETTINGS_VERSION = 3
-STT_SETTINGS_VERSION = 1
+STT_SETTINGS_VERSION = 2
 LOCAL_DECISION_MODES = ("off", "shadow", "fast")
 
 
@@ -221,10 +221,20 @@ def migrate_local_decision_settings(settings: dict) -> bool:
 
 def migrate_stt_settings(settings: dict) -> bool:
     """자동 감도 기본값을 한 번만 끄고 사용자 수동 임계값을 보존한다."""
-    if settings.get("stt_settings_version") == STT_SETTINGS_VERSION:
+    version = settings.get("stt_settings_version")
+    if version == STT_SETTINGS_VERSION:
         return False
-    if settings.get("stt_dynamic_energy") is True:
+    # 버전 1에서 이미 한 번 껐으므로, 그 뒤 사용자가 다시 켠 자동 감도는 건드리지 않는다.
+    if version != 1 and settings.get("stt_dynamic_energy") is True:
         settings["stt_dynamic_energy"] = False
+    if "stt_energy_threshold" in settings:
+        try:
+            threshold = float(settings["stt_energy_threshold"])
+        except (TypeError, ValueError):
+            threshold = 0.0
+        # 1 미만이면 모든 소리가 말소리로 잡혀 발화 끝을 찾지 못한다. 그 밖의 값은 보존한다.
+        if threshold < 1:
+            settings["stt_energy_threshold"] = DEFAULT_SETTINGS["stt_energy_threshold"]
     settings["stt_settings_version"] = STT_SETTINGS_VERSION
     return True
 
