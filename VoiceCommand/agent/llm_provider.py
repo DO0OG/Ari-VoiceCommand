@@ -474,7 +474,24 @@ class LLMProvider:
             history = list(self.conversation_history)
         if not tool_blocks:
             # Anthropic 형식의 도구 블록은 다른 제공자가 받지 못한다.
-            history = [message for message in history if not self._has_tool_blocks(message)]
+            # 뺀 자리에서 같은 역할이 이어지면 역할 교대를 요구하는 서버가 거절하므로 합친다.
+            kept, dropped = [], False
+            for message in history:
+                if self._has_tool_blocks(message):
+                    dropped = True
+                    continue
+                previous = kept[-1] if kept else {}
+                if (
+                    dropped
+                    and previous.get("role") == message.get("role")
+                    and isinstance(previous.get("content"), str)
+                    and isinstance(message.get("content"), str)
+                ):
+                    kept[-1] = {**previous, "content": f"{previous['content']}\n\n{message['content']}"}
+                else:
+                    kept.append(message)
+                dropped = False
+            history = kept
         cleaned_history = []
         index = 0
         while index < len(history):

@@ -116,6 +116,10 @@ class CustomLLMProviderTests(unittest.TestCase):
             provider.add_to_history("assistant", [{"type": "tool_use", "id": "t1", "name": "x", "input": {}}])
             provider.add_to_history("user", [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}])
             provider.add_to_history("assistant", "done")
+            provider.add_to_history("user", "again")
+            provider.add_to_history("assistant", [{"type": "tool_use", "id": "t2", "name": "x", "input": {}}])
+            provider.add_to_history("user", [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}])
+            provider.add_to_history("user", "still there?")
             config_lock = provider._config_lock
             settings.update({"llm_provider": CUSTOM_A})
 
@@ -123,10 +127,11 @@ class CustomLLMProviderTests(unittest.TestCase):
 
         self.assertEqual(provider.provider, CUSTOM_A)
         self.assertIs(provider._config_lock, config_lock)
-        self.assertEqual(len(provider._history_for_context()), 4)
+        self.assertEqual(len(provider._history_for_context()), 8)
         self.assertEqual(provider._history_for_context(tool_blocks=False), [
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "done"},
+            {"role": "user", "content": "again\n\nstill there?"},
         ])
 
     def test_provider_configs_merge_builtins_with_validated_custom_entries(self):
