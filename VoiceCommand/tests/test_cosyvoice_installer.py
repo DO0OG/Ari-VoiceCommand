@@ -150,9 +150,72 @@ class CosyVoiceInstallerTests(unittest.TestCase):
         with (
             patch("core.resource_manager.is_bundled", return_value=True),
             patch("core.cosyvoice_installer.shutil.which", return_value=None),
+            patch("core.cosyvoice_installer.os.path.isfile", return_value=False),
+            patch("core.cosyvoice_installer.subprocess.run"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "Python 3"):
+            with self.assertRaisesRegex(RuntimeError, "찾지 못했습니다"):
                 cosyvoice_installer._base_python_executable()
+
+    def _mock_python_discovery(self, which_map, version_map):
+        winreg = ModuleType("winreg")
+        winreg.HKEY_CURRENT_USER = object()
+        winreg.HKEY_LOCAL_MACHINE = object()
+
+        class RegistryKey:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        winreg.OpenKey = lambda *_args: RegistryKey()
+        winreg.QueryValueEx = lambda *_args: ("", 0)
+
+        def run(command, **_kwargs):
+            if command[0].endswith("py.exe"):
+                version = (3, 11) if "-3.11" in command else (3, 10)
+                executable = f"C:/Python{version[0]}{version[1]}/python.exe"
+            else:
+                version = version_map[command[0]]
+                executable = command[0]
+            return SimpleNamespace(
+                returncode=0,
+                stdout=f"ARI_PYTHON={executable}|{version[0]}.{version[1]}|64\n",
+            )
+
+        return (
+            patch("core.resource_manager.is_bundled", return_value=True),
+            patch("core.cosyvoice_installer.shutil.which", side_effect=lambda name: which_map.get(name)),
+            patch("core.cosyvoice_installer.os.path.isfile", return_value=False),
+            patch("core.cosyvoice_installer.subprocess.run", side_effect=run),
+            patch.dict("sys.modules", {"winreg": winreg}),
+        )
+
+    def test_bundled_install_uses_python_from_py_launcher(self):
+        patches = self._mock_python_discovery({"py": "C:/Launcher/py.exe"}, {"C:/Launcher/py.exe": (3, 11)})
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            self.assertEqual(cosyvoice_installer._base_python_executable(), "C:/Python311/python.exe")
+
+    def test_bundled_install_reports_found_unsupported_python(self):
+        patches = self._mock_python_discovery({"python": "C:/Python314/python.exe"}, {"C:/Python314/python.exe": (3, 14)})
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            with self.assertRaisesRegex(RuntimeError, "3.14"):
+                cosyvoice_installer._base_python_executable()
+
+    def test_bundled_install_prefers_supported_python_version(self):
+        patches = self._mock_python_discovery(
+            {"python": "C:/Python314/python.exe", "python3": "C:/Python310/python.exe"},
+            {"C:/Python314/python.exe": (3, 14), "C:/Python310/python.exe": (3, 10)},
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            self.assertEqual(cosyvoice_installer._base_python_executable(), "C:/Python310/python.exe")
+
+    def test_unbundled_install_uses_current_interpreter(self):
+        with (
+            patch("core.resource_manager.is_bundled", return_value=False),
+            patch.object(cosyvoice_installer.sys, "executable", "current-python.exe"),
+        ):
+            self.assertEqual(cosyvoice_installer._base_python_executable(), "current-python.exe")
 
     def test_download_resumes_in_place_and_marks_only_complete_model(self):
         with tempfile.TemporaryDirectory() as temp_dir:

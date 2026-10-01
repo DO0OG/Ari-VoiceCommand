@@ -32,6 +32,7 @@ _MODEL_REQUIRED_FILES = (
     "llm.pt",
     "speech_tokenizer_v3.onnx",
 )
+SUPPORTED_PYTHON_VERSIONS = ((3, 11), (3, 10))
 
 
 def is_valid_cosyvoice_dir(path: str) -> bool:
@@ -84,34 +85,137 @@ def _tts_venv_python_path() -> str:
     return writable_python
 
 
+def _python_candidates() -> list[list[str]]:
+    candidates: list[list[str]] = []
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+
+    def add(candidate: str | None, *args: str) -> None:
+        if not candidate:
+            return
+        key = (os.path.normcase(os.path.abspath(candidate)), args)
+        if key not in seen:
+            seen.add(key)
+            candidates.append([candidate, *args])
+
+    launchers = [shutil.which("py")]
+    launchers.extend(
+        os.path.join(root, *parts)
+        for root, parts in (
+            (os.environ.get("SystemRoot", r"C:\Windows"), ("py.exe",)),
+            (os.environ.get("LOCALAPPDATA", ""), ("Programs", "Python", "Launcher", "py.exe")),
+        )
+        if root
+    )
+    for launcher in launchers:
+        if launcher and (launcher == launchers[0] or os.path.isfile(launcher)):
+            for version in SUPPORTED_PYTHON_VERSIONS:
+                add(launcher, f"-3.{version[1]}")
+
+    for command in ("python", "python3"):
+        add(shutil.which(command))
+
+    if os.name == "nt":
+        try:
+            import winreg
+
+            for hive, key_path in (
+                (winreg.HKEY_CURRENT_USER, "Environment"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+            ):
+                try:
+                    with winreg.OpenKey(hive, key_path) as key:
+                        value = winreg.QueryValueEx(key, "Path")[0]
+                    for directory in os.path.expandvars(str(value)).split(os.pathsep):
+                        candidate = os.path.join(directory, "python.exe")
+                        if directory and os.path.isfile(candidate):
+                            add(candidate)
+                except OSError:
+                    continue
+        except ImportError:
+            pass
+
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    program_files = os.environ.get("ProgramFiles", "")
+    for root, folder in (
+        (local_app_data, "Programs\\Python\\Python311"),
+        (local_app_data, "Programs\\Python\\Python310"),
+        (program_files, "Python311"),
+        (program_files, "Python310"),
+        ("C:\\", "Python311"),
+        ("C:\\", "Python310"),
+    ):
+        if root:
+            candidate = os.path.join(root, folder, "python.exe")
+            if os.path.isfile(candidate):
+                add(candidate)
+    return candidates
+
+
+def _inspect_python(candidate: list[str]) -> tuple[str, tuple[int, int], bool] | None:
+    code = (
+        "import struct,sys; "
+        "print('ARI_PYTHON=' + sys.executable + '|' + str(sys.version_info[0]) + '.' + "
+        "str(sys.version_info[1]) + '|' + str(struct.calcsize('P') * 8))"
+    )
+    env = os.environ.copy()
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
+    try:
+        result = subprocess.run(
+            [*candidate, "-c", code],
+            check=False,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+            env=env,
+            **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}),
+        )  # nosec B603
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        if line.startswith("ARI_PYTHON="):
+            try:
+                executable, version, bits = line.removeprefix("ARI_PYTHON=").rsplit("|", 2)
+                major, minor = (int(part) for part in version.split("."))
+                return executable, (major, minor), bits == "64"
+            except (ValueError, TypeError):
+                return None
+    return None
+
+
 def _base_python_executable() -> str:
     from core.resource_manager import is_bundled
 
     if not is_bundled():
         return sys.executable
 
-    for command in ("python", "python3"):
-        candidate = shutil.which(command)
-        if not candidate:
+    found_versions: set[tuple[int, int]] = set()
+    supported: dict[tuple[int, int], str] = {}
+    for candidate in _python_candidates():
+        inspected = _inspect_python(candidate)
+        if inspected is None:
             continue
-        try:
-            result = subprocess.run(
-                [candidate, "-c", "import sys; print('ARI_PYTHON=' + sys.executable)"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )  # nosec B603
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if result.returncode == 0 and "ARI_PYTHON=" in result.stdout:
-            return candidate
+        executable, version, is_64_bit = inspected
+        found_versions.add(version)
+        if is_64_bit and version in SUPPORTED_PYTHON_VERSIONS:
+            supported.setdefault(version, executable)
+    for version in SUPPORTED_PYTHON_VERSIONS:
+        if version in supported:
+            return supported[version]
 
-    raise RuntimeError(
-        _(
-            "CosyVoice를 설치하려면 Python 3이 별도로 설치되어 있어야 합니다. "
-            "Python 3을 설치하고 PATH에 추가한 다음 다시 시도해 주세요."
+    if found_versions:
+        versions = ", ".join(f"{major}.{minor}" for major, minor in sorted(found_versions))
+        raise RuntimeError(
+            _(
+                "지원되지 않는 Python 버전 {versions}을(를) 찾았습니다. CosyVoice에는 Python 3.10 또는 3.11(64비트)이 필요합니다. 기존 Python을 제거할 필요 없이 해당 버전을 추가로 설치해 주세요.",
+                versions=versions,
+            )
         )
+    raise RuntimeError(
+        _("Python을 찾지 못했습니다. Python 3.10 또는 3.11(64비트)을 설치한 뒤 다시 시도해 주세요.")
     )
 
 
