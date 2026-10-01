@@ -25,6 +25,20 @@ class ExecutionDashboardPanelTests(unittest.TestCase):
 
         self.assertEqual(panel._steps[1], {"desc": "합계 계산", "type": "python", "status": "done"})
 
+    def test_long_step_description_does_not_widen_panel(self):
+        panel = ExecutionDashboardPanel()
+        self.addCleanup(panel.deleteLater)
+        step = ActionStep(
+            step_id=1,
+            step_type="python",
+            content="print(1)",
+            description_kr="downloads_folder_report_with_a_very_long_unbroken_name " * 2,
+        )
+
+        panel.on_progress("plan_ready", steps=[asdict(step)], iteration=0)
+
+        self.assertLessEqual(panel.minimumSizeHint().width(), 420)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -230,7 +230,7 @@ def migrate_stt_settings(settings: dict) -> bool:
     if "stt_energy_threshold" in settings:
         try:
             threshold = float(settings["stt_energy_threshold"])
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             threshold = 0.0
         # 1 미만이면 모든 소리가 말소리로 잡혀 발화 끝을 찾지 못한다. 그 밖의 값은 보존한다.
         if not 1 <= threshold < float("inf"):
