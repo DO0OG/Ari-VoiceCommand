@@ -826,13 +826,16 @@ class AICommand(FastPathMixin, BaseCommand):
                 "'5분 뒤', '11시 30분에', '매일 오전 9시' 형식으로 말씀해 주세요."
             ).format(when=when)
 
-        task_id = self.scheduler.schedule(
-            goal=goal,
-            next_run_dt=next_run,
-            desc=when,
-            repeat=repeat,
-            repeat_sec=repeat_seconds,
-        )
+        try:
+            task_id = self.scheduler.schedule(
+                goal=goal,
+                next_run_dt=next_run,
+                desc=when,
+                repeat=repeat,
+                repeat_sec=repeat_seconds,
+            )
+        except ValueError as exc:
+            return str(exc)
         repeat_str = _(" (반복)") if repeat else ""
         formatted = self._format_datetime_kr(next_run)
         return _("작업 예약 완료 (ID: {task_id}){repeat}. {formatted}에 실행됩니다.").format(

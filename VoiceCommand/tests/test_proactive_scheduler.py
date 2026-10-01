@@ -189,7 +189,8 @@ class ProactiveSchedulerTests(unittest.TestCase):
                 goal="작업",
                 schedule_expr="매일 9시",
                 next_run="2026-03-25T09:00:00",
-                enabled=number != 0,
+                enabled=number not in (0, 1),
+                last_run="2026-03-24T09:00:00" if number == 0 else "",
             )
             for number in range(50)
         }
@@ -199,6 +200,7 @@ class ProactiveSchedulerTests(unittest.TestCase):
 
         self.assertEqual(len(scheduler._tasks), 50)
         self.assertNotIn("0", scheduler._tasks)
+        self.assertIn("1", scheduler._tasks)
         self.assertIn(task_id, scheduler._tasks)
         scheduler._save.assert_called_once()
 

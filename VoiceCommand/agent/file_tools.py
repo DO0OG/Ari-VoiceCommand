@@ -414,7 +414,7 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any
             "file_path": path,
             "replaced": True,
             "old_length": len(old_string),
-            "new_length": len(new_string),
+            "new_length": len(new_string or ""),
         }
     except Exception as e:
         logger.error("edit_file 오류: %s", e)
