@@ -269,6 +269,23 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         self.assertEqual(widget.history[0]["timestamp"], "09:30:00")
         self.assertIn("09:30:00", [label.text() for label in labels])
 
+    def test_chat_widget_stream_update_replaces_only_that_row(self):
+        widget = ChatWidget()
+        widget.resize(360, 300)
+        widget.add_message("질문", is_user=True)
+        widget.add_message("", is_user=False)
+        first_row = widget.layout().itemAt(0).widget()
+        old_row = widget.layout().itemAt(1).widget()
+
+        widget.update_message(1, "스트리밍 응답")
+
+        self.assertEqual(widget.layout().count(), 2)
+        self.assertIs(widget.layout().itemAt(0).widget(), first_row)
+        self.assertIsNot(widget.layout().itemAt(1).widget(), old_row)
+        self.assertTrue(old_row.isHidden())
+        new_texts = [label.text() for label in widget.layout().itemAt(1).widget().findChildren(QLabel)]
+        self.assertTrue(any("스트리밍 응답" in text for text in new_texts), new_texts)
+
     def test_scheduler_task_row_wraps_long_text_labels(self):
         task = ScheduledTask(
             task_id="task-1",
