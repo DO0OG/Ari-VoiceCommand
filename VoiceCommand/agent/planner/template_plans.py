@@ -176,7 +176,10 @@ class TemplatePlansMixin:
             target_name = "chrome"
         elif any(token in normalized for token in ("엣지", "edge")):
             target_name = "msedge"
-        elif any(token in lower for token in ("vscode", "vs code", "visual studio code")) or any(token in normalized for token in ("코드", "코드 에디터")):
+        # "파이썬 코드"·"디스코드"가 VS Code로 잡히지 않도록 에디터를 가리키는 표현만 본다.
+        elif any(token in lower for token in ("vscode", "vs code", "visual studio code", "vs코드")) or any(
+            token in normalized for token in ("비주얼 스튜디오 코드", "비주얼스튜디오 코드", "코드 에디터")
+        ):
             target_name = "code"
         elif any(token in normalized for token in ("계산기",)) or any(token in lower for token in ("calculator", "calc")):
             target_name = "calculator"

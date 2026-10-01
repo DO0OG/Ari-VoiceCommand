@@ -155,6 +155,14 @@ class AgentPlannerParsingTests(unittest.TestCase):
         self.assertEqual(profile.source_path, "")
         self.assertEqual(planner._build_template_plan(goal), [])
 
+    def test_only_editor_phrases_target_vscode(self):
+        planner = AgentPlanner(DummyLLMProvider())
+
+        self.assertEqual(planner._profile_goal("vscode 열어줘").target_name, "code")
+        self.assertEqual(planner._profile_goal("코드 에디터 열어줘").target_name, "code")
+        for goal in ("파이썬 코드를 실행해서 1부터 100까지 더한 값을 알려줘", "디스코드 켜줘"):
+            self.assertNotEqual(planner._profile_goal(goal).target_name, "code", goal)
+
     def test_short_voicecommand_repository_goal_is_treated_as_developer_work(self):
         planner = AgentPlanner(DummyLLMProvider())
         goal = "VoiceCommand 저장소 전체 파악 후, 사용자 체감이 크고 회귀 위험이 낮은 개선 과제 1개를 선정하여 코드 변경 및 검증까지 완료"
