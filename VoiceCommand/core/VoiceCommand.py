@@ -254,14 +254,14 @@ def initialize_tts():
     settings = ConfigManager.load_settings()
     next_signature = build_tts_signature(settings)
     warming_provider = None
-    # 교체 구간만 잠근다. 로컬 엔진 warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
+    # 교체 구간만 잠근다. 로컬 엔진의 READY·warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
     with _TTS_INIT_LOCK:
         if _state.fish_tts is not None and _state.tts_signature == next_signature:
             logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
         else:
             _cleanup_tts_provider(_state.fish_tts)
             try:
-                provider, provider_mode = create_tts_provider()
+                provider, provider_mode = create_tts_provider(wait_ready=False)
                 # 준비 중에도 등록해 둔다. 로컬 엔진의 speak()는 READY까지 기다린다.
                 _state.fish_tts = provider
                 if provider_mode == "local" and hasattr(provider, "wait_until_warmup_done"):
@@ -274,7 +274,9 @@ def initialize_tts():
     # 준비 중 발화도 종료 시그널과 말투 설정을 쓰도록 warmup 대기 전에 마친다.
     _finish_tts_setup(settings)
 
-    if warming_provider is not None and not warming_provider.wait_until_warmup_done():
+    if warming_provider is not None and not (
+        warming_provider.wait_until_ready() and warming_provider.wait_until_warmup_done()
+    ):
         reason = (
             getattr(warming_provider, "_warmup_error", None)
             or getattr(warming_provider, "_worker_error", None)

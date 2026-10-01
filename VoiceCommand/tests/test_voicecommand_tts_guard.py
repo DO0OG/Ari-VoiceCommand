@@ -177,7 +177,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             provider.cleanup.assert_called_once_with()
             self.assertEqual(
                 create_provider.call_args_list,
-                [call(), call({**settings, "tts_mode": "openai_tts"})],
+                [call(wait_ready=False), call({**settings, "tts_mode": "openai_tts"})],
             )
         finally:
             VoiceCommand._state.fish_tts = previous_provider
@@ -219,6 +219,10 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
     def test_local_provider_is_registered_before_warmup_finishes(self):
         provider = Mock()
         registered_during_warmup = []
+        lock_held_while_waiting = []
+        provider.wait_until_ready.side_effect = lambda: (
+            lock_held_while_waiting.append(VoiceCommand._TTS_INIT_LOCK.locked()) or True
+        )
         provider.wait_until_warmup_done.side_effect = lambda: (
             registered_during_warmup.append(
                 VoiceCommand._state.fish_tts is provider
@@ -232,6 +236,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         self._run_initialize_tts({"tts_mode": "local"}, [(provider, "local")])
 
         self.assertEqual(registered_during_warmup, [True])
+        self.assertEqual(lock_held_while_waiting, [False])
         self.assertIs(VoiceCommand._state.fish_tts, provider)
         provider.cleanup.assert_not_called()
 

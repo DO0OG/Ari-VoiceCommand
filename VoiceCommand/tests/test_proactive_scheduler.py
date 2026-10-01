@@ -188,9 +188,10 @@ class ProactiveSchedulerTests(unittest.TestCase):
                 task_id=str(number),
                 goal="작업",
                 schedule_expr="매일 9시",
-                next_run="2026-03-25T09:00:00",
+                # 1번은 실행 시각 전에 수동 실행한 뒤 일시중지한 예약이다.
+                next_run="2099-03-25T09:00:00" if number == 1 else "2026-03-25T09:00:00",
                 enabled=number not in (0, 1),
-                last_run="2026-03-24T09:00:00" if number == 0 else "",
+                last_run="2026-03-24T09:00:00" if number in (0, 1) else "",
             )
             for number in range(50)
         }

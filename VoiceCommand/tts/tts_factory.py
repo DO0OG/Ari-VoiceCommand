@@ -42,7 +42,7 @@ def build_tts_signature(settings=None):
     return tuple(settings.get(key) for key in _TTS_SIGNATURE_KEYS)
 
 
-def _create_local(settings):
+def _create_local(settings, wait_ready=True):
     provider = None
     try:
         from tts.cosyvoice_tts import CosyVoiceTTS
@@ -55,7 +55,7 @@ def _create_local(settings):
             speed=float(settings.get("cosyvoice_speed", 0.9)),
             cosyvoice_dir=configured_dir if configured_dir and os.path.isdir(configured_dir) else None,
         )
-        if not provider.wait_until_ready():
+        if wait_ready and not provider.wait_until_ready():
             raise RuntimeError(
                 getattr(provider, "_worker_error", None)
                 or "CosyVoice3 worker did not become ready"
@@ -189,13 +189,19 @@ _TTS_PROVIDER_CREATORS = {
 }
 
 
-def create_tts_provider(settings=None):
-    """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성"""
+def create_tts_provider(settings=None, wait_ready=True):
+    """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성.
+
+    wait_ready=False이면 로컬 엔진의 READY 대기를 호출자에게 맡긴다.
+    """
     settings = settings or ConfigManager.load_settings()
     tts_mode = settings.get("tts_mode", "edge")
     for provider_mode, creator in _TTS_PROVIDER_CREATORS.items():
         if tts_mode == provider_mode:
-            provider = creator(settings)
+            if creator is _create_local:
+                provider = creator(settings, wait_ready=wait_ready)
+            else:
+                provider = creator(settings)
             if provider is not None:
                 return provider
             tts_mode = "edge"
