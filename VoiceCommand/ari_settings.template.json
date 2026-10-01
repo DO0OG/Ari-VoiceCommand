@@ -78,7 +78,7 @@
   "voice_activation_mode": "push_to_talk",
   "stt_energy_threshold": 300,
   "stt_dynamic_energy": false,
-  "stt_settings_version": 1,
+  "stt_settings_version": 2,
   "stt_pause_threshold": 0.6,
   "wake_pause_threshold": 0.4,
   "post_tts_listen_delay_ms": 100,
