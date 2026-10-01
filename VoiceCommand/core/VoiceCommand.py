@@ -245,6 +245,9 @@ def _create_fallback_tts(settings: dict):
     fallback_settings = dict(settings)
     fallback_settings["tts_mode"] = fallback
     logging.warning("[TTS] 폴백으로 전환: %s", fallback)
+    # 폴백 생성까지 실패해도 정리된 프로바이더가 재사용되지 않게 먼저 비운다.
+    _state.fish_tts = None
+    _state.tts_signature = None
     return create_tts_provider(fallback_settings)[0]
 
 
@@ -284,11 +287,15 @@ def initialize_tts():
         )
         logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", reason)
         with _TTS_INIT_LOCK:
-            if _state.fish_tts is not warming_provider:
-                # 그사이 다른 초기화가 프로바이더를 교체했다.
+            if (
+                _state.fish_tts is not warming_provider
+                or getattr(warming_provider, "_stopping", False) is True
+            ):
+                # 그사이 다른 초기화나 게임 모드 전환이 프로바이더를 교체·정리했다.
                 return
             _cleanup_tts_provider(warming_provider)
             _state.fish_tts = _create_fallback_tts(settings)
+            _state.tts_signature = next_signature
         _finish_tts_setup(settings)
 
 

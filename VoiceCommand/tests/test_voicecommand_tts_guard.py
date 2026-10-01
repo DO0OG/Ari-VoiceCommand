@@ -258,6 +258,28 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         self.assertIs(VoiceCommand._state.fish_tts, newer_provider)
         self.assertEqual(create_provider.call_count, 1)
 
+    def test_failed_fallback_does_not_leave_cleaned_provider_registered(self):
+        settings = {"tts_mode": "openai_tts", "tts_fallback_provider": "edge"}
+
+        with self.assertRaises(RuntimeError):
+            self._run_initialize_tts(settings, [RuntimeError("no key"), RuntimeError("edge down")])
+
+        self.assertIsNone(VoiceCommand._state.fish_tts)
+        self.assertIsNone(VoiceCommand._state.tts_signature)
+
+    def test_warmup_failure_skips_fallback_when_provider_was_stopped(self):
+        provider = Mock()
+        provider._stopping = True
+        provider.wait_until_ready.return_value = False
+
+        create_provider = self._run_initialize_tts(
+            {"tts_mode": "local", "tts_fallback_provider": "edge"},
+            [(provider, "local")],
+        )
+
+        self.assertEqual(create_provider.call_count, 1)
+        provider.cleanup.assert_not_called()
+
     def test_fallback_same_as_primary_uses_edge(self):
         fallback_provider = object()
         settings = {"tts_mode": "openai_tts", "tts_fallback_provider": "openai_tts"}

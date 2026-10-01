@@ -68,6 +68,7 @@ class ScheduledTask:
     enabled: bool = True
     last_run: str = ""
     last_result: str = ""
+    completed: bool = False   # 일회성 예약이 예정 시각에 실행돼 끝났는지
 
 
 @dataclass
@@ -230,15 +231,10 @@ class ProactiveScheduler:
         )
         with self._lock:
             if len(self._tasks) >= _MAX_TASKS:
-                # 일시중지한 예약은 남기고, 실행 시각이 지나 실행을 마친 일회성 예약만 정리한다.
-                now_text = datetime.now().isoformat()
+                # 일시중지한 예약은 남기고, 예정대로 실행을 마친 일회성 예약만 정리한다.
                 finished_ids = [
                     task_id for task_id, current in self._tasks.items()
-                    if not current.enabled
-                    and not current.repeat
-                    and current.last_run
-                    and current.next_run
-                    and current.next_run <= now_text
+                    if current.completed and not current.enabled
                 ]
                 for finished_id in finished_ids:
                     del self._tasks[finished_id]
@@ -339,6 +335,7 @@ class ProactiveScheduler:
             if task_id not in self._tasks:
                 return False
             self._tasks[task_id].enabled = not self._tasks[task_id].enabled
+            self._tasks[task_id].completed = False
             self._save()
         return True
 
@@ -650,6 +647,15 @@ class ProactiveScheduler:
             payload["schedule_expr"] = payload.pop("schedule_desc")
         elif "schedule_desc" in payload:
             payload.pop("schedule_desc")
+        if "completed" not in payload:
+            # 이전 버전 파일에는 완료 표시가 없어, 실행 시각이 지난 비활성 일회성 예약을 완료로 본다.
+            payload["completed"] = bool(
+                not payload.get("enabled", True)
+                and not payload.get("repeat", False)
+                and payload.get("last_run")
+                and payload.get("next_run")
+                and str(payload["next_run"]) <= datetime.now().isoformat()
+            )
         # dataclass 필드에 없는 키 제거
         valid_fields = {f.name for f in ScheduledTask.__dataclass_fields__.values()}
         payload = {k: v for k, v in payload.items() if k in valid_fields}
@@ -716,6 +722,7 @@ class ProactiveScheduler:
                     next_run_after = task.next_run
                 else:
                     task.enabled = False
+                    task.completed = True
                     next_run_after = ""
                 claimed.append((
                     ScheduledTask(**asdict(task)),
