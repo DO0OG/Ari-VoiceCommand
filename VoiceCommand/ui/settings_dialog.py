@@ -83,6 +83,7 @@ class SettingsDialog(QDialog):
         "llm_planner_provider", "llm_planner_model",
         "llm_execution_provider", "llm_execution_model",
         "llm_memory_extractor_provider", "llm_memory_extractor_model",
+        "llm_router_enabled",
         "ollama_base_url", "custom_llm_providers",
         "groq_api_key", "openai_api_key", "anthropic_api_key", "mistral_api_key",
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
@@ -861,10 +862,10 @@ class SettingsDialog(QDialog):
 
         if self.llm_settings_changed():
             try:
-                from agent.llm_provider import reset_llm_provider
-                reset_llm_provider()
+                from agent.llm_provider import reload_llm_provider
+                reload_llm_provider()
             except Exception as exc:
-                logging.debug(f"LLM provider reset 생략: {exc}")
+                logging.warning("LLM 제공자 재구성 실패: %s", exc)
 
         if self.theme_settings_changed():
             QMessageBox.information(

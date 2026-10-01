@@ -2069,101 +2069,136 @@ class LLMProvider:
 _instance: LLMProvider | None = None
 _instance_lock = threading.Lock()
 
+def _build_llm_provider() -> LLMProvider:
+    try:
+        from core.config_manager import ConfigManager
+        s = dict(ConfigManager.load_settings())
+    except Exception as exc:
+        logging.debug("[LLMProvider] 설정 로드 실패, 기본 LLM 설정 사용: %s", exc)
+        s = {}
+    from core.custom_llm_providers import custom_api_key_name, normalize_custom_provider_settings
+
+    normalize_custom_provider_settings(s)
+    provider_configs = get_provider_configs(s)
+
+    def select_provider(setting_key, model_key, fallback):
+        selected = s.get(setting_key, "") or fallback
+        if selected not in provider_configs:
+            # 역할 제공자는 기본 제공자로, 기본 제공자는 groq로 돌린다.
+            selected = fallback if fallback in provider_configs else "groq"
+            s[setting_key] = selected
+            s[model_key] = ""
+        return selected
+
+    provider = select_provider("llm_provider", "llm_model", "groq")
+    planner_provider = select_provider("llm_planner_provider", "llm_planner_model", provider)
+    execution_provider = select_provider("llm_execution_provider", "llm_execution_model", provider)
+    memory_extractor_provider = select_provider(
+        "llm_memory_extractor_provider",
+        "llm_memory_extractor_model",
+        execution_provider,
+    )
+
+    def provider_key(selected):
+        if selected == "ollama":
+            return "ollama"
+        key_name = _KEY_MAP.get(selected)
+        if key_name is None and selected in provider_configs and selected not in _PROVIDER_CONFIG:
+            key_name = custom_api_key_name(selected)
+        return s.get(key_name, "") if key_name else ""
+
+    api_key = provider_key(provider)
+    planner_api_key = provider_key(planner_provider) if planner_provider != provider else ""
+    execution_api_key = provider_key(execution_provider) if execution_provider != provider else ""
+    memory_extractor_api_key = (
+        provider_key(memory_extractor_provider)
+        if memory_extractor_provider not in {provider, execution_provider}
+        else ""
+    )
+    model = s.get("llm_model", "") or ""
+    if not model and provider not in _PROVIDER_CONFIG:
+        model = provider_configs[provider].get("default_model", "") or ""
+
+    def role_model(setting_key, selected):
+        value = s.get(setting_key, "") or ""
+        if value or selected == provider:
+            return value or model
+        if selected not in _PROVIDER_CONFIG:
+            return provider_configs[selected].get("default_model", "") or ""
+        return ""
+
+    planner_model = role_model("llm_planner_model", planner_provider)
+    execution_model = role_model("llm_execution_model", execution_provider)
+    memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
+    if memory_extractor_provider != execution_provider and not memory_extractor_model:
+        memory_extractor_model = (
+            model
+            if memory_extractor_provider == provider
+            else provider_configs[memory_extractor_provider].get("default_model", "")
+        )
+
+    return LLMProvider(
+        provider=provider, api_key=api_key,
+        model=model,
+        planner_model=planner_model,
+        execution_model=execution_model,
+        planner_provider=planner_provider if planner_provider != provider else "",
+        execution_provider=execution_provider if execution_provider != provider else "",
+        planner_api_key=planner_api_key,
+        execution_api_key=execution_api_key,
+        memory_extractor_provider=memory_extractor_provider,
+        memory_extractor_model=memory_extractor_model,
+        memory_extractor_api_key=memory_extractor_api_key,
+        system_prompt=s.get("system_prompt", ""),
+        personality=s.get("personality", ""),
+        scenario=s.get("scenario", ""),
+        history_instruction=s.get("history_instruction", ""),
+        personality_examples_en=s.get("personality_examples_en", ""),
+        personality_examples_ja=s.get("personality_examples_ja", ""),
+        response_verbosity=s.get("response_verbosity", "concise"),
+        router_enabled=s.get("llm_router_enabled", False),
+        provider_configs=provider_configs,
+    )
+
+
 def get_llm_provider() -> LLMProvider:
     global _instance
     if _instance is None:
         with _instance_lock:
             if _instance is None:
-                try:
-                    from core.config_manager import ConfigManager
-                    s = dict(ConfigManager.load_settings())
-                except Exception as exc:
-                    logging.debug("[LLMProvider] 설정 로드 실패, 기본 LLM 설정 사용: %s", exc)
-                    s = {}
-                from core.custom_llm_providers import custom_api_key_name, normalize_custom_provider_settings
-
-                normalize_custom_provider_settings(s)
-                provider_configs = get_provider_configs(s)
-
-                def select_provider(setting_key, model_key, fallback):
-                    selected = s.get(setting_key, "") or fallback
-                    if selected not in provider_configs:
-                        # 역할 제공자는 기본 제공자로, 기본 제공자는 groq로 돌린다.
-                        selected = fallback if fallback in provider_configs else "groq"
-                        s[setting_key] = selected
-                        s[model_key] = ""
-                    return selected
-
-                provider = select_provider("llm_provider", "llm_model", "groq")
-                planner_provider = select_provider("llm_planner_provider", "llm_planner_model", provider)
-                execution_provider = select_provider("llm_execution_provider", "llm_execution_model", provider)
-                memory_extractor_provider = select_provider(
-                    "llm_memory_extractor_provider",
-                    "llm_memory_extractor_model",
-                    execution_provider,
-                )
-
-                def provider_key(selected):
-                    if selected == "ollama":
-                        return "ollama"
-                    key_name = _KEY_MAP.get(selected)
-                    if key_name is None and selected in provider_configs and selected not in _PROVIDER_CONFIG:
-                        key_name = custom_api_key_name(selected)
-                    return s.get(key_name, "") if key_name else ""
-
-                api_key = provider_key(provider)
-                planner_api_key = provider_key(planner_provider) if planner_provider != provider else ""
-                execution_api_key = provider_key(execution_provider) if execution_provider != provider else ""
-                memory_extractor_api_key = (
-                    provider_key(memory_extractor_provider)
-                    if memory_extractor_provider not in {provider, execution_provider}
-                    else ""
-                )
-                model = s.get("llm_model", "") or ""
-                if not model and provider not in _PROVIDER_CONFIG:
-                    model = provider_configs[provider].get("default_model", "") or ""
-
-                def role_model(setting_key, selected):
-                    value = s.get(setting_key, "") or ""
-                    if value or selected == provider:
-                        return value or model
-                    if selected not in _PROVIDER_CONFIG:
-                        return provider_configs[selected].get("default_model", "") or ""
-                    return ""
-
-                planner_model = role_model("llm_planner_model", planner_provider)
-                execution_model = role_model("llm_execution_model", execution_provider)
-                memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
-                if memory_extractor_provider != execution_provider and not memory_extractor_model:
-                    memory_extractor_model = (
-                        model
-                        if memory_extractor_provider == provider
-                        else provider_configs[memory_extractor_provider].get("default_model", "")
-                    )
-
-                _instance = LLMProvider(
-                    provider=provider, api_key=api_key,
-                    model=model,
-                    planner_model=planner_model,
-                    execution_model=execution_model,
-                    planner_provider=planner_provider if planner_provider != provider else "",
-                    execution_provider=execution_provider if execution_provider != provider else "",
-                    planner_api_key=planner_api_key,
-                    execution_api_key=execution_api_key,
-                    memory_extractor_provider=memory_extractor_provider,
-                    memory_extractor_model=memory_extractor_model,
-                    memory_extractor_api_key=memory_extractor_api_key,
-                    system_prompt=s.get("system_prompt", ""),
-                    personality=s.get("personality", ""),
-                    scenario=s.get("scenario", ""),
-                    history_instruction=s.get("history_instruction", ""),
-                    personality_examples_en=s.get("personality_examples_en", ""),
-                    personality_examples_ja=s.get("personality_examples_ja", ""),
-                    response_verbosity=s.get("response_verbosity", "concise"),
-                    router_enabled=s.get("llm_router_enabled", False),
-                    provider_configs=provider_configs,
-                )
+                _instance = _build_llm_provider()
     return _instance
+
+
+def reload_llm_provider() -> None:
+    if _instance is None:
+        return
+    with _instance_lock:
+        instance = _instance
+        if instance is None:
+            return
+        replacement = _build_llm_provider()
+
+        preserved = {
+            "conversation_history", "_history_lock",
+            "_active_stream_lock", "_active_stream", "_active_stream_cancel_event",
+            "_plugin_tools", "_plugin_tool_intents",
+        }
+        clients = ("client", "planner_client", "execution_client", "memory_extractor_client")
+        config = (
+            "provider_configs", "provider", "api_key", "model", "planner_provider",
+            "planner_model", "execution_provider", "execution_model",
+            "memory_extractor_provider", "memory_extractor_model",
+        )
+        # 진행 중인 호출이 기존 기록과 스트림 상태를 계속 사용하도록 보존한다.
+        for name in config:
+            setattr(instance, name, getattr(replacement, name))
+        for name, value in replacement.__dict__.items():
+            if name not in preserved and name not in clients and name not in config:
+                setattr(instance, name, value)
+        for name in clients:
+            setattr(instance, name, getattr(replacement, name))
+
 
 def reset_llm_provider():
     global _instance

@@ -3,7 +3,12 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from agent.llm_provider import LLMProvider, get_llm_provider, reset_llm_provider
+from agent.llm_provider import (
+    LLMProvider,
+    get_llm_provider,
+    reload_llm_provider,
+    reset_llm_provider,
+)
 from agent.provider_config import _PROVIDER_CONFIG, get_provider_configs
 
 
@@ -49,6 +54,53 @@ class CustomLLMProviderTests(unittest.TestCase):
         timeout = call.kwargs["timeout"]
         self.assertEqual(timeout.read, read_timeout)
         self.assertEqual(timeout.connect, 5.0)
+
+    def test_reload_preserves_singleton_history_and_plugin_tools(self):
+        settings = {"llm_provider": "groq", "groq_api_key": ""}
+        custom = {CUSTOM_A: _config("Local", "https://llm.example/v1", "local-model")}
+        openai = Mock(return_value=Mock())
+        with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module(custom)}), \
+             patch.dict(sys.modules, {"openai": _openai_module(openai)}), \
+             patch("core.config_manager.ConfigManager.load_settings", side_effect=lambda: dict(settings)), \
+             patch("agent.llm_provider.ConfigManager.get", side_effect=lambda key, default: default), \
+             patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default), \
+             patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
+            provider = get_llm_provider()
+            provider.add_to_history("user", "remember this")
+            history_lock = provider._history_lock
+            stream_lock = provider._active_stream_lock
+            active_stream = Mock()
+            cancel_event = Mock()
+            provider._active_stream = active_stream
+            provider._active_stream_cancel_event = cancel_event
+            tool = {"type": "function", "function": {"name": "plugin_tool"}}
+            provider.register_plugin_tool(tool, intents=["hello"])
+            settings.update({"llm_provider": CUSTOM_A, f"{CUSTOM_A}_api_key": "custom-key"})
+
+            reload_llm_provider()
+
+        self.assertIs(get_llm_provider(), provider)
+        self.assertEqual(provider.provider, CUSTOM_A)
+        self.assertEqual(provider.model, "local-model")
+        self.assertEqual(provider.provider_configs[CUSTOM_A]["base_url"], "https://llm.example/v1")
+        self.assertEqual(provider.conversation_history, [{"role": "user", "content": "remember this"}])
+        self.assertIs(provider._history_lock, history_lock)
+        self.assertIs(provider._active_stream_lock, stream_lock)
+        self.assertIs(provider._active_stream, active_stream)
+        self.assertIs(provider._active_stream_cancel_event, cancel_event)
+        self.assertEqual(provider._plugin_tools, [tool])
+        self.assertEqual(provider._plugin_tool_intents, {"plugin_tool": {"hello"}})
+
+    def test_reload_build_failure_leaves_existing_singleton_unchanged(self):
+        provider = Mock()
+        provider.provider = "groq"
+        with patch("agent.llm_provider._instance", provider), \
+             patch("agent.llm_provider._build_llm_provider", side_effect=RuntimeError("build failed")):
+            with self.assertRaisesRegex(RuntimeError, "build failed"):
+                reload_llm_provider()
+
+            self.assertIs(get_llm_provider(), provider)
+        self.assertEqual(provider.provider, "groq")
 
     def test_provider_configs_merge_builtins_with_validated_custom_entries(self):
         custom = {CUSTOM_A: _config("Local", "http://localhost:1234/v1", "local-model")}

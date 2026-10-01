@@ -120,7 +120,7 @@ def get_groq_assistant():
 
 
 def set_groq_api_key(api_key):
-    from agent.llm_provider import reset_llm_provider
+    from agent.llm_provider import reload_llm_provider
     from core.config_manager import ConfigManager
     ConfigManager.set_value("groq_api_key", api_key)
-    reset_llm_provider()
+    reload_llm_provider()
