@@ -24,6 +24,38 @@ class SettingsSecretUITests(unittest.TestCase):
         self.assertEqual(device_tab.frameShape(), QScrollArea.Shape.NoFrame)
         dialog.reject()
 
+    def test_agent_and_plugin_tabs_use_scroll_areas(self):
+        self._app = QApplication.instance() or QApplication([])
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+
+        for title, page in (("에이전트", dialog._agent_page), ("확장", dialog._plugin_page)):
+            index = next(
+                index for index in range(dialog.tabs.count())
+                if dialog.tabs.tabText(index) == title
+            )
+            scroll = dialog.tabs.widget(index)
+            self.assertIsInstance(scroll, QScrollArea)
+            self.assertIs(scroll.widget(), page)
+        dialog.reject()
+
+    def test_agent_page_keeps_minimum_height_when_dialog_is_reduced(self):
+        self._app = QApplication.instance() or QApplication([])
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+
+        dialog.resize(605, 600)
+        dialog.show()
+        self._app.processEvents()
+
+        self.assertGreaterEqual(
+            dialog._agent_page.height(),
+            dialog._agent_page.minimumSizeHint().height(),
+        )
+        dialog.reject()
+
     def test_real_dialog_builds_every_tab(self):
         self._app = QApplication.instance() or QApplication([])
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):
