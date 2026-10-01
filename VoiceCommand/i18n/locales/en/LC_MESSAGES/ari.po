@@ -2504,8 +2504,8 @@ msgstr "Analysis question"
 msgid "이미지 파일 내용을 분석합니다."
 msgstr "Analyzes the contents of an image file."
 
-msgid "앱 이름이나 경로로 애플리케이션을 실행합니다."
-msgstr "Launches an application by name or path."
+msgid "앱 이름이나 경로로 애플리케이션을 실행합니다. 웹사이트나 웹 서비스는 브라우저 이름 대신 사이트 이름(예: naver, youtube)을 그대로 넘깁니다."
+msgstr "Launches an application by name or path. For a website or web service, pass the site name itself (e.g. naver, youtube) instead of a browser name."
 
 msgid "프로세스 이름으로 실행 중인 앱을 종료합니다."
 msgstr "Terminates a running app by process name."

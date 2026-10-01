@@ -380,7 +380,9 @@ CORE_TOOL_SCHEMAS.extend([
         "type": "function",
         "function": {
             "name": "launch_app",
-            "description": _("앱 이름이나 경로로 애플리케이션을 실행합니다."),
+            "description": _(
+                "앱 이름이나 경로로 애플리케이션을 실행합니다. 웹사이트나 웹 서비스는 브라우저 이름 대신 사이트 이름(예: naver, youtube)을 그대로 넘깁니다."
+            ),
             "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
         },
     },
