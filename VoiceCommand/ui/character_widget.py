@@ -1644,6 +1644,8 @@ class CharacterWidget(QWidget):
         self._stream_buffer += delta
         if self.speech_bubble and self.speech_bubble.isVisible():
             self.speech_bubble.update_text(self._stream_buffer)
+            if self.bubble_hide_timer.isActive():
+                self.bubble_hide_timer.start()
         else:
             # 시그널 경유 슬롯은 버퍼를 비우므로 버퍼를 유지한 채 직접 표시한다
             self._present_speech_bubble(self._stream_buffer, 0)
