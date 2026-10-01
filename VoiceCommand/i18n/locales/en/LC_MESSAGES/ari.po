@@ -3284,8 +3284,11 @@ msgstr "Could not create the CosyVoice virtual environment (exit code: {returnco
 msgid "CosyVoice 전용 가상환경을 만들지 못했습니다: {error}"
 msgstr "Could not create the CosyVoice virtual environment: {error}"
 
-msgid "CosyVoice를 설치하려면 Python 3이 별도로 설치되어 있어야 합니다. Python 3을 설치하고 PATH에 추가한 다음 다시 시도해 주세요."
-msgstr "Installing CosyVoice requires a separate Python 3 installation. Install Python 3, add it to PATH, and try again."
+msgid "Python을 찾지 못했습니다. Python 3.10 또는 3.11(64비트)을 설치한 뒤 다시 시도해 주세요."
+msgstr "Python was not found. Install 64-bit Python 3.10 or 3.11, then try again."
+
+msgid "지원되지 않는 Python 버전 {versions}을(를) 찾았습니다. CosyVoice에는 Python 3.10 또는 3.11(64비트)이 필요합니다. 기존 Python을 제거할 필요 없이 해당 버전을 추가로 설치해 주세요."
+msgstr "Found unsupported Python version(s): {versions}. CosyVoice requires 64-bit Python 3.10 or 3.11. You can install one of these alongside your existing Python; you do not need to remove it."
 
 msgid "TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요."
 msgstr "TTS test playback failed. Please check the settings and output device."
