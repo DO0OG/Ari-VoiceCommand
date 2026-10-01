@@ -88,6 +88,8 @@ class LLMProvider:
         self.router_enabled = bool(router_enabled)
         self.conversation_history = []
         self._history_lock = threading.RLock()
+        # 설정 재구성 도중 제공자·모델·client가 섞여 읽히지 않게 한다.
+        self._config_lock = threading.RLock()
         self._active_stream_lock = threading.Lock()
         self._active_stream = None
         self._active_stream_cancel_event = None
@@ -458,10 +460,38 @@ class LLMProvider:
             compacted["content"] = f"[도구 결과 요약: {len(content)}자]"
         return compacted
 
-    def _history_for_context(self, max_tokens: int | None = None) -> list[dict]:
+    @staticmethod
+    def _has_tool_blocks(message: dict) -> bool:
+        content = message.get("content")
+        return isinstance(content, list) and any(
+            isinstance(block, dict) and block.get("type") in ("tool_use", "tool_result")
+            for block in content
+        )
+
+    def _history_for_context(self, max_tokens: int | None = None, tool_blocks: bool = True) -> list[dict]:
         budget = int(max_tokens or self.max_context_tokens or 8000)
         with self._history_lock:
             history = list(self.conversation_history)
+        if not tool_blocks:
+            # Anthropic 형식의 도구 블록은 다른 제공자가 받지 못한다.
+            # 뺀 자리에서 같은 역할이 이어지면 역할 교대를 요구하는 서버가 거절하므로 합친다.
+            kept, dropped = [], False
+            for message in history:
+                if self._has_tool_blocks(message):
+                    dropped = True
+                    continue
+                previous = kept[-1] if kept else {}
+                if (
+                    dropped
+                    and previous.get("role") == message.get("role")
+                    and isinstance(previous.get("content"), str)
+                    and isinstance(message.get("content"), str)
+                ):
+                    kept[-1] = {**previous, "content": f"{previous['content']}\n\n{message['content']}"}
+                else:
+                    kept.append(message)
+                dropped = False
+            history = kept
         cleaned_history = []
         index = 0
         while index < len(history):
@@ -810,6 +840,10 @@ class LLMProvider:
         return f"{label} {role_label} 모델이 설정되지 않았습니다. 설정에서 선택한 모델을 지정해주세요."
 
     def _get_role_target(self, role: str) -> tuple[Any, str, str]:
+        with self._config_lock:
+            return self._read_role_target(role)
+
+    def _read_role_target(self, role: str) -> tuple[Any, str, str]:
         if role == "planner":
             provider = self.planner_provider
             model = self.planner_model
@@ -917,9 +951,10 @@ class LLMProvider:
         return {}
 
     def _resolve_route(self, user_message: str, model_override: str = "") -> tuple[Any, str, str]:
-        provider = self.provider
-        model = model_override or self.model
-        client = self.client
+        with self._config_lock:
+            provider = self.provider
+            model = model_override or self.model
+            client = self.client
         if model_override or not self.router_enabled:
             return client, provider, model
         try:
@@ -988,7 +1023,7 @@ class LLMProvider:
             )
             messages = [{"role": "system", "content": system_content}]
             if include_history:
-                messages.extend(self._history_for_context())
+                messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             messages.append({"role": "user", "content": user_message})
             if save_history:
                 self.add_to_history("user", user_message)
@@ -1069,7 +1104,7 @@ class LLMProvider:
                     situation_prompt=situation_prompt,
                 ),
             }]
-            messages.extend(self._history_for_context())
+            messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             
             request_ctx = self._analyze_request(user_message)
             if skill_ctx.get("force_web_search"):
@@ -1450,7 +1485,7 @@ class LLMProvider:
                     if part
                 ),
             }]
-            messages.extend(self._history_for_context())
+            messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
@@ -2069,101 +2104,137 @@ class LLMProvider:
 _instance: LLMProvider | None = None
 _instance_lock = threading.Lock()
 
+def _build_llm_provider() -> LLMProvider:
+    try:
+        from core.config_manager import ConfigManager
+        s = dict(ConfigManager.load_settings())
+    except Exception as exc:
+        logging.debug("[LLMProvider] 설정 로드 실패, 기본 LLM 설정 사용: %s", exc)
+        s = {}
+    from core.custom_llm_providers import custom_api_key_name, normalize_custom_provider_settings
+
+    normalize_custom_provider_settings(s)
+    provider_configs = get_provider_configs(s)
+
+    def select_provider(setting_key, model_key, fallback):
+        selected = s.get(setting_key, "") or fallback
+        if selected not in provider_configs:
+            # 역할 제공자는 기본 제공자로, 기본 제공자는 groq로 돌린다.
+            selected = fallback if fallback in provider_configs else "groq"
+            s[setting_key] = selected
+            s[model_key] = ""
+        return selected
+
+    provider = select_provider("llm_provider", "llm_model", "groq")
+    planner_provider = select_provider("llm_planner_provider", "llm_planner_model", provider)
+    execution_provider = select_provider("llm_execution_provider", "llm_execution_model", provider)
+    memory_extractor_provider = select_provider(
+        "llm_memory_extractor_provider",
+        "llm_memory_extractor_model",
+        execution_provider,
+    )
+
+    def provider_key(selected):
+        if selected == "ollama":
+            return "ollama"
+        key_name = _KEY_MAP.get(selected)
+        if key_name is None and selected in provider_configs and selected not in _PROVIDER_CONFIG:
+            key_name = custom_api_key_name(selected)
+        return s.get(key_name, "") if key_name else ""
+
+    api_key = provider_key(provider)
+    planner_api_key = provider_key(planner_provider) if planner_provider != provider else ""
+    execution_api_key = provider_key(execution_provider) if execution_provider != provider else ""
+    memory_extractor_api_key = (
+        provider_key(memory_extractor_provider)
+        if memory_extractor_provider not in {provider, execution_provider}
+        else ""
+    )
+    model = s.get("llm_model", "") or ""
+    if not model and provider not in _PROVIDER_CONFIG:
+        model = provider_configs[provider].get("default_model", "") or ""
+
+    def role_model(setting_key, selected):
+        value = s.get(setting_key, "") or ""
+        if value or selected == provider:
+            return value or model
+        if selected not in _PROVIDER_CONFIG:
+            return provider_configs[selected].get("default_model", "") or ""
+        return ""
+
+    planner_model = role_model("llm_planner_model", planner_provider)
+    execution_model = role_model("llm_execution_model", execution_provider)
+    memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
+    if memory_extractor_provider != execution_provider and not memory_extractor_model:
+        memory_extractor_model = (
+            model
+            if memory_extractor_provider == provider
+            else provider_configs[memory_extractor_provider].get("default_model", "")
+        )
+
+    return LLMProvider(
+        provider=provider, api_key=api_key,
+        model=model,
+        planner_model=planner_model,
+        execution_model=execution_model,
+        planner_provider=planner_provider if planner_provider != provider else "",
+        execution_provider=execution_provider if execution_provider != provider else "",
+        planner_api_key=planner_api_key,
+        execution_api_key=execution_api_key,
+        memory_extractor_provider=memory_extractor_provider,
+        memory_extractor_model=memory_extractor_model,
+        memory_extractor_api_key=memory_extractor_api_key,
+        system_prompt=s.get("system_prompt", ""),
+        personality=s.get("personality", ""),
+        scenario=s.get("scenario", ""),
+        history_instruction=s.get("history_instruction", ""),
+        personality_examples_en=s.get("personality_examples_en", ""),
+        personality_examples_ja=s.get("personality_examples_ja", ""),
+        response_verbosity=s.get("response_verbosity", "concise"),
+        router_enabled=s.get("llm_router_enabled", False),
+        provider_configs=provider_configs,
+    )
+
+
 def get_llm_provider() -> LLMProvider:
     global _instance
     if _instance is None:
         with _instance_lock:
             if _instance is None:
-                try:
-                    from core.config_manager import ConfigManager
-                    s = dict(ConfigManager.load_settings())
-                except Exception as exc:
-                    logging.debug("[LLMProvider] 설정 로드 실패, 기본 LLM 설정 사용: %s", exc)
-                    s = {}
-                from core.custom_llm_providers import custom_api_key_name, normalize_custom_provider_settings
-
-                normalize_custom_provider_settings(s)
-                provider_configs = get_provider_configs(s)
-
-                def select_provider(setting_key, model_key, fallback):
-                    selected = s.get(setting_key, "") or fallback
-                    if selected not in provider_configs:
-                        # 역할 제공자는 기본 제공자로, 기본 제공자는 groq로 돌린다.
-                        selected = fallback if fallback in provider_configs else "groq"
-                        s[setting_key] = selected
-                        s[model_key] = ""
-                    return selected
-
-                provider = select_provider("llm_provider", "llm_model", "groq")
-                planner_provider = select_provider("llm_planner_provider", "llm_planner_model", provider)
-                execution_provider = select_provider("llm_execution_provider", "llm_execution_model", provider)
-                memory_extractor_provider = select_provider(
-                    "llm_memory_extractor_provider",
-                    "llm_memory_extractor_model",
-                    execution_provider,
-                )
-
-                def provider_key(selected):
-                    if selected == "ollama":
-                        return "ollama"
-                    key_name = _KEY_MAP.get(selected)
-                    if key_name is None and selected in provider_configs and selected not in _PROVIDER_CONFIG:
-                        key_name = custom_api_key_name(selected)
-                    return s.get(key_name, "") if key_name else ""
-
-                api_key = provider_key(provider)
-                planner_api_key = provider_key(planner_provider) if planner_provider != provider else ""
-                execution_api_key = provider_key(execution_provider) if execution_provider != provider else ""
-                memory_extractor_api_key = (
-                    provider_key(memory_extractor_provider)
-                    if memory_extractor_provider not in {provider, execution_provider}
-                    else ""
-                )
-                model = s.get("llm_model", "") or ""
-                if not model and provider not in _PROVIDER_CONFIG:
-                    model = provider_configs[provider].get("default_model", "") or ""
-
-                def role_model(setting_key, selected):
-                    value = s.get(setting_key, "") or ""
-                    if value or selected == provider:
-                        return value or model
-                    if selected not in _PROVIDER_CONFIG:
-                        return provider_configs[selected].get("default_model", "") or ""
-                    return ""
-
-                planner_model = role_model("llm_planner_model", planner_provider)
-                execution_model = role_model("llm_execution_model", execution_provider)
-                memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
-                if memory_extractor_provider != execution_provider and not memory_extractor_model:
-                    memory_extractor_model = (
-                        model
-                        if memory_extractor_provider == provider
-                        else provider_configs[memory_extractor_provider].get("default_model", "")
-                    )
-
-                _instance = LLMProvider(
-                    provider=provider, api_key=api_key,
-                    model=model,
-                    planner_model=planner_model,
-                    execution_model=execution_model,
-                    planner_provider=planner_provider if planner_provider != provider else "",
-                    execution_provider=execution_provider if execution_provider != provider else "",
-                    planner_api_key=planner_api_key,
-                    execution_api_key=execution_api_key,
-                    memory_extractor_provider=memory_extractor_provider,
-                    memory_extractor_model=memory_extractor_model,
-                    memory_extractor_api_key=memory_extractor_api_key,
-                    system_prompt=s.get("system_prompt", ""),
-                    personality=s.get("personality", ""),
-                    scenario=s.get("scenario", ""),
-                    history_instruction=s.get("history_instruction", ""),
-                    personality_examples_en=s.get("personality_examples_en", ""),
-                    personality_examples_ja=s.get("personality_examples_ja", ""),
-                    response_verbosity=s.get("response_verbosity", "concise"),
-                    router_enabled=s.get("llm_router_enabled", False),
-                    provider_configs=provider_configs,
-                )
+                _instance = _build_llm_provider()
     return _instance
+
+
+def reload_llm_provider() -> None:
+    if _instance is None:
+        return
+    with _instance_lock:
+        instance = _instance
+        if instance is None:
+            return
+        replacement = _build_llm_provider()
+
+        preserved = {
+            "conversation_history", "_history_lock", "_config_lock",
+            "_active_stream_lock", "_active_stream", "_active_stream_cancel_event",
+            "_plugin_tools", "_plugin_tool_intents",
+        }
+        clients = ("client", "planner_client", "execution_client", "memory_extractor_client")
+        config = (
+            "provider_configs", "provider", "api_key", "model", "planner_provider",
+            "planner_model", "execution_provider", "execution_model",
+            "memory_extractor_provider", "memory_extractor_model",
+        )
+        # 진행 중인 호출이 기존 기록과 스트림 상태를 계속 사용하도록 보존한다.
+        with instance._config_lock:
+            for name in config:
+                setattr(instance, name, getattr(replacement, name))
+            for name, value in replacement.__dict__.items():
+                if name not in preserved and name not in clients and name not in config:
+                    setattr(instance, name, value)
+            for name in clients:
+                setattr(instance, name, getattr(replacement, name))
+
 
 def reset_llm_provider():
     global _instance

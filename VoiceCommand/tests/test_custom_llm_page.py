@@ -174,6 +174,7 @@ class CustomLLMSettingsPageTests(unittest.TestCase):
         keys = {
             "custom_llm_providers",
             custom_api_key_name(PROVIDER_ID),
+            "llm_router_enabled",
         }
         for key in keys:
             with self.subTest(key=key):

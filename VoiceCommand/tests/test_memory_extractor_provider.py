@@ -1,3 +1,4 @@
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -14,6 +15,7 @@ class MemoryExtractorProviderTests(unittest.TestCase):
             chat=SimpleNamespace(completions=SimpleNamespace(create=create))
         )
         provider = LLMProvider.__new__(LLMProvider)
+        provider._config_lock = threading.RLock()
         provider.memory_extractor_provider = "extractor"
         provider.memory_extractor_model = "small-model"
         provider.memory_extractor_client = client

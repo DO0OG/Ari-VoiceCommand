@@ -119,6 +119,47 @@ class SettingsSecretUITests(unittest.TestCase):
         warning.assert_called_once()
         dialog.accept.assert_not_called()
 
+    def test_save_reloads_llm_provider_when_llm_settings_change(self):
+        field = Mock()
+        field.toPlainText.return_value = ""
+        field.currentData.return_value = None
+        field.value.return_value = 0
+        field.text.return_value = "1.0"
+        field.isChecked.return_value = False
+        dialog = SimpleNamespace(**dict.fromkeys((
+            "personality_input", "examples_en_input", "examples_ja_input",
+            "scenario_input", "system_input", "history_input", "verbosity_combo",
+            "mic_combo", "speaker_combo", "char_scale_slider", "char_offset_slider",
+            "theme_preset_combo", "theme_scale_input", "theme_font_input", "lang_combo",
+            "update_check_enabled", "activity_idle_checkbox", "activity_lock_checkbox",
+            "activity_quiet_checkbox", "activity_away_threshold_spin", "activity_app_checkbox",
+            "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
+            "activity_ide_long_use_checkbox",
+        ), field))
+        dialog.original_settings = {"llm_router_enabled": False}
+        dialog.update_checker = None
+        dialog._float = lambda value, default: float(value)
+        dialog._llm_page = Mock()
+        dialog._llm_page.get_values.return_value = {"llm_router_enabled": True}
+        dialog._tts_page = Mock()
+        dialog._tts_page.get_values.return_value = {}
+        dialog._agent_page = Mock()
+        dialog._agent_page.get_values.return_value = {}
+        dialog.LLM_KEYS = SettingsDialog.LLM_KEYS
+        dialog.llm_settings_changed = lambda: SettingsDialog.llm_settings_changed(dialog)
+        dialog.character_settings_changed = lambda: False
+        dialog.theme_settings_changed = lambda: False
+        dialog.accept = Mock()
+
+        with patch("ui.settings_dialog.ConfigManager.save_settings", return_value=True), \
+             patch("ui.settings_dialog.refresh_activity_monitor"), \
+             patch("ui.settings_dialog.get_language", return_value=None), \
+             patch("agent.llm_provider.reload_llm_provider") as reload_provider:
+            SettingsDialog._save(dialog)
+
+        self.assertIn("llm_router_enabled", dialog.changed_keys)
+        reload_provider.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()
