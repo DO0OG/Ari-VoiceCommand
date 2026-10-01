@@ -26,16 +26,22 @@ class _SkillInstallThread(QThread):
     done = Signal(object)
     error = Signal(str)
 
-    def __init__(self, source: str, skills_dir: str):
+    def __init__(self, source: str, skills_dir: str, skill_dir: str | None = None):
         super().__init__()
         self.source = source
         self.skills_dir = skills_dir
+        self.skill_dir = skill_dir
 
     def run(self) -> None:
         try:
             from agent.skill_installer import SkillInstaller
 
-            installed = SkillInstaller(self.skills_dir).install(self.source)
+            installer = SkillInstaller(self.skills_dir)
+            installed = (
+                installer.update(self.skill_dir)
+                if self.skill_dir is not None
+                else installer.install(self.source)
+            )
             self.done.emit(installed)
         except Exception as exc:
             self.error.emit(str(exc))
@@ -206,19 +212,44 @@ class SkillsDialog(QDialog):
         self._refresh_list()
 
     def _on_update(self) -> None:
-        from agent.skill_installer import SkillInstaller
         from agent.skill_manager import get_skill_manager
 
         name = self._selected_skill_name()
         if not name:
             return
-        ok = SkillInstaller(get_skill_manager().skills_dir).update(name)
-        if ok:
-            get_skill_manager().load_all()
+        if self._install_thread and self._install_thread.isRunning():
+            return
+        skill_manager = get_skill_manager()
+        skill = skill_manager.get_skill(name)
+        if skill is None:
+            return
+
+        progress = QProgressDialog(_("업데이트"), None, 0, 0, self)
+        progress.setLabelText(_("스킬 업데이트 중..."))
+        progress.setWindowModality(Qt.WindowModal)
+        progress.show()
+        self._install_thread = _SkillInstallThread(
+            "", skill_manager.skills_dir, skill.skill_dir
+        )
+        self._install_thread.done.connect(
+            lambda result: self._on_update_done(result, name, progress)
+        )
+        self._install_thread.error.connect(
+            lambda message: self._on_update_error(message, progress)
+        )
+        self._install_thread.start()
+
+    def _on_update_done(self, result: object, name: str, progress: QProgressDialog) -> None:
+        progress.close()
+        if result:
             self._refresh_list()
             QMessageBox.information(self, _("업데이트"), _("{name} 업데이트 완료").format(name=name))
         else:
             QMessageBox.warning(self, _("업데이트 실패"), _("설치 원본 정보가 없습니다."))
+
+    def _on_update_error(self, message: str, progress: QProgressDialog) -> None:
+        progress.close()
+        QMessageBox.warning(self, _("업데이트 실패"), message)
 
     def _on_delete(self) -> None:
         from agent.skill_manager import get_skill_manager

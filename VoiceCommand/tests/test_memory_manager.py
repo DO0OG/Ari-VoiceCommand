@@ -315,6 +315,25 @@ class MemoryManagerTests(unittest.TestCase):
                 [{"field": "name", "value": "Mina"}],
             )
 
+    def test_fact_index_uses_stored_value_and_confidence_after_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            context = UserContextManager(context_file=f"{tmp}/user_context.json")
+            context.record_fact(
+                "favorite_color", "blue", source="user", confidence=0.95, ttl_days=0
+            )
+            manager = MemoryManager.__new__(MemoryManager)
+            manager.context_manager = context
+            index = Mock()
+
+            with patch("memory.memory_manager.get_memory_index", return_value=index):
+                manager._extract_info_from_response("[FACT: favorite_color=red]")
+
+            stored = context.get_facts_snapshot()["favorite_color"]
+            self.assertEqual(stored["value"], "blue")
+            index.index_fact.assert_called_once_with(
+                "favorite_color", "blue", stored["confidence"]
+            )
+
     def test_invalid_evidence_and_sensitive_candidates_are_dropped(self):
         user_message = "나는 요리를 좋아하고 계좌번호 12345678901234를 쓴다."
         payload = (

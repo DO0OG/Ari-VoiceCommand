@@ -4140,3 +4140,9 @@ msgstr "You must complete additional verification with ElevenLabs before you can
 
 msgid "TTS 재생에 실패했습니다. 로그에서 자세한 내용을 확인하세요."
 msgstr "TTS playback failed. Check the logs for details."
+
+msgid "예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정리한 뒤 다시 시도해주세요."
+msgstr "The scheduled task limit has been reached. Remove unused tasks and try again."
+
+msgid "스킬 업데이트 중..."
+msgstr "Updating skill..."

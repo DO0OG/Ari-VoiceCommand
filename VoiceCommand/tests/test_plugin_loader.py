@@ -9,7 +9,7 @@ import zipfile
 from unittest.mock import Mock, patch
 
 
-from core.plugin_loader import PluginContext, PluginManager
+from core.plugin_loader import PluginContext, PluginInfo, PluginManager
 from i18n.translator import _
 
 
@@ -30,6 +30,32 @@ class _TempPluginManager(PluginManager):
 
 
 class PluginLoaderTests(unittest.TestCase):
+    def test_discovery_does_not_replace_loaded_plugin_cleanup_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "active_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write("PLUGIN_INFO = {}\n")
+            manager = _TempPluginManager(tmp)
+            active = PluginInfo(
+                name="active_plugin",
+                version="1.0",
+                description="active",
+                path=plugin_path,
+                loaded=True,
+                runtime_path=os.path.join(tmp, "runtime"),
+                registered_menu_actions=[{"label": "menu"}],
+                registered_commands=["command"],
+            )
+            manager._plugins = [active]
+
+            discovered = manager.discover_plugins()
+
+            self.assertEqual(discovered[0].name, active.name)
+            self.assertIs(manager.list_plugins()[0], active)
+            self.assertEqual(active.registered_menu_actions, [{"label": "menu"}])
+            self.assertEqual(active.registered_commands, ["command"])
+            self.assertEqual(active.runtime_path, os.path.join(tmp, "runtime"))
+
     def test_rejected_plugin_is_not_executed_or_asked_again_this_run(self):
         with tempfile.TemporaryDirectory() as tmp:
             plugin_path = os.path.join(tmp, "rejected_plugin.py")

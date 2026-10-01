@@ -313,6 +313,46 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertFalse(index.search("favorite_drink"))
             self.assertFalse(index.search("coffee"))
 
+    def test_optimize_memory_removes_expired_and_low_confidence_facts_from_fts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            now = datetime.now()
+            manager.context["facts"] = {
+                "expired": {
+                    "value": "stale fact",
+                    "confidence": 0.9,
+                    "base_confidence": 0.9,
+                    "updated_at": now.isoformat(),
+                    "expires_at": (now - timedelta(days=1)).isoformat(),
+                },
+                "weak": {
+                    "value": "weak fact",
+                    "confidence": 0.1,
+                    "base_confidence": 0.1,
+                    "updated_at": now.isoformat(),
+                    "expires_at": None,
+                },
+                "kept": {
+                    "value": "stable fact",
+                    "confidence": 0.9,
+                    "base_confidence": 0.9,
+                    "updated_at": now.isoformat(),
+                    "expires_at": None,
+                },
+            }
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            for key, fact in manager.context["facts"].items():
+                index.index_fact(key, fact["value"], fact["confidence"])
+
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                manager.optimize_memory()
+
+            self.assertFalse(index.search("stale", kind="fact"))
+            self.assertFalse(index.search("weak", kind="fact"))
+            self.assertTrue(index.search("stable", kind="fact"))
+
     def test_fact_conflicts_and_topic_recommendations_are_available(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "user_context.json")

@@ -713,6 +713,7 @@ class UserContextManager:
         
         # 1. 사실 신뢰도 감쇄 및 만료 정리
         facts = self.context.get("facts", {})
+        previous_fact_keys = set(facts)
         from memory.trust_engine import batch_decay
         facts = batch_decay(facts, now)
         for key in list(facts.keys()):
@@ -728,7 +729,14 @@ class UserContextManager:
             if topics[t] < 1:
                 del topics[t]
 
-        self.save_context()
+        if self.save_context():
+            removed_fact_keys = previous_fact_keys - facts.keys()
+            if removed_fact_keys:
+                from memory.memory_index import get_memory_index
+
+                memory_index = get_memory_index()
+                for key in removed_fact_keys:
+                    memory_index.delete_fact(key)
 
     # ── 유틸리티 ───────────────────────────────────────────────────────────────
 
