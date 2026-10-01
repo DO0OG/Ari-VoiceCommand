@@ -20,6 +20,13 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
         values = page.get_values()
         return values["local_decision_mode"], values["local_decision_direct_execution"]
 
+    def test_missing_local_decision_settings_default_to_fast(self):
+        page = _AgentSettingsPage({})
+
+        self.assertTrue(page.local_decision_checkbox.isChecked())
+        self.assertEqual(page.get_values()["local_decision_mode"], "fast")
+        self.assertTrue(page.get_values()["local_decision_direct_execution"])
+
     def test_saving_other_settings_keeps_the_stored_pair(self):
         self.assertEqual(self._saved("off", False), ("off", False))
         self.assertEqual(self._saved("shadow", False), ("shadow", False))

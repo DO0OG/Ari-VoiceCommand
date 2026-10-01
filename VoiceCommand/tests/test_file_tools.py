@@ -118,6 +118,38 @@ class FileToolsTests(unittest.TestCase):
             self.assertEqual(result["end_line"], 2)
             self.assertEqual(result["line_count"], 2)
 
+    def test_edit_file_preserves_cp949_and_utf8_bom(self):
+        source = "한글\r\nbefore\r\n"
+        cases = (
+            ("cp949", source.encode("cp949")),
+            ("utf-8-bom", b"\xef\xbb\xbf" + source.encode("utf-8")),
+        )
+        for name, original in cases:
+            with self.subTest(encoding=name), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "sample.txt"
+                path.write_bytes(original)
+
+                result = file_tools.edit_file(str(path), "before", "after")
+
+                expected = source.replace("before", "after")
+                if name == "cp949":
+                    expected_bytes = expected.encode("cp949")
+                else:
+                    expected_bytes = b"\xef\xbb\xbf" + expected.encode("utf-8")
+                self.assertTrue(result["replaced"])
+                self.assertEqual(path.read_bytes(), expected_bytes)
+
+    def test_edit_file_does_not_write_when_encoding_is_unknown(self):
+        for original in (b"\x81\x30invalid", b"\xef\xbb\xbf\xffinvalid"):
+            with self.subTest(original=original), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "unknown.txt"
+                path.write_bytes(original)
+
+                result = file_tools.edit_file(str(path), "invalid", "changed")
+
+                self.assertIn("error", result)
+                self.assertEqual(path.read_bytes(), original)
+
 
 if __name__ == "__main__":
     unittest.main()

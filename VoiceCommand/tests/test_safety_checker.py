@@ -56,6 +56,19 @@ class SafetyCheckerTests(unittest.TestCase):
             DangerLevel.CAUTION,
         )
 
+    def test_aliased_python_delete_calls_are_dangerous(self):
+        snippets = (
+            "from pathlib import Path as P\nP('sample').unlink()",
+            "import pathlib as pl\npl.Path('sample').rmdir()",
+            "import os as filesystem\nfilesystem.unlink('sample')",
+            "from os import unlink as remove_file\nremove_file('sample')",
+            "import shutil as fs\nfs.rmtree('sample')",
+            "from shutil import rmtree as remove_tree\nremove_tree('sample')",
+        )
+        for code in snippets:
+            with self.subTest(code=code):
+                self.assertEqual(self.checker.check_python(code).level, DangerLevel.DANGEROUS)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -531,8 +531,27 @@ class AICommandTests(unittest.TestCase):
                     response = command.run_interaction(text)
 
                 self.assertEqual(len(assistant.followups), 1)
-                self.assertEqual(assistant.recorded_results, [])
+                self.assertEqual(assistant.recorded_results[0][1], [result])
+                self.assertEqual(assistant.recorded_results[0][2], "")
                 self.assertIn("후속 설명 응답입니다.", response)
+
+    def test_none_tool_result_is_recorded_as_completed_without_value(self):
+        assistant = _ToolCallAssistant([{
+            "id": "tool_1",
+            "name": "take_screenshot",
+            "arguments": {},
+        }])
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: None
+        command._get_skill_context = lambda text: {"skills": []}
+        command._dispatch["take_screenshot"] = lambda args: None
+
+        command.run_interaction("스크린샷을 저장해줘")
+
+        self.assertEqual(
+            assistant.recorded_results[0][1],
+            [_("작업은 완료됐지만 확인 가능한 결과를 받지 못했습니다.")],
+        )
 
     def test_tool_exception_result_instructs_followup_not_to_claim_success(self):
         command = AICommand(_FakeAssistant(), lambda message: None, {"enabled": False})
@@ -579,7 +598,7 @@ class AICommandTests(unittest.TestCase):
             response = command.run_interaction("앱을 열고 화면도 저장해줘")
 
         self.assertEqual(len(assistant.followups), 1)
-        self.assertEqual(assistant.recorded_results, [])
+        self.assertEqual(assistant.recorded_results[0][1], ["앱", "shot.png"])
         self.assertIn("후속 설명 응답입니다.", response)
 
     def test_explanation_request_uses_followup_for_simple_tool(self):
@@ -597,7 +616,7 @@ class AICommandTests(unittest.TestCase):
             response = command.run_interaction("메모장을 열고 실행 결과를 설명해줘")
 
         self.assertEqual(len(assistant.followups), 1)
-        self.assertEqual(assistant.recorded_results, [])
+        self.assertEqual(assistant.recorded_results[0][1], ["메모장"])
         self.assertIn("후속 설명 응답입니다.", response)
 
     def test_weather_result_uses_local_response_when_it_is_usable(self):
@@ -632,7 +651,10 @@ class AICommandTests(unittest.TestCase):
             response = command.run_interaction("메모장 창으로 전환해줘")
 
         self.assertEqual(len(assistant.followups), 1)
-        self.assertEqual(assistant.recorded_results, [])
+        self.assertEqual(
+            assistant.recorded_results[0][1],
+            ['{"focused": false, "title": "메모장"}'],
+        )
         self.assertIn("후속 설명 응답입니다.", response)
 
     def test_disabling_tool_followup_policy_keeps_llm_followup(self):
@@ -650,7 +672,7 @@ class AICommandTests(unittest.TestCase):
             response = command.run_interaction("메모장을 열어줘")
 
         self.assertEqual(len(assistant.followups), 1)
-        self.assertEqual(assistant.recorded_results, [])
+        self.assertEqual(assistant.recorded_results[0][1], ["메모장"])
         self.assertIn("후속 설명 응답입니다.", response)
 
     def test_run_interaction_passes_stream_callback_when_supported(self):

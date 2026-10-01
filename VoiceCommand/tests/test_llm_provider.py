@@ -465,6 +465,19 @@ class LLMProviderTests(unittest.TestCase):
         provider.conversation_history.pop()
         self.assertEqual(len(provider._history_for_context(max_tokens=1)), 2)
 
+    def test_context_history_drops_tool_use_without_result(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.add_to_history("user", "before")
+        provider.add_to_history("assistant", [{
+            "type": "tool_use", "id": "orphan", "name": "read_file", "input": {},
+        }])
+        provider.add_to_history("user", "after")
+
+        self.assertEqual(
+            provider._history_for_context(),
+            [{"role": "user", "content": "before"}, {"role": "user", "content": "after"}],
+        )
+
     def test_chat_with_tools_streams_content_before_stream_finishes(self):
         provider = self._stream_provider()
         streamed = []
@@ -696,6 +709,21 @@ class LLMProviderTests(unittest.TestCase):
         })
         self.assertEqual(history[-1], {"role": "assistant", "content": "앱을 실행했습니다."})
         provider.client.messages.create.assert_not_called()
+
+    def test_none_tool_result_records_completion_text(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        provider.client = Mock()
+        calls = [{"id": "call-1", "name": "take_screenshot", "arguments": {}}]
+        provider.add_to_history("assistant", [{
+            "type": "tool_use", "id": "call-1", "name": "take_screenshot", "input": {},
+        }])
+
+        provider.record_tool_result(calls, [None], "")
+
+        self.assertEqual(
+            provider._history_snapshot()[-1]["content"][0]["content"],
+            _("도구가 완료됐지만 반환값이 없습니다."),
+        )
 
     def test_anthropic_feed_failure_is_reported_and_retry_keeps_one_result_turn(self):
         provider = LLMProvider(provider="anthropic", model="test")

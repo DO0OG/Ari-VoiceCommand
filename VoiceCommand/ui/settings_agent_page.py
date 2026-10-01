@@ -176,15 +176,15 @@ class _AgentSettingsPage(QWidget):
     def _build_local_decision_group(self, settings: dict) -> QGroupBox:
         group = QGroupBox(_("빠른 로컬 처리"))
         box = QVBoxLayout(group)
-        mode = settings.get("local_decision_mode", "off")
+        mode = settings.get("local_decision_mode", "fast")
         if mode not in ("off", "shadow", "fast"):
             mode = "off"
-        direct = settings.get("local_decision_direct_execution") is True
+        direct = settings.get("local_decision_direct_execution", mode == "fast") is True
 
         self.local_decision_checkbox = QCheckBox(_("간단한 명령을 로컬에서 바로 처리"))
         self.local_decision_checkbox.setChecked(mode == "fast" and direct)
         box.addWidget(self.local_decision_checkbox)
-        note = QLabel(_("사람 검수와 실사용 검증을 마치기 전까지 기본값은 꺼짐입니다."))
+        note = QLabel(_("빠른 처리는 기본으로 켜져 있습니다. 진단용 기록 모드는 별도로 선택할 수 있습니다."))
         note.setWordWrap(True)
         box.addWidget(note)
 
@@ -242,7 +242,7 @@ class _AgentSettingsPage(QWidget):
         self.timeout_label.setText(_("{seconds}초").format(seconds=int(value)))
 
     def get_values(self) -> dict:
-        mode = self.local_decision_mode.currentData() or "off"
+        mode = self.local_decision_mode.currentData() or "fast"
         # 기준은 체크박스다. 저장된 fast + direct=false 조합이 다른 설정을 저장했다는
         # 이유만으로 직접 실행으로 바뀌면 안 된다.
         direct = mode == "fast" and self.local_decision_checkbox.isChecked()

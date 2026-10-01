@@ -17,8 +17,8 @@
     "take_screenshot"
   ],
   "runtime_policy_default": {
-    "mode": "off",
-    "direct_execution": false
+    "mode": "fast",
+    "direct_execution": true
   },
   "training": {
     "dataset_version": "decision-dataset-v2",
@@ -86,8 +86,8 @@
   },
   "resource_usage": {
     "model_resource_bytes": 1322113,
-    "additional_steady_rss_bytes": 14102528,
-    "warm_p95_ms": 0.1725300001680807,
+    "additional_steady_rss_bytes": 14446592,
+    "warm_p95_ms": 0.1014199999417542,
     "gpu_used": false
   },
   "review": {
@@ -114,10 +114,10 @@
     "candidate_snapshot_sha256": "a2bc0b80a2052cdb9fe727f5c1ed0763b83c077255747f221f938b71edcd9ed2",
     "candidate_policy_sha256": "f54ada5fc53db8de73313e377db637da9672f2f3e9bffdd52553647d4bbbca20",
     "parser_sha256": "23a5432b4d89ad17ab32590cb5f05a7ff79818cb30a7cb2a08e02ca6664f0da2",
-    "engine_sha256": "78b6f2e5b4741bc3f0dff4ebcf92c9a3e7d3dc830b776d3a6d8237c4c11b10a5",
+    "engine_sha256": "69153c45a1872c46021231d33f354bf70f6e4f9f758a22cfa5d4ac9de52349ba",
     "router_sha256": "282d93753f36c0fd45774960b229c4fb6d1e83064290fa76ce892d742d255054",
-    "runtime_settings_sha256": "8aa330291b6c235ac02776840e0d0d71a91671dc151d7e60f85c8bd26bd01ef9",
-    "settings_schema_sha256": "fd160e608d3074cb1c8576db720b01defe560d6ca26ac7fb977becbff93c70e1",
+    "runtime_settings_sha256": "6387f9f5fadbed77d0cea89686e3fc9252915d74e811c53d8757413734b4b9cd",
+    "settings_schema_sha256": "d250ee2cf993e7a74e501a47ce6ebcba420c877443779f79a291f97030370950",
     "split_manifest_sha256": "b92011b21fa1c967e5068784364c814800eb16861acc23f80bf5ca9f35c64c58",
     "split_baseline_manifest_sha256": "439bbad2281994370b92ab94f7153857c0726e7de37d56d1f2b00f291615fc39",
     "split_baseline_commit": "ac2d4f9140a981035c46865b51dccf385d470092",

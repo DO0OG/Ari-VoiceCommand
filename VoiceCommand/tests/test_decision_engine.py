@@ -443,7 +443,7 @@ class DecisionEngineTests(unittest.TestCase):
         local.choice.assert_not_called()
         self.assertIsNone(local.last_decision)
 
-    def test_missing_mode_defaults_to_off(self):
+    def test_missing_mode_defaults_to_fast(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             engine.UNKNOWN, {engine.UNKNOWN: 1.0}, 1.0, 1.0, "linear", 1.0
@@ -461,8 +461,8 @@ class DecisionEngineTests(unittest.TestCase):
 
         with patch("core.config_manager.ConfigManager.get", side_effect=get):
             self.assertIsNone(local.try_fast_path("hello"))
-        self.assertIsNone(local.last_decision)
-        local.choice.assert_not_called()
+        self.assertIs(local.last_decision, decision)
+        local.choice.assert_called_once_with("hello")
 
     def test_non_finite_confidence_and_margin_are_rejected(self):
         engine = _engine_module()
@@ -538,14 +538,14 @@ class DecisionEngineTests(unittest.TestCase):
         self.assertEqual(events[0], ("chat", "hello", True))
         self.assertEqual(imported, [])
 
-    def test_ai_command_default_and_missing_mode_preserve_chat_for_direct_candidate(self):
+    def test_shadow_and_off_preserve_chat_while_missing_mode_runs_fast(self):
         engine = _engine_module()
         decision = engine.DecisionResult(
             "get_current_time", {"get_current_time": 0.99}, 0.99, 0.80, "linear", 1.0
         )
 
-        # 기본값과 누락 상태에서는 기존 대화 경로를 유지한다.
-        for mode_setting in ("shadow", None):
+        # 진단·끄기 모드는 대화 경로를 유지하고, 설정 누락은 fast 기본값을 따른다.
+        for mode_setting in ("shadow", "off", None):
             with self.subTest(mode_setting=mode_setting):
                 events = []
 
@@ -559,7 +559,7 @@ class DecisionEngineTests(unittest.TestCase):
                 local = engine.LocalDecisionEngine("unused")
                 local.choice = Mock(return_value=decision)
                 command._decision_engine = local
-                dispatch = Mock()
+                dispatch = Mock(return_value="12:00")
                 command._dispatch["get_current_time"] = dispatch
                 values = {
                     "local_decision_engine_enabled": True,
@@ -578,16 +578,22 @@ class DecisionEngineTests(unittest.TestCase):
                         with patch("core.VoiceCommand.emit_plugin_event"):
                             result = command.run_interaction("what time is it")
 
-                self.assertEqual(result, "ordinary chat response")
-                self.assertEqual(events[0], ("chat", "what time is it", True))
                 if mode_setting is None:
-                    # 모드가 없으면 꺼짐이므로 점수를 전혀 매기지 않는다.
-                    self.assertIsNone(local.last_decision)
-                    local.choice.assert_not_called()
-                else:
+                    self.assertEqual(result, "12:00")
+                    self.assertEqual(events, [])
                     self.assertIs(local.last_decision, decision)
                     local.choice.assert_called_once_with("what time is it")
-                dispatch.assert_not_called()
+                    dispatch.assert_called_once_with({})
+                else:
+                    self.assertEqual(result, "ordinary chat response")
+                    self.assertEqual(events[0], ("chat", "what time is it", True))
+                    if mode_setting == "off":
+                        self.assertIsNone(local.last_decision)
+                        local.choice.assert_not_called()
+                    else:
+                        self.assertIs(local.last_decision, decision)
+                        local.choice.assert_called_once_with("what time is it")
+                    dispatch.assert_not_called()
 
     def test_ai_command_high_risk_prediction_uses_chat_and_existing_safety_handler(self):
         engine = _engine_module()
@@ -705,10 +711,12 @@ class DecisionEngineTests(unittest.TestCase):
 
         template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
         template = json.loads(template_path.read_text(encoding="utf-8"))
-        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "off")
-        self.assertEqual(template["local_decision_mode"], "off")
-        self.assertEqual(template["local_decision_settings_version"], 2)
-        self.assertEqual(DEFAULT_SETTINGS["local_decision_settings_version"], 2)
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_mode"], "fast")
+        self.assertEqual(template["local_decision_mode"], "fast")
+        self.assertTrue(DEFAULT_SETTINGS["local_decision_direct_execution"])
+        self.assertTrue(template["local_decision_direct_execution"])
+        self.assertEqual(template["local_decision_settings_version"], 3)
+        self.assertEqual(DEFAULT_SETTINGS["local_decision_settings_version"], 3)
         for key in (
             "local_decision_engine_enabled",
             "local_decision_backend",

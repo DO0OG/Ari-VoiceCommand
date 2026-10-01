@@ -3,6 +3,7 @@
 AI가 생성한 코드/명령/URL의 위험 수준을 분류한다.
 패턴은 모듈 로드 시 한 번만 컴파일된다.
 """
+import ast
 import re
 import threading
 from enum import Enum
@@ -92,6 +93,77 @@ def _scan(rules: List[_CompiledRule], text: str) -> List[str]:
     return [desc for pattern, desc in rules if pattern.search(text)]
 
 
+def _python_contains_delete_call(code: str) -> bool:
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, TypeError, ValueError):
+        return False
+
+    os_modules = {"os"}
+    shutil_modules = {"shutil"}
+    pathlib_modules = {"pathlib"}
+    path_names = {"Path"}
+    os_functions = set()
+    shutil_functions = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "os":
+                    os_modules.add(alias.asname or alias.name)
+                elif alias.name == "shutil":
+                    shutil_modules.add(alias.asname or alias.name)
+                elif alias.name == "pathlib":
+                    pathlib_modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module == "pathlib":
+                path_names.update(
+                    alias.asname or alias.name
+                    for alias in node.names
+                    if alias.name == "Path"
+                )
+            elif node.module == "os":
+                os_functions.update(
+                    alias.asname or alias.name
+                    for alias in node.names
+                    if alias.name in {"remove", "unlink", "rmdir"}
+                )
+            elif node.module == "shutil":
+                shutil_functions.update(
+                    alias.asname or alias.name
+                    for alias in node.names
+                    if alias.name == "rmtree"
+                )
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        if isinstance(function, ast.Name):
+            if function.id in os_functions or function.id in shutil_functions:
+                return True
+            continue
+        if not isinstance(function, ast.Attribute):
+            continue
+        target = function.value
+        if function.attr in {"remove", "unlink", "rmdir"}:
+            if isinstance(target, ast.Name) and target.id in os_modules:
+                return True
+            if function.attr in {"unlink", "rmdir"} and isinstance(target, ast.Call):
+                constructor = target.func
+                if isinstance(constructor, ast.Name) and constructor.id in path_names:
+                    return True
+                if (
+                    isinstance(constructor, ast.Attribute)
+                    and constructor.attr == "Path"
+                    and isinstance(constructor.value, ast.Name)
+                    and constructor.value.id in pathlib_modules
+                ):
+                    return True
+        if function.attr == "rmtree" and isinstance(target, ast.Name) and target.id in shutil_modules:
+            return True
+    return False
+
+
 def _translate_matches(items: List[str]) -> List[str]:
     return [_(item) for item in items]
 
@@ -112,6 +184,8 @@ class SafetyChecker:
         if cached is not None:
             return cached
         matched = _scan(_DANGEROUS_PYTHON, code)
+        if _python_contains_delete_call(code) and "파일/폴더 삭제" not in matched:
+            matched.append("파일/폴더 삭제")
         caution_from_trust: List[str] = []
         if str(trust_level or "").casefold() == "verified":
             trusted_ctypes = {"저수준 시스템 접근", "ctypes 저수준 DLL 로드", "ctypes 포인터 캐스팅"}

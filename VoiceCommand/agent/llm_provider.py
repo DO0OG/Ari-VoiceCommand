@@ -462,6 +462,45 @@ class LLMProvider:
         budget = int(max_tokens or self.max_context_tokens or 8000)
         with self._history_lock:
             history = list(self.conversation_history)
+        cleaned_history = []
+        index = 0
+        while index < len(history):
+            message = history[index]
+            content = message.get("content")
+            tool_uses = (
+                [block for block in content if isinstance(block, dict) and block.get("type") == "tool_use"]
+                if message.get("role") == "assistant" and isinstance(content, list)
+                else []
+            )
+            if tool_uses:
+                result_message = history[index + 1] if index + 1 < len(history) else {}
+                result_content = result_message.get("content")
+                tool_results = (
+                    [block for block in result_content if isinstance(block, dict) and block.get("type") == "tool_result"]
+                    if result_message.get("role") == "user" and isinstance(result_content, list)
+                    else []
+                )
+                use_ids = [block.get("id") for block in tool_uses]
+                result_ids = [block.get("tool_use_id") for block in tool_results]
+                if (
+                    use_ids
+                    and None not in use_ids
+                    and len(use_ids) == len(set(use_ids))
+                    and use_ids == result_ids
+                ):
+                    cleaned_history.extend((message, result_message))
+                    index += 2
+                else:
+                    index += 1
+                    if index < len(history) and self._is_tool_result_message(history[index]):
+                        index += 1
+                continue
+            if self._is_tool_result_message(message):
+                index += 1
+                continue
+            cleaned_history.append(message)
+            index += 1
+        history = cleaned_history
         selected: list[dict] = []
         used = 0
         while history:
@@ -1434,6 +1473,10 @@ class LLMProvider:
             self._log_provider_exception(logging.error, "feed_tool_result 오류", provider, e)
             return self._error_response(e) if self._is_custom_provider(provider) else f"도구 결과 처리 실패: {e}"
 
+    @staticmethod
+    def _tool_result_text(result) -> str:
+        return _("도구가 완료됐지만 반환값이 없습니다.") if result is None else str(result)
+
     def record_tool_result(self, tool_calls: list, results: list, response: str) -> None:
         """호출 없이 도구 결과와 로컬 응답을 대화 이력에 기록한다."""
         if not tool_calls or len(tool_calls) != len(results):
@@ -1456,7 +1499,7 @@ class LLMProvider:
             if previous.get("role") != "assistant" or actual != expected:
                 raise ValueError("Tool results do not match the preceding assistant tool-use turn")
             result_content = [
-                {"type": "tool_result", "tool_use_id": call["id"], "content": str(result)}
+                {"type": "tool_result", "tool_use_id": call["id"], "content": self._tool_result_text(result)}
                 for call, result in zip(tool_calls, results)
             ]
             self.add_to_history("user", result_content)
@@ -1533,7 +1576,7 @@ class LLMProvider:
         try:
             if not tool_calls or len(tool_calls) != len(results):
                 raise ValueError("Every tool call must have exactly one result")
-            results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": str(r)} for tc, r in zip(tool_calls, results)]
+            results_content = [{"type": "tool_result", "tool_use_id": tc["id"], "content": self._tool_result_text(result)} for tc, result in zip(tool_calls, results)]
             with self._history_lock:
                 history = self._history_snapshot()
                 result_message = {"role": "user", "content": results_content}

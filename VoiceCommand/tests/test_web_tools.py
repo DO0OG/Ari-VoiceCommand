@@ -39,6 +39,21 @@ class WebToolsTests(unittest.TestCase):
 
         self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
 
+    def test_wait_for_download_stability_clock_restarts_only_when_size_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "download.bin")
+            with open(path, "wb") as handle:
+                handle.write(b"x")
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+
+            with patch.object(web_tools.time, "time", side_effect=(0, 0, 0, 0.5, 0.5, 1, 1, 1.5, 1.5, 2.1, 2.1)), \
+                 patch.object(web_tools.time, "sleep"), \
+                 patch.object(web_tools.os.path, "getsize", side_effect=(1, 1, 2, 2, 2)):
+                result = browser.wait_for_download(timeout=10, stable_seconds=1)
+
+        self.assertEqual(result, path)
+
     def test_create_search_client_prefers_ddgs_package_name(self):
         class _Client:
             def __enter__(self):
