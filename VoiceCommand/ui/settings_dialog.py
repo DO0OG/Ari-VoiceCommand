@@ -23,7 +23,7 @@ from core.custom_llm_providers import is_custom_secret_key
 from i18n.translator import _, set_language, get_language
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
-    TAB_STYLE, INPUT_STYLE, SCROLLBAR_STYLE,
+    TAB_STYLE, INPUT_STYLE, scrollbar_style,
     available_theme_presets, secondary_btn_style, theme_dir, load_theme_palette,
 )
 from ui.theme_editor import ThemeEditorDialog
@@ -220,7 +220,7 @@ class SettingsDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setStyleSheet(scrollbar_style())
         scroll.setWidget(widget)
         return scroll
 

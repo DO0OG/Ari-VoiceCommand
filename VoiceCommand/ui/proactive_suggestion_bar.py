@@ -3,7 +3,7 @@ from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout
 from ui.theme import (
     FONT_KO, FONT_SIZE_SMALL, COLOR_PRIMARY, COLOR_MUTED,
-    COLOR_BG_SUGGESTION, COLOR_BG_CHIP_PRIMARY, SUGGESTION_REFRESH,
+    COLOR_BG_SUGGESTION, COLOR_BG_CHIP_PRIMARY,
 )
 from ui import theme as theme_module
 from i18n.translator import _
@@ -139,16 +139,20 @@ class ProactiveSuggestionBar(QFrame):
         self._refresh_suggestions()
 
     def start_timer(self) -> None:
-        self._refresh_timer.start(SUGGESTION_REFRESH)
+        self._refresh_timer.start(theme_module.SUGGESTION_REFRESH)
 
     def stop_timer(self) -> None:
         self._refresh_timer.stop()
 
     def refresh_theme(self) -> None:
+        timer_active = self._refresh_timer.isActive()
+        self._refresh_timer.setInterval(theme_module.SUGGESTION_REFRESH)
         self.setStyleSheet(f"""
             QFrame {{ background: {theme_module.COLOR_BG_SUGGESTION};
                       border-bottom: 1px solid rgba(74,144,226,40); }}
         """)
+        if timer_active:
+            self._refresh_timer.start()
         self._refresh_suggestions(force=True)
 
 

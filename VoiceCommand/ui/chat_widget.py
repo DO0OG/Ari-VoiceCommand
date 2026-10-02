@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QStyle, QVBoxLayout, QWidget
 from ui.common import clear_layout
@@ -27,6 +27,10 @@ class ChatWidget(QFrame):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.history = []
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(80)
+        self._resize_timer.timeout.connect(self.render_history)
         self.setFrameStyle(QFrame.StyledPanel)
         self.setStyleSheet("QFrame { background-color: transparent; border: none; }")
         lay = QVBoxLayout(self)
@@ -72,8 +76,17 @@ class ChatWidget(QFrame):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if self.history and event.size().width() != event.oldSize().width():
-            self.render_history()
+        if (
+            self.history
+            and event.size().width() != event.oldSize().width()
+            and not self._resize_timer.isActive()
+        ):
+            # 끄는 동안에도 간격마다 한 번은 다시 그려 말풍선이 잘린 채 남지 않게 한다.
+            self._resize_timer.start()
+
+    def closeEvent(self, event) -> None:
+        self._resize_timer.stop()
+        super().closeEvent(event)
 
     def _bubble_max_width(self) -> int:
         layout = self.layout()

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication, QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
@@ -207,6 +208,11 @@ class TextInterfaceStreamingTests(unittest.TestCase):
 
         def assert_bubble_fits():
             self._app.processEvents()
+            # 폭 변경에 따른 다시 그리기는 타이머로 모으므로, 대기 중이면 바로 실행한다.
+            if widget._resize_timer.isActive():
+                widget._resize_timer.stop()
+                widget.render_history()
+                self._app.processEvents()
             widget.layout().activate()
             row_widget = widget.layout().itemAt(0).widget()
             row_layout = row_widget.layout()
@@ -299,6 +305,54 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         self.assertTrue(old_row.isHidden())
         new_texts = [label.text() for label in widget.layout().itemAt(1).widget().findChildren(QLabel)]
         self.assertTrue(any("스트리밍 응답" in text for text in new_texts), new_texts)
+
+    def test_chat_widget_debounces_rerender_during_resize(self):
+        widget = ChatWidget()
+        widget.add_message("resize test", is_user=True)
+        widget.show()
+        self._app.processEvents()
+
+        with patch.object(widget, "render_history", wraps=widget.render_history) as render:
+            widget._resize_timer.timeout.disconnect()
+            widget._resize_timer.timeout.connect(widget.render_history)
+            for width in (361, 362, 363, 364):
+                widget.resize(width, 300)
+            QTest.qWait(120)
+            self.assertEqual(render.call_count, 1)
+
+        widget.close()
+
+    def test_status_summary_keeps_long_text_in_tooltip(self):
+        with patch("ui.text_interface.get_context_manager", return_value=None):
+            interface = TextInterface()
+        self.addCleanup(interface.close)
+        self.addCleanup(interface._status_timer.stop)
+        self.addCleanup(interface.suggestion_bar.stop_timer)
+        context_manager = Mock()
+        context_manager.context = {"conversation_topics": {"긴 기억 상태 문구 " * 100: 1}}
+        context_manager.get_predicted_next_commands.return_value = []
+        context_manager.get_top_preferences.return_value = []
+        interface.context_manager = context_manager
+
+        interface.refresh_status_panel()
+
+        self.assertEqual(interface.status_summary.minimumWidth(), 0)
+        self.assertIn("긴 기억 상태 문구", interface.status_summary.toolTip())
+        self.assertEqual(interface.status_summary.text(), interface.status_summary.toolTip())
+
+    def test_refresh_theme_reapplies_current_scrollbar_style(self):
+        with patch("ui.text_interface.get_context_manager", return_value=None):
+            interface = TextInterface()
+        self.addCleanup(interface.close)
+        with (
+            patch.object(theme_module, "COLOR_BG_INPUT", "#123456"),
+            patch.object(theme_module, "COLOR_BORDER_INPUT", "#abcdef"),
+        ):
+            interface.refresh_theme()
+            self.addCleanup(interface._status_timer.stop)
+            self.addCleanup(interface.suggestion_bar.stop_timer)
+            self.assertIn("#123456", interface.scroll_area.styleSheet())
+            self.assertIn("#abcdef", interface.scroll_area.styleSheet())
 
     def test_scheduler_task_row_wraps_long_text_labels(self):
         task = ScheduledTask(

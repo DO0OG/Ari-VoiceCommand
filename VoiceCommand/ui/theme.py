@@ -259,7 +259,8 @@ STATUS_REFRESH = 5_000
 DASHBOARD_AUTO_HIDE = 5_000
 TEMP_STATUS_DURATION = 4_000
 
-SCROLLBAR_STYLE = f"""
+def scrollbar_style() -> str:
+    return f"""
     QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{ border: none; background: {COLOR_BG_INPUT};
                           width: 8px; border-radius: 4px; }}
@@ -268,7 +269,8 @@ SCROLLBAR_STYLE = f"""
     QScrollBar::sub-line:vertical {{ border: none; background: none; }}
 """
 
-SCROLLBAR_THIN_STYLE = f"""
+def scrollbar_thin_style() -> str:
+    return f"""
     QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{ border: none; background: {COLOR_BG_INPUT};
                           width: 7px; border-radius: 3px; }}
