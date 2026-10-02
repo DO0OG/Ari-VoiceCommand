@@ -21,6 +21,7 @@ from agent.execution_analysis import (
     analyze_failure,
     classify_failure_message,
     extract_artifacts,
+    extract_developer_result_paths,
     extract_step_targets,
     is_read_only_step_content,
     mutates_runtime_state,
@@ -1007,7 +1008,7 @@ class ExecutionEngine:
         exec_result = getattr(sr, "exec_result", None)
         content = getattr(step, "content", "") or ""
         output = getattr(exec_result, "output", "") or ""
-        for path in self._extract_developer_result_paths(output):
+        for path in extract_developer_result_paths(output, os.getcwd()):
             if not self.planner.is_allowed_developer_path(
                 path, goal=goal, context=context
             ):
@@ -1028,8 +1029,8 @@ class ExecutionEngine:
             exec_result = getattr(sr, "exec_result", None)
             content = getattr(step, "content", "") or ""
             output = getattr(exec_result, "output", "") or ""
-            for path in self._extract_developer_result_paths(
-                "\n".join([content, output])
+            for path in extract_developer_result_paths(
+                "\n".join([content, output]), os.getcwd()
             ):
                 if not self.planner.is_allowed_developer_path(
                     path, goal=goal, context=None
@@ -1038,51 +1039,6 @@ class ExecutionEngine:
                         f"허용 범위를 벗어난 파일/경로가 선택되어 작업을 완료로 볼 수 없습니다: {path}"
                     )
         return ""
-
-    def _extract_developer_result_paths(self, text: str) -> List[str]:
-        candidates: List[str] = []
-        normalized_repo_root = (
-            os.path.abspath(os.getcwd()).replace("\\", "/").lower()
-        )
-
-        def add_candidate(value: str) -> None:
-            if not value:
-                return
-            normalized = str(value).strip().strip('"').strip("'").replace("\\", "/")
-            if not normalized:
-                return
-            lowered = normalized.lower().lstrip("./")
-            if re.match(r"^[a-z]:/", lowered):
-                repo_prefix = normalized_repo_root + "/"
-                if lowered.startswith(repo_prefix):
-                    lowered = lowered[len(repo_prefix):]
-            if lowered and lowered not in candidates:
-                candidates.append(lowered)
-
-        def visit(value) -> None:
-            if isinstance(value, str):
-                for match in re.findall(
-                    r"(?:VoiceCommand|docs|tests|market|supabase|\.github|\.claude|\.idea)"
-                    r"[/\\][A-Za-z0-9_./\\-]+",
-                    value,
-                    flags=re.IGNORECASE,
-                ):
-                    add_candidate(match)
-            elif isinstance(value, dict):
-                for nested in value.values():
-                    visit(nested)
-            elif isinstance(value, list):
-                for nested in value:
-                    visit(nested)
-
-        try:
-            payload = json.loads(text)
-        except Exception:
-            payload = None
-        if payload is not None:
-            visit(payload)
-        visit(text)
-        return candidates
 
     def _contains_invalid_developer_validation(self, content: str) -> bool:
         normalized = (content or "").lower().replace("\\", "/")

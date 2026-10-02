@@ -10,6 +10,7 @@ from agent.execution_analysis import (
     describes_storage_action,
     existing_paths,
     extract_artifacts,
+    extract_developer_result_paths,
     extract_step_targets,
     is_read_only_step_content,
 )
@@ -55,6 +56,13 @@ class ExecutionAnalysisTests(unittest.TestCase):
         self.assertIn("메모장", targets["windows"])
         self.assertIn("메모장 저장", targets["goal_hints"])
         self.assertIn("example.com", targets["domains"])
+
+    def test_extract_developer_result_paths_lowercases_and_dedupes(self):
+        text = '{"saved": "VoiceCommand\\agent\\Foo.py", "again": "voicecommand/agent/foo.py", "doc": ["docs/A.md"]}'
+
+        paths = extract_developer_result_paths(text, os.getcwd())
+
+        self.assertEqual(paths, ["voicecommand/agent/foo.py", "docs/a.md"])
 
 
 if __name__ == "__main__":

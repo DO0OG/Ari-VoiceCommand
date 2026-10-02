@@ -694,17 +694,6 @@ class _LLMSettingsPage(QWidget):
 
     # ── 공개 인터페이스 ────────────────────────────────────────────────────────
 
-    def apply_ollama_result(self, base_url: str, installed_models: list[str]):
-        """Ollama 설치 완료 후 SettingsDialog에서 호출."""
-        self._set_combo(self.llm_provider_combo, "ollama")
-        self.ollama_url_input.setText(base_url or "http://localhost:11434/v1")
-        if installed_models and not self.llm_model_input.text().strip():
-            self.llm_model_input.setText(installed_models[0])
-            model_input = self._llm_model_inputs.get("ollama")
-            if model_input and not model_input.text().strip():
-                model_input.setText(installed_models[0])
-        self._on_llm_changed()
-
     def get_values(self) -> dict:
         """현재 LLM 설정 값을 dict로 반환."""
         llm_keys = {}

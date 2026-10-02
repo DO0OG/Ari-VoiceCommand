@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import logging
 import math
 import os
 import threading
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 import numpy as np
@@ -23,7 +22,6 @@ _LOCAL_MODEL = (
     "tokenizer.json",
     384,
 )
-_EMBED_DIM_FALLBACK = 64
 _SYMLINK_HOP_LIMIT = 8
 log = logging.getLogger(__name__)
 
@@ -78,9 +76,6 @@ class Embedder:
             return ConfigManager.get("embedding_remote_enabled", False) is True
         except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
             return False
-
-    def _try_sentence_transformers(self) -> bool:
-        return False
 
     def _model_cache_dir(self) -> str:
         try:
@@ -141,9 +136,6 @@ class Embedder:
         if not math.isfinite(seconds) or seconds <= 0:
             return default
         return seconds
-
-    def _try_gemini(self) -> bool:
-        return False
 
     def _get_api_key(self, key: str) -> str:
         try:
@@ -289,20 +281,6 @@ class Embedder:
             log.debug("[Embedder] ONNX embed 실패: %s", exc)
             return None
 
-    def embed_batch(self, texts: list[str]) -> list[Optional[np.ndarray]]:
-        if self.backend == "onnx" and self._session is None:
-            self._start_local_load()
-            return [None] * len(texts)
-        return [self.embed(text) for text in texts]
-
-    def _fallback_embed(self, text: str) -> np.ndarray:
-        vector = np.zeros(_EMBED_DIM_FALLBACK, dtype=float)
-        for token in text.lower().split():
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
-            idx = int.from_bytes(digest[:4], "big") % _EMBED_DIM_FALLBACK
-            vector[idx] += 1.0
-        return vector
-
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         return _cosine_similarity(a, b)
@@ -321,22 +299,8 @@ class Embedder:
         threading.Thread(target=_worker, daemon=True, name="AriEmbedderWarmup").start()
 
 
-class CrossEncoderReranker:
-    def __init__(self):
-        self._model = None
-        self._try_load()
-
-    def _try_load(self):
-        self._model = None
-
-    def rerank(self, query: str, candidates: list[tuple[float, Any]]) -> list[tuple[float, Any]]:
-        return candidates
-
-
 _embedder: Optional[Embedder] = None
-_reranker: Optional[CrossEncoderReranker] = None
 _embedder_lock = threading.Lock()
-_reranker_lock = threading.Lock()
 
 
 def get_embedder() -> Embedder:
@@ -352,15 +316,6 @@ def reset_embedder() -> None:
     global _embedder
     with _embedder_lock:
         _embedder = None
-
-
-def get_reranker() -> CrossEncoderReranker:
-    global _reranker
-    if _reranker is None:
-        with _reranker_lock:
-            if _reranker is None:
-                _reranker = CrossEncoderReranker()
-    return _reranker
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ Nuitka EXE 빌드 스크립트 (최적화 버전)
 Nuitka import 제외 정책:
   --nofollow-import-to로 제외한 모듈은 배포 폴더에 들어가지 않는다. 대체 경로가 있는
   무거운 선택 기능(torch, sentence_transformers, easyocr 등)과 앱이 쓰지 않는
-  groq/mistralai 클라이언트만 제외한다. 기본 기능이 쓰는 패키지(openai/anthropic,
+  mistralai 클라이언트만 제외한다. 기본 기능이 쓰는 패키지(openai/anthropic,
   httpx/pydantic, Whisper, 웹 검색, 화면 분석)와 그 의존성은 제외하지 않는다.
   numpy와 scipy는 로컬 판단 엔진과 Whisper 워커가 필요로 한다.
 
@@ -21,9 +21,7 @@ Nuitka import 제외 정책:
   agent/file_tools.py     — LLM 직접 파일 도구(read/write/edit/list/search/move/delete)
   agent/llm_provider.py   — stream_chat(), analyze_image(), 토큰 예산 기반 컨텍스트
   agent/api_connector.py  — OpenAPI 기반 외부 API 호출
-  memory/knowledge_base.py — SQLite/FTS 구조화 지식 베이스
   services/google_calendar.py / gmail_service.py / image_generator.py — 고급 도구 서비스
-  ui/conversation_search.py — 대화 검색 UI
 
 포함 모듈 (2026-04-29):
   agent/response_cache.py — from_config() 팩토리 + _coerce_positive_int() 보조 함수 추가
@@ -53,7 +51,6 @@ Nuitka import 제외 정책:
   agent/agent_planner.py      — StrategyMemory lift 게이팅 + 선택적 step 필드 전달
   agent/agent_math.py         — cosine_similarity 공통 유틸
   agent/tag_keywords.py       — 공통 TAG_KEYWORDS 사전
-  agent/record_store.py       — 추가 전용 방식의 증분 저장 스토어 기본 골격
   agent/learning_engine.py    — 백그라운드 성찰 스레드 + 학습 항목 업데이트 보조 함수
   agent/reflection_engine.py  — 대체 메시지 i18n 실행 시 번역 + 추정 토큰 계측
   agent/skill_library.py      — 목표 임베딩 기반 스킬 매칭 + compile_failed 추적
@@ -71,6 +68,7 @@ Nuitka import 제외 정책:
   ui/text_interface.py     — 스트리밍 TTS 짧은 앞문장 배치 재생 (_queue_stream_tts_sentence)
   agent/assistant_text_utils.py — LLM/AICommand 공통 목표 해석·도구 응답 정리 유틸리티 분리
   agent/planner_json_utils.py   — 잘린 JSON 응답 복구/파싱 책임 분리
+  agent/llm_retry.py            — 플래너·검증기가 함께 쓰는 LLM 재시도 판단
   agent/automation_plan_utils.py — 브라우저/데스크톱 액션 계획 조립·정렬 유틸리티 분리
   agent/agent_planner.py        — JSON 복구 헬퍼 위임으로 플래너 본체 응집도 개선
   agent/automation_helpers.py   — 복원력 강화/적응형 계획 조립 중복 제거
@@ -294,7 +292,6 @@ nuitka_args = [
     "--include-module=agent.llm_router",
     "--include-module=agent.mcp_server",
     "--include-module=agent.real_verifier",
-    "--include-module=agent.record_store",
     "--include-module=agent.regression_guard",
     "--include-module=agent.safety_checker",
     "--include-module=agent.tag_keywords",
@@ -302,6 +299,7 @@ nuitka_args = [
     "--include-module=agent.strategy_memory",
     "--include-module=agent.episode_memory",
     "--include-module=agent.automation_helpers",
+    "--include-module=agent.llm_retry",
     "--include-module=agent.planner_json_utils",
     "--include-module=agent.few_shot_injector",
     "--include-module=agent.response_cache",
@@ -314,7 +312,6 @@ nuitka_args = [
     "--include-module=memory.user_profile_engine",
     "--include-module=memory.memory_index",
     "--include-module=memory.memory_consolidator",
-    "--include-module=memory.knowledge_base",
     "--include-module=commands.memory_command",
     "--include-module=core.plugin_loader",
     "--include-module=core.plugin_sandbox",
@@ -330,7 +327,6 @@ nuitka_args = [
     "--include-module=ui.scheduler_panel",
     "--include-module=ui.agent_dashboard",
     "--include-module=ui.settings_agent_page",
-    "--include-module=ui.conversation_search",
     "--include-package=agent",
     "--include-package=assistant",
     "--include-package=audio",
@@ -346,12 +342,10 @@ nuitka_args = [
     *_optional_include_packages(
         "pycaw",
         "comtypes",
-        "groq",
         "ormsgpack",
         "speech_recognition",
         "pyaudio",
         "certifi",
-        "websockets",
         "watchdog",
         "requests",
         "httpx",
@@ -380,7 +374,6 @@ nuitka_args = [
         "PIL",
         "docx",
         "bs4",
-        "wmi",
         "win32api",
     ),
 
@@ -411,7 +404,6 @@ nuitka_args = [
     "--no-deployment-flag=excluded-module-usage",
 
     # 앱이 쓰지 않는 LLM 클라이언트
-    "--nofollow-import-to=groq",
     "--nofollow-import-to=mistralai",
 
     # 기타
@@ -420,7 +412,6 @@ nuitka_args = [
     "--nofollow-import-to=pygments",
     "--nofollow-import-to=mouseinfo",
     "--nofollow-import-to=comtypes.test",
-    "--nofollow-import-to=wmi",
     "--nofollow-import-to=win32api",
     "--nofollow-import-to=win32con",
     "--nofollow-import-to=win32com",

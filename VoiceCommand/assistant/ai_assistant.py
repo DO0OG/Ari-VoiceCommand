@@ -44,14 +44,6 @@ class SimpleAIAssistant:
         # AdvancedAIAssistant와 호환성을 위해 튜플 반환
         return response, [], "neutral"
 
-    def learn_new_response(self, query, response):
-        """응답 학습 (간단 버전은 로그만)"""
-        logging.info(f"학습 요청 - Query: {query}, Response: {response}")
-
-    def update_q_table(self, state, action, reward, next_state):
-        """Q-learning (간단 버전은 로그만)"""
-        logging.debug(f"Q-table 업데이트: {action}, reward={reward}")
-
 
 def get_ai_assistant():
     """AI 어시스턴트 싱글톤"""

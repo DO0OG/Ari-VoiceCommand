@@ -21,8 +21,6 @@ import httpx
 from agent.assistant_text_utils import (
     analyze_tool_request,
     clean_tool_artifact_text,
-    contains_specific_goal_markers,
-    is_generic_agent_explanation,
     resolve_agent_task_goal,
 )
 from agent.response_cache import ResponseCache, build_response_cache_key
@@ -1820,12 +1818,6 @@ class LLMProvider:
                 n["goal"] = resolved_goal
         return n
 
-    def _is_generic_agent_explanation(self, text: str) -> bool:
-        return is_generic_agent_explanation(text)
-
-    def _contains_specific_goal_markers(self, text: str) -> bool:
-        return contains_specific_goal_markers(text)
-
     def _fallback_tool_calls_from_text(self, raw, msg, ctx):
         if ctx.get("preferred_tool") == "web_search":
             query = str(ctx.get("search_query_hint", "") or "").strip() or msg
@@ -2089,13 +2081,6 @@ class LLMProvider:
                 time_prompt = memory_manager.get_current_time_prompt()
             except Exception as e:
                 logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
-            try:
-                from memory.knowledge_base import get_knowledge_base
-                kb_prompt = get_knowledge_base().prompt_for(user_message, top_k=3)
-                if kb_prompt:
-                    parts.append(kb_prompt)
-            except Exception as e:
-                logging.debug("[LLM] 지식 베이스 주입 실패: %s", e)
         skill_ctx = self._get_skill_context(user_message)
         if skill_ctx.get("prompt"):
             parts.append(skill_ctx["prompt"])

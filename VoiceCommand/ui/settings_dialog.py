@@ -895,9 +895,6 @@ class SettingsDialog(QDialog):
     def theme_settings_changed(self) -> bool:
         return any(key in self.changed_keys for key in self.THEME_KEYS)
 
-    def language_settings_changed(self) -> bool:
-        return "language" in self.changed_keys
-
     # ── 생명주기 ──────────────────────────────────────────────────────────────
 
     def done(self, result):

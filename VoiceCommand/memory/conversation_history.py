@@ -221,22 +221,6 @@ class ConversationHistory:
             return truncated[:last_space] + "…"
         return truncated + "…"
 
-    def get_messages_for_llm(self) -> List[Dict[str, str]]:
-        with self._lock:
-            messages: List[Dict[str, str]] = []
-            if self.summaries:
-                combined = " | ".join(self.summaries[-3:])
-                messages.append({
-                    "role": "system",
-                    "content": f"[이전 대화 요약] {combined}",
-                })
-            for item in self.active:
-                if item.get("user"):
-                    messages.append({"role": "user", "content": item["user"]})
-                if item.get("ai"):
-                    messages.append({"role": "assistant", "content": item["ai"]})
-            return messages
-
     def _estimate_tokens(self, messages: List[Dict[str, str]]) -> int:
         """대략적인 토큰 수를 계산한다(문자 수 ÷ 3)."""
         total = 0

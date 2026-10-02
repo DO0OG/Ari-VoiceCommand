@@ -106,12 +106,6 @@ class GroqAssistant:
         response = self.chat(query, include_context=True)
         return response, [], "neutral"
 
-    def learn_new_response(self, query, response):
-        logging.info(f"학습 요청 (Groq wrapper) - Query: {query}, Response: {response}")
-
-    def update_q_table(self, state, action, reward, next_state):
-        logging.debug(f"Q-table 업데이트 (Groq wrapper): {action}, reward={reward}")
-
 
 _groq_assistant = None
 
@@ -119,10 +113,3 @@ _groq_assistant = None
 def get_groq_assistant():
     from agent.llm_provider import get_llm_provider
     return get_llm_provider()
-
-
-def set_groq_api_key(api_key):
-    from agent.llm_provider import reload_llm_provider
-    from core.config_manager import ConfigManager
-    ConfigManager.set_value("groq_api_key", api_key)
-    reload_llm_provider()

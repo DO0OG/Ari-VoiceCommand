@@ -134,10 +134,6 @@ class ProactiveSuggestionBar(QFrame):
                 suggestions.append((f"→ {cmd}", cmd))
         return suggestions[:4]
 
-    def update_context_manager(self, ctx_manager) -> None:
-        self._ctx = ctx_manager
-        self._refresh_suggestions()
-
     def start_timer(self) -> None:
         self._refresh_timer.start(theme_module.SUGGESTION_REFRESH)
 

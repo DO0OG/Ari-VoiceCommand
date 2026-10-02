@@ -176,9 +176,6 @@ class PanelTitleBar(QFrame):
         self._title_lbl.setStyleSheet("color: white;")
         self._close_btn.setStyleSheet(theme_module.close_btn_style())
 
-    def set_title(self, text: str) -> None:
-        self._title_lbl.setText(text)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPos() - self._win.pos()
@@ -215,7 +212,6 @@ class FloatingPanel(QMainWindow):
         width: int,
         height: int,
         parent=None,
-        close_hides: bool = True,
     ):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
