@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 from memory.user_context import UserContextManager
 from memory.memory_index import MemoryIndex
+from memory.conversation_history import ConversationHistory
 
 
 class UserContextManagerTests(unittest.TestCase):
@@ -554,6 +555,25 @@ class UserContextManagerTests(unittest.TestCase):
                     self.assertFalse(manager.delete_fact("drink", delete_conversations=True))
                     history.delete_containing.assert_not_called()
             self.assertTrue(index.search("coffee", kind="conversation"))
+
+    def test_delete_fact_restores_history_when_conversation_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            manager.record_fact("drink", "tea", source="user")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history.file_path = os.path.join(tmp, "history.json")
+            history._lock = threading.RLock()
+            history.active = [{"user": "I like tea.", "ai": "Noted"}]
+            history.summaries = []
+            before = list(history.active)
+            with patch("memory.memory_index.get_memory_index"), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch(
+                "memory.conversation_history.write_json_atomic",
+                side_effect=OSError("disk full"),
+            ):
+                self.assertFalse(manager.delete_fact("drink", delete_conversations=True))
+                self.assertEqual(history.active, before)
 
     def test_delete_preference_continues_conversation_cleanup_after_index_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

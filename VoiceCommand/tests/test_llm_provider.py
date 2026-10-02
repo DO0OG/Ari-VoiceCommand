@@ -526,6 +526,26 @@ class LLMProviderTests(unittest.TestCase):
         provider.conversation_history.pop()
         self.assertEqual(len(provider._history_for_context(max_tokens=1)), 2)
 
+    def test_clear_history_can_keep_the_turn_in_progress(self):
+        provider = LLMProvider(provider="anthropic", model="test")
+        tool_use = [{"type": "tool_use", "id": "call-1", "name": "memory_forget", "input": {}}]
+        provider.add_to_history("user", "I live in Busan")
+        provider.add_to_history("assistant", "Noted")
+        provider.add_to_history("user", "forget hometown")
+        provider.add_to_history("assistant", tool_use)
+
+        # 진행 중인 도구 호출은 다른 경로에서 지워도 남아야 그 결과를 이어 붙일 수 있다.
+        provider.clear_history()
+        self.assertEqual(provider._history_snapshot(), [
+            {"role": "user", "content": "forget hometown"},
+            {"role": "assistant", "content": tool_use},
+        ])
+        provider.add_to_history("assistant", "done")
+        provider.clear_history(keep_current_turn=True)
+        self.assertEqual(provider._history_snapshot()[0], {"role": "user", "content": "forget hometown"})
+        provider.clear_history()
+        self.assertEqual(provider._history_snapshot(), [])
+
     def test_context_history_drops_tool_use_without_result(self):
         provider = LLMProvider(provider="anthropic", model="test")
         provider.add_to_history("user", "before")

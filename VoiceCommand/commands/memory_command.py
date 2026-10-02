@@ -186,7 +186,7 @@ class MemoryCommand(BaseCommand):
             return
         self.tts_wrapper(_("기억했어요: {value}", value=value))
 
-    def _forget(self, content: str, recent: bool = False) -> None:
+    def _forget(self, content: str, recent: bool = False, in_tool_call: bool = False) -> None:
         if not content and not recent:
             self.tts_wrapper(_("무엇을 잊을까요?"))
             return
@@ -291,17 +291,27 @@ class MemoryCommand(BaseCommand):
                 delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
             )
         )
+        preference_delete_failed = False
+        if deleted:
+            # 지운 내용이 LLM 대화 문맥에 남아 다음 요청에 다시 실려 가지 않게 한다.
+            from agent import llm_provider
+
+            with llm_provider._instance_lock:
+                provider = llm_provider._instance
+            if provider is not None:
+                provider.clear_history(keep_current_turn=in_tool_call)
         if deleted and kind == "fact":
             # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
             fact_value = str(fact.get("value", "")).strip()
             if len(fact_value) > 1:
                 for category, values in context.get_preferences_snapshot().items():
                     for value in values:
-                        if fact_value.casefold() in str(value).casefold():
-                            context.delete_preference(
+                        if fact_value.casefold() == str(value).strip().casefold():
+                            if not context.delete_preference(
                                 category, value, delete_conversations=True
-                            )
-        if deleted:
+                            ):
+                                preference_delete_failed = True
+        if deleted and not preference_delete_failed:
             self.tts_wrapper(_("기억을 잊었어요: {key}", key=key))
         else:
             self.tts_wrapper(_("기억을 삭제하지 못했어요."))

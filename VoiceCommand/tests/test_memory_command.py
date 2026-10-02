@@ -313,6 +313,95 @@ class MemoryCommandTests(unittest.TestCase):
             self.assertEqual(context.context["preferences"]["drink"], {"coffee": 1, "tea": 1})
             self.assertEqual(len(history.active), 1)
 
+    def test_forget_tea_keeps_steak_and_unrelated_english_conversation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            context = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                context.record_fact("favorite_drink", "tea", source="user")
+                context.record_preference("food", "steak")
+                context.record_preference("drink", "tea")
+            index.index_conversation("My team meets tomorrow", "Okay", "2026-09-29T10:00:00")
+            index.index_conversation("I like tea.", "Noted", "2026-09-29T10:01:00")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history._lock = threading.RLock()
+            history.active = [
+                {"user": "My team meets tomorrow", "ai": "Okay"},
+                {"user": "I like tea.", "ai": "Noted"},
+            ]
+            history.summaries = []
+            history.save = Mock()
+            provider = Mock()
+            from agent import llm_provider
+            with patch.object(llm_provider, "_instance", provider), patch(
+                "memory.memory_index.get_memory_index", return_value=index
+            ), patch(
+                "memory.user_context.get_context_manager", return_value=context
+            ), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                get_manager.return_value.request_confirmation.return_value = True
+                MemoryCommand(lambda _message: None).execute("forget tea")
+
+                self.assertEqual(context.context["preferences"]["food"], {"steak": 1})
+                self.assertNotIn("drink", context.context["preferences"])
+                self.assertEqual(history.active, [{"user": "My team meets tomorrow", "ai": "Okay"}])
+                self.assertTrue(index.search("team", kind="conversation"))
+                self.assertFalse([
+                    item for item in index.search("tea", kind="conversation")
+                    if "I like tea" in item.content
+                ])
+                provider.clear_history.assert_called_once_with(keep_current_turn=False)
+
+    def test_forget_korean_value_still_matches_attached_particle(self):
+        history = ConversationHistory.__new__(ConversationHistory)
+        history._lock = threading.RLock()
+        history.active = [{"user": "커피를 좋아해", "ai": ""}]
+        history.summaries = []
+        history.save = Mock()
+
+        self.assertEqual(history.delete_containing("커피"), 1)
+        self.assertEqual(history.active, [])
+
+    def test_failed_or_cancelled_forget_keeps_llm_history(self):
+        from agent import llm_provider
+
+        provider = Mock()
+        context = Mock()
+        context.get_preferences_snapshot.return_value = {}
+        context.get_facts_snapshot.return_value = {"drink": {"value": "tea"}}
+        command = MemoryCommand(lambda _message: None)
+        with patch.object(llm_provider, "_instance", provider), patch(
+            "memory.user_context.get_context_manager", return_value=context
+        ), patch(
+                "agent.confirmation_manager.get_confirmation_manager"
+        ) as get_manager:
+            get_manager.return_value.request_confirmation.return_value = False
+            command.execute("forget tea")
+            get_manager.return_value.request_confirmation.return_value = True
+            context.delete_fact.return_value = False
+            command.execute("forget tea")
+            provider.clear_history.assert_not_called()
+
+    def test_failed_related_preference_delete_reports_failure(self):
+        context = Mock()
+        context.get_preferences_snapshot.return_value = {"drink": {"tea": 1}}
+        context.get_facts_snapshot.return_value = {"drink": {"value": "tea"}}
+        context.delete_fact.return_value = True
+        context.delete_preference.return_value = False
+        spoken = []
+        from agent import llm_provider
+        provider = Mock()
+        with patch.object(llm_provider, "_instance", provider), patch(
+            "memory.user_context.get_context_manager", return_value=context
+        ), patch(
+            "agent.confirmation_manager.get_confirmation_manager"
+        ) as get_manager:
+            get_manager.return_value.request_confirmation.return_value = True
+            MemoryCommand(spoken.append).execute("forget tea")
+            self.assertNotEqual(spoken, ["기억을 잊었어요: drink"])
+            self.assertEqual(spoken, ["기억을 삭제하지 못했어요."])
+
 
 if __name__ == "__main__":
     unittest.main()

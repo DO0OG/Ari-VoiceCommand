@@ -146,6 +146,49 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
 
         self.assertTrue(initialized_event)
 
+    def test_game_mode_restore_waits_for_local_cleanup_before_initializing(self):
+        previous = (
+            VoiceCommand._state.game_mode,
+            VoiceCommand._state.fish_tts,
+            VoiceCommand._state.tts_signature,
+            VoiceCommand._LOCAL_TTS_CLEANUP_DONE,
+            VoiceCommand._state.tts_init_event.is_set(),
+        )
+        events = []
+
+        class CleanupDone:
+            def wait(self, timeout=None):
+                events.append(("cleanup_wait", timeout))
+
+        VoiceCommand._state.game_mode = True
+        VoiceCommand._state.fish_tts = Mock()
+        VoiceCommand._state.tts_signature = ("edge",)
+        VoiceCommand._LOCAL_TTS_CLEANUP_DONE = CleanupDone()
+        restore_thread = Mock()
+        try:
+            with patch.object(VoiceCommand, "_cleanup_tts_provider_async"), patch.object(
+                VoiceCommand.threading, "Thread", return_value=restore_thread
+            ) as make_thread, patch.object(
+                VoiceCommand, "initialize_tts", side_effect=lambda: events.append(("create", None))
+            ), patch.object(VoiceCommand, "emit_plugin_event"), patch.object(
+                VoiceCommand, "tts_wrapper"
+            ):
+                VoiceCommand.disable_game_mode()
+                make_thread.call_args.kwargs["target"]()
+                self.assertEqual(events, [("cleanup_wait", 5), ("create", None)])
+        finally:
+            (
+                VoiceCommand._state.game_mode,
+                VoiceCommand._state.fish_tts,
+                VoiceCommand._state.tts_signature,
+                VoiceCommand._LOCAL_TTS_CLEANUP_DONE,
+                event_was_set,
+            ) = previous
+            if event_was_set:
+                VoiceCommand._state.tts_init_event.set()
+            else:
+                VoiceCommand._state.tts_init_event.clear()
+
     def test_cosyvoice_warmup_failure_uses_configured_fallback(self):
         from types import SimpleNamespace
 
