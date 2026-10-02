@@ -25,6 +25,27 @@ from ui.local_installers import (
 from ui.tts_diagnostics import TTSDiagnosticPanel
 
 
+_live_installer_threads = set()
+
+
+def _track_installer_thread(thread):
+    _live_installer_threads.add(thread)
+    thread.finished.connect(lambda tracked=thread: _release_installer_thread(tracked))
+
+
+def _release_installer_thread(thread):
+    _live_installer_threads.discard(thread)
+    thread.deleteLater()
+
+
+def _installer_running(thread_type) -> bool:
+    """설정 창을 닫았다 다시 열어도 앞서 시작한 같은 종류의 설치가 돌고 있는지 알려 준다."""
+    return any(
+        isinstance(thread, thread_type) and thread.isRunning()
+        for thread in _live_installer_threads
+    )
+
+
 class _TTSActionRelay(QObject):
     """작업 스레드 결과를 GUI 스레드로 넘긴다. 설정 창보다 오래 살아야 해서 모듈에 하나만 둔다."""
 
@@ -65,6 +86,7 @@ class _TTSSettingsPage(QWidget):
         self._ollama_progress_dialog: QProgressDialog | None = None
         self._cosyvoice_install_thread: CosyVoiceInstallerThread | None = None
         self._cosyvoice_progress_dialog: QProgressDialog | None = None
+        self._closed = False
         self._tts_action_job: SimpleNamespace | None = None
         # GUI 스레드에서 릴레이를 만들고 연결해 결과가 항상 GUI 스레드에서 처리되게 한다.
         _action_relay().completed.connect(self._finish_elevenlabs_action)
@@ -497,6 +519,9 @@ class _TTSSettingsPage(QWidget):
 
     def _open_ollama_installer(self):
         from PySide6.QtWidgets import QDialog
+        if _installer_running(OllamaInstallerThread):
+            QMessageBox.information(self, _("Ollama 설치"), _("이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."))
+            return
         installed = bool(self.local_install_section.ollama_path)
         dialog = OllamaInstallDialog(self, installed=installed)
         if dialog.exec() != QDialog.Accepted:
@@ -522,6 +547,7 @@ class _TTSSettingsPage(QWidget):
             dialog.models_dir_input.text(),
             selected_models,
         )
+        _track_installer_thread(self._ollama_install_thread)
         self._ollama_install_thread.done.connect(self._on_ollama_install_done)
         self._ollama_progress_dialog = QProgressDialog(
             _("Ollama 모델을 받는 중입니다.\n모델 다운로드는 콘솔 없이 백그라운드로 계속됩니다.") if installed else
@@ -536,6 +562,8 @@ class _TTSSettingsPage(QWidget):
         self._ollama_install_thread.start()
 
     def _on_ollama_install_done(self, success: bool, message: str, result: dict):
+        if self._closed:
+            return
         if self._ollama_progress_dialog is not None:
             self._ollama_progress_dialog.close()
             self._ollama_progress_dialog = None
@@ -580,6 +608,9 @@ class _TTSSettingsPage(QWidget):
             self.cosyvoice_dir_status.setStyleSheet("color: #e67e22;")
 
     def _install_cosyvoice(self):
+        if _installer_running(CosyVoiceInstallerThread):
+            QMessageBox.information(self, _("CosyVoice 설치"), _("이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."))
+            return
         target_dir = self.cosyvoice_dir_input.text().strip()
         if not target_dir:
             target_dir = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "CosyVoice")
@@ -607,6 +638,7 @@ class _TTSSettingsPage(QWidget):
             return
 
         self._cosyvoice_install_thread = CosyVoiceInstallerThread(target_dir)
+        _track_installer_thread(self._cosyvoice_install_thread)
         self._cosyvoice_install_thread.done.connect(self._on_cosyvoice_install_done)
         self._cosyvoice_progress_dialog = QProgressDialog(
             _("CosyVoice3 설치를 진행 중입니다.\n의존성 및 모델 다운로드로 시간이 조금 걸릴 수 있습니다."),
@@ -620,6 +652,8 @@ class _TTSSettingsPage(QWidget):
         self._cosyvoice_install_thread.start()
 
     def _on_cosyvoice_install_done(self, success: bool, message: str, installed_path: str):
+        if self._closed:
+            return
         if self._cosyvoice_progress_dialog is not None:
             self._cosyvoice_progress_dialog.close()
             self._cosyvoice_progress_dialog = None
@@ -744,11 +778,8 @@ class _TTSSettingsPage(QWidget):
 
     def cleanup_threads(self):
         """다이얼로그 닫힐 때 실행 중인 스레드 정리."""
+        self._closed = True
         self.local_install_section.stop_detection()
         self.tts_diagnostic_panel.cancel()
         # ElevenLabs 요청은 중간에 멈출 수 없으니 기다리지 않고 결과 처리만 끊는다.
         self._tts_action_job = None
-        for thread in (self._ollama_install_thread, self._cosyvoice_install_thread):
-            if thread and thread.isRunning():
-                thread.quit()
-                thread.wait(2000)

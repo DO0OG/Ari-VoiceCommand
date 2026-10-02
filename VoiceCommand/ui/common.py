@@ -109,7 +109,7 @@ def show_temp_status(
 ) -> None:
     """레이블에 메시지를 표시하고 duration_ms 후 자동으로 지운다."""
     label.setText(msg)
-    QTimer.singleShot(duration_ms, lambda: label.setText(""))
+    QTimer.singleShot(duration_ms, label, lambda: label.setText(""))
 
 
 # ── 공통 타이틀 바 ────────────────────────────────────────────────────────────

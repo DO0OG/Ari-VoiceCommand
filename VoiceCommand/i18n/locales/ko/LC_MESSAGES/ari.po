@@ -4227,3 +4227,6 @@ msgstr "텍스트가 아닌 응답입니다: {content_type}"
 
 msgid "허용되지 않은 URL입니다: {reason}"
 msgstr "허용되지 않은 URL입니다: {reason}"
+
+msgid "이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."
+msgstr "이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."
