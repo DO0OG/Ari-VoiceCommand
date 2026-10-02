@@ -1,7 +1,7 @@
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 from agent.agent_planner import AgentPlanner
@@ -62,6 +62,18 @@ class _RoleFallbackProvider:
 
 
 class AgentPlannerParsingTests(unittest.TestCase):
+    def test_request_uses_one_atomic_role_target(self):
+        provider = DummyLLMProvider()
+        client = _FakePlannerCompletionClient([('{}', "stop")])
+        provider.get_role_target = Mock(return_value=(client, "openai", "snapshot-model"))
+        planner = AgentPlanner(provider)
+
+        result = planner.reflect("goal", "history")
+
+        self.assertEqual(result, {})
+        provider.get_role_target.assert_called_once_with("planner")
+        self.assertEqual(client.calls[0]["model"], "snapshot-model")
+
     def test_strategy_memory_helpers_return_context_and_failure_hints(self):
         planner = AgentPlanner(DummyLLMProvider())
         fake_module = types.ModuleType("agent.strategy_memory")
@@ -325,6 +337,18 @@ class AgentPlannerParsingTests(unittest.TestCase):
             provider.planner_client.calls[0].get("response_format"),
             {"type": "json_object"},
         )
+
+    def test_llm_candidates_do_not_mix_passed_client_with_refetched_model(self):
+        provider = DummyLLMProvider()
+        provider.planner_model = "gpt-4o"
+        provider.planner_provider = "openai"
+        provider.planner_client = object()
+        old_client = object()
+        planner = AgentPlanner(provider)
+
+        candidates = planner._get_llm_candidates("planner", "", old_client, "groq")
+
+        self.assertFalse(any(candidate[0] is old_client for candidate in candidates))
 
     def test_call_llm_skips_json_response_format_for_ollama(self):
         provider = DummyLLMProvider()

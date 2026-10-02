@@ -504,6 +504,10 @@ class RealVerifier:
             return []
         if hasattr(self.llm, "get_role_fallback_targets"):
             return list(self.llm.get_role_fallback_targets("planner"))
+        getter = getattr(self.llm, "get_role_target", None)
+        if callable(getter):
+            target = getter("planner")
+            return [target] if target[0] and target[2] else []
         target_model = getattr(self.llm, "planner_model", "") or getattr(self.llm, "model", "")
         provider = getattr(self.llm, "planner_provider", "") or getattr(self.llm, "provider", "")
         client = getattr(self.llm, "planner_client", None)

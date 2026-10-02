@@ -1,6 +1,8 @@
 import sys
+import threading
 import types
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from agent.llm_provider import (
@@ -54,6 +56,101 @@ class CustomLLMProviderTests(unittest.TestCase):
         timeout = call.kwargs["timeout"]
         self.assertEqual(timeout.read, read_timeout)
         self.assertEqual(timeout.connect, 5.0)
+
+    def test_role_target_reads_client_provider_and_model_under_config_lock(self):
+        provider = LLMProvider.__new__(LLMProvider)
+        old_client = object()
+        new_client = object()
+        provider.planner_client = old_client
+        provider.planner_provider = "old-provider"
+        provider.planner_model = "old-model"
+        provider.client = None
+        provider.provider = "base"
+        provider.model = "base-model"
+
+        class ReconfigureLock:
+            def __enter__(self):
+                provider.planner_provider = "new-provider"
+                provider.planner_model = "new-model"
+                provider.planner_client = new_client
+
+            def __exit__(self, *args):
+                pass
+
+        provider._config_lock = ReconfigureLock()
+
+        self.assertEqual(
+            provider.get_role_target("planner"),
+            (new_client, "new-provider", "new-model"),
+        )
+
+    def _reload_with_clients(self, old_clients, new_clients, active_stream=None):
+        names = ("client", "planner_client", "execution_client", "memory_extractor_client")
+        config = {
+            "provider_configs": {}, "provider": "new", "api_key": "", "model": "new-model",
+            "planner_provider": "new", "planner_model": "new-model",
+            "execution_provider": "new", "execution_model": "new-model",
+            "memory_extractor_provider": "new", "memory_extractor_model": "new-model",
+        }
+        instance = SimpleNamespace(
+            **config,
+            **dict(zip(names, old_clients)),
+            _config_lock=threading.RLock(),
+            _active_stream_lock=threading.Lock(),
+            _active_stream=active_stream,
+        )
+        replacement = SimpleNamespace(**config, **dict(zip(names, new_clients)))
+
+        class ImmediateTimer:
+            delays = []
+
+            def __init__(self, delay, function, args=()):
+                self.delays.append(delay)
+                self._function = function
+                self._args = args
+                self.daemon = False
+
+            def start(self):
+                self._function(*self._args)
+
+        with patch("agent.llm_provider._instance", instance), \
+             patch("agent.llm_provider._build_llm_provider", return_value=replacement), \
+             patch("agent.llm_provider.threading.Timer", ImmediateTimer):
+            reload_llm_provider()
+        return ImmediateTimer.delays
+
+    def test_reload_closes_each_obsolete_client_once_but_keeps_reused_client(self):
+        obsolete = Mock()
+        reused = Mock()
+        replacement = Mock()
+
+        self._reload_with_clients(
+            [obsolete, obsolete, reused, None],
+            [replacement, reused, replacement, None],
+        )
+
+        obsolete.close.assert_called_once_with()
+        reused.close.assert_not_called()
+
+    def test_reload_delays_closing_obsolete_clients(self):
+        delays = self._reload_with_clients(
+            [Mock(), None, None, None],
+            [Mock(), None, None, None],
+        )
+
+        self.assertEqual(len(delays), 1)
+        self.assertGreater(delays[0], 0)
+
+    def test_reload_keeps_old_clients_while_stream_is_active(self):
+        old_client = Mock()
+
+        self._reload_with_clients(
+            [old_client, None, None, None],
+            [Mock(), None, None, None],
+            active_stream=object(),
+        )
+
+        old_client.close.assert_not_called()
 
     def test_reload_preserves_singleton_history_and_plugin_tools(self):
         settings = {"llm_provider": "groq", "groq_api_key": ""}

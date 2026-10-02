@@ -16,11 +16,11 @@ _OPENAI_COMPATIBLE_PROVIDERS = frozenset({
 })
 _SUPPORTED_PROVIDERS = _OPENAI_COMPATIBLE_PROVIDERS | {"anthropic"}
 _state_lock = threading.Lock()
-_last_success_at: dict[str, float] = {}
-_in_flight: set[str] = set()
+_last_success_at: dict[tuple[str, str, str], float] = {}
+_in_flight: set[tuple[str, str, str]] = set()
 
 
-def _warm_client(provider_id, client):
+def _warm_client(key, client):
     try:
         from core.VoiceCommand import is_session_lock_blocked
 
@@ -29,14 +29,14 @@ def _warm_client(provider_id, client):
         client.models.list()
     except Exception as exc:
         logging.debug(
-            "LLM 연결 예열 실패 (%s): %s", provider_id, type(exc).__name__
+            "LLM 연결 예열 실패 (%s): %s", key[0], type(exc).__name__
         )
     else:
         with _state_lock:
-            _last_success_at[provider_id] = time.monotonic()
+            _last_success_at[key] = time.monotonic()
     finally:
         with _state_lock:
-            _in_flight.discard(provider_id)
+            _in_flight.discard(key)
 
 
 def prewarm_current_llm_connection() -> bool:
@@ -55,11 +55,25 @@ def prewarm_current_llm_connection() -> bool:
         from agent.llm_provider import get_llm_provider
 
         llm_provider = get_llm_provider()
-        provider_id = str(getattr(llm_provider, "provider", "") or "")
+        if hasattr(llm_provider, "get_role_target"):
+            client, provider, model = llm_provider.get_role_target("default")
+        else:
+            provider = getattr(llm_provider, "provider", "")
+            model = getattr(llm_provider, "model", "")
+            client = getattr(llm_provider, "client", None)
+        provider_id = str(provider or "")
         if provider_id not in _SUPPORTED_PROVIDERS:
             return False
 
-        client = getattr(llm_provider, "client", None)
+        model = str(model or "")
+        if not client or not model:
+            return False
+        base_url = str(getattr(client, "base_url", "") or "")
+        if not base_url:
+            base_url = str(
+                getattr(llm_provider, "provider_configs", {}).get(provider_id, {}).get("base_url", "") or ""
+            )
+        key = (provider_id, model, base_url)
         models = getattr(client, "models", None)
         list_models = getattr(models, "list", None)
         if not callable(list_models):
@@ -67,25 +81,25 @@ def prewarm_current_llm_connection() -> bool:
 
         now = time.monotonic()
         with _state_lock:
-            last_success = _last_success_at.get(provider_id)
+            last_success = _last_success_at.get(key)
             if (
-                provider_id in _in_flight
+                key in _in_flight
                 or last_success is not None
                 and now - last_success < _COOLDOWN_SECONDS
             ):
                 return False
-            _in_flight.add(provider_id)
+            _in_flight.add(key)
 
         try:
             thread = threading.Thread(
                 target=_warm_client,
-                args=(provider_id, client),
+                args=(key, client),
                 daemon=True,
             )
             thread.start()
         except RuntimeError as exc:
             with _state_lock:
-                _in_flight.discard(provider_id)
+                _in_flight.discard(key)
             logging.debug(
                 "LLM 연결 예열 예약 실패 (%s): %s",
                 provider_id,

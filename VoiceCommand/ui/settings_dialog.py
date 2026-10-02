@@ -861,9 +861,21 @@ class SettingsDialog(QDialog):
             )
 
         if self.llm_settings_changed():
+            import threading
+
+            def _reload_llm_provider():
+                try:
+                    from agent.llm_provider import reload_llm_provider
+                    reload_llm_provider()
+                except Exception as exc:
+                    logging.warning("LLM 제공자 재구성 실패: %s", exc)
+
             try:
-                from agent.llm_provider import reload_llm_provider
-                reload_llm_provider()
+                threading.Thread(
+                    target=_reload_llm_provider,
+                    daemon=True,
+                    name="LLM-Reload",
+                ).start()
             except Exception as exc:
                 logging.warning("LLM 제공자 재구성 실패: %s", exc)
 

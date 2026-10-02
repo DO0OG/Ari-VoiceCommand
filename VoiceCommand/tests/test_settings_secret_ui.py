@@ -176,14 +176,27 @@ class SettingsSecretUITests(unittest.TestCase):
         dialog.theme_settings_changed = lambda: False
         dialog.accept = Mock()
 
+        started_threads = []
+
+        class ImmediateThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+                self.kwargs = kwargs
+                started_threads.append(self)
+
+            def start(self):
+                self.target()
+
         with patch("ui.settings_dialog.ConfigManager.save_settings", return_value=True), \
              patch("ui.settings_dialog.refresh_activity_monitor"), \
              patch("ui.settings_dialog.get_language", return_value=None), \
-             patch("agent.llm_provider.reload_llm_provider") as reload_provider:
+             patch("agent.llm_provider.reload_llm_provider") as reload_provider, \
+             patch("threading.Thread", ImmediateThread):
             SettingsDialog._save(dialog)
+            reload_provider.assert_called_once_with()
+            self.assertEqual(started_threads[0].kwargs["name"], "LLM-Reload")
 
         self.assertIn("llm_router_enabled", dialog.changed_keys)
-        reload_provider.assert_called_once_with()
 
 
 if __name__ == "__main__":
