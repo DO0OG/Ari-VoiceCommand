@@ -2233,7 +2233,10 @@ def get_llm_provider() -> LLMProvider:
 
 
 # 교체된 클라이언트를 닫기 전에 진행 중인 요청이 끝나기를 기다리는 시간.
-_OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS = 120.0
+# 옛 클라이언트는 교체 전에 시작한 요청만 쓴다. 그 요청의 재시도·대체 모델 전환·이어받기가
+# 모두 끝날 만큼 길게 잡는다(요청 제한 시간 90초 기준으로 최악의 경우에도 넉넉하다).
+# ponytail: 고정 대기 시간, 요청별 사용 추적이 필요해지면 그때 바꾼다.
+_OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS = 1800.0
 
 
 def reload_llm_provider() -> None:

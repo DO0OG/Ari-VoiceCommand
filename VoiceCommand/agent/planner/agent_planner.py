@@ -668,13 +668,11 @@ class AgentPlanner(TemplatePlansMixin):
 
     def _get_llm_candidates(self, role_hint: str, model: str, client_override, provider_override: str) -> List[tuple]:
         candidates: List[tuple] = []
-        if model and provider_override:
+        if client_override is not None or model or provider_override:
+            # 호출자가 넘긴 값은 한 시점의 조합이다. 일부가 비어 있어도 다른 시점의 값과 섞지 않는다.
             primary_client, primary_provider, primary_model = client_override, provider_override, model
         else:
             primary_client, primary_provider, primary_model = self._get_role_target(role_hint)
-            primary_model = model or primary_model
-            primary_provider = provider_override or primary_provider
-            primary_client = client_override or primary_client
 
         seen = set()
         if primary_client and primary_model:

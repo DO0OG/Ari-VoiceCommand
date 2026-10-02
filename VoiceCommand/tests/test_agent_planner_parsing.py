@@ -338,6 +338,18 @@ class AgentPlannerParsingTests(unittest.TestCase):
             {"type": "json_object"},
         )
 
+    def test_llm_candidates_do_not_mix_passed_client_with_refetched_model(self):
+        provider = DummyLLMProvider()
+        provider.planner_model = "gpt-4o"
+        provider.planner_provider = "openai"
+        provider.planner_client = object()
+        old_client = object()
+        planner = AgentPlanner(provider)
+
+        candidates = planner._get_llm_candidates("planner", "", old_client, "groq")
+
+        self.assertFalse(any(candidate[0] is old_client for candidate in candidates))
+
     def test_call_llm_skips_json_response_format_for_ollama(self):
         provider = DummyLLMProvider()
         provider.planner_model = "dummy"
