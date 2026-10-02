@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
 from core import update_checker
@@ -75,6 +76,29 @@ class _FakeConnection:
 
 
 class UpdateCheckerTests(unittest.TestCase):
+    @contextmanager
+    def _check_with_responses(
+        self, channel, current_version, responses, initial_state=None
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            if initial_state is not None:
+                with open(path, "w", encoding="utf-8") as handle:
+                    json.dump(initial_state, handle)
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                patch.object(update_checker.ConfigManager, "get", return_value=channel),
+                patch("core.update_checker.get_version", return_value=current_version),
+                patch(
+                    "core.update_checker._request_manifest",
+                    side_effect=responses,
+                ) as request,
+            ):
+                result = update_checker._check_for_updates()
+                state = _read_state(path)
+                calls = request.call_args_list
+                yield result, state, calls
+
     def test_manifest_rejects_missing_fields(self):
         paths = (
             ("schema",),
@@ -203,6 +227,117 @@ class UpdateCheckerTests(unittest.TestCase):
             self.assertEqual(state["etag"], "manifest-tag")
             self.assertEqual(state["last_modified"], "Mon, 28 Sep 2026 00:00:00 GMT")
             request.assert_called_once()
+
+    def test_beta_channel_selects_stable_release_above_current_beta(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.2")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.3.0-beta.2", responses,
+            {"last_checked_channel": "beta", "etag": "beta-tag"},
+        ) as ((_, _), state, calls):
+            self.assertEqual(state["pending_version"], "1.3.0")
+            self.assertEqual(calls[0].args[0], update_checker._BETA_MANIFEST_URL)
+            self.assertEqual(calls[0].args[1]["If-None-Match"], "beta-tag")
+            self.assertEqual(calls[1].args[0], update_checker._STABLE_MANIFEST_URL)
+            self.assertNotIn("If-None-Match", calls[1].args[1])
+            self.assertNotIn("If-Modified-Since", calls[1].args[1])
+
+    def test_beta_channel_selects_newer_beta_over_stable(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.2.3")).encode("utf-8")),
+        ]
+        with self._check_with_responses("beta", "1.2.3", responses) as (
+            (_, _), state, _
+        ):
+            self.assertEqual(state["pending_version"], "1.3.0-beta.1")
+
+    def test_beta_channel_uses_beta_when_stable_request_fails(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),
+            OSError("stable unavailable"),
+        ]
+        with self._check_with_responses("beta", "1.2.3", responses) as (
+            result, state, _
+        ):
+            self.assertEqual(result, (200, 0))
+            self.assertEqual(state["pending_version"], "1.3.0-beta.1")
+
+    def test_beta_channel_uses_stable_when_beta_request_fails(self):
+        responses = [
+            OSError("beta unavailable"),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses("beta", "1.2.3", responses) as (
+            result, state, _
+        ):
+            self.assertEqual(result, (200, 0))
+            self.assertEqual(state["pending_version"], "1.3.0")
+
+    def test_beta_failure_after_channel_switch_drops_stable_cache_validators(self):
+        responses = [
+            OSError("beta unavailable"),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.2.3", responses,
+            {
+                "last_checked_channel": "stable",
+                "etag": "stable-tag",
+                "last_modified": "Mon, 28 Sep 2026 00:00:00 GMT",
+            },
+        ) as (_, state, _):
+            self.assertEqual(state["last_checked_channel"], "beta")
+            self.assertEqual(state["etag"], "")
+            self.assertEqual(state["last_modified"], "")
+
+    def test_stable_channel_does_not_request_beta_manifest(self):
+        with self._check_with_responses(
+            "stable", "1.2.3",
+            [(200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8"))],
+        ) as (_, state, calls):
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0].args[0], update_checker._STABLE_MANIFEST_URL)
+            self.assertEqual(state["pending_version"], "1.3.0")
+
+    def test_skipped_selected_beta_channel_version_is_not_pending(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.2.3", responses, {"skipped_version": "1.3.0"}
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "")
+
+    def test_beta_channel_announces_stable_when_highest_candidate_is_skipped(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.2.1")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.2.0", responses, {"skipped_version": "1.3.0-beta.1"}
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "1.2.1")
+            self.assertEqual(state["skipped_version"], "1.3.0-beta.1")
+
+    def test_beta_304_does_not_downgrade_existing_pending_update(self):
+        responses = [
+            (304, {}, b""),
+            (200, {}, json.dumps(_manifest("1.2.3")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.1.0", responses,
+            {
+                "last_checked_channel": "beta",
+                "pending_version": "1.3.0-beta.1",
+                "pending_notes_url": _manifest("1.3.0-beta.1")["notes_url"],
+                "pending_min_updatable_from": "1.0.0",
+            },
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "1.3.0-beta.1")
 
     def test_304_preserves_pending_update_and_uses_saved_etag(self):
         with tempfile.TemporaryDirectory() as directory:
