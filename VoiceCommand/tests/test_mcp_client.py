@@ -24,10 +24,14 @@ class _FakeResponse:
     def read(self, size=-1):
         return self._payload if size < 0 else self._payload[:size]
 
-    def readline(self):
+    def readline(self, size=-1):
         if not self._lines:
             return b""
-        return self._lines.pop(0)
+        line = self._lines.pop(0)
+        if size >= 0 and len(line) > size:
+            self._lines.insert(0, line[size:])
+            return line[:size]
+        return line
 
 
 class McpClientTests(unittest.TestCase):
@@ -105,6 +109,23 @@ class McpClientTests(unittest.TestCase):
 
         self.assertTrue(notifications)
         self.assertEqual(notifications[0]["method"], "notifications/tools/list_changed")
+
+    def test_sse_reader_bounds_unterminated_line(self):
+        session = McpSession("https://example.com/mcp")
+
+        class Response:
+            def __init__(self):
+                self.requested = []
+
+            def readline(self, size):
+                self.requested.append(size)
+                return b"x" * size
+
+        response = Response()
+        with self.assertRaises(ValueError):
+            session._iter_sse_messages(response)
+
+        self.assertEqual(response.requested, [10 * 1024 * 1024 + 1])
 
     def test_close_ignores_http_405(self):
         session = McpSession("https://example.com/mcp")

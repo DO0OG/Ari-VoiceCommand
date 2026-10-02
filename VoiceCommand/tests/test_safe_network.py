@@ -1,5 +1,6 @@
 import socket
 import unittest
+import gzip
 from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -54,6 +55,25 @@ class SafeNetworkTests(unittest.TestCase):
         with self.assertRaises(UnsafeUrlError):
             validate_browser_landing("http://localhost:3000", "http://127.0.0.1/private")
         validate_browser_landing("http://localhost:3000", "http://localhost:3000/next")
+
+    def test_browser_landing_normalizes_ipv6_literals(self):
+        validate_browser_landing("http://[0:0:0:0:0:0:0:1]/", "http://[::1]/")
+
+    def test_nonstandard_numeric_hosts_are_rejected_before_dns(self):
+        for host in ("0x08080808", "134744072", "010.010.010.010"):
+            for validate in (validate_public_http_url, validate_browser_url):
+                with self.subTest(host=host, validate=validate.__name__), patch(
+                    "core.safe_network.socket.getaddrinfo"
+                ) as resolve:
+                    with self.assertRaises(UnsafeUrlError):
+                        validate(f"http://{host}/")
+                    resolve.assert_not_called()
+
+        with patch("core.safe_network.socket.getaddrinfo", return_value=[_result("93.184.216.34")]) as resolve:
+            for validate in (validate_public_http_url, validate_browser_url):
+                validate("http://8.8.8.8/")
+                validate("http://example.com/")
+            self.assertEqual(resolve.call_count, 2)
 
     def test_web_fetch_still_rejects_localhost(self):
         from services.web_tools import web_fetch
@@ -132,6 +152,19 @@ class SafeNetworkTests(unittest.TestCase):
         response = Response()
         self.assertEqual(read_limited(response, 4), b"abcd")
         self.assertEqual(response.requested, 5)
+        self.assertTrue(response._safe_network_truncated)
+
+    def test_read_limited_decompresses_gzip_and_marks_expanded_limit(self):
+        class Response(BytesIO):
+            headers = {"Content-Encoding": "gzip"}
+
+        body = gzip.compress(b"expanded content")
+        response = Response(body)
+        self.assertEqual(read_limited(response, 100), b"expanded content")
+        self.assertFalse(response._safe_network_truncated)
+
+        response = Response(body)
+        self.assertEqual(read_limited(response, 8), b"expanded")
         self.assertTrue(response._safe_network_truncated)
 
 

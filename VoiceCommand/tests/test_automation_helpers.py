@@ -87,7 +87,7 @@ class AutomationHelpersTests(unittest.TestCase):
         def validate(start_url, current_url):
             if current_url.startswith("http://127."):
                 raise UnsafeUrlError("blocked redirect")
-        with patch.dict(sys.modules, modules), patch("agent.automation_helpers.validate_browser_landing", side_effect=validate):
+        with patch.dict(sys.modules, modules), patch("core.safe_network.validate_browser_landing", side_effect=validate):
             with self.assertRaises(UnsafeUrlError):
                 helper.browser_login("https://example.com", "user", "pass")
         self.assertEqual(driver.visited, ["https://example.com", "about:blank"])

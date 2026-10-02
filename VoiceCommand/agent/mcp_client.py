@@ -197,7 +197,8 @@ class McpSession:
         lines: List[str] = []
         total_bytes = 0
         while not self._sse_stop.is_set():
-            raw_line = response.readline()
+            remaining = 10 * 1024 * 1024 - total_bytes
+            raw_line = response.readline(remaining + 1)
             total_bytes += len(raw_line) if isinstance(raw_line, bytes) else len(str(raw_line or "").encode("utf-8"))
             if total_bytes > 10 * 1024 * 1024:
                 raise ValueError("MCP 응답이 10MB 제한을 초과했습니다.")

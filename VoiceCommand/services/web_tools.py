@@ -14,7 +14,7 @@ import urllib.request
 from typing import Optional, List, Dict, Any
 
 from i18n.translator import _
-from core.safe_network import UnsafeUrlError, is_public_http_url, read_limited, safe_urlopen, validate_browser_landing, validate_browser_url, validate_public_http_url
+from core.safe_network import UnsafeUrlError, is_public_http_url, read_limited, safe_urlopen, validate_browser_session, validate_browser_url, validate_public_http_url
 
 from agent.automation_plan_utils import (
     find_similar_goal_key,
@@ -117,6 +117,7 @@ class SmartBrowser:
         self._selector_history: Dict[str, Dict[str, str]] = self._load_selector_history()
         self._action_plan_history: Dict[str, Dict[str, List[Dict[str, Any]]]] = self._load_action_plan_history()
         self._last_action_summary = ""
+        self._browser_start_url = ""
 
     def _ensure_driver(self):
         if self.driver:
@@ -137,19 +138,22 @@ class SmartBrowser:
             logging.error("[SmartBrowser] 드라이버 초기화 실패: %s", e)
             raise
 
+    def _validate_current_page(self):
+        driver = getattr(self, "driver", None)
+        if driver:
+            start_url = getattr(self, "_browser_start_url", "") or str(getattr(driver, "current_url", "") or "")
+            validate_browser_session(driver, start_url)
+
     def navigate_and_action(self, url: str, actions: List[Dict[str, Any]], goal_hint: str = "") -> str:
         """지정된 URL로 이동하여 일련의 작업을 수행한다.
         actions 예: [{"type": "click", "selectors": ["#login", ".btn-submit"]}, {"type": "type", "text": "...", "selectors": ["input[name='q']"]}]
         """
         validate_browser_url(url)
         self._ensure_driver()
+        # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
+        self._browser_start_url = url
         self.driver.get(url)
-        current_url = str(getattr(self.driver, "current_url", "") or "")
-        try:
-            validate_browser_landing(url, current_url)
-        except UnsafeUrlError:
-            self.driver.get("about:blank")
-            raise
+        self._validate_current_page()
         
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -169,6 +173,9 @@ class SmartBrowser:
         for action in actions:
             try:
                 results.append(self._execute_browser_action(action, current_domain, wait, By, EC))
+            except UnsafeUrlError as e:
+                results.append(f"오류: {action.get('type')} ({str(e)[:50]})")
+                break
             except Exception as e:
                 act_type = action.get("type")
                 results.append(f"오류: {act_type} ({str(e)[:50]})")
@@ -179,6 +186,14 @@ class SmartBrowser:
         return self._last_action_summary
 
     def _execute_browser_action(self, action: Dict[str, Any], current_domain: str, wait, by_module, ec_module) -> str:
+        self._validate_current_page()
+        try:
+            result = self._execute_browser_action_unchecked(action, current_domain, wait, by_module, ec_module)
+        finally:
+            self._validate_current_page()
+        return result
+
+    def _execute_browser_action_unchecked(self, action: Dict[str, Any], current_domain: str, wait, by_module, ec_module) -> str:
         act_type = action.get("type")
         action_key = action.get("key") or action.get("name") or act_type or "action"
 
@@ -200,6 +215,7 @@ class SmartBrowser:
         if act_type == "read_links":
             selector = action.get("selector", "a")
             links = self.driver.find_elements(by_module.CSS_SELECTOR, selector)
+            self._validate_current_page()
             hrefs = [link.get_attribute("href") for link in links[: int(action.get("limit", 5))]]
             return "링크: " + ", ".join([href for href in hrefs if href])
         if act_type == "wait_selector":
@@ -212,32 +228,41 @@ class SmartBrowser:
 
         if act_type == "click":
             wait.until(ec_module.element_to_be_clickable((by_module.CSS_SELECTOR, matched_selector))).click()
+            self._validate_current_page()
             return "성공: click"
         if act_type == "click_text":
             found_el.click()
+            self._validate_current_page()
             return "성공: click_text"
         if act_type == "type":
             found_el.clear()
+            self._validate_current_page()
             found_el.send_keys(action.get("text", ""))
+            self._validate_current_page()
             return "성공: type"
         if act_type == "wait":
             wait.until(ec_module.presence_of_element_located((by_module.CSS_SELECTOR, matched_selector)))
+            self._validate_current_page()
             return "성공: wait"
         if act_type == "read":
             return f"읽기: {found_el.text[:120]}"
         return f"건너뜀: {act_type or 'unknown'}"
 
     def _find_element_for_action(self, action: Dict[str, Any], current_domain: str, action_key: str, wait, by_module, ec_module):
+        self._validate_current_page()
         selectors = self._ordered_selectors(current_domain, action_key, action.get("selectors", []))
         found_el = None
         matched_selector = ""
         for sel in selectors:
             try:
                 found_el = wait.until(ec_module.presence_of_element_located((by_module.CSS_SELECTOR, sel)))
+                self._validate_current_page()
                 if found_el:
                     matched_selector = sel
                     self._remember_selector(current_domain, action_key, sel)
                     break
+            except UnsafeUrlError:
+                raise
             except Exception as exc:
                 logging.debug("[SmartBrowser] 셀렉터 실패: %s (%s)", sel, exc)
         if found_el:
@@ -251,6 +276,7 @@ class SmartBrowser:
         return found_el, matched_selector
 
     def _find_element_by_text(self, text_query: str):
+        self._validate_current_page()
         if not self.driver or not text_query:
             return None
         try:
@@ -275,12 +301,17 @@ class SmartBrowser:
             )
             try:
                 elements = self.driver.find_elements(By.XPATH, xpath)
+                self._validate_current_page()
+            except UnsafeUrlError:
+                raise
             except Exception as exc:
                 logging.debug("[SmartBrowser] 텍스트 요소 검색 실패: %s (%s)", variant, exc)
                 continue
             for element in elements:
                 try:
+                    self._validate_current_page()
                     if element.is_displayed():
+                        self._validate_current_page()
                         return element
                 except Exception as exc:
                     logging.debug("[SmartBrowser] 요소 표시 상태 확인 실패: %s", exc)
@@ -293,6 +324,7 @@ class SmartBrowser:
             return ""
         end = time.time() + timeout
         while time.time() < end:
+            self._validate_current_page()
             current_url = str(getattr(self.driver, "current_url", "") or "")
             if target in current_url.lower():
                 return current_url
@@ -305,6 +337,7 @@ class SmartBrowser:
             return ""
         end = time.time() + timeout
         while time.time() < end:
+            self._validate_current_page()
             title = str(getattr(self.driver, "title", "") or "")
             if target in title.lower():
                 return title
@@ -323,13 +356,10 @@ class SmartBrowser:
         """로그인 후 DOM 상태를 분석하고 후속 액션을 동적으로 실행한다."""
         validate_browser_url(url)
         self._ensure_driver()
+        # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
+        self._browser_start_url = url
         self.driver.get(url)
-        current_url = str(getattr(self.driver, "current_url", "") or "")
-        try:
-            validate_browser_landing(url, current_url)
-        except UnsafeUrlError:
-            self.driver.get("about:blank")
-            raise
+        self._validate_current_page()
         action_results: List[Dict[str, Any]] = []
         suggested_followups: List[Dict[str, Any]] = []
         replan_count = 0
@@ -343,6 +373,7 @@ class SmartBrowser:
         login_result = self._execute_browser_action(login_action, current_domain, wait, By, EC)
         action_results.append({"action": login_action, "result": login_result})
 
+        self._validate_current_page()
         dom_state = analyse_dom(self.driver)
         if not dom_state.logged_in and not dom_state.login_detected:
             logging.warning("[SmartBrowser] 로그인 상태 확인이 불확실합니다.")
@@ -362,6 +393,7 @@ class SmartBrowser:
         for action in actions:
             result = self._execute_browser_action(action, current_domain, wait, By, EC)
             action_results.append({"action": action, "result": result})
+            self._validate_current_page()
             dom_state = analyse_dom(self.driver)
             if dom_state.alerts and any(token in " ".join(dom_state.alerts).lower() for token in ("error", "오류", "실패")):
                 if replan_callback is None or replan_count >= max_replan_rounds:
@@ -378,6 +410,7 @@ class SmartBrowser:
                 for extra_action in replanned:
                     extra_result = self._execute_browser_action(extra_action, current_domain, wait, By, EC)
                     action_results.append({"action": extra_action, "result": extra_result})
+                    self._validate_current_page()
                     dom_state = analyse_dom(self.driver)
 
         self._last_action_summary = " | ".join(item["result"] for item in action_results if item.get("result"))
@@ -407,6 +440,7 @@ class SmartBrowser:
                 state["dom_suggestions"] = []
             return state
 
+        self._validate_current_page()
         current_url = getattr(self.driver, "current_url", "")
         state = {
             "ready": True,
@@ -420,6 +454,7 @@ class SmartBrowser:
         }
         if include_dom_analysis:
             try:
+                self._validate_current_page()
                 dom_state = analyse_dom(self.driver)
                 state["dom_analysis"] = dom_state.__dict__
                 state["dom_suggestions"] = suggest_next_actions(dom_state)
@@ -432,6 +467,7 @@ class SmartBrowser:
         end = time.time() + timeout
         last_seen: Dict[str, tuple[int, float]] = {}
         while time.time() < end:
+            self._validate_current_page()
             try:
                 entries = [
                     os.path.join(self.download_dir, name)
@@ -608,8 +644,11 @@ class SmartBrowser:
 
     def close(self):
         if self.driver:
-            self.driver.quit()
-            self.driver = None
+            try:
+                self.driver.quit()
+            finally:
+                self.driver = None
+                self._browser_start_url = ""
 
 # 싱글톤 브라우저 (필요 시 사용)
 _browser_instance: Optional[SmartBrowser] = None

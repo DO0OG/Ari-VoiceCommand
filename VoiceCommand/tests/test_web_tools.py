@@ -2,6 +2,7 @@ import os
 import ipaddress
 import socket
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -119,6 +120,59 @@ class WebToolsTests(unittest.TestCase):
             with self.assertRaises(web_tools.UnsafeUrlError):
                 browser.navigate_and_action("https://example.com", [])
         self.assertEqual(driver.visited, ["https://example.com", "about:blank"])
+
+    def test_explicit_local_navigation_after_public_page_is_allowed(self):
+        class Driver:
+            current_url = "https://example.com/"
+            title = ""
+            page_source = ""
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        driver = Driver()
+        browser.driver = driver
+        browser._ensure_driver = lambda: None
+        browser._browser_start_url = "https://example.com/"
+
+        browser._validate_current_page()
+        browser._browser_start_url = "http://127.0.0.1:3000/"
+        driver.get("http://127.0.0.1:3000/")
+        browser._validate_current_page()
+
+        self.assertEqual(driver.visited, ["http://127.0.0.1:3000/"])
+
+    def test_navigation_sets_baseline_to_requested_url(self):
+        class Driver:
+            current_url = ""
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        browser.driver = Driver()
+        browser._ensure_driver = lambda: None
+        browser._browser_start_url = "https://example.com/"
+        seen = []
+
+        def stop_after_validation():
+            seen.append(browser._browser_start_url)
+            raise web_tools.UnsafeUrlError("stop")
+
+        browser._validate_current_page = stop_after_validation
+        with self.assertRaises(web_tools.UnsafeUrlError):
+            browser.navigate_and_action("http://127.0.0.1:3000/", [])
+
+        self.assertEqual(seen, ["http://127.0.0.1:3000/"])
 
     def test_wait_for_download_stability_clock_restarts_only_when_size_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -298,6 +352,75 @@ class WebToolsTests(unittest.TestCase):
             result = browser._execute_browser_action({"type": "read_url"}, "example.com", None, None, None)
 
             self.assertIn("https://example.com/dashboard", result)
+
+    def test_browser_click_to_unexpected_local_address_blanks_page(self):
+        browser = SmartBrowser.__new__(SmartBrowser)
+
+        class Driver:
+            current_url = "https://example.com/start"
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        class Element:
+            def click(self):
+                browser.driver.current_url = "http://127.0.0.1/"
+
+        class Wait:
+            def __init__(self, driver, timeout):
+                self.driver = driver
+
+            def until(self, condition):
+                return Element()
+
+        class By:
+            CSS_SELECTOR = "css selector"
+
+        class EC:
+            @staticmethod
+            def element_to_be_clickable(locator):
+                return locator
+
+        browser.driver = Driver()
+        browser._browser_start_url = ""
+        browser._find_element_for_action = lambda *_args, **_kwargs: (Element(), "#go")
+        selenium_modules = {
+            "selenium": types.ModuleType("selenium"),
+            "selenium.webdriver": types.ModuleType("selenium.webdriver"),
+            "selenium.webdriver.common": types.ModuleType("selenium.webdriver.common"),
+            "selenium.webdriver.common.by": types.ModuleType("selenium.webdriver.common.by"),
+            "selenium.webdriver.support": types.ModuleType("selenium.webdriver.support"),
+            "selenium.webdriver.support.ui": types.ModuleType("selenium.webdriver.support.ui"),
+            "selenium.webdriver.support.expected_conditions": types.ModuleType(
+                "selenium.webdriver.support.expected_conditions"
+            ),
+        }
+        selenium_modules["selenium.webdriver.common.by"].By = By
+        selenium_modules["selenium.webdriver.support.ui"].WebDriverWait = Wait
+        selenium_modules["selenium.webdriver.support.expected_conditions"].element_to_be_clickable = (
+            EC.element_to_be_clickable
+        )
+        for name in ("selenium", "selenium.webdriver", "selenium.webdriver.common", "selenium.webdriver.support"):
+            selenium_modules[name].__path__ = []
+        selenium_modules["selenium"].webdriver = selenium_modules["selenium.webdriver"]
+        selenium_modules["selenium.webdriver"].common = selenium_modules["selenium.webdriver.common"]
+        selenium_modules["selenium.webdriver"].support = selenium_modules["selenium.webdriver.support"]
+        selenium_modules["selenium.webdriver.common"].by = selenium_modules["selenium.webdriver.common.by"]
+        selenium_modules["selenium.webdriver.support"].ui = selenium_modules["selenium.webdriver.support.ui"]
+        selenium_modules["selenium.webdriver.support"].expected_conditions = selenium_modules[
+            "selenium.webdriver.support.expected_conditions"
+        ]
+        with patch.dict("sys.modules", selenium_modules):
+            result = browser.navigate_and_action(
+                "https://example.com/start",
+                [{"type": "click", "selectors": ["#go"]}],
+            )
+            self.assertIn("오류: click", result)
+            self.assertEqual(browser.driver.visited, ["https://example.com/start", "about:blank"])
 
     def test_execute_browser_action_supports_wait_selector(self):
         with tempfile.TemporaryDirectory() as tmp:
