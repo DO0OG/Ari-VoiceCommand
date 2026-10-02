@@ -409,8 +409,21 @@ def _check_for_updates() -> tuple[int, int]:
         if status == 200 or manifests:
             current_version = get_version()
             selected_manifest = None
+            skipped = state.get("skipped_version")
+            if not isinstance(skipped, str) or _VERSION_PATTERN.fullmatch(skipped) is None:
+                skipped = ""
             for manifest in manifests:
                 if compare_versions(manifest["version"], current_version) <= 0:
+                    continue
+                # 건너뛴 버전이 최고 버전이어도 다른 후보의 안내가 가려지지 않게 먼저 제외한다.
+                if manifest["version"] == skipped:
+                    continue
+                # 정식판을 건너뛴 사용자에게 그보다 낮은 시험판을 권하지 않는다.
+                if (
+                    skipped
+                    and "-" in manifest["version"]
+                    and compare_versions(manifest["version"], skipped) < 0
+                ):
                     continue
                 if (
                     selected_manifest is None
@@ -419,10 +432,7 @@ def _check_for_updates() -> tuple[int, int]:
                     ) > 0
                 ):
                     selected_manifest = manifest
-            if (
-                selected_manifest is not None
-                and state.get("skipped_version") != selected_manifest["version"]
-            ):
+            if selected_manifest is not None:
                 updates.update(
                     {
                         "pending_version": selected_manifest["version"],

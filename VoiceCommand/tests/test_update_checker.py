@@ -312,6 +312,17 @@ class UpdateCheckerTests(unittest.TestCase):
         ) as (_, state, _):
             self.assertEqual(state["pending_version"], "")
 
+    def test_beta_channel_announces_stable_when_highest_candidate_is_skipped(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.2.1")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.2.0", responses, {"skipped_version": "1.3.0-beta.1"}
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "1.2.1")
+            self.assertEqual(state["skipped_version"], "1.3.0-beta.1")
+
     def test_beta_304_does_not_downgrade_existing_pending_update(self):
         responses = [
             (304, {}, b""),
