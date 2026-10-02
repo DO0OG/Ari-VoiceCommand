@@ -1,4 +1,5 @@
 import os
+import socket
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -21,6 +22,13 @@ class _TempBrowser(SmartBrowser):
 
 
 class WebToolsTests(unittest.TestCase):
+    def setUp(self):
+        self.dns = patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )])
+        self.dns.start()
+        self.addCleanup(self.dns.stop)
+
     def test_is_safe_http_url_blocks_local_and_private_targets(self):
         blocked_urls = (
             "http://localhost:8000",
@@ -33,11 +41,83 @@ class WebToolsTests(unittest.TestCase):
             "file:///etc/passwd",
         )
 
-        for url in blocked_urls:
-            with self.subTest(url=url):
-                self.assertFalse(web_tools._is_safe_http_url(url))
+        addresses = {
+            "localhost": "127.0.0.1", "127.0.0.1": "127.0.0.1", "10.0.0.25": "10.0.0.25",
+            "192.168.0.10": "192.168.0.10", "::1": "::1", "fe80::1": "fe80::1", "0.0.0.0": "0.0.0.0",
+        }
+        def resolve(host, *args, **kwargs):
+            address = addresses.get(host, "93.184.216.34")
+            family = socket.AF_INET6 if ":" in address else socket.AF_INET
+            sockaddr = (address, 443, 0, 0) if family == socket.AF_INET6 else (address, 443)
+            return [(family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)]
+        with patch("core.safe_network.socket.getaddrinfo", side_effect=resolve):
+            for url in blocked_urls:
+                with self.subTest(url=url):
+                    self.assertFalse(web_tools._is_safe_http_url(url))
+            self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
 
-        self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
+    def test_web_fetch_limits_body_and_rejects_binary_content_type(self):
+        class Response:
+            def __init__(self, payload, content_type):
+                self.payload = payload
+                self.headers = {"Content-Type": content_type}
+                self.read_sizes = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, size):
+                self.read_sizes.append(size)
+                return self.payload[:size]
+
+        body = Response(b"a" * (2 * 1024 * 1024 + 10), "text/plain")
+        with patch.object(web_tools, "safe_urlopen", return_value=body):
+            text = web_tools.web_fetch("https://example.com")
+        self.assertEqual(body.read_sizes, [2 * 1024 * 1024 + 1])
+        self.assertEqual(len(text), 3000)
+
+        binary = Response(b"image", "image/png")
+        with patch.object(web_tools, "safe_urlopen", return_value=binary):
+            result = web_tools.web_fetch("https://example.com")
+        self.assertIn("텍스트가 아닌 응답입니다: image/png", result)
+        self.assertEqual(binary.read_sizes, [])
+
+    def test_web_fetch_returns_unsafe_url_reason(self):
+        with patch.object(web_tools, "validate_public_http_url", side_effect=web_tools.UnsafeUrlError("공개 주소가 아닙니다")):
+            result = web_tools.web_fetch("http://127.0.0.1")
+        self.assertIn("허용되지 않은 URL입니다: 공개 주소가 아닙니다", result)
+
+    def test_browser_rejects_before_navigation_and_blanks_unsafe_redirect(self):
+        class Driver:
+            current_url = ""
+
+            def __init__(self, current_url=""):
+                self.current_url = current_url
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        driver = Driver()
+        browser.driver = driver
+        browser._ensure_driver = lambda: None
+        with patch.object(web_tools, "validate_browser_url", side_effect=web_tools.UnsafeUrlError("blocked")):
+            with self.assertRaises(web_tools.UnsafeUrlError):
+                browser.navigate_and_action("http://127.0.0.1", [])
+        self.assertEqual(driver.visited, [])
+
+        driver = Driver("http://127.0.0.1/private")
+        browser.driver = driver
+        with patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )]):
+            with self.assertRaises(web_tools.UnsafeUrlError):
+                browser.navigate_and_action("https://example.com", [])
+        self.assertEqual(driver.visited, ["https://example.com", "about:blank"])
 
     def test_wait_for_download_stability_clock_restarts_only_when_size_changes(self):
         with tempfile.TemporaryDirectory() as tmp:

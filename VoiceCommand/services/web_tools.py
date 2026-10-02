@@ -3,7 +3,6 @@
 인터넷 검색, 페이지 조회 및 Selenium 기반의 스마트 브라우저 워크플로우를 제공한다.
 """
 import html
-import ipaddress
 import logging
 import os
 import json
@@ -15,6 +14,7 @@ import urllib.request
 from typing import Optional, List, Dict, Any
 
 from i18n.translator import _
+from core.safe_network import UnsafeUrlError, is_public_http_url, read_limited, safe_urlopen, validate_browser_landing, validate_browser_url, validate_public_http_url
 
 from agent.automation_plan_utils import (
     find_similar_goal_key,
@@ -32,10 +32,6 @@ _HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
-_BLOCKED_HOSTNAMES = {"localhost"}
-_BLOCKED_IP_PREFIXES = ("127.", "10.", "169.254.", "192.168.")
-
-
 def _runtime_fallback_path(filename: str) -> str:
     project_root = os.path.dirname(os.path.dirname(__file__))
     runtime_root = os.path.join(project_root, ".ari_runtime")
@@ -44,28 +40,7 @@ def _runtime_fallback_path(filename: str) -> str:
 
 
 def _is_safe_http_url(url: str) -> bool:
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return False
-
-    host = (parsed.hostname or "").strip().rstrip(".").lower()
-    if not host or host in _BLOCKED_HOSTNAMES:
-        return False
-    if any(host.startswith(prefix) for prefix in _BLOCKED_IP_PREFIXES):
-        return False
-
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return True
-
-    return not (
-        address.is_private
-        or address.is_loopback
-        or address.is_link_local
-        or address.is_reserved
-        or address.is_unspecified
-    )
+    return is_public_http_url(url)
 
 
 def _create_search_client():
@@ -108,13 +83,17 @@ def web_search(query: str, max_results: int = 5) -> str:
 def web_fetch(url: str, max_chars: int = 3000) -> str:
     """URL의 본문 텍스트를 추출한다."""
     try:
-        if not _is_safe_http_url(url):
-            parsed = urllib.parse.urlparse(url)
-            return _("허용되지 않은 URL 스킴: {scheme}", scheme=parsed.scheme or "unknown")
+        validate_public_http_url(url)
         req = urllib.request.Request(url, headers=_HEADERS)
-        # _is_safe_http_url() restricts fetches to http/https URLs only.
-        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
-            raw = resp.read().decode("utf-8", errors="replace")
+        with safe_urlopen(req, timeout=10) as resp:
+            content_type = resp.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if content_type and not (
+                content_type.startswith("text/")
+                or content_type in {"application/xhtml+xml", "application/json", "application/xml"}
+                or content_type.endswith(("+json", "+xml"))
+            ):
+                return _("텍스트가 아닌 응답입니다: {content_type}", content_type=content_type)
+            raw = read_limited(resp, 2 * 1024 * 1024).decode("utf-8", errors="replace")
         
         # 스크립트, 스타일, 태그 제거
         text = re.sub(r'<(script|style)[^>]*>.*?</\1>', '', raw, flags=re.DOTALL | re.I)
@@ -122,6 +101,8 @@ def web_fetch(url: str, max_chars: int = 3000) -> str:
         text = html.unescape(text)
         return re.sub(r'\s+', ' ', text).strip()[:max_chars]
     except Exception as e:
+        if isinstance(e, UnsafeUrlError):
+            return _("허용되지 않은 URL입니다: {reason}", reason=e)
         return _("페이지 로드 실패: {error}", error=e)
 
 # ── Selenium 스마트 브라우저 (Phase 2.1) ───────────────────────────────────────
@@ -160,8 +141,15 @@ class SmartBrowser:
         """지정된 URL로 이동하여 일련의 작업을 수행한다.
         actions 예: [{"type": "click", "selectors": ["#login", ".btn-submit"]}, {"type": "type", "text": "...", "selectors": ["input[name='q']"]}]
         """
+        validate_browser_url(url)
         self._ensure_driver()
         self.driver.get(url)
+        current_url = str(getattr(self.driver, "current_url", "") or "")
+        try:
+            validate_browser_landing(url, current_url)
+        except UnsafeUrlError:
+            self.driver.get("about:blank")
+            raise
         
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -333,8 +321,15 @@ class SmartBrowser:
         max_replan_rounds: int = 2,
     ) -> Dict[str, Any]:
         """로그인 후 DOM 상태를 분석하고 후속 액션을 동적으로 실행한다."""
+        validate_browser_url(url)
         self._ensure_driver()
         self.driver.get(url)
+        current_url = str(getattr(self.driver, "current_url", "") or "")
+        try:
+            validate_browser_landing(url, current_url)
+        except UnsafeUrlError:
+            self.driver.get("about:blank")
+            raise
         action_results: List[Dict[str, Any]] = []
         suggested_followups: List[Dict[str, Any]] = []
         replan_count = 0

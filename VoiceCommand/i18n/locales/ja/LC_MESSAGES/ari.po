@@ -4161,3 +4161,9 @@ msgstr "予約タスクの上限に達しました。使っていないタスク
 
 msgid "스킬 업데이트 중..."
 msgstr "スキルを更新しています..."
+
+msgid "텍스트가 아닌 응답입니다: {content_type}"
+msgstr "テキスト以外の応答です: {content_type}"
+
+msgid "허용되지 않은 URL입니다: {reason}"
+msgstr "許可されていないURLです: {reason}"

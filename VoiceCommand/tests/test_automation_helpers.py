@@ -1,10 +1,13 @@
 import os
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
 
 from agent.automation_helpers import AutomationHelpers
+from core.safe_network import UnsafeUrlError
 
 
 class _TempAutomationHelpers(AutomationHelpers):
@@ -20,6 +23,75 @@ class _TempAutomationHelpers(AutomationHelpers):
 
 
 class AutomationHelpersTests(unittest.TestCase):
+    def test_browser_login_rejects_url_before_starting_browser(self):
+        helper = AutomationHelpers()
+        with patch("agent.automation_helpers.validate_browser_url", side_effect=UnsafeUrlError("blocked")):
+            with self.assertRaises(UnsafeUrlError):
+                helper.browser_login("http://127.0.0.1", "user", "pass")
+
+    def test_browser_login_blanks_unsafe_redirect(self):
+        helper = AutomationHelpers()
+
+        class Driver:
+            current_url = "http://127.0.0.1/private"
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+
+        driver = Driver()
+        webdriver = types.ModuleType("selenium.webdriver")
+        webdriver.Chrome = lambda **kwargs: driver
+        options_module = types.ModuleType("selenium.webdriver.chrome.options")
+        options_module.Options = type("Options", (), {"add_argument": lambda self, value: None})
+        by_module = types.ModuleType("selenium.webdriver.common.by")
+        by_module.By = type("By", (), {"CSS_SELECTOR": "css"})
+        ui_module = types.ModuleType("selenium.webdriver.support.ui")
+        ui_module.WebDriverWait = object
+        expected_module = types.ModuleType("selenium.webdriver.support.expected_conditions")
+        service_module = types.ModuleType("selenium.webdriver.chrome.service")
+        service_module.Service = lambda path: path
+        manager_module = types.ModuleType("webdriver_manager.chrome")
+        manager_module.ChromeDriverManager = lambda: types.SimpleNamespace(install=lambda: "driver")
+        selenium = types.ModuleType("selenium")
+        chrome_module = types.ModuleType("selenium.webdriver.chrome")
+        common_module = types.ModuleType("selenium.webdriver.common")
+        support_module = types.ModuleType("selenium.webdriver.support")
+        manager_parent = types.ModuleType("webdriver_manager")
+        webdriver.chrome = chrome_module
+        webdriver.common = common_module
+        webdriver.support = support_module
+        chrome_module.options = options_module
+        chrome_module.service = service_module
+        common_module.by = by_module
+        support_module.ui = ui_module
+        support_module.expected_conditions = expected_module
+        manager_parent.chrome = manager_module
+        selenium.webdriver = webdriver
+        modules = {
+            "selenium": selenium,
+            "selenium.webdriver": webdriver,
+            "selenium.webdriver.chrome": chrome_module,
+            "selenium.webdriver.chrome.options": options_module,
+            "selenium.webdriver.chrome.service": service_module,
+            "selenium.webdriver.common": common_module,
+            "selenium.webdriver.common.by": by_module,
+            "selenium.webdriver.support": support_module,
+            "selenium.webdriver.support.ui": ui_module,
+            "selenium.webdriver.support.expected_conditions": expected_module,
+            "webdriver_manager": manager_parent,
+            "webdriver_manager.chrome": manager_module,
+        }
+        def validate(start_url, current_url):
+            if current_url.startswith("http://127."):
+                raise UnsafeUrlError("blocked redirect")
+        with patch.dict(sys.modules, modules), patch("agent.automation_helpers.validate_browser_landing", side_effect=validate):
+            with self.assertRaises(UnsafeUrlError):
+                helper.browser_login("https://example.com", "user", "pass")
+        self.assertEqual(driver.visited, ["https://example.com", "about:blank"])
+
     def test_automation_helpers_exposes_internal_mixins(self):
         base_names = {base.__name__ for base in AutomationHelpers.__bases__}
 

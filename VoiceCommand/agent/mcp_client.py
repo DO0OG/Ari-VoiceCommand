@@ -7,7 +7,9 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+from core import safe_network
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,18 @@ def _require_https(url: str) -> str:
     normalized = str(url or "").strip()
     if not normalized.startswith("https://"):
         raise ValueError(f"HTTPS URL only: {url}")
-    return normalized
+    return safe_network.validate_public_http_url(normalized, allowed_schemes=("https",))
+
+
+def urlopen(request, timeout=None):
+    return safe_network.safe_urlopen(request, timeout=timeout, allowed_schemes=("https",))
+
+
+def _read_response(response) -> bytes:
+    body = safe_network.read_limited(response, 10 * 1024 * 1024)
+    if getattr(response, "_safe_network_truncated", False):
+        raise ValueError("MCP 응답이 10MB 제한을 초과했습니다.")
+    return body
 
 
 class McpSession:
@@ -72,7 +85,7 @@ class McpSession:
             )
             with urlopen(request, timeout=self.timeout) as response:  # nosec B310
                 self.session_id = response.headers.get("Mcp-Session-Id", "") or None
-                raw = response.read().decode("utf-8", errors="replace")
+                raw = _read_response(response).decode("utf-8", errors="replace")
                 content_type = response.headers.get("Content-Type", "")
 
             parsed = (
@@ -182,8 +195,12 @@ class McpSession:
     def _iter_sse_messages(self, response) -> List[dict]:
         messages: List[dict] = []
         lines: List[str] = []
+        total_bytes = 0
         while not self._sse_stop.is_set():
             raw_line = response.readline()
+            total_bytes += len(raw_line) if isinstance(raw_line, bytes) else len(str(raw_line or "").encode("utf-8"))
+            if total_bytes > 10 * 1024 * 1024:
+                raise ValueError("MCP 응답이 10MB 제한을 초과했습니다.")
             if isinstance(raw_line, bytes):
                 line = raw_line.decode("utf-8", errors="replace")
             else:
@@ -230,7 +247,7 @@ class McpSession:
         )
         with urlopen(request, timeout=self.timeout) as response:  # nosec B310
             content_type = response.headers.get("Content-Type", "")
-            raw = response.read().decode("utf-8", errors="replace")
+            raw = _read_response(response).decode("utf-8", errors="replace")
 
         if "text/event-stream" in content_type.lower():
             return self._parse_sse(raw)

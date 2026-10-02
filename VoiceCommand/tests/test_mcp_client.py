@@ -1,4 +1,5 @@
 import json
+import socket
 import unittest
 from io import BytesIO
 from urllib.error import HTTPError
@@ -20,8 +21,8 @@ class _FakeResponse:
     def __exit__(self, exc_type, exc, tb):
         return False
 
-    def read(self):
-        return self._payload
+    def read(self, size=-1):
+        return self._payload if size < 0 else self._payload[:size]
 
     def readline(self):
         if not self._lines:
@@ -30,6 +31,13 @@ class _FakeResponse:
 
 
 class McpClientTests(unittest.TestCase):
+    def setUp(self):
+        self.dns = mock.patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )])
+        self.dns.start()
+        self.addCleanup(self.dns.stop)
+
     def tearDown(self):
         reset_mcp_pool()
 
@@ -122,6 +130,13 @@ class McpClientTests(unittest.TestCase):
         session_a.close.assert_called_once()
         session_b.close.assert_called_once()
         self.assertEqual(pool._sessions, {})
+
+    def test_private_endpoint_is_rejected(self):
+        with mock.patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("10.0.0.1", 443)
+        )]):
+            with self.assertRaises(ValueError):
+                McpSession("https://private.example/mcp")
 
 
 if __name__ == "__main__":

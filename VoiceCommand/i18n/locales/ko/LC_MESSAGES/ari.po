@@ -4161,3 +4161,9 @@ msgstr "예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정�
 
 msgid "스킬 업데이트 중..."
 msgstr "스킬 업데이트 중..."
+
+msgid "텍스트가 아닌 응답입니다: {content_type}"
+msgstr "텍스트가 아닌 응답입니다: {content_type}"
+
+msgid "허용되지 않은 URL입니다: {reason}"
+msgstr "허용되지 않은 URL입니다: {reason}"

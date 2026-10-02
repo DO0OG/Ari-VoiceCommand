@@ -4164,3 +4164,9 @@ msgstr "The scheduled task limit has been reached. Remove unused tasks and try a
 
 msgid "스킬 업데이트 중..."
 msgstr "Updating skill..."
+
+msgid "텍스트가 아닌 응답입니다: {content_type}"
+msgstr "The response is not text: {content_type}"
+
+msgid "허용되지 않은 URL입니다: {reason}"
+msgstr "The URL is not allowed: {reason}"

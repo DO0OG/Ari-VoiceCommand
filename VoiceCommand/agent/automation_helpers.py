@@ -10,6 +10,7 @@ import logging
 import json
 import shutil
 from typing import Optional, List
+from core.safe_network import UnsafeUrlError, validate_browser_landing, validate_browser_url
 
 from agent.automation_plan_utils import (
     action_plan_cache_key,
@@ -336,6 +337,7 @@ class _AutomationHelpersCore:
         headless: bool = False,
     ) -> str:
         """브라우저를 열어 로그인을 시도한다."""
+        validate_browser_url(url)
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -356,6 +358,12 @@ class _AutomationHelpersCore:
         try:
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
             driver.get(url)
+            current_url = str(getattr(driver, "current_url", "") or "")
+            try:
+                validate_browser_landing(url, current_url)
+            except UnsafeUrlError:
+                driver.get("about:blank")
+                raise
             wait = WebDriverWait(driver, 20)
             password_selector = password_selector or "input[type='password']"
             
@@ -373,6 +381,8 @@ class _AutomationHelpersCore:
                 time.sleep(2)  # 로그인 처리 대기
 
             return driver.current_url
+        except UnsafeUrlError:
+            raise
         except Exception as exc:
             raise RuntimeError(f"브라우저 로그인 자동화 실패: {exc}") from exc
         finally:
