@@ -127,6 +127,12 @@ class McpClientTests(unittest.TestCase):
 
         self.assertEqual(response.requested, [10 * 1024 * 1024 + 1])
 
+    def test_sse_reader_rejects_compressed_response(self):
+        session = McpSession("https://example.com/mcp")
+        response = _FakeResponse(headers={"Content-Encoding": "gzip"})
+        with self.assertRaisesRegex(ValueError, "압축된 SSE 응답은 지원하지 않습니다"):
+            session._iter_sse_messages(response)
+
     def test_close_ignores_http_405(self):
         session = McpSession("https://example.com/mcp")
         session.session_id = "session-123"

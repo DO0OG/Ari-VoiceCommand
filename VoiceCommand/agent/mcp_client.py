@@ -193,6 +193,9 @@ class McpSession:
         self._sse_thread.start()
 
     def _iter_sse_messages(self, response) -> List[dict]:
+        encoding = getattr(response, "headers", {}).get("Content-Encoding", "").strip().lower()
+        if encoding and encoding != "identity":
+            raise ValueError("압축된 SSE 응답은 지원하지 않습니다.")
         messages: List[dict] = []
         lines: List[str] = []
         total_bytes = 0

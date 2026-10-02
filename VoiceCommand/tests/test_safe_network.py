@@ -12,6 +12,7 @@ from core.safe_network import (
     _SafeHTTPSHandler,
     _SafeRedirectHandler,
     read_limited,
+    safe_urlopen,
     validate_browser_landing,
     validate_browser_url,
     validate_public_http_url,
@@ -166,6 +167,72 @@ class SafeNetworkTests(unittest.TestCase):
         response = Response(body)
         self.assertEqual(read_limited(response, 8), b"expanded")
         self.assertTrue(response._safe_network_truncated)
+
+    def test_read_limited_rejects_gzip_trailing_data_with_bounded_reads(self):
+        class Response(BytesIO):
+            headers = {"Content-Encoding": "gzip"}
+
+            def __init__(self, body):
+                super().__init__(body)
+                self.read_total = 0
+
+            def read(self, size=-1):
+                data = super().read(size)
+                self.read_total += len(data)
+                return data
+
+        response = Response(gzip.compress(b"x") + b"z" * 10000)
+        with self.assertRaises(ValueError):
+            read_limited(response, 64)
+
+        # 출력이 늘지 않는 빈 멤버가 이어져도 입력 상한에서 멈춘다.
+        response = Response(gzip.compress(b"x") + gzip.compress(b"") * 20000)
+        self.assertEqual(read_limited(response, 64), b"x")
+        self.assertTrue(response._safe_network_truncated)
+        self.assertLessEqual(response.read_total, 64 + 64 * 1024 + 1)
+
+    def test_read_limited_decompresses_concatenated_gzip_members(self):
+        class Response(BytesIO):
+            headers = {"Content-Encoding": "gzip"}
+
+        response = Response(gzip.compress(b"first") + gzip.compress(b"second"))
+        self.assertEqual(read_limited(response, 100), b"firstsecond")
+
+    def test_read_limited_rejects_truncated_gzip(self):
+        class Response(BytesIO):
+            headers = {"Content-Encoding": "gzip"}
+
+        response = Response(gzip.compress(b"complete")[:-3])
+        with self.assertRaises(ValueError):
+            read_limited(response, 100)
+
+        # 본문이 없는 응답은 압축 표시가 있어도 빈 본문으로 본다.
+        self.assertEqual(read_limited(Response(b""), 100), b"")
+
+    def test_read_limited_decompresses_both_deflate_formats(self):
+        import zlib
+
+        class Response(BytesIO):
+            headers = {"Content-Encoding": "deflate"}
+
+        for body in (zlib.compress(b"deflate body"), zlib.compress(b"deflate body", wbits=-zlib.MAX_WBITS)):
+            with self.subTest(raw=body[:2] != b"\x78\x9c"):
+                response = Response(body)
+                self.assertEqual(read_limited(response, 100), b"deflate body")
+
+    def test_safe_urlopen_adds_identity_encoding_unless_caller_set_it(self):
+        class Opener:
+            def open(self, request, timeout):
+                return request
+
+        with patch("core.safe_network.validate_public_http_url"), patch(
+            "core.safe_network.urllib.request.build_opener", return_value=Opener()
+        ):
+            request = safe_urlopen("https://example.com", timeout=1)
+            self.assertEqual(request.get_header("Accept-encoding"), "identity")
+            custom = Request("https://example.com", headers={"Accept-Encoding": "gzip"})
+            result = safe_urlopen(custom, timeout=1)
+            self.assertEqual(result.get_header("Accept-encoding"), "gzip")
 
 
 if __name__ == "__main__":

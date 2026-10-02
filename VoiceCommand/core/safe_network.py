@@ -210,6 +210,8 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 def safe_urlopen(request_or_url, *, timeout, max_redirects=5, allowed_schemes=("http", "https")):
     request = request_or_url if isinstance(request_or_url, urllib.request.Request) else urllib.request.Request(request_or_url)
+    if not request.has_header("Accept-encoding"):
+        request.add_header("Accept-encoding", "identity")
     validate_public_http_url(request.full_url, allowed_schemes=allowed_schemes)
     opener = urllib.request.build_opener(
         _SafeHTTPHandler(),
@@ -219,6 +221,9 @@ def safe_urlopen(request_or_url, *, timeout, max_redirects=5, allowed_schemes=("
     return opener.open(request, timeout=timeout)
 
 
+_COMPRESSED_INPUT_SLACK = 64 * 1024
+
+
 def read_limited(response, max_bytes: int) -> bytes:
     encoding = getattr(response, "headers", {}).get("Content-Encoding", "").strip().lower()
     if encoding not in {"gzip", "deflate"}:
@@ -226,25 +231,50 @@ def read_limited(response, max_bytes: int) -> bytes:
         response._safe_network_truncated = len(data) > max_bytes
         return data[:max_bytes]
 
-    decoder = zlib.decompressobj(31 if encoding == "gzip" else zlib.MAX_WBITS)
+    wbits = 31 if encoding == "gzip" else zlib.MAX_WBITS
+    decoder = zlib.decompressobj(wbits)
     output = bytearray()
     truncated = False
+    # 압축 입력에도 상한을 둔다. 출력이 늘지 않는 빈 멤버가 끝없이 이어질 수 있기 때문이다.
+    # 압축 헤더나 압축되지 않는 본문 때문에 입력이 출력보다 조금 클 수 있어 여유를 둔다.
+    input_limit = max_bytes + _COMPRESSED_INPUT_SLACK
+    input_size = 0
+    first_chunk = True
     while True:
-        chunk = response.read(64 * 1024)
+        chunk = response.read(min(64 * 1024, input_limit - input_size + 1))
         if not chunk:
             break
+        input_size += len(chunk)
+        if input_size > input_limit:
+            chunk = chunk[:input_limit - (input_size - len(chunk))]
+            input_size = input_limit
+            truncated = True
         pending = chunk
         while pending:
-            decoded = decoder.decompress(pending, max_bytes + 1 - len(output))
+            if decoder.eof:
+                if encoding != "gzip":
+                    raise ValueError("압축 응답 뒤에 잘못된 데이터가 있습니다.")
+                decoder = zlib.decompressobj(wbits)
+            try:
+                decoded = decoder.decompress(pending, max_bytes + 1 - len(output))
+            except zlib.error as exc:
+                if encoding == "deflate" and first_chunk and not output:
+                    decoder = zlib.decompressobj(-zlib.MAX_WBITS)
+                    try:
+                        decoded = decoder.decompress(pending, max_bytes + 1 - len(output))
+                    except zlib.error as raw_exc:
+                        raise ValueError("압축 응답을 해제할 수 없습니다.") from raw_exc
+                else:
+                    raise ValueError("압축 응답을 해제할 수 없습니다.") from exc
             output.extend(decoded)
             if len(output) > max_bytes:
                 truncated = True
                 break
-            pending = decoder.unconsumed_tail
+            first_chunk = False
+            pending = decoder.unused_data if decoder.eof else decoder.unconsumed_tail
         if truncated:
             break
-    if not truncated:
-        output.extend(decoder.flush(max_bytes + 1 - len(output)))
-        truncated = len(output) > max_bytes
+    if not truncated and input_size and not decoder.eof:
+        raise ValueError("압축 응답이 끝나기 전에 스트림이 종료되었습니다.")
     response._safe_network_truncated = truncated
     return bytes(output[:max_bytes])
