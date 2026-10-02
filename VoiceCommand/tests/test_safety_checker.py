@@ -58,16 +58,36 @@ class SafetyCheckerTests(unittest.TestCase):
 
     def test_aliased_python_delete_calls_are_dangerous(self):
         snippets = (
+            'from pathlib import Path\np = Path("x")\np.unlink()',
+            'target.rmdir()',
+            'import shutil as sh\nd = "x"\nsh.rmtree(d)',
+            'from os import remove\np = "x"\nremove(p)',
+            'exec("import os\\nos.remove(p)")',
             "from pathlib import Path as P\nP('sample').unlink()",
             "import pathlib as pl\npl.Path('sample').rmdir()",
             "import os as filesystem\nfilesystem.unlink('sample')",
             "from os import unlink as remove_file\nremove_file('sample')",
             "import shutil as fs\nfs.rmtree('sample')",
             "from shutil import rmtree as remove_tree\nremove_tree('sample')",
+            "import os\nlist(map(os.remove, paths))",
+            "import os\nf = os.remove\nf(p)",
+            "from os import *\nremove(p)",
+            'exec("import os as o\\no.remove(p)")',
         )
         for code in snippets:
             with self.subTest(code=code):
                 self.assertEqual(self.checker.check_python(code).level, DangerLevel.DANGEROUS)
+
+    def test_python_delete_detection_ignores_list_remove(self):
+        for code in (
+            "text.strip()",
+            "items.remove(item)",
+            "todos.remove(x)",
+            "videos.remove(item)",
+            "pos.remove(1)",
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(self.checker.check_python(code).level, DangerLevel.SAFE)
 
 
 if __name__ == "__main__":

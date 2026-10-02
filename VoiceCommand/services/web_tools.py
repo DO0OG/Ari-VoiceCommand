@@ -118,6 +118,7 @@ class SmartBrowser:
         self._action_plan_history: Dict[str, Dict[str, List[Dict[str, Any]]]] = self._load_action_plan_history()
         self._last_action_summary = ""
         self._browser_start_url = ""
+        self._download_baseline: Optional[Dict[str, tuple[int, int]]] = None
 
     def _ensure_driver(self):
         if self.driver:
@@ -134,6 +135,7 @@ class SmartBrowser:
             opts.add_experimental_option("prefs", {"download.default_directory": self.download_dir})
             
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+            self._download_baseline = self._snapshot_downloads()
         except Exception as e:
             logging.error("[SmartBrowser] 드라이버 초기화 실패: %s", e)
             raise
@@ -152,9 +154,10 @@ class SmartBrowser:
         self._ensure_driver()
         # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
         self._browser_start_url = url
+        self._download_baseline = self._snapshot_downloads()
         self.driver.get(url)
         self._validate_current_page()
-        
+
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
@@ -225,6 +228,10 @@ class SmartBrowser:
         found_el, matched_selector = self._find_element_for_action(action, current_domain, action_key, wait, by_module, ec_module)
         if not found_el:
             return f"실패: {act_type} (셀렉터를 찾을 수 없음)"
+
+        if act_type in ("click", "click_text", "type"):
+            # 다운로드를 일으킬 수 있는 동작 직전의 폴더 상태가 기준이다.
+            self._download_baseline = self._snapshot_downloads()
 
         if act_type == "click":
             wait.until(ec_module.element_to_be_clickable((by_module.CSS_SELECTOR, matched_selector))).click()
@@ -358,6 +365,7 @@ class SmartBrowser:
         self._ensure_driver()
         # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
         self._browser_start_url = url
+        self._download_baseline = self._snapshot_downloads()
         self.driver.get(url)
         self._validate_current_page()
         action_results: List[Dict[str, Any]] = []
@@ -462,10 +470,32 @@ class SmartBrowser:
                 logging.debug("[SmartBrowser] DOM 분석 생략: %s", exc)
         return state
 
+    def _snapshot_downloads(self) -> Dict[str, tuple[int, int]]:
+        """다운로드 폴더의 파일별 (크기, 수정 시각)을 기록한다."""
+        snapshot: Dict[str, tuple[int, int]] = {}
+        try:
+            names = os.listdir(self.download_dir)
+        except OSError:
+            return snapshot
+        for name in names:
+            path = os.path.join(self.download_dir, name)
+            try:
+                if os.path.isfile(path):
+                    stat = os.stat(path)
+                    snapshot[path] = (stat.st_size, stat.st_mtime_ns)
+            except OSError:
+                continue
+        return snapshot
+
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """다운로드 완료 파일을 감지해 경로를 반환한다."""
         end = time.time() + timeout
-        last_seen: Dict[str, tuple[int, float]] = {}
+        # 기준은 다운로드를 일으킬 수 있는 동작(이동·click·type) 직전의 폴더 상태다.
+        # 대기를 시작할 때 찍으면 그 전에 이미 끝난 빠른 다운로드를 기존 파일로 오인한다.
+        initial_files = getattr(self, "_download_baseline", None)
+        if initial_files is None:
+            initial_files = self._snapshot_downloads()
+        last_seen: Dict[str, tuple[tuple[int, int], float]] = {}
         while time.time() < end:
             self._validate_current_page()
             try:
@@ -482,14 +512,22 @@ class SmartBrowser:
                 name = os.path.basename(path).lower()
                 if name.endswith((".crdownload", ".part", ".tmp")):
                     continue
-                size = os.path.getsize(path)
+                try:
+                    stat = os.stat(path)
+                except OSError:
+                    continue
+                state = (stat.st_size, stat.st_mtime_ns)
+                if initial_files.get(path) == state:
+                    continue
                 prev = last_seen.get(path)
                 now = time.time()
-                if prev and prev[0] == size:
+                if prev and prev[0] == state:
                     if now - prev[1] >= stable_seconds:
+                        # 돌려준 파일만 기준에 넣어, 같은 동작의 다른 파일은 다음 대기에서 반환된다.
+                        self._download_baseline = {**initial_files, path: state}
                         return path
                 else:
-                    last_seen[path] = (size, now)
+                    last_seen[path] = (state, now)
             time.sleep(0.5)
         raise TimeoutError(_("다운로드 완료 파일을 찾지 못했습니다."))
 
