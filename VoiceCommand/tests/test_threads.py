@@ -10,6 +10,7 @@ from core.threads import (
     CommandExecutionThread,
     TTSThread,
     VoiceRecognitionThread,
+    _MICROPHONE_RETRY_INTERVALS,
     _wait_for_tts_playback_completion,
 )
 from core.core_manager import start_file_watcher
@@ -420,6 +421,7 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
     def test_missing_microphone_waits_without_polling_and_stops(self):
         waiting = threading.Event()
         original_wait = threading.Event.wait
+        retries = MagicMock()
 
         def wait_for_microphone(event, timeout=None):
             waiting.set()
@@ -432,6 +434,7 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
         ):
             thread = VoiceRecognitionThread()
             self.addCleanup(thread.stop)
+            thread._retry_microphone = retries
             thread._microphone_wakeup.wait = lambda timeout=None: wait_for_microphone(
                 thread._microphone_wakeup, timeout
             )
@@ -440,12 +443,83 @@ class VoiceRecognitionThreadTests(unittest.TestCase):
             self.assertTrue(waiting.wait(1))
             self.assertIs(thread.microphone_available, False)
             self.assertTrue(thread.isRunning())
+            self.assertEqual(thread._microphone_retry_interval, 5)
             self.assertTrue(thread.claim_microphone_unavailable_notification())
             self.assertFalse(thread.claim_microphone_unavailable_notification())
             create_provider.assert_not_called()
 
             thread.stop()
             self.assertTrue(thread.wait(1000))
+            retries.assert_not_called()
+
+    def test_microphone_retries_after_timeout_and_recovers_on_voice_thread(self):
+        creation_threads = []
+        microphone = MagicMock()
+        timeouts = []
+
+        def create_microphone(device_index=None):
+            creation_threads.append(threading.current_thread().name)
+            if len(creation_threads) == 1:
+                raise OSError("no input device")
+            return microphone
+
+        with (
+            patch("VoiceCommand.SharedMicrophone", side_effect=create_microphone),
+            patch("VoiceCommand.get_microphone_index_helper", return_value=4),
+            patch("core.threads.ConfigManager.load_settings", return_value={"microphone": "USB Microphone"}),
+            patch("core.threads.ConfigManager.get", return_value=False),
+        ):
+            thread = VoiceRecognitionThread()
+            thread.cleanup = MagicMock()
+
+            def timeout_wait(timeout):
+                timeouts.append(timeout)
+                return False
+
+            thread._microphone_wakeup.wait = timeout_wait
+            thread._voice_wakeup.wait = lambda: setattr(thread, "running", False)
+            thread.start()
+            self.assertTrue(thread.wait(1000))
+
+        self.assertEqual(timeouts, [5])
+        self.assertIs(thread.microphone, microphone)
+        self.assertEqual(thread.selected_microphone, "USB Microphone")
+        self.assertEqual(thread.microphone_index, 4)
+        self.assertEqual(thread._microphone_retry_interval, 5)
+        self.assertNotEqual(creation_threads[1], threading.current_thread().name)
+
+    def test_microphone_retry_interval_backs_off_and_failures_do_not_repeat_notice(self):
+        with patch("VoiceCommand.SharedMicrophone", side_effect=OSError("no input device")):
+            thread = VoiceRecognitionThread()
+        notices = []
+        thread.microphone_unavailable.connect(lambda: notices.append(True))
+
+        with (
+            patch("core.threads.ConfigManager.load_settings", return_value={"microphone": "USB Microphone"}),
+            patch("core.threads.ConfigManager.get", return_value=False),
+            patch("VoiceCommand.get_microphone_index_helper", return_value=4),
+        ):
+            self.assertEqual(thread._microphone_retry_interval, 5)
+            with patch("VoiceCommand.SharedMicrophone", side_effect=OSError("no input device")):
+                for expected_interval in (10, 20, 30, 60, 60, 60):
+                    self.assertFalse(thread._retry_microphone())
+                    self.assertEqual(thread._microphone_retry_interval, expected_interval)
+
+            # 재시도가 실패를 반복해도 알림은 시작 때의 한 번만 요청된다.
+            self.assertEqual(notices, [])
+            self.assertTrue(thread.claim_microphone_unavailable_notification())
+            self.assertFalse(thread.claim_microphone_unavailable_notification())
+
+            with patch("VoiceCommand.SharedMicrophone", return_value=MagicMock()):
+                self.assertTrue(thread._retry_microphone())
+
+        self.assertEqual(thread._microphone_retry_interval, _MICROPHONE_RETRY_INTERVALS[0])
+        self.assertTrue(thread.microphone_available)
+        self.assertEqual(notices, [])
+
+        thread._microphone_retry_interval = 60
+        thread.set_microphone("Another Microphone")
+        self.assertEqual(thread._microphone_retry_interval, 5)
 
     def test_setting_microphone_recovers_on_voice_thread(self):
         microphone_ready = threading.Event()
