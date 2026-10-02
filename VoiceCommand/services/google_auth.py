@@ -30,6 +30,7 @@ SCOPES = (
 )
 AUTH_CACHE_FILENAME = "google_token.dpapi"
 LEGACY_AUTH_CACHE_FILENAME = "google_token.json"
+CALLBACK_READ_TIMEOUT = 3
 
 
 class GoogleAuthRequired(RuntimeError):
@@ -82,7 +83,7 @@ def load_token() -> dict | None:
 
 def save_token(token: dict) -> None:
     payload = json.dumps({key: token.get(key, "" if key != "expires_at" else 0) for key in (
-        "access_token", "refresh_token", "expires_at", "scope"
+        "access_token", "refresh_token", "expires_at", "scope", "client_id", "client_secret"
     )}, ensure_ascii=False).encode("utf-8")
     write_bytes_atomic(_token_path(), protect_bytes(payload))
 
@@ -173,6 +174,8 @@ def authorize(client_id: str, client_secret: str, *, open_browser=webbrowser.ope
     expected_state = ""
 
     class CallbackHandler(BaseHTTPRequestHandler):
+        timeout = CALLBACK_READ_TIMEOUT
+
         def do_GET(self):
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
@@ -216,7 +219,21 @@ def authorize(client_id: str, client_secret: str, *, open_browser=webbrowser.ope
             raise GoogleOAuthError(result["error"], result.get("error_description", ""))
         if not result.get("code"):
             raise RuntimeError(_("Google 인증 코드가 없습니다."))
+        if cancel_event is not None and cancel_event.is_set():
+            raise RuntimeError(_("Google 인증이 취소되었습니다."))
         token = exchange_code(client_id, client_secret, result["code"], verifier, redirect_uri)
+        token["client_id"] = client_id
+        token["client_secret"] = client_secret
+        if cancel_event is not None and cancel_event.is_set():
+            try:
+                requests.post(
+                    REVOKE_URL,
+                    data={"token": token.get("refresh_token") or token.get("access_token", "")},
+                    timeout=15,
+                )
+            except requests.RequestException:
+                pass
+            raise RuntimeError(_("Google 인증이 취소되었습니다."))
         save_token(token)
     finally:
         server.server_close()
@@ -228,7 +245,10 @@ def _configured_credentials() -> tuple[str, str]:
 
 
 def _refresh_stored_token(token: dict) -> str:
-    client_id, client_secret = _configured_credentials()
+    client_id = str(token.get("client_id", "") or "")
+    client_secret = str(token.get("client_secret", "") or "")
+    if not client_id or not client_secret:
+        client_id, client_secret = _configured_credentials()
     if not client_id or not client_secret:
         raise GoogleAuthRequired("설정에 저장된 Google Client ID·Secret을 확인하고 다시 연결해 주세요.")
     try:
@@ -291,13 +311,18 @@ def request_with_auth(method, url: str, **kwargs):
 
 def sign_out() -> None:
     with _TOKEN_LOCK:
-        token = load_token()
-        if token:
-            try:
-                requests.post(REVOKE_URL, data={"token": token.get("refresh_token") or token.get("access_token", "")}, timeout=15)
-            except requests.RequestException:
-                pass
-        clear_token()
+        try:
+            token = load_token()
+        except GoogleAuthRequired:
+            token = None
+        try:
+            if token:
+                try:
+                    requests.post(REVOKE_URL, data={"token": token.get("refresh_token") or token.get("access_token", "")}, timeout=15)
+                except requests.RequestException:
+                    pass
+        finally:
+            clear_token()
 
 
 def is_connected() -> bool:

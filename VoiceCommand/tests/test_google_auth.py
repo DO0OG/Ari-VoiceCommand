@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import socket
 import tempfile
 import threading
 import unittest
@@ -67,7 +68,7 @@ class GoogleAuthTests(unittest.TestCase):
                 timeout=5, cancel_event=cancel_event,
             )
 
-    def _authorize_callback(self, query):
+    def _authorize_callback(self, query, client_id="client", client_secret=_SAMPLE_CLIENT_VALUE, verify=None):
         posted = Mock(ok=True)
         posted.json.return_value = {
             "access_token": _SAMPLE_ACCESS,
@@ -114,47 +115,169 @@ class GoogleAuthTests(unittest.TestCase):
         ) as post, patch.object(google_auth.webbrowser, "open", side_effect=open_browser) as browser:
             outcome = None
             try:
-                google_auth.authorize("client", "secret", open_browser=google_auth.webbrowser.open, timeout=5)
+                google_auth.authorize(client_id, client_secret, open_browser=google_auth.webbrowser.open, timeout=5)
             except Exception as exc:
                 outcome = exc
             browser.assert_called_once()
+            if verify is not None:
+                verify(outcome, post, FakeServer.instances[0].errors)
         return outcome, post, FakeServer.instances[0].errors
 
     def test_state_mismatch_is_ignored_until_valid_callback(self):
-        error, post, callback_errors = self._authorize_callback(
+        def verify(error, post, callback_errors):
+            self.assertIsNone(error)
+            self.assertEqual(callback_errors, [400])
+            post.assert_called_once()
+            self.assertEqual(post.call_args.kwargs["data"]["code"], "valid-code")
+
+        self._authorize_callback(
             lambda params: [
                 "state=wrong&code=wrong-code",
                 f"state={params['state'][0]}&code=valid-code",
-            ]
+            ],
+            verify=verify,
         )
-        self.assertIsNone(error)
-        self.assertEqual(callback_errors, [400])
-        post.assert_called_once()
-        self.assertEqual(post.call_args.kwargs["data"]["code"], "valid-code")
 
     def test_access_denied_callback_fails(self):
-        error, post, _ = self._authorize_callback(lambda params: f"state={params['state'][0]}&error=access_denied")
-        self.assertIsInstance(error, google_auth.GoogleOAuthError)
-        post.assert_not_called()
+        def verify(error, post, _callback_errors):
+            self.assertIsInstance(error, google_auth.GoogleOAuthError)
+            post.assert_not_called()
+
+        self._authorize_callback(
+            lambda params: f"state={params['state'][0]}&error=access_denied",
+            verify=verify,
+        )
 
     def test_successful_callback_exchanges_and_saves_token(self):
-        error, post, _ = self._authorize_callback(lambda params: f"state={params['state'][0]}&code=auth-code")
-        self.assertIsNone(error)
-        self.assertEqual(post.call_args.kwargs["data"]["code"], "auth-code")
-        token = google_auth.load_token()
-        self.assertEqual(token["access_token"], "access")
-        self.assertEqual(token["refresh_token"], "refresh")
-        self.assertGreater(token["expires_at"], 0)
+        def verify(error, post, _callback_errors):
+            self.assertIsNone(error)
+            self.assertEqual(post.call_args.kwargs["data"]["code"], "auth-code")
+            token = google_auth.load_token()
+            self.assertEqual(token["access_token"], "access")
+            self.assertEqual(token["refresh_token"], "refresh")
+            self.assertGreater(token["expires_at"], 0)
+
+        self._authorize_callback(
+            lambda params: f"state={params['state'][0]}&code=auth-code",
+            verify=verify,
+        )
 
     def test_expired_token_refreshes_and_keeps_existing_refresh_token(self):
         google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1, "scope": "scope"})
         refreshed = Mock(ok=True)
         refreshed.json.return_value = {"access_token": _SAMPLE_NEW, "expires_in": 3600}
-        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE}.get(key, default)), patch.object(google_auth.requests, "post", return_value=refreshed):
+        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE}.get(key, default)), patch.object(google_auth.requests, "post", return_value=refreshed) as post:
             self.assertEqual(google_auth.get_access_token(), "new")
+            self.assertEqual(post.call_args.kwargs["data"]["client_id"], "id")
+            self.assertEqual(post.call_args.kwargs["data"]["client_secret"], _SAMPLE_CLIENT_VALUE)
         saved = google_auth.load_token()
         self.assertEqual(saved["refresh_token"], "refresh")
         self.assertEqual(saved["access_token"], "new")
+
+    def test_authorization_saves_credentials_for_future_refresh(self):
+        with patch.object(google_auth, "save_token", wraps=google_auth.save_token) as save:
+            error, _, _ = self._authorize_callback(
+                lambda params: f"state={params['state'][0]}&code=auth-code",
+                client_id="connected-id",
+                client_secret=_SAMPLE_CLIENT_VALUE,
+            )
+            self.assertIsNone(error)
+            self.assertEqual(save.call_args.args[0]["client_id"], "connected-id")
+            self.assertEqual(save.call_args.args[0]["client_secret"], _SAMPLE_CLIENT_VALUE)
+
+    def test_refresh_prefers_credentials_bound_to_token(self):
+        google_auth.save_token({
+            "access_token": _SAMPLE_OLD,
+            "refresh_token": _SAMPLE_REFRESH,
+            "expires_at": 1,
+            "client_id": "connected-id",
+            "client_secret": _SAMPLE_CLIENT_VALUE,
+        })
+        refreshed = Mock(ok=True)
+        refreshed.json.return_value = {"access_token": _SAMPLE_NEW, "expires_in": 3600}
+        with patch("core.config_manager.ConfigManager.get", return_value=""), patch.object(
+            google_auth.requests, "post", return_value=refreshed
+        ) as post:
+            self.assertEqual(google_auth.get_access_token(), "new")
+            self.assertEqual(post.call_args.kwargs["data"]["client_id"], "connected-id")
+            self.assertEqual(post.call_args.kwargs["data"]["client_secret"], _SAMPLE_CLIENT_VALUE)
+
+    def test_cancel_during_code_exchange_revokes_without_saving_token(self):
+        cancel_event = threading.Event()
+        response = Mock(ok=True)
+        response.json.return_value = {
+            "access_token": _SAMPLE_ACCESS,
+            "refresh_token": _SAMPLE_REFRESH,
+            "expires_in": 3600,
+        }
+        sockets = []
+
+        def open_browser(url):
+            redirect_uri = parse_qs(urlparse(url).query)["redirect_uri"][0]
+            conn = socket.create_connection(("127.0.0.1", urlparse(redirect_uri).port))
+            state = parse_qs(urlparse(url).query)["state"][0]
+            conn.sendall(f"GET /?state={state}&code=valid-code HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+            sockets.append(conn)
+            return True
+
+        def post(url, **_kwargs):
+            if url == google_auth.EXCHANGE_URL:
+                cancel_event.set()
+                return response
+            return Mock()
+
+        try:
+            with patch.object(google_auth.requests, "post", side_effect=post) as request:
+                with self.assertRaisesRegex(RuntimeError, "취소"):
+                    google_auth.authorize(
+                        "connected-id", _SAMPLE_CLIENT_VALUE,
+                        open_browser=open_browser, timeout=5, cancel_event=cancel_event,
+                    )
+                self.assertEqual(request.call_count, 2)
+                self.assertEqual(request.call_args_list[-1].args[0], google_auth.REVOKE_URL)
+                self.assertFalse(self.token_path.exists())
+        finally:
+            for conn in sockets:
+                conn.close()
+
+    def test_incomplete_callback_headers_do_not_block_valid_callback(self):
+        sockets = []
+        response = Mock(ok=True)
+        response.json.return_value = {
+            "access_token": _SAMPLE_ACCESS,
+            "refresh_token": _SAMPLE_REFRESH,
+            "expires_in": 3600,
+        }
+
+        def open_browser(url):
+            redirect_uri = parse_qs(urlparse(url).query)["redirect_uri"][0]
+            address = ("127.0.0.1", urlparse(redirect_uri).port)
+            partial = socket.create_connection(address)
+            partial.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nX-incomplete:")
+            valid = socket.create_connection(address)
+            state = parse_qs(urlparse(url).query)["state"][0]
+            valid.sendall(f"GET /?state={state}&code=valid-code HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+            sockets.extend((partial, valid))
+            return True
+
+        try:
+            with patch.object(google_auth, "CALLBACK_READ_TIMEOUT", 0.05), patch.object(
+                google_auth.requests, "post", return_value=response
+            ) as post:
+                google_auth.authorize("client", _SAMPLE_CLIENT_VALUE, open_browser=open_browser, timeout=3)
+                post.assert_called_once()
+                self.assertEqual(post.call_args.kwargs["data"]["code"], "valid-code")
+                self.assertTrue(self.token_path.exists())
+        finally:
+            for conn in sockets:
+                conn.close()
+
+    def test_sign_out_removes_corrupt_protected_file(self):
+        self.token_path.write_bytes(b"corrupt")
+        with patch.object(google_auth.requests, "post") as post:
+            google_auth.sign_out()
+            post.assert_not_called()
+            self.assertFalse(self.token_path.exists())
 
     def test_invalid_grant_clears_token_and_requires_authorization(self):
         google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1})
@@ -173,9 +296,9 @@ class GoogleAuthTests(unittest.TestCase):
         }
         with patch.object(google_auth.requests, "post", return_value=rejected):
             with self.assertRaises(google_auth.GoogleOAuthError) as caught:
-                google_auth.refresh_access_token("id", "secret-value", "refresh-value")
-        self.assertNotIn("secret-value", str(caught.exception))
-        self.assertNotIn("refresh-value", str(caught.exception))
+                google_auth.refresh_access_token("client-id", "secret-value", "refresh-value")
+            self.assertNotIn("secret-value", str(caught.exception))
+            self.assertNotIn("refresh-value", str(caught.exception))
 
     def test_legacy_plaintext_token_moves_to_protected_file(self):
         self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH}), encoding="utf-8")
