@@ -186,6 +186,11 @@ class AriMCPServer:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
+# 이 서버는 WebSocket을 쓰지 않는다. 자동 감지에 맡기면 설치본에 속이 빈 websockets 폴더만 남았을 때
+# 그것을 불러오다 서버 스레드가 죽으므로 감지를 끈다.
+UVICORN_OPTIONS = {"log_level": "warning", "ws": "none"}
+
+
 def start_mcp_server_background(tts_func: Callable[[str], None] | None = None, port: int = 8765) -> threading.Thread | None:
     """uvicorn 서버를 데몬 스레드로 시작한다."""
     try:
@@ -194,7 +199,7 @@ def start_mcp_server_background(tts_func: Callable[[str], None] | None = None, p
         app = server.create_app()
 
         def _run() -> None:
-            uvicorn.run(app, host="127.0.0.1", port=int(port), log_level="warning")
+            uvicorn.run(app, host="127.0.0.1", port=int(port), **UVICORN_OPTIONS)
 
         thread = threading.Thread(target=_run, name="AriMCPServer", daemon=True)
         thread.start()

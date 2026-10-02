@@ -6,7 +6,7 @@ import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from agent.mcp_server import AriMCPServer
+from agent.mcp_server import AriMCPServer, UVICORN_OPTIONS
 
 
 class MCPServerTests(unittest.TestCase):
@@ -72,6 +72,13 @@ class MCPServerTests(unittest.TestCase):
             with patch.object(Path, "resolve", return_value=root.parent / "secret"):
                 with self.assertRaises(PermissionError):
                     server._resolve_allowed_path(str(root / "link"))
+
+    def test_server_options_skip_websocket_protocol_detection(self):
+        import uvicorn
+
+        config = uvicorn.Config(AriMCPServer(token="secret").create_app(), **UVICORN_OPTIONS)
+        config.load()
+        self.assertIsNone(config.ws_protocol_class)
 
     def test_tools_list_returns_ari_tools(self):
         server = AriMCPServer()
