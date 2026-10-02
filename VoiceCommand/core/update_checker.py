@@ -261,6 +261,14 @@ def _request_manifest(url: str, headers: dict[str, str]) -> tuple[int, dict, byt
     raise ValueError("too many update redirects")
 
 
+def _load_manifest(url: str, headers: dict[str, str]) -> tuple[int, dict, dict | None]:
+    status, response_headers, body = _request_manifest(url, headers)
+    manifest = None
+    if status == 200:
+        manifest = validate_manifest(json.loads(body.decode("utf-8")))
+    return status, response_headers, manifest
+
+
 def _record_failure() -> int:
     try:
         state = _read_runtime_state()[1]
@@ -303,8 +311,78 @@ def _check_for_updates() -> tuple[int, int]:
         ):
             headers["If-Modified-Since"] = state["last_modified"]
 
-        url = _manifest_url(channel)
-        status, response_headers, body = _request_manifest(url, headers)
+        manifests = []
+        status = 0
+        cache_result = None
+        if channel == "beta":
+            beta_result = None
+            beta_error = None
+            try:
+                beta_result = _load_manifest(_BETA_MANIFEST_URL, headers)
+            except (
+                OSError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                ValueError,
+                TimeoutError,
+                RecursionError,
+                http.client.HTTPException,
+            ) as error:
+                beta_error = error
+
+            stable_headers = {
+                key: value
+                for key, value in headers.items()
+                if key not in {"If-None-Match", "If-Modified-Since"}
+            }
+            try:
+                stable_result = _load_manifest(_STABLE_MANIFEST_URL, stable_headers)
+            except (
+                OSError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                ValueError,
+                TimeoutError,
+                RecursionError,
+                http.client.HTTPException,
+            ):
+                stable_result = None
+
+            if beta_result is None and stable_result is None:
+                raise beta_error
+            if beta_result is not None:
+                beta_status, _, beta_manifest = beta_result
+                cache_result = beta_result
+                status = beta_status
+                if beta_manifest is not None:
+                    manifests.append(beta_manifest)
+            if stable_result is not None:
+                stable_status, _, stable_manifest = stable_result
+                if beta_result is None or stable_status == 200:
+                    status = 200
+                if stable_manifest is not None:
+                    manifests.append(stable_manifest)
+            if beta_result is not None and beta_result[0] == 304:
+                pending_version = state.get("pending_version")
+                if (
+                    isinstance(pending_version, str)
+                    and _VERSION_PATTERN.fullmatch(pending_version)
+                ):
+                    manifests.append(
+                        {
+                            "version": pending_version,
+                            "notes_url": state.get("pending_notes_url", ""),
+                            "min_updatable_from": state.get(
+                                "pending_min_updatable_from", ""
+                            ),
+                        }
+                    )
+        else:
+            cache_result = _load_manifest(_manifest_url(channel), headers)
+            status, _, manifest = cache_result
+            if manifest is not None:
+                manifests.append(manifest)
+
         updates = {
             "last_checked_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "last_check_attempt_at": datetime.now(timezone.utc).strftime(
@@ -313,26 +391,41 @@ def _check_for_updates() -> tuple[int, int]:
             "update_check_failures": 0,
             "last_checked_channel": channel,
         }
-        if "etag" in response_headers:
-            updates["etag"] = response_headers["etag"]
-        elif status == 200:
-            updates["etag"] = ""
-        if "last-modified" in response_headers:
-            updates["last_modified"] = response_headers["last-modified"]
-        elif status == 200:
-            updates["last_modified"] = ""
+        if cache_result is not None:
+            cache_status, cache_headers, _ = cache_result
+            if "etag" in cache_headers:
+                updates["etag"] = cache_headers["etag"]
+            elif cache_status == 200:
+                updates["etag"] = ""
+            if "last-modified" in cache_headers:
+                updates["last_modified"] = cache_headers["last-modified"]
+            elif cache_status == 200:
+                updates["last_modified"] = ""
 
-        if status == 200:
-            manifest = validate_manifest(json.loads(body.decode("utf-8")))
+        if status == 200 or manifests:
+            current_version = get_version()
+            selected_manifest = None
+            for manifest in manifests:
+                if compare_versions(manifest["version"], current_version) <= 0:
+                    continue
+                if (
+                    selected_manifest is None
+                    or compare_versions(
+                        manifest["version"], selected_manifest["version"]
+                    ) > 0
+                ):
+                    selected_manifest = manifest
             if (
-                compare_versions(manifest["version"], get_version()) > 0
-                and state.get("skipped_version") != manifest["version"]
+                selected_manifest is not None
+                and state.get("skipped_version") != selected_manifest["version"]
             ):
                 updates.update(
                     {
-                        "pending_version": manifest["version"],
-                        "pending_notes_url": manifest["notes_url"],
-                        "pending_min_updatable_from": manifest["min_updatable_from"],
+                        "pending_version": selected_manifest["version"],
+                        "pending_notes_url": selected_manifest["notes_url"],
+                        "pending_min_updatable_from": selected_manifest[
+                            "min_updatable_from"
+                        ],
                     }
                 )
             else:
