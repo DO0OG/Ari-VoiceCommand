@@ -177,7 +177,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             provider.cleanup.assert_called_once_with()
             self.assertEqual(
                 create_provider.call_args_list,
-                [call(wait_ready=False), call({**settings, "tts_mode": "openai_tts"})],
+                [call(settings, wait_ready=False), call({**settings, "tts_mode": "openai_tts"})],
             )
         finally:
             VoiceCommand._state.fish_tts = previous_provider
@@ -291,6 +291,86 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
 
         self.assertIs(VoiceCommand._state.fish_tts, fallback_provider)
         self.assertEqual(create_provider.call_args_list[1], call({**settings, "tts_mode": "edge"}))
+
+    def test_game_mode_initialization_uses_one_effective_settings_snapshot(self):
+        previous_mode = VoiceCommand._state.game_mode
+        previous_provider = VoiceCommand._state.fish_tts
+        previous_signature = VoiceCommand._state.tts_signature
+        VoiceCommand._state.game_mode = True
+        settings = {"tts_mode": "local", "edge_tts_voice": "test-voice"}
+        provider = object()
+        snapshot_seen = []
+        try:
+            with (
+                patch("core.config_manager.ConfigManager.load_settings", return_value=settings),
+                patch("tts.tts_factory.build_tts_signature", side_effect=lambda arg: snapshot_seen.append(arg) or ("sig",)),
+                patch("tts.tts_factory.create_tts_provider", return_value=(provider, "edge")) as create_provider,
+                patch.object(VoiceCommand, "_finish_tts_setup", side_effect=lambda arg: snapshot_seen.append(arg)),
+            ):
+                VoiceCommand._state.fish_tts = None
+                VoiceCommand._state.tts_signature = None
+                VoiceCommand.initialize_tts()
+
+            effective = {"tts_mode": "edge", "edge_tts_voice": "test-voice"}
+            self.assertEqual(create_provider.call_args, call(effective, wait_ready=False))
+            self.assertEqual(snapshot_seen[0], effective)
+            self.assertIs(snapshot_seen[1], snapshot_seen[0])
+            self.assertIs(create_provider.call_args.args[0], snapshot_seen[0])
+            self.assertEqual(settings["tts_mode"], "local")
+        finally:
+            VoiceCommand._state.game_mode = previous_mode
+            VoiceCommand._state.fish_tts = previous_provider
+            VoiceCommand._state.tts_signature = previous_signature
+
+    def test_game_mode_startup_does_not_use_local_tts_worker_branch(self):
+        previous_mode = VoiceCommand._state.game_mode
+        previous_started = VoiceCommand._state.tts_init_started
+        old_event = VoiceCommand._state.tts_init_event.is_set()
+        VoiceCommand._state.game_mode = True
+        VoiceCommand._state.tts_init_started = False
+        VoiceCommand._state.tts_init_event.clear()
+        try:
+            with (
+                patch("core.config_manager.ConfigManager.load_settings", return_value={"tts_mode": "local"}),
+                patch.object(VoiceCommand, "initialize_tts") as initialize,
+                patch("core.VoiceCommand.threading.Thread") as thread,
+            ):
+                VoiceCommand.start_tts_background()
+
+            initialize.assert_called_once_with()
+            thread.assert_not_called()
+        finally:
+            VoiceCommand._state.game_mode = previous_mode
+            VoiceCommand._state.tts_init_started = previous_started
+            if old_event:
+                VoiceCommand._state.tts_init_event.set()
+            else:
+                VoiceCommand._state.tts_init_event.clear()
+
+    def test_game_mode_initialization_failure_restores_previous_mode(self):
+        previous_mode = VoiceCommand._state.game_mode
+        previous_provider = VoiceCommand._state.fish_tts
+        previous_signature = VoiceCommand._state.tts_signature
+        VoiceCommand._state.game_mode = False
+        try:
+            with (
+                patch.object(
+                    VoiceCommand,
+                    "initialize_tts",
+                    side_effect=[RuntimeError("edge failed"), None],
+                ) as initialize,
+                patch("core.config_manager.ConfigManager.save_settings") as save_settings,
+                patch.object(VoiceCommand, "emit_plugin_event"),
+            ):
+                VoiceCommand.enable_game_mode()
+
+            self.assertFalse(VoiceCommand._state.game_mode)
+            self.assertEqual(initialize.call_count, 2)
+            save_settings.assert_not_called()
+        finally:
+            VoiceCommand._state.game_mode = previous_mode
+            VoiceCommand._state.fish_tts = previous_provider
+            VoiceCommand._state.tts_signature = previous_signature
 
     def test_character_widget_startup_survives_orchestrator_storage_failure(self):
         from types import SimpleNamespace

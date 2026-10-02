@@ -59,7 +59,6 @@ class AppState:
         self.tts_playback_finished_event = threading.Event()
         self.tts_init_started = False
         self.game_mode = False
-        self.saved_tts_mode = None
         self.last_bubble_signature = ("", 0.0)
         self.listening_indicator_active = False
         self.listening_indicator_text = _("말씀해주세요")
@@ -204,7 +203,7 @@ def start_tts_background():
 
     try:
         from core.config_manager import ConfigManager
-        tts_mode = ConfigManager.load_settings().get("tts_mode", "fish")
+        tts_mode = _effective_tts_settings(ConfigManager.load_settings()).get("tts_mode", "fish")
 
         if tts_mode == "local":
             def _run():
@@ -233,8 +232,15 @@ def _cleanup_tts_provider(provider) -> None:
     if provider is not None and hasattr(provider, "cleanup"):
         try:
             provider.cleanup()
-        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        except Exception as exc:
             logging.debug("TTS 프로바이더 정리 중 무시된 오류: %s", exc)
+
+
+def _effective_tts_settings(settings: dict) -> dict:
+    effective = dict(settings)
+    if _state.game_mode:
+        effective["tts_mode"] = "edge"
+    return effective
 
 
 def _create_fallback_tts(settings: dict):
@@ -254,17 +260,18 @@ def _create_fallback_tts(settings: dict):
 def initialize_tts():
     from core.config_manager import ConfigManager
     from tts.tts_factory import create_tts_provider, build_tts_signature
-    settings = ConfigManager.load_settings()
-    next_signature = build_tts_signature(settings)
+    loaded_settings = ConfigManager.load_settings()
     warming_provider = None
-    # 교체 구간만 잠근다. 로컬 엔진의 READY·warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
+    # 교체와 후처리만 잠근다. 로컬 엔진의 READY·warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
     with _TTS_INIT_LOCK:
+        settings = _effective_tts_settings(loaded_settings)
+        next_signature = build_tts_signature(settings)
         if _state.fish_tts is not None and _state.tts_signature == next_signature:
             logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
         else:
             _cleanup_tts_provider(_state.fish_tts)
             try:
-                provider, provider_mode = create_tts_provider(wait_ready=False)
+                provider, provider_mode = create_tts_provider(settings, wait_ready=False)
                 # 준비 중에도 등록해 둔다. 로컬 엔진의 speak()는 READY까지 기다린다.
                 _state.fish_tts = provider
                 if provider_mode == "local" and hasattr(provider, "wait_until_warmup_done"):
@@ -275,7 +282,7 @@ def initialize_tts():
             _state.tts_signature = next_signature
 
     # 준비 중 발화도 종료 시그널과 말투 설정을 쓰도록 warmup 대기 전에 마친다.
-    _finish_tts_setup(settings)
+        _finish_tts_setup(settings)
 
     if warming_provider is not None and not (
         warming_provider.wait_until_ready() and warming_provider.wait_until_warmup_done()
@@ -296,7 +303,7 @@ def initialize_tts():
             _cleanup_tts_provider(warming_provider)
             _state.fish_tts = _create_fallback_tts(settings)
             _state.tts_signature = next_signature
-        _finish_tts_setup(settings)
+            _finish_tts_setup(settings)
 
 
 def _finish_tts_setup(settings: dict) -> None:
@@ -914,42 +921,24 @@ def enable_game_mode():
     if _state.game_mode:
         return
 
-    from core.config_manager import ConfigManager
-    settings = ConfigManager.load_settings()
-    _state.saved_tts_mode = settings.get("tts_mode", "fish")
-    legacy_settings_without_mode = "tts_mode" not in settings
-    settings["tts_mode"] = "edge"
-    ConfigManager.save_settings(settings)
-
-    if _state.fish_tts and hasattr(_state.fish_tts, 'cleanup'):
-        try:
-            _state.fish_tts.cleanup()
-        except Exception as e:
-            logging.warning("기존 TTS 정리 오류 (무시): %s", e)
-    _state.fish_tts = None
-
-    try:
-        if legacy_settings_without_mode:
-            from tts.fish_tts_ws import FishTTSWebSocket
-            _state.fish_tts = FishTTSWebSocket(
-                api_key=settings.get("fish_api_key", ""),
-                reference_id=settings.get("fish_reference_id", ""),
-                model=settings.get("fish_model", "s2.1-pro-free"),
-                tts_volume=settings.get("tts_volume", 1.0),
-            )
-        else:
-            initialize_tts()
-        reconnect_tts_signals()
+    with _TTS_INIT_LOCK:
         _state.game_mode = True
+        _cleanup_tts_provider(_state.fish_tts)
+        _state.fish_tts = None
+        _state.tts_signature = None
+    try:
+        initialize_tts()
+        reconnect_tts_signals()
         emit_plugin_event("on_game_mode_change", {"enabled": True})
         logging.info("게임 모드 활성화: Edge TTS로 전환, GPU 메모리 해제됨")
     except Exception as e:
         logging.error("게임 모드 전환 실패: %s", e)
+        with _TTS_INIT_LOCK:
+            _cleanup_tts_provider(_state.fish_tts)
+            _state.fish_tts = None
+            _state.tts_signature = None
+            _state.game_mode = False
         try:
-            if _state.saved_tts_mode:
-                settings = ConfigManager.load_settings()
-                settings["tts_mode"] = _state.saved_tts_mode
-                ConfigManager.save_settings(settings)
             initialize_tts()
         except Exception as fallback_exc:
             logging.error("게임 모드 실패 후 TTS 복원 실패: %s", fallback_exc)
@@ -960,18 +949,11 @@ def disable_game_mode():
     if not _state.game_mode:
         return
 
-    if _state.fish_tts and hasattr(_state.fish_tts, 'cleanup'):
-        try:
-            _state.fish_tts.cleanup()
-        except Exception as e:
-            logging.warning("Fish TTS 정리 오류 (무시): %s", e)
-    _state.fish_tts = None
-    _state.game_mode = False
-    from core.config_manager import ConfigManager
-    if _state.saved_tts_mode:
-        settings = ConfigManager.load_settings()
-        settings["tts_mode"] = _state.saved_tts_mode
-        ConfigManager.save_settings(settings)
+    with _TTS_INIT_LOCK:
+        _cleanup_tts_provider(_state.fish_tts)
+        _state.fish_tts = None
+        _state.tts_signature = None
+        _state.game_mode = False
     emit_plugin_event("on_game_mode_change", {"enabled": False})
 
     def _reinit():

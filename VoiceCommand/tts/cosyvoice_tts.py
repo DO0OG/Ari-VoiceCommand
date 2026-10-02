@@ -552,178 +552,183 @@ class CosyVoiceTTS(QObject):
         if not text or stop_event.is_set():
             return False
 
-        with _audio_lock:
-            with self._speak_lock:
-                if self._stopping or stop_event.is_set():
-                    return False
-                with self._state_lock:
-                    self._request_id += 1
-                    request_id = self._request_id
-                    self._active_request_id = request_id
-                    self._active_stop_event = stop_event
-                self.is_playing = True
-                request_finished = threading.Event()
-                watcher = None
-                reader_t = None
-                pa_stream = None
-                proc = None
-                worker_complete = False
-                request_sent = False
-                reader_state = {"clean": False}
-                try:
-                    self._clear_pcm_state()
-                    if not self._ensure_worker(stop_event):
-                        proc = self._proc
-                        if not stop_event.is_set():
-                            logging.error(
-                                "[TTS] CosyVoice3 워커 준비 실패: %s",
-                                self._worker_error or "READY timeout",
-                            )
-                        return False
+        with self._speak_lock:
+            if self._stopping or stop_event.is_set():
+                return False
+            with self._state_lock:
+                self._request_id += 1
+                request_id = self._request_id
+                self._active_request_id = request_id
+                self._active_stop_event = stop_event
+            self.is_playing = True
+            request_finished = threading.Event()
+            watcher = None
+            reader_t = None
+            pa_stream = None
+            proc = None
+            worker_complete = False
+            request_sent = False
+            reader_state = {"clean": False}
+            audio_lock_acquired = False
+            try:
+                self._clear_pcm_state()
+                if not self._ensure_worker(stop_event):
                     proc = self._proc
-                    watcher = threading.Thread(
-                        target=self._watch_stop_event,
-                        args=(request_id, proc, stop_event, request_finished),
-                        daemon=True,
-                    )
-                    watcher.start()
-                    if stop_event.is_set():
-                        return False
-
-                    with self._ctrl_lock:
-                        self._ctrl_q.clear()
-                    started_at = time.monotonic()
-                    proc.stdin.write(
-                        (text.replace("\n", " ").strip() + "\n").encode("utf-8")
-                    )
-                    proc.stdin.flush()
-
-                    def pipe_reader():
-                        first = True
-                        try:
-                            # 취소돼도 종료 표시(0)까지 읽어 파이프를 비운다(재생은 안 함).
-                            while True:
-                                hdr = self._read_exact(4, proc)
-                                if not hdr:
-                                    break
-                                size = struct.unpack("<I", hdr)[0]
-                                if size == 0:
-                                    reader_state["clean"] = True
-                                    break
-                                data = self._read_exact(size, proc)
-                                if not data:
-                                    break
-                                if not self._request_is_active(
-                                    request_id, proc, stop_event
-                                ):
-                                    continue
-                                if first:
-                                    logging.info(
-                                        "[TTS] 첫 청크 수신 → 재생 시작: %.2fs",
-                                        time.monotonic() - started_at,
-                                    )
-                                    first = False
-                                data = self._apply_volume(data)
-                                max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
-                                while self._request_is_active(
-                                    request_id, proc, stop_event
-                                ):
-                                    with self._pcm_lock:
-                                        if (
-                                            self._active_request_id == request_id
-                                            and self._pcm_buffer.size + len(data)
-                                            <= max_buffer_bytes
-                                        ):
-                                            self._pcm_buffer.append(data)
-                                            break
-                                    time.sleep(0.01)
-                        except Exception as e:
-                            if self._request_is_active(request_id, proc, stop_event):
-                                logging.debug("pipe_reader 오류: %s", e)
-                        finally:
-                            if self._request_is_active(request_id, proc, stop_event):
-                                self._pcm_done.set()
-
-                    reader_t = threading.Thread(
-                        target=pipe_reader, name=f"CosyVoice-PCM-{request_id}", daemon=True
-                    )
-                    reader_t.start()
-                    request_sent = True
-
-                    pa_stream = self._ensure_stream()
-                    if not pa_stream.is_active():
-                        pa_stream.start_stream()
-
-                    reader_deadline = time.monotonic() + 300
-                    while (
-                        reader_t.is_alive()
-                        and not stop_event.is_set()
-                        and time.monotonic() < reader_deadline
-                    ):
-                        reader_t.join(timeout=0.05)
-                    if reader_t.is_alive() and not stop_event.is_set():
-                        logging.error("CosyVoice3 PCM 읽기 타임아웃")
-                        self._abort_request(request_id, proc)
-                        return False
-                    if stop_event.is_set():
-                        return False
-                    self._pcm_done.set()
-                    deadline = time.monotonic() + 30
-                    if pa_stream:
-                        while (
-                            pa_stream.is_active()
-                            and time.monotonic() < deadline
-                            and not stop_event.is_set()
-                        ):
-                            time.sleep(0.1)
-
-                    if stop_event.is_set():
-                        return False
-
-                    logging.info(
-                        "[TTS] 전체 완료: %.2fs", time.monotonic() - started_at
-                    )
-                    ctrl = self._wait_ctrl(
-                        timeout=60, proc=proc, stop_event=stop_event
-                    )
-                    worker_complete = ctrl != "ERROR:timeout" and ctrl != "ERROR:cancelled"
-                    if ctrl.startswith("ERROR:"):
-                        logging.error("워커 오류: %s", ctrl[6:])
-                    return not ctrl.startswith("ERROR:") and not stop_event.is_set()
-
-                except Exception as e:
-                    if not stop_event.is_set() and not self._stopping:
-                        logging.error("CosyVoice TTS speak 오류: %s", e)
+                    if not stop_event.is_set():
+                        logging.error(
+                            "[TTS] CosyVoice3 워커 준비 실패: %s",
+                            self._worker_error or "READY timeout",
+                        )
                     return False
-                finally:
-                    request_finished.set()
-                    if stop_event.is_set():
-                        with self._state_lock:
-                            cancel_proc = (
-                                self._proc
-                                if self._active_request_id == request_id
-                                else None
-                            )
-                        if cancel_proc is not None:
-                            self._cancel_request(request_id, cancel_proc, stop_event)
-                        if request_sent and not worker_complete:
-                            self._start_drain(request_id, proc, reader_t, reader_state)
-                    elif proc is not None and not worker_complete:
-                        self._abort_request(request_id, proc)
-                    if watcher is not None:
-                        watcher.join(timeout=0.1)
-                    if pa_stream is not None:
-                        try:
-                            self._close_stream()
-                        except (OSError, RuntimeError, TypeError, ValueError) as exc:
-                            logging.debug("CosyVoice 오디오 스트림 정리 실패: %s", exc)
+                proc = self._proc
+                watcher = threading.Thread(
+                    target=self._watch_stop_event,
+                    args=(request_id, proc, stop_event, request_finished),
+                    daemon=True,
+                )
+                watcher.start()
+                if stop_event.is_set():
+                    return False
+
+                with self._ctrl_lock:
+                    self._ctrl_q.clear()
+                started_at = time.monotonic()
+                proc.stdin.write(
+                    (text.replace("\n", " ").strip() + "\n").encode("utf-8")
+                )
+                proc.stdin.flush()
+
+                def pipe_reader():
+                    first = True
+                    try:
+                        # 취소돼도 종료 표시(0)까지 읽어 파이프를 비운다(재생은 안 함).
+                        while True:
+                            hdr = self._read_exact(4, proc)
+                            if not hdr:
+                                break
+                            size = struct.unpack("<I", hdr)[0]
+                            if size == 0:
+                                reader_state["clean"] = True
+                                break
+                            data = self._read_exact(size, proc)
+                            if not data:
+                                break
+                            if not self._request_is_active(
+                                request_id, proc, stop_event
+                            ):
+                                continue
+                            if first:
+                                logging.info(
+                                    "[TTS] 첫 청크 수신 → 재생 시작: %.2fs",
+                                    time.monotonic() - started_at,
+                                )
+                                first = False
+                            data = self._apply_volume(data)
+                            max_buffer_bytes = max(self._MAX_PCM_BUFFER_BYTES, len(data))
+                            while self._request_is_active(
+                                request_id, proc, stop_event
+                            ):
+                                with self._pcm_lock:
+                                    if (
+                                        self._active_request_id == request_id
+                                        and self._pcm_buffer.size + len(data)
+                                        <= max_buffer_bytes
+                                    ):
+                                        self._pcm_buffer.append(data)
+                                        break
+                                time.sleep(0.01)
+                    except Exception as e:
+                        if self._request_is_active(request_id, proc, stop_event):
+                            logging.debug("pipe_reader 오류: %s", e)
+                    finally:
+                        if self._request_is_active(request_id, proc, stop_event):
+                            self._pcm_done.set()
+
+                reader_t = threading.Thread(
+                    target=pipe_reader, name=f"CosyVoice-PCM-{request_id}", daemon=True
+                )
+                reader_t.start()
+                request_sent = True
+
+                _audio_lock.acquire()
+                audio_lock_acquired = True
+                pa_stream = self._ensure_stream()
+                if not pa_stream.is_active():
+                    pa_stream.start_stream()
+
+                reader_deadline = time.monotonic() + 300
+                while (
+                    reader_t.is_alive()
+                    and not stop_event.is_set()
+                    and time.monotonic() < reader_deadline
+                ):
+                    reader_t.join(timeout=0.05)
+                if reader_t.is_alive() and not stop_event.is_set():
+                    logging.error("CosyVoice3 PCM 읽기 타임아웃")
+                    self._abort_request(request_id, proc)
+                    return False
+                if stop_event.is_set():
+                    return False
+                self._pcm_done.set()
+                deadline = time.monotonic() + 30
+                if pa_stream:
+                    while (
+                        pa_stream.is_active()
+                        and time.monotonic() < deadline
+                        and not stop_event.is_set()
+                    ):
+                        time.sleep(0.1)
+
+                if stop_event.is_set():
+                    return False
+
+                logging.info(
+                    "[TTS] 전체 완료: %.2fs", time.monotonic() - started_at
+                )
+                ctrl = self._wait_ctrl(
+                    timeout=60, proc=proc, stop_event=stop_event
+                )
+                worker_complete = ctrl != "ERROR:timeout" and ctrl != "ERROR:cancelled"
+                if ctrl.startswith("ERROR:"):
+                    logging.error("워커 오류: %s", ctrl[6:])
+                return not ctrl.startswith("ERROR:") and not stop_event.is_set()
+
+            except Exception as e:
+                if not stop_event.is_set() and not self._stopping:
+                    logging.error("CosyVoice TTS speak 오류: %s", e)
+                return False
+            finally:
+                request_finished.set()
+                if stop_event.is_set():
                     with self._state_lock:
-                        if self._active_request_id == request_id:
-                            self._active_request_id = None
-                        if self._active_stop_event is stop_event:
-                            self._active_stop_event = None
-                        self.is_playing = False
-                    self.playback_finished.emit()
+                        cancel_proc = (
+                            self._proc
+                            if self._active_request_id == request_id
+                            else None
+                        )
+                    if cancel_proc is not None:
+                        self._cancel_request(request_id, cancel_proc, stop_event)
+                    if request_sent and not worker_complete:
+                        self._start_drain(request_id, proc, reader_t, reader_state)
+                elif proc is not None and not worker_complete:
+                    self._abort_request(request_id, proc)
+                if watcher is not None:
+                    watcher.join(timeout=0.1)
+                if pa_stream is not None:
+                    try:
+                        self._close_stream()
+                    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                        logging.debug("CosyVoice 오디오 스트림 정리 실패: %s", exc)
+                if audio_lock_acquired:
+                    _audio_lock.release()
+                    audio_lock_acquired = False
+                with self._state_lock:
+                    if self._active_request_id == request_id:
+                        self._active_request_id = None
+                    if self._active_stop_event is stop_event:
+                        self._active_stop_event = None
+                    self.is_playing = False
+                self.playback_finished.emit()
 
     def _read_exact(self, n: int, proc=None, stop_event=None):
         """stdout에서 정확히 n바이트 읽기"""
