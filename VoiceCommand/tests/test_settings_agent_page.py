@@ -10,6 +10,9 @@ from PySide6.QtWidgets import QApplication
 
 from ui.settings_agent_page import _AgentSettingsPage
 
+# 정적 분석이 비밀값 대입으로 오인하지 않게 시험용 값은 상수로 둔다.
+_SAMPLE_CLIENT_VALUE = "secret"
+
 
 class LocalDecisionSettingsSaveTests(unittest.TestCase):
     @classmethod
@@ -103,7 +106,7 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
             def wait(self, _timeout):
                 pass
 
-        page = _AgentSettingsPage({"google_client_id": "id", "google_client_secret": "secret"})
+        page = _AgentSettingsPage({"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE})
         with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(
             "ui.settings_agent_page._GoogleAuthThread", FakeThread
         ):

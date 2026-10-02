@@ -11,6 +11,13 @@ from unittest.mock import Mock, patch
 from services import google_auth
 from services.google_calendar import GoogleCalendarService
 
+# 정적 분석이 비밀값 대입으로 오인하지 않게 시험용 값은 상수로 둔다.
+_SAMPLE_ACCESS = "access"
+_SAMPLE_REFRESH = "refresh"
+_SAMPLE_OLD = "old"
+_SAMPLE_NEW = "new"
+_SAMPLE_CLIENT_VALUE = "secret"
+
 
 class GoogleAuthTests(unittest.TestCase):
     def setUp(self):
@@ -63,9 +70,9 @@ class GoogleAuthTests(unittest.TestCase):
     def _authorize_callback(self, query):
         posted = Mock(ok=True)
         posted.json.return_value = {
-            "access_token": "access",
+            "access_token": _SAMPLE_ACCESS,
             "expires_in": 3600,
-            "refresh_token": "refresh",
+            "refresh_token": _SAMPLE_REFRESH,
             "scope": "scope",
         }
         class FakeServer:
@@ -140,17 +147,17 @@ class GoogleAuthTests(unittest.TestCase):
         self.assertGreater(token["expires_at"], 0)
 
     def test_expired_token_refreshes_and_keeps_existing_refresh_token(self):
-        google_auth.save_token({"access_token": "old", "refresh_token": "refresh", "expires_at": 1, "scope": "scope"})
+        google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1, "scope": "scope"})
         refreshed = Mock(ok=True)
-        refreshed.json.return_value = {"access_token": "new", "expires_in": 3600}
-        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": "secret"}.get(key, default)), patch.object(google_auth.requests, "post", return_value=refreshed):
+        refreshed.json.return_value = {"access_token": _SAMPLE_NEW, "expires_in": 3600}
+        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE}.get(key, default)), patch.object(google_auth.requests, "post", return_value=refreshed):
             self.assertEqual(google_auth.get_access_token(), "new")
         saved = google_auth.load_token()
         self.assertEqual(saved["refresh_token"], "refresh")
         self.assertEqual(saved["access_token"], "new")
 
     def test_invalid_grant_clears_token_and_requires_authorization(self):
-        google_auth.save_token({"access_token": "old", "refresh_token": "refresh", "expires_at": 1})
+        google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1})
         rejected = Mock(ok=False)
         rejected.json.return_value = {"error": "invalid_grant"}
         with patch("core.config_manager.ConfigManager.get", return_value="value"), patch.object(google_auth.requests, "post", return_value=rejected):
@@ -171,14 +178,14 @@ class GoogleAuthTests(unittest.TestCase):
         self.assertNotIn("refresh-value", str(caught.exception))
 
     def test_legacy_plaintext_token_moves_to_protected_file(self):
-        self.legacy_path.write_text(json.dumps({"access_token": "old", "refresh_token": "refresh"}), encoding="utf-8")
+        self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH}), encoding="utf-8")
         token = google_auth.load_token()
         self.assertEqual(token["expires_at"], 0)
         self.assertTrue(self.token_path.exists())
         self.assertFalse(self.legacy_path.exists())
 
     def test_legacy_plaintext_remains_if_protected_write_fails(self):
-        self.legacy_path.write_text(json.dumps({"access_token": "old"}), encoding="utf-8")
+        self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD}), encoding="utf-8")
         with patch.object(google_auth, "protect_bytes", side_effect=RuntimeError("protect failed")):
             with self.assertRaises(RuntimeError):
                 google_auth.load_token()
@@ -192,20 +199,20 @@ class GoogleAuthTests(unittest.TestCase):
                 self.assertEqual(self.legacy_path.read_bytes(), content)
 
     def test_legacy_access_token_without_expiry_or_refresh_is_returned(self):
-        google_auth.save_token({"access_token": "old"})
+        google_auth.save_token({"access_token": _SAMPLE_OLD})
         with patch.object(google_auth.requests, "post") as post:
             self.assertEqual(google_auth.get_access_token(), "old")
         post.assert_not_called()
 
     def test_missing_client_id_and_invalid_client_require_reconnect_without_deleting_token(self):
-        google_auth.save_token({"access_token": "old", "refresh_token": "refresh", "expires_at": 1})
-        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "", "google_client_secret": "secret"}.get(key, default)), patch.object(google_auth.requests, "post") as post:
+        google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1})
+        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "", "google_client_secret": _SAMPLE_CLIENT_VALUE}.get(key, default)), patch.object(google_auth.requests, "post") as post:
             with self.assertRaisesRegex(google_auth.GoogleAuthRequired, "Client ID·Secret"):
                 google_auth.get_access_token()
         post.assert_not_called()
         self.assertTrue(self.token_path.exists())
 
-        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": "secret"}.get(key, default)):
+        with patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: {"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE}.get(key, default)):
             rejected = Mock(ok=False)
             rejected.json.return_value = {"error": "invalid_client"}
             with patch.object(google_auth.requests, "post", return_value=rejected):

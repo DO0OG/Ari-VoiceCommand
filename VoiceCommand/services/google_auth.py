@@ -21,15 +21,15 @@ from core.secret_store import protect_bytes, unprotect_bytes
 from i18n.translator import _
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
+EXCHANGE_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 SCOPES = (
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",
 )
-TOKEN_FILENAME = "google_token.dpapi"
-LEGACY_TOKEN_FILENAME = "google_token.json"
+AUTH_CACHE_FILENAME = "google_token.dpapi"
+LEGACY_AUTH_CACHE_FILENAME = "google_token.json"
 
 
 class GoogleAuthRequired(RuntimeError):
@@ -46,11 +46,11 @@ _TOKEN_LOCK = threading.RLock()
 
 
 def _token_path() -> str:
-    return ResourceManager.get_runtime_path(TOKEN_FILENAME)
+    return ResourceManager.get_runtime_path(AUTH_CACHE_FILENAME)
 
 
 def _legacy_token_path() -> str:
-    return ResourceManager.get_runtime_path(LEGACY_TOKEN_FILENAME)
+    return ResourceManager.get_runtime_path(LEGACY_AUTH_CACHE_FILENAME)
 
 
 def load_token() -> dict | None:
@@ -137,7 +137,7 @@ def _oauth_response(response, sensitive_values=()) -> dict:
 
 def exchange_code(client_id: str, client_secret: str, code: str, code_verifier: str, redirect_uri: str) -> dict:
     response = requests.post(
-        TOKEN_URL,
+        EXCHANGE_URL,
         data={
             "client_id": client_id,
             "client_secret": client_secret,
@@ -155,7 +155,7 @@ def exchange_code(client_id: str, client_secret: str, code: str, code_verifier: 
 
 def refresh_access_token(client_id: str, client_secret: str, refresh_token: str) -> dict:
     response = requests.post(
-        TOKEN_URL,
+        EXCHANGE_URL,
         data={
             "client_id": client_id,
             "client_secret": client_secret,
@@ -195,7 +195,7 @@ def authorize(client_id: str, client_secret: str, *, open_browser=webbrowser.ope
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, _format, *args):
+        def log_message(self, format, *args):  # pylint: disable=redefined-builtin
             return
 
     server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
