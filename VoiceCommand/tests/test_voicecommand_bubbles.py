@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 import core.VoiceCommand as voicecommand
@@ -34,10 +34,22 @@ class _FakeFishProvider:
         self.playback_finished = _FakeSignal()
 
 
+class _FakeCleanupProvider:
+    def __init__(self, lock_states):
+        self.lock_states = lock_states
+
+    def cleanup(self):
+        acquired = voicecommand._TTS_INIT_LOCK.acquire(blocking=False)
+        self.lock_states.append(acquired)
+        if acquired:
+            voicecommand._TTS_INIT_LOCK.release()
+
+
 class VoiceCommandBubbleTests(unittest.TestCase):
     def setUp(self):
         self.original_widget = voicecommand._state.character_widget
         self.original_provider = voicecommand._state.fish_tts
+        self.original_signature = voicecommand._state.tts_signature
         self.original_game_mode = voicecommand._state.game_mode
         self.original_indicator = voicecommand._state.listening_indicator_active
         self.original_indicator_text = voicecommand._state.listening_indicator_text
@@ -55,6 +67,7 @@ class VoiceCommandBubbleTests(unittest.TestCase):
     def tearDown(self):
         voicecommand._state.character_widget = self.original_widget
         voicecommand._state.fish_tts = self.original_provider
+        voicecommand._state.tts_signature = self.original_signature
         voicecommand._state.game_mode = self.original_game_mode
         voicecommand._state.listening_indicator_active = self.original_indicator
         voicecommand._state.listening_indicator_text = self.original_indicator_text
@@ -100,13 +113,57 @@ class VoiceCommandBubbleTests(unittest.TestCase):
         self.assertFalse(voicecommand.should_pause_wake_detection(now=101.2))
 
     def test_enable_game_mode_reconnects_playback_finished_signal(self):
-        with patch("core.config_manager.ConfigManager.load_settings", return_value={}):
-            with patch("tts.fish_tts_ws.FishTTSWebSocket", _FakeFishProvider):
-                voicecommand.enable_game_mode()
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value={}),
+            patch("core.config_manager.ConfigManager.save_settings") as save_settings,
+            patch.dict("tts.tts_factory._TTS_PROVIDER_CREATORS", {"edge": lambda _settings: (_FakeFishProvider(), "edge")}),
+            patch("core.VoiceCommand.threading.Thread") as thread,
+        ):
+            voicecommand.enable_game_mode()
 
-        provider = voicecommand._state.fish_tts
-        self.assertIsNotNone(provider)
-        self.assertIn(voicecommand._handle_tts_playback_finished, provider.playback_finished.connected)
+            provider = voicecommand._state.fish_tts
+            self.assertIsNotNone(provider)
+            self.assertIn(voicecommand._handle_tts_playback_finished, provider.playback_finished.connected)
+            voicecommand.disable_game_mode()
+            save_settings.assert_not_called()
+            restore_calls = [
+                call for call in thread.call_args_list
+                if call.kwargs.get("name") == "TTS-GameModeRestore"
+            ]
+            self.assertEqual(len(restore_calls), 1)
+            # 복원 전에는 발화가 기다리도록 준비 이벤트가 내려가 있고, 복원이 끝나면 올라간다.
+            self.assertFalse(voicecommand._state.tts_init_event.is_set())
+            with patch("core.VoiceCommand.tts_wrapper"):
+                restore_calls[0].kwargs["target"]()
+            self.assertTrue(voicecommand._state.tts_init_event.is_set())
+            self.assertIsNotNone(voicecommand._state.fish_tts)
+
+    def test_game_mode_provider_cleanup_runs_outside_tts_initialization_lock(self):
+        lock_states = []
+        voicecommand._state.fish_tts = _FakeCleanupProvider(lock_states)
+
+        def run_cleanup_thread(*, target, args=(), **_kwargs):
+            if target.__name__ == "_cleanup_tts_provider":
+                target(*args)
+            else:
+                thread = Mock()
+                thread.start = Mock()
+                return thread
+            thread = Mock()
+            thread.start = Mock()
+            return thread
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value={"tts_mode": "fish"}),
+            patch.dict("tts.tts_factory._TTS_PROVIDER_CREATORS", {"edge": lambda _settings: (_FakeFishProvider(), "edge")}),
+            patch.object(voicecommand, "emit_plugin_event"),
+            patch("core.VoiceCommand.threading.Thread", side_effect=run_cleanup_thread),
+        ):
+            voicecommand.enable_game_mode()
+            voicecommand._state.fish_tts = _FakeCleanupProvider(lock_states)
+            voicecommand.disable_game_mode()
+
+        self.assertEqual(lock_states, [True, True])
 
     def test_parse_emotion_text_supports_english_and_japanese_tags(self):
         emotion_en, pure_en = voicecommand.parse_emotion_text("[happy] hello")

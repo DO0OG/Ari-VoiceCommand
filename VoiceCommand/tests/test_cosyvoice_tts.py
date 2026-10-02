@@ -178,6 +178,7 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         tts._ready.set()
         tts._proc = _FakeProc()
         tts._speak_lock = threading.Lock()
+        from audio.audio_manager import _audio_output_lock
         tts._state_lock = threading.Lock()
         tts._active_stop_event = None
         tts._request_id = 0
@@ -193,7 +194,8 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         tts.is_playing = False
         tts._clear_pcm_state = lambda: None
         tts._close_stream = lambda: None
-        tts._ensure_worker = lambda _stop_event: True
+        worker_lock_state = []
+        tts._ensure_worker = lambda _stop_event: worker_lock_state.append(_audio_output_lock.locked()) or True
         fake_stream = _FakeStream()
         tts._ensure_stream = lambda: fake_stream
         tts._wait_ctrl = lambda timeout=60, proc=None, stop_event=None: "DONE:ok"
@@ -207,6 +209,66 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         self.assertEqual(tts.playback_finished.emitted, 1)
         self.assertEqual(tts._proc.stdin.flush_calls, 1)
         self.assertEqual(tts._proc.stdin.writes, ["테스트 문장\n".encode("utf-8")])
+        self.assertEqual(worker_lock_state, [False])
+
+    def test_worker_failure_does_not_acquire_global_output_lock(self):
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
+        from audio.audio_manager import _audio_output_lock
+        tts._proc = None
+        tts._worker_error = None
+        tts._speak_lock = threading.Lock()
+        tts._state_lock = threading.Lock()
+        tts._request_id = 0
+        tts._active_request_id = None
+        tts._active_stop_event = None
+        tts._stopping = False
+        tts.is_playing = False
+        tts.playback_finished = _DummySignal()
+        tts._clear_pcm_state = lambda: None
+        lock_state = []
+        tts._ensure_worker = lambda _stop_event: lock_state.append(_audio_output_lock.locked()) or False
+
+        self.assertFalse(tts.speak("테스트 문장"))
+
+        self.assertEqual(lock_state, [False])
+        self.assertFalse(_audio_output_lock.locked())
+
+    def test_cleanup_exception_releases_global_output_lock(self):
+        tts = self._make_pipe_tts()
+        from audio.audio_manager import _audio_output_lock
+
+        class NoThread:
+            def __init__(self, *args, **kwargs):
+                del args, kwargs
+
+            def start(self):
+                pass
+
+            def is_alive(self):
+                return False
+
+            def join(self, timeout=None):
+                del timeout
+
+        def cancelled(*, timeout, proc, stop_event):
+            del timeout, proc
+            stop_event.set()
+            return "ERROR:cancelled"
+
+        tts._ensure_worker = lambda _stop_event: True
+        tts._wait_ctrl = cancelled
+        tts._start_drain = Mock(side_effect=RuntimeError("drain failed"))
+        stop_event = threading.Event()
+
+        with patch("tts.cosyvoice_tts.threading.Thread", NoThread):
+            self.assertFalse(tts.speak("테스트 문장", stop_event=stop_event))
+
+        acquired = _audio_output_lock.acquire(blocking=False)
+        self.assertTrue(acquired)
+        if acquired:
+            _audio_output_lock.release()
+        self.assertFalse(tts.is_playing)
 
     def _make_pipe_tts(self):
         with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
