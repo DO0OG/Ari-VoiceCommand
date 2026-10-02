@@ -55,9 +55,11 @@ ARI_OPENAI_API_KEY=발급받은-키
 
 Google Cloud에서 OAuth 클라이언트를 **데스크톱 앱** 유형으로 만들고 Calendar API와 Gmail API를 사용 설정한다.
 앱 설정의 에이전트 페이지에 Client ID와 Client Secret을 입력한 뒤 **Google 계정 연결**을 누른다.
-도구를 사용하려면 에이전트 설정에서 Google 도구 사용도 켜야 한다.
-브라우저에서 Google 계정과 권한을 확인하면 앱이 인증을 마친다.
-인증 토큰은 Windows 사용자 계정에 묶인 DPAPI로 보호해 저장한다.
+브라우저에서 Google 계정과 권한을 확인하면 앱이 이 PC의 임시 주소(`127.0.0.1`)로 결과를 받아 인증을 마친다.
+같은 화면의 **Google Calendar/Gmail 도구 사용**이 꺼져 있으면 연결돼 있어도 캘린더·메일 도구는 동작하지 않는다.
+인증 토큰은 연결에 쓴 Client ID·Secret과 함께 런타임 폴더의 `google_token.dpapi`에 Windows 사용자 계정에 묶인 DPAPI로 보호해 저장한다.
+이전 버전의 평문 `google_token.json`이 있으면 처음 읽을 때 보호 저장으로 옮기고 지운다.
+**연결 해제**를 누르면 Google에 토큰 폐기를 요청하고 저장된 토큰 파일을 지운다.
 OAuth 동의 화면이 **테스트** 게시 상태이면 갱신 토큰은 7일 뒤 만료되므로 다시 연결해야 한다.
 
 ## Windows 저장과 마이그레이션
