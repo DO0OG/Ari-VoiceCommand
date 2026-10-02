@@ -22,6 +22,7 @@ from core.stt_provider import create_stt_provider
 from i18n.translator import _
 
 _RNG = secrets.SystemRandom()
+_MICROPHONE_RETRY_INTERVALS = (5, 10, 20, 30, 60)
 
 
 def _wait_for_tts_playback_completion(
@@ -63,6 +64,7 @@ class VoiceRecognitionThread(QThread):
         self._microphone_notification_claimed = False
         self._microphone_request_lock = threading.Lock()
         self._microphone_wakeup = threading.Event()
+        self._microphone_retry_interval = _MICROPHONE_RETRY_INTERVALS[0]
         self._microphone_request_pending = False
         self._pending_microphone = None
         self._voice_wakeup = threading.Event()
@@ -103,6 +105,7 @@ class VoiceRecognitionThread(QThread):
                 return
             self._pending_microphone = microphone
             self._microphone_request_pending = True
+            self._microphone_retry_interval = _MICROPHONE_RETRY_INTERVALS[0]
             if not self._microphone_active:
                 self._set_microphone_status(None)
             self._microphone_wakeup.set()
@@ -225,6 +228,7 @@ class VoiceRecognitionThread(QThread):
         pending, microphone_name = self._take_pending_microphone()
         if not pending:
             return
+        self._microphone_retry_interval = _MICROPHONE_RETRY_INTERVALS[0]
 
         from VoiceCommand import SharedMicrophone, get_microphone_index_helper
 
@@ -250,6 +254,36 @@ class VoiceRecognitionThread(QThread):
         self._microphone_probed = wake_word_enabled
         self._voice_setup_failed = False
         self._set_microphone_status(True)
+
+    def _retry_microphone(self) -> bool:
+        """음성 스레드에서 저장된 마이크를 다시 연다."""
+        from VoiceCommand import SharedMicrophone, get_microphone_index_helper
+
+        try:
+            microphone_name = ConfigManager.load_settings().get("microphone", "")
+            wake_word_enabled = bool(ConfigManager.get("wake_word_enabled", True))
+            microphone_index = get_microphone_index_helper(microphone_name)
+            microphone = SharedMicrophone(device_index=microphone_index)
+            if wake_word_enabled:
+                self._probe_microphone(microphone)
+        except Exception as exc:
+            logging.debug("마이크 재연결 시도 실패: %s", exc)
+            interval_index = _MICROPHONE_RETRY_INTERVALS.index(self._microphone_retry_interval)
+            self._microphone_retry_interval = _MICROPHONE_RETRY_INTERVALS[
+                min(interval_index + 1, len(_MICROPHONE_RETRY_INTERVALS) - 1)
+            ]
+            return False
+
+        with self._microphone_request_lock:
+            self.microphone = microphone
+            self.selected_microphone = microphone_name
+            self.microphone_index = microphone_index
+            self._microphone_active = True
+        self._microphone_probed = wake_word_enabled
+        self._voice_setup_failed = False
+        self._microphone_retry_interval = _MICROPHONE_RETRY_INTERVALS[0]
+        self._set_microphone_status(True)
+        return True
 
     def _initialize_voice_recognition(self, initialize_wake_detector=True) -> bool:
         if self.speech_recognizer is not None and (
@@ -319,7 +353,15 @@ class VoiceRecognitionThread(QThread):
                 if not self.running:
                     break
                 if self.microphone is None:
-                    self._microphone_wakeup.wait()
+                    woke = self._microphone_wakeup.wait(self._microphone_retry_interval)
+                    with self._microphone_request_lock:
+                        microphone_request_pending = self._microphone_request_pending
+                    if (
+                        not woke
+                        and self.running
+                        and not microphone_request_pending
+                    ):
+                        self._retry_microphone()
                     continue
                 if self._voice_setup_failed:
                     self._voice_wakeup.wait()
