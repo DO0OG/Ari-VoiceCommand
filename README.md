@@ -106,7 +106,7 @@ Ari can use cloud services, but the project also supports a more local setup:
 - Remote embeddings disabled by default
 - Telegram integration disabled by default
 - Direct local handling applies only to allow-listed high-confidence commands and can be disabled in Settings → Agent
-- Plugins are not automatically loaded without user consent
+- Plugins are not automatically loaded without user consent (approved plugins run with the app's privileges, not in a sandbox)
 
 The exact data flow depends on the providers and optional integrations you enable.
 
@@ -166,14 +166,14 @@ These numbers evaluate the decision/parser path only. They do **not** measure mi
 - Explicit remember/forget commands and improved multilingual memory retrieval
 - Persistent mood, conversational context, and event-based character speech
 - Update checks, notifications, and installer reliability improvements
-- v1.2.0: voice cloning and emotional speech across TTS providers — new OpenAI-compatible TTS, ElevenLabs voice cloning and v3 emotion tags, and OpenAI custom voices
-- v1.2.0: fixes the installed app closing right after startup, and every release installer is now launched and checked before publishing
+- v1.2.0: voice cloning and emotional speech across TTS providers (OpenAI-compatible TTS, ElevenLabs voice cloning and v3 emotion tags, OpenAI custom voices), plus a fix for the installed app closing right after startup
 - v1.2.1: Fish Audio and ElevenLabs TTS start playing from the first audio chunk, the TTS volume setting applies to every engine, and TTS failures are shown in the speech bubble
 - v1.2.1: speech bubble sits right above the character's head, "open Naver"-style requests fall back to the browser for known sites, and missing translations were filled in
 - v1.2.2: microphone auto-sensitivity is off and fast local handling is on by default; fixed chat flicker and widening, Python tool WinError 6, CosyVoice reloading after a stop, and paused schedules being removed
 - v1.2.3: settings tabs scroll when the window is small, LLM provider changes apply without a restart, and the CosyVoice installer finds Python 3.10/3.11 on its own
+- v1.3.0: network tools can no longer reach internal network addresses, Google account connection is completed from Settings, and game mode, memory deletion, the beta update channel, and settings saving are more reliable
 
-See the **[v1.2.3 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.2.3)**.
+See the **[v1.3.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.3.0)**.
 
 ## For developers
 
