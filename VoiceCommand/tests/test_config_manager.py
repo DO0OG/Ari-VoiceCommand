@@ -147,7 +147,7 @@ class ConfigManagerTests(unittest.TestCase):
             with open(path, "rb") as handle:
                 self.assertEqual(handle.read(), b"{broken")
 
-    def test_access_failure_loads_defaults_and_save_preserves_readable_settings_copy(self):
+    def test_access_failure_then_save_keeps_user_settings_and_applies_only_the_change(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ari_settings.json"
             path.write_text('{"llm_provider":"openai"}', encoding="utf-8")
@@ -161,16 +161,22 @@ class ConfigManagerTests(unittest.TestCase):
                     raise PermissionError("temporarily unreadable")
                 return read_bytes(candidate)
 
-            with patch("core.config_manager._settings_path", return_value=str(path)), \
-                    patch.object(Path, "read_bytes", read), \
-                    patch("core.config_manager.SecretStore.read", return_value={}):
-                ConfigManager._cached_settings = None
-                ConfigManager.load_settings()
-                self.assertEqual(list(Path(tmp).glob("*.corrupt-*.json")), [])
-                self.assertTrue(ConfigManager.save_settings({"llm_provider": "groq"}))
-            backups = list(Path(tmp).glob("ari_settings.corrupt-*.json"))
-            self.assertEqual(len(backups), 1)
-            self.assertEqual(json.loads(backups[0].read_text(encoding="utf-8"))["llm_provider"], "openai")
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=str(path)), \
+                        patch.object(Path, "read_bytes", read), \
+                        patch("core.config_manager.SecretStore.read", return_value={}):
+                    ConfigManager._cached_settings = None
+                    defaults = ConfigManager.load_settings()
+                    self.assertEqual(defaults["llm_provider"], "groq")
+                    self.assertTrue(ConfigManager.save_settings({**defaults, "stt_energy_threshold": 500}))
+            finally:
+                ConfigManager._cached_settings = previous
+            # 기본값이 아니라 다시 읽은 사용자 설정 위에 바뀐 값만 얹어 저장한다.
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["llm_provider"], "openai")
+            self.assertEqual(saved["stt_energy_threshold"], 500)
+            self.assertEqual(list(Path(tmp).glob("*.corrupt-*.json")), [])
 
     def test_removing_custom_provider_from_valid_settings_removes_its_secret(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,7 +192,8 @@ class ConfigManagerTests(unittest.TestCase):
 
     def test_custom_provider_secret_survives_saves_when_its_provider_was_lost_not_removed(self):
         key = "custom_0123456789abcdef0123456789abcdef_api_key"
-        # 손상 복구 뒤의 저장(파일에 제공자가 없음)과 읽기 실패 뒤의 저장(기본값으로 덮어씀)
+        # 손상 복구 뒤의 저장(파일에 제공자가 없음)과 읽기 실패 뒤의 저장(기본값으로 실행 중)
+        self.addCleanup(setattr, ConfigManager, "_cached_settings", ConfigManager._cached_settings)
         for content, read_failed in (('{"custom_llm_providers": {}}', False),
                                      ('{"custom_llm_providers": {"custom_0123456789abcdef0123456789abcdef": {"label": "x", "base_url": "https://example.com/v1", "default_model": "m"}}}', True)):
             with self.subTest(read_failed=read_failed), tempfile.TemporaryDirectory() as tmp:
@@ -194,12 +201,16 @@ class ConfigManagerTests(unittest.TestCase):
                 with open(path, "w", encoding="utf-8") as handle:
                     handle.write(content)
                 ConfigManager._settings_read_failed = read_failed
+                ConfigManager._cached_settings = dict(ConfigManager.DEFAULT_SETTINGS)
                 with patch("core.config_manager._settings_path", return_value=path), \
                         patch("core.config_manager.SecretStore.read", return_value={key: "secret"}), \
                         patch("core.config_manager.SecretStore.write") as write:
                     self.assertTrue(ConfigManager.save_settings({"custom_llm_providers": {}}))
                     write.assert_not_called()
-                self.assertEqual(len(list(Path(tmp).glob("ari_settings.corrupt-*.json"))), int(read_failed))
+                with open(path, encoding="utf-8") as handle:
+                    saved = json.load(handle)
+                # 읽기 실패 뒤에는 파일의 제공자 목록도 그대로 남는다.
+                self.assertEqual(bool(saved["custom_llm_providers"]), read_failed)
 
     def test_local_decision_contradictions_are_normalized(self):
         from core.settings_schema import normalize_local_decision_settings

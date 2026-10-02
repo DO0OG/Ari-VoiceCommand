@@ -210,6 +210,17 @@ class ConfigManager:
         with cls._lock:
             path = _settings_path()
             try:
+                if cls._settings_read_failed:
+                    # 시작할 때 파일을 읽지 못해 기본값으로 실행 중이었다. 이제 읽히면 그 설정 위에
+                    # 이번에 바뀐 값만 얹어, 기본값이 사용자의 설정을 덮어쓰지 않게 한다.
+                    stale = cls._effective_settings()
+                    cls._cached_settings = None
+                    loaded = cls.load_settings()
+                    if not cls._settings_read_failed:
+                        settings = {**loaded, **{
+                            key: value for key, value in settings.items()
+                            if (stale.get(key) or None) != (value or None)
+                        }}
                 requested = {key: value for key, value in settings.items() if cls._is_secret_key(key)}
                 if any(not isinstance(value, str) for value in requested.values()):
                     raise SecretStoreError("Invalid credential type")
