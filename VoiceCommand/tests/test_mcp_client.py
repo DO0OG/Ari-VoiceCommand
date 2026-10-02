@@ -1,4 +1,5 @@
 import json
+import socket
 import unittest
 from io import BytesIO
 from urllib.error import HTTPError
@@ -20,16 +21,27 @@ class _FakeResponse:
     def __exit__(self, exc_type, exc, tb):
         return False
 
-    def read(self):
-        return self._payload
+    def read(self, size=-1):
+        return self._payload if size < 0 else self._payload[:size]
 
-    def readline(self):
+    def readline(self, size=-1):
         if not self._lines:
             return b""
-        return self._lines.pop(0)
+        line = self._lines.pop(0)
+        if size >= 0 and len(line) > size:
+            self._lines.insert(0, line[size:])
+            return line[:size]
+        return line
 
 
 class McpClientTests(unittest.TestCase):
+    def setUp(self):
+        self.dns = mock.patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )])
+        self.dns.start()
+        self.addCleanup(self.dns.stop)
+
     def tearDown(self):
         reset_mcp_pool()
 
@@ -98,6 +110,29 @@ class McpClientTests(unittest.TestCase):
         self.assertTrue(notifications)
         self.assertEqual(notifications[0]["method"], "notifications/tools/list_changed")
 
+    def test_sse_reader_bounds_unterminated_line(self):
+        session = McpSession("https://example.com/mcp")
+
+        class Response:
+            def __init__(self):
+                self.requested = []
+
+            def readline(self, size):
+                self.requested.append(size)
+                return b"x" * size
+
+        response = Response()
+        with self.assertRaises(ValueError):
+            session._iter_sse_messages(response)
+
+        self.assertEqual(response.requested, [10 * 1024 * 1024 + 1])
+
+    def test_sse_reader_rejects_compressed_response(self):
+        session = McpSession("https://example.com/mcp")
+        response = _FakeResponse(headers={"Content-Encoding": "gzip"})
+        with self.assertRaisesRegex(ValueError, "압축된 SSE 응답은 지원하지 않습니다"):
+            session._iter_sse_messages(response)
+
     def test_close_ignores_http_405(self):
         session = McpSession("https://example.com/mcp")
         session.session_id = "session-123"
@@ -122,6 +157,13 @@ class McpClientTests(unittest.TestCase):
         session_a.close.assert_called_once()
         session_b.close.assert_called_once()
         self.assertEqual(pool._sessions, {})
+
+    def test_private_endpoint_is_rejected(self):
+        with mock.patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("10.0.0.1", 443)
+        )]):
+            with self.assertRaises(ValueError):
+                McpSession("https://private.example/mcp")
 
 
 if __name__ == "__main__":

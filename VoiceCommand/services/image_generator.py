@@ -8,6 +8,7 @@ import urllib.parse
 from datetime import datetime
 from typing import Any
 
+from core.safe_network import read_limited, safe_urlopen
 from core.resource_manager import ResourceManager
 
 
@@ -62,12 +63,12 @@ class ImageGenerator:
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("이미지 다운로드 URL은 https만 허용합니다.")
 
-        import requests
-
-        response = requests.get(image_url, timeout=30)
-        response.raise_for_status()
+        with safe_urlopen(image_url, timeout=30, allowed_schemes=("https",)) as response:
+            content = read_limited(response, 30 * 1024 * 1024)
+            if getattr(response, "_safe_network_truncated", False):
+                raise ValueError("이미지 응답이 30MB 제한을 초과했습니다.")
         with open(path, "wb") as handle:
-            handle.write(response.content)
+            handle.write(content)
 
 
 def get_image_generator() -> ImageGenerator:

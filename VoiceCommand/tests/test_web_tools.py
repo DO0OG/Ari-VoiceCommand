@@ -1,5 +1,8 @@
 import os
+import ipaddress
+import socket
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +24,13 @@ class _TempBrowser(SmartBrowser):
 
 
 class WebToolsTests(unittest.TestCase):
+    def setUp(self):
+        self.dns = patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )])
+        self.dns.start()
+        self.addCleanup(self.dns.stop)
+
     def test_is_safe_http_url_blocks_local_and_private_targets(self):
         blocked_urls = (
             "http://localhost:8000",
@@ -33,11 +43,136 @@ class WebToolsTests(unittest.TestCase):
             "file:///etc/passwd",
         )
 
-        for url in blocked_urls:
-            with self.subTest(url=url):
-                self.assertFalse(web_tools._is_safe_http_url(url))
+        def resolve(host, *args, **kwargs):
+            # IP 리터럴은 그대로, 이름은 localhost만 루프백으로 해석한다.
+            try:
+                address = str(ipaddress.ip_address(host))
+            except ValueError:
+                address = "127.0.0.1" if host == "localhost" else "93.184.216.34"
+            family = socket.AF_INET6 if ":" in address else socket.AF_INET
+            sockaddr = (address, 443, 0, 0) if family == socket.AF_INET6 else (address, 443)
+            return [(family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)]
+        with patch("core.safe_network.socket.getaddrinfo", side_effect=resolve):
+            for url in blocked_urls:
+                with self.subTest(url=url):
+                    self.assertFalse(web_tools._is_safe_http_url(url))
+            self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
 
-        self.assertTrue(web_tools._is_safe_http_url("https://example.com/path"))
+    def test_web_fetch_limits_body_and_rejects_binary_content_type(self):
+        class Response:
+            def __init__(self, payload, content_type):
+                self.payload = payload
+                self.headers = {"Content-Type": content_type}
+                self.read_sizes = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, size):
+                self.read_sizes.append(size)
+                return self.payload[:size]
+
+        body = Response(b"a" * (2 * 1024 * 1024 + 10), "text/plain")
+        with patch.object(web_tools, "safe_urlopen", return_value=body):
+            text = web_tools.web_fetch("https://example.com")
+        self.assertEqual(body.read_sizes, [2 * 1024 * 1024 + 1])
+        self.assertEqual(len(text), 3000)
+
+        binary = Response(b"image", "image/png")
+        with patch.object(web_tools, "safe_urlopen", return_value=binary):
+            result = web_tools.web_fetch("https://example.com")
+        self.assertIn("텍스트가 아닌 응답입니다: image/png", result)
+        self.assertEqual(binary.read_sizes, [])
+
+    def test_web_fetch_returns_unsafe_url_reason(self):
+        with patch.object(web_tools, "validate_public_http_url", side_effect=web_tools.UnsafeUrlError("공개 주소가 아닙니다")):
+            result = web_tools.web_fetch("http://127.0.0.1")
+        self.assertIn("허용되지 않은 URL입니다: 공개 주소가 아닙니다", result)
+
+    def test_browser_rejects_before_navigation_and_blanks_unsafe_redirect(self):
+        class Driver:
+            current_url = ""
+
+            def __init__(self, current_url=""):
+                self.current_url = current_url
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        driver = Driver()
+        browser.driver = driver
+        browser._ensure_driver = lambda: None
+        with patch.object(web_tools, "validate_browser_url", side_effect=web_tools.UnsafeUrlError("blocked")):
+            with self.assertRaises(web_tools.UnsafeUrlError):
+                browser.navigate_and_action("http://127.0.0.1", [])
+        self.assertEqual(driver.visited, [])
+
+        driver = Driver("http://127.0.0.1/private")
+        browser.driver = driver
+        with patch("core.safe_network.socket.getaddrinfo", return_value=[(
+            socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443)
+        )]):
+            with self.assertRaises(web_tools.UnsafeUrlError):
+                browser.navigate_and_action("https://example.com", [])
+        self.assertEqual(driver.visited, ["https://example.com", "about:blank"])
+
+    def test_explicit_local_navigation_after_public_page_is_allowed(self):
+        class Driver:
+            current_url = "https://example.com/"
+            title = ""
+            page_source = ""
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        driver = Driver()
+        browser.driver = driver
+        browser._ensure_driver = lambda: None
+        browser._browser_start_url = "https://example.com/"
+
+        browser._validate_current_page()
+        browser._browser_start_url = "http://127.0.0.1:3000/"
+        driver.get("http://127.0.0.1:3000/")
+        browser._validate_current_page()
+
+        self.assertEqual(driver.visited, ["http://127.0.0.1:3000/"])
+
+    def test_navigation_sets_baseline_to_requested_url(self):
+        class Driver:
+            current_url = ""
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        browser = SmartBrowser.__new__(SmartBrowser)
+        browser.driver = Driver()
+        browser._ensure_driver = lambda: None
+        browser._browser_start_url = "https://example.com/"
+        seen = []
+
+        def stop_after_validation():
+            seen.append(browser._browser_start_url)
+            raise web_tools.UnsafeUrlError("stop")
+
+        browser._validate_current_page = stop_after_validation
+        with self.assertRaises(web_tools.UnsafeUrlError):
+            browser.navigate_and_action("http://127.0.0.1:3000/", [])
+
+        self.assertEqual(seen, ["http://127.0.0.1:3000/"])
 
     def test_wait_for_download_stability_clock_restarts_only_when_size_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,6 +352,75 @@ class WebToolsTests(unittest.TestCase):
             result = browser._execute_browser_action({"type": "read_url"}, "example.com", None, None, None)
 
             self.assertIn("https://example.com/dashboard", result)
+
+    def test_browser_click_to_unexpected_local_address_blanks_page(self):
+        browser = SmartBrowser.__new__(SmartBrowser)
+
+        class Driver:
+            current_url = "https://example.com/start"
+
+            def __init__(self):
+                self.visited = []
+
+            def get(self, url):
+                self.visited.append(url)
+                self.current_url = url
+
+        class Element:
+            def click(self):
+                browser.driver.current_url = "http://127.0.0.1/"
+
+        class Wait:
+            def __init__(self, driver, timeout):
+                self.driver = driver
+
+            def until(self, condition):
+                return Element()
+
+        class By:
+            CSS_SELECTOR = "css selector"
+
+        class EC:
+            @staticmethod
+            def element_to_be_clickable(locator):
+                return locator
+
+        browser.driver = Driver()
+        browser._browser_start_url = ""
+        browser._find_element_for_action = lambda *_args, **_kwargs: (Element(), "#go")
+        selenium_modules = {
+            "selenium": types.ModuleType("selenium"),
+            "selenium.webdriver": types.ModuleType("selenium.webdriver"),
+            "selenium.webdriver.common": types.ModuleType("selenium.webdriver.common"),
+            "selenium.webdriver.common.by": types.ModuleType("selenium.webdriver.common.by"),
+            "selenium.webdriver.support": types.ModuleType("selenium.webdriver.support"),
+            "selenium.webdriver.support.ui": types.ModuleType("selenium.webdriver.support.ui"),
+            "selenium.webdriver.support.expected_conditions": types.ModuleType(
+                "selenium.webdriver.support.expected_conditions"
+            ),
+        }
+        selenium_modules["selenium.webdriver.common.by"].By = By
+        selenium_modules["selenium.webdriver.support.ui"].WebDriverWait = Wait
+        selenium_modules["selenium.webdriver.support.expected_conditions"].element_to_be_clickable = (
+            EC.element_to_be_clickable
+        )
+        for name in ("selenium", "selenium.webdriver", "selenium.webdriver.common", "selenium.webdriver.support"):
+            selenium_modules[name].__path__ = []
+        selenium_modules["selenium"].webdriver = selenium_modules["selenium.webdriver"]
+        selenium_modules["selenium.webdriver"].common = selenium_modules["selenium.webdriver.common"]
+        selenium_modules["selenium.webdriver"].support = selenium_modules["selenium.webdriver.support"]
+        selenium_modules["selenium.webdriver.common"].by = selenium_modules["selenium.webdriver.common.by"]
+        selenium_modules["selenium.webdriver.support"].ui = selenium_modules["selenium.webdriver.support.ui"]
+        selenium_modules["selenium.webdriver.support"].expected_conditions = selenium_modules[
+            "selenium.webdriver.support.expected_conditions"
+        ]
+        with patch.dict("sys.modules", selenium_modules):
+            result = browser.navigate_and_action(
+                "https://example.com/start",
+                [{"type": "click", "selectors": ["#go"]}],
+            )
+            self.assertIn("오류: click", result)
+            self.assertEqual(browser.driver.visited, ["https://example.com/start", "about:blank"])
 
     def test_execute_browser_action_supports_wait_selector(self):
         with tempfile.TemporaryDirectory() as tmp:
