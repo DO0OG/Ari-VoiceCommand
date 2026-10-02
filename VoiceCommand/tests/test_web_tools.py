@@ -250,13 +250,14 @@ class WebToolsTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             self.assertEqual({first, second}, paths)
 
-    def test_click_action_resets_download_baseline_before_acting(self):
+    def test_click_action_keeps_download_baseline_from_navigation(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = SmartBrowser.__new__(SmartBrowser)
             browser.download_dir = tmp
             browser._download_baseline = browser._snapshot_downloads()
-            # 기준을 찍은 뒤 다른 앱이 받은 파일이다.
-            with open(os.path.join(tmp, "other_app.bin"), "wb") as handle:
+            # 앞 동작이 받아 이미 끝난 파일이다. 다음 동작이 기준을 다시 찍으면 놓친다.
+            path = os.path.join(tmp, "first.bin")
+            with open(path, "wb") as handle:
                 handle.write(b"x")
 
             with patch.object(browser, "_validate_current_page"), \
@@ -266,10 +267,9 @@ class WebToolsTests(unittest.TestCase):
                 )
 
             with patch.object(browser, "_validate_current_page"), \
-                 patch.object(web_tools.time, "time", side_effect=(0, 0, 2)), \
-                 patch.object(web_tools.time, "sleep"), \
-                 self.assertRaises(TimeoutError):
-                browser.wait_for_download(timeout=1, stable_seconds=1)
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 0.5, 0.5, 1.5, 1.5)), \
+                 patch.object(web_tools.time, "sleep"):
+                self.assertEqual(browser.wait_for_download(timeout=10, stable_seconds=1), path)
 
     def test_wait_for_download_returns_changed_existing_file(self):
         with tempfile.TemporaryDirectory() as tmp:

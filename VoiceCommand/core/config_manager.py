@@ -218,7 +218,10 @@ class ConfigManager:
                     loaded = cls.load_settings()
                     if not cls._settings_read_failed:
                         settings = {**loaded, **{
-                            key: value for key, value in settings.items()
+                            # 기본값 화면에는 보이지 않던 기존 항목(사용자 제공자 등)은 새 값과 합친다.
+                            key: {**loaded[key], **value}
+                            if isinstance(value, dict) and isinstance(loaded.get(key), dict) else value
+                            for key, value in settings.items()
                             if (stale.get(key) or None) != (value or None)
                         }}
                 requested = {key: value for key, value in settings.items() if cls._is_secret_key(key)}

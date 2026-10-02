@@ -178,6 +178,27 @@ class ConfigManagerTests(unittest.TestCase):
             self.assertEqual(saved["stt_energy_threshold"], 500)
             self.assertEqual(list(Path(tmp).glob("*.corrupt-*.json")), [])
 
+    def test_access_failure_then_adding_provider_keeps_existing_providers_and_secrets(self):
+        existing = "custom_0123456789abcdef0123456789abcdef"
+        added = "custom_fedcba9876543210fedcba9876543210"
+        details = {"label": "x", "base_url": "https://example.com/v1", "default_model": "m"}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "ari_settings.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"custom_llm_providers": {existing: details}}, handle)
+            self.addCleanup(setattr, ConfigManager, "_cached_settings", ConfigManager._cached_settings)
+            ConfigManager._settings_read_failed = True
+            ConfigManager._cached_settings = dict(ConfigManager.DEFAULT_SETTINGS)
+            with patch("core.config_manager._settings_path", return_value=path), \
+                    patch("core.config_manager.SecretStore.read", return_value={existing + "_api_key": "secret"}), \
+                    patch("core.config_manager.SecretStore.write") as write:
+                self.assertTrue(ConfigManager.save_settings({"custom_llm_providers": {added: details}}))
+                write.assert_not_called()
+            with open(path, encoding="utf-8") as handle:
+                saved = json.load(handle)
+            # 기본값 화면에서 추가한 제공자가 파일에 있던 제공자를 지우지 않는다.
+            self.assertEqual(set(saved["custom_llm_providers"]), {existing, added})
+
     def test_removing_custom_provider_from_valid_settings_removes_its_secret(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "ari_settings.json")

@@ -38,8 +38,9 @@ def _c(pattern: str, flags: int = 0) -> re.Pattern:
 _DANGEROUS_PYTHON: List[_CompiledRule] = [
     # 문자열로 실행하는 코드(exec 등)와 구문 오류가 있는 코드는 AST로 잡히지 않아 본문 검색도 함께 한다.
     # 왼쪽 경계는 todos.remove(x) 같은 리스트 조작이 삭제로 오인되지 않게 한다.
-    (_c(r'(?<![\w.])os\s*\.\s*(remove|unlink|rmdir|removedirs)\s*\('), "파일/폴더 삭제"),
-    (_c(r'(?<![\w.])shutil\s*\.\s*rmtree\s*\('),   "폴더 강제 삭제"),
+    # 밑줄이나 점 뒤(self._os.remove)는 삭제일 수 있어 그대로 잡는다.
+    (_c(r'(?<![A-Za-z0-9])os\s*\.\s*(remove|unlink|rmdir|removedirs)\s*\('), "파일/폴더 삭제"),
+    (_c(r'(?<![A-Za-z0-9])shutil\s*\.\s*rmtree\s*\('), "폴더 강제 삭제"),
     (_c(r'ctypes\s*\.\s*(windll|cdll|CDLL|WinDLL)\s*[\.\(]'), "ctypes 저수준 DLL 로드"),
     (_c(r'ctypes\s*\.\s*cast\s*\('),                "ctypes 포인터 캐스팅"),
     (_c(r'win32api|win32con|winreg'),               "Windows API/레지스트리 접근"),
