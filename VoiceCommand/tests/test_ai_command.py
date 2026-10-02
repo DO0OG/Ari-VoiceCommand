@@ -133,6 +133,23 @@ class AICommandTests(unittest.TestCase):
     def setUp(self):
         _ManualTimer.instances.clear()
 
+    def test_google_tools_do_not_call_services_when_disabled(self):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        with (
+            patch("core.config_manager.ConfigManager.get", return_value=False),
+            patch("services.google_calendar.get_calendar_service") as calendar,
+            patch("services.gmail_service.get_gmail_service") as gmail,
+        ):
+            results = (
+                command._handle_get_calendar_events({}),
+                command._handle_create_calendar_event({}),
+                command._handle_send_email({}),
+                command._handle_read_emails({}),
+            )
+        self.assertEqual(results, ("설정에서 Google 도구 사용을 켜야 합니다.",) * 4)
+        calendar.assert_not_called()
+        gmail.assert_not_called()
+
     def test_first_response_before_700ms_cancels_ack(self):
         shown = []
         ack = InstantAckTimer(lambda: shown.append("ack"), timer_factory=_ManualTimer)

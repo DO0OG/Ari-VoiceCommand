@@ -2368,6 +2368,57 @@ msgstr "Google OAuth Client ID"
 msgid "settings.agent.google_client_secret"
 msgstr "Google OAuth Client Secret"
 
+msgid "settings.agent.google_connected"
+msgstr "Google 계정 연결됨"
+
+msgid "settings.agent.google_not_connected"
+msgstr "Google 계정 연결 안 됨"
+
+msgid "settings.agent.google_connect"
+msgstr "Google 계정 연결"
+
+msgid "settings.agent.google_disconnect"
+msgstr "연결 해제"
+
+msgid "settings.agent.google_connecting"
+msgstr "Google 계정 연결 중..."
+
+msgid "settings.agent.google_disconnecting"
+msgstr "Google 계정 연결 해제 중..."
+
+msgid "settings.agent.google_auth_success"
+msgstr "Google 계정 인증 완료"
+
+msgid "settings.agent.google_disconnected"
+msgstr "Google 계정 연결 해제 완료"
+
+msgid "settings.agent.google_auth_failed"
+msgstr "Google 계정 연결 실패: {error}"
+
+msgid "settings.agent.google_credentials_required"
+msgstr "Client ID와 Client Secret을 입력해 주세요."
+
+msgid "settings.agent.google_cancel"
+msgstr "취소"
+
+msgid "settings.agent.google_auth_cancelled"
+msgstr "연결을 취소했습니다."
+
+msgid "Google 인증 브라우저를 열 수 없습니다."
+msgstr "Google 인증 브라우저를 열 수 없습니다."
+
+msgid "Google 인증 시간이 초과되었습니다."
+msgstr "Google 인증 시간이 초과되었습니다."
+
+msgid "Google 인증이 취소되었습니다."
+msgstr "Google 인증이 취소되었습니다."
+
+msgid "Google 인증 코드가 없습니다."
+msgstr "Google 인증 코드가 없습니다."
+
+msgid "Google 인증이 완료되었습니다. 이 창을 닫아도 됩니다."
+msgstr "Google 인증이 완료되었습니다. 이 창을 닫아도 됩니다."
+
 msgid "settings.agent.image_generation"
 msgstr "이미지 생성 도구 사용"
 

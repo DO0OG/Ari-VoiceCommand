@@ -721,7 +721,13 @@ class AICommand(FastPathMixin, BaseCommand):
         self.executor._log_audit("clipboard", "[set_clipboard]", "success", f"{len(result)} chars", self._current_goal)
         return _("클립보드에 저장했습니다.")
 
+    def _google_tools_enabled(self) -> bool:
+        from core.config_manager import ConfigManager
+        return bool(ConfigManager.get("google_calendar_enabled", False))
+
     def _handle_get_calendar_events(self, args: dict) -> Optional[str]:
+        if not self._google_tools_enabled():
+            return "설정에서 Google 도구 사용을 켜야 합니다."
         try:
             from services.google_calendar import get_calendar_service
             events = get_calendar_service().get_events(
@@ -735,6 +741,8 @@ class AICommand(FastPathMixin, BaseCommand):
             return _("calendar.events.failed").format(error=exc)
 
     def _handle_create_calendar_event(self, args: dict) -> Optional[str]:
+        if not self._google_tools_enabled():
+            return "설정에서 Google 도구 사용을 켜야 합니다."
         try:
             from services.google_calendar import get_calendar_service
             event = get_calendar_service().create_event(
@@ -750,6 +758,8 @@ class AICommand(FastPathMixin, BaseCommand):
             return _("calendar.create.failed").format(error=exc)
 
     def _handle_send_email(self, args: dict) -> Optional[str]:
+        if not self._google_tools_enabled():
+            return "설정에서 Google 도구 사용을 켜야 합니다."
         try:
             from services.gmail_service import get_gmail_service
             result = get_gmail_service().send_email(
@@ -763,6 +773,8 @@ class AICommand(FastPathMixin, BaseCommand):
             return _("email.send.failed").format(error=exc)
 
     def _handle_read_emails(self, args: dict) -> Optional[str]:
+        if not self._google_tools_enabled():
+            return "설정에서 Google 도구 사용을 켜야 합니다."
         try:
             from services.gmail_service import get_gmail_service
             result = get_gmail_service().read_emails(

@@ -12,6 +12,11 @@ from ui.stt_settings_dialog import STTSettingsDialog
 
 
 class SettingsSecretUITests(unittest.TestCase):
+    def setUp(self):
+        connected = patch("services.google_auth.is_connected", return_value=False)
+        connected.start()
+        self.addCleanup(connected.stop)
+
     def test_device_tab_uses_scroll_area(self):
         self._app = QApplication.instance() or QApplication([])
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}):

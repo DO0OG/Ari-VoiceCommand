@@ -51,6 +51,15 @@ ARI_OPENAI_API_KEY=발급받은-키
 `.env`의 값은 프로세스 환경에 복사하지 않는다.
 [python-dotenv 문서](https://bbc2.github.io/python-dotenv/reference/)
 
+## Google Calendar/Gmail 연결
+
+Google Cloud에서 OAuth 클라이언트를 **데스크톱 앱** 유형으로 만들고 Calendar API와 Gmail API를 사용 설정한다.
+앱 설정의 에이전트 페이지에 Client ID와 Client Secret을 입력한 뒤 **Google 계정 연결**을 누른다.
+도구를 사용하려면 에이전트 설정에서 Google 도구 사용도 켜야 한다.
+브라우저에서 Google 계정과 권한을 확인하면 앱이 인증을 마친다.
+인증 토큰은 Windows 사용자 계정에 묶인 DPAPI로 보호해 저장한다.
+OAuth 동의 화면이 **테스트** 게시 상태이면 갱신 토큰은 7일 뒤 만료되므로 다시 연결해야 한다.
+
 ## Windows 저장과 마이그레이션
 
 런타임 폴더의 `ari_secrets.dpapi`에는 사용자 계정에 묶인 DPAPI 암호문만 기록한다.

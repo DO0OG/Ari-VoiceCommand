@@ -13,7 +13,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class SkillInstaller:
         metadata = {
             "enabled": enabled,
             "source": source_label,
-            "installed_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         }
         with open(os.path.join(skill_dir, _META_FILE_NAME), "w", encoding="utf-8") as handle:
             json.dump(metadata, handle, ensure_ascii=False, indent=2)

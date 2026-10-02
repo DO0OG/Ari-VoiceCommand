@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import sys
+import threading
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -20,6 +22,41 @@ from PySide6.QtWidgets import (
 
 from agent.learning_metrics import get_learning_metrics
 from i18n.translator import _
+
+
+_google_auth_threads: set[QThread] = set()
+
+
+class _GoogleAuthThread(QThread):
+    result = Signal(bool, str)
+
+    def __init__(self, action: str, client_id: str, client_secret: str):
+        super().__init__()
+        self.action = action
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.cancel_event = threading.Event()
+
+    def run(self):
+        try:
+            from services import google_auth
+            if self.action == "connect":
+                google_auth.authorize(
+                    self.client_id,
+                    self.client_secret,
+                    cancel_event=self.cancel_event,
+                )
+                self.result.emit(True, "settings.agent.google_auth_success")
+            else:
+                google_auth.sign_out()
+                self.result.emit(True, "settings.agent.google_disconnected")
+        except Exception as exc:
+            self.result.emit(
+                False,
+                "settings.agent.google_auth_cancelled"
+                if self.action == "connect" and self.cancel_event.is_set()
+                else str(exc),
+            )
 
 
 def _live_decision_engine():
@@ -81,6 +118,18 @@ class _AgentSettingsPage(QWidget):
         self.google_client_secret.setPlaceholderText(_("settings.agent.google_client_secret"))
         self.google_client_secret.setEchoMode(QLineEdit.Password)
         box.addWidget(self.google_client_secret)
+        self.google_status = QLabel("")
+        box.addWidget(self.google_status)
+        google_buttons = QHBoxLayout()
+        self.google_connect_button = QPushButton(_("settings.agent.google_connect"))
+        self.google_disconnect_button = QPushButton(_("settings.agent.google_disconnect"))
+        self.google_connect_button.clicked.connect(self._connect_google)
+        self.google_disconnect_button.clicked.connect(self._disconnect_google)
+        google_buttons.addWidget(self.google_connect_button)
+        google_buttons.addWidget(self.google_disconnect_button)
+        box.addLayout(google_buttons)
+        self._google_auth_thread = None
+        self._refresh_google_status()
 
         self.image_checkbox = QCheckBox(_("settings.agent.image_generation"))
         self.image_checkbox.setChecked(bool(settings.get("image_generation_enabled", False)))
@@ -146,6 +195,69 @@ class _AgentSettingsPage(QWidget):
         else:
             text = _("로컬 임베딩 모델: 다운로드 대기")
         self.embedding_status.setText(text)
+
+    def _refresh_google_status(self) -> None:
+        from services.google_auth import is_connected
+        connected = is_connected()
+        self.google_status.setText(_(
+            "settings.agent.google_connected" if connected
+            else "settings.agent.google_not_connected"
+        ))
+        self.google_disconnect_button.setEnabled(connected)
+
+    def _connect_google(self) -> None:
+        thread = self._google_auth_thread
+        if thread is not None and thread.action == "connect":
+            thread.cancel_event.set()
+            return
+        client_id = self.google_client_id.text().strip()
+        client_secret = self.google_client_secret.text().strip()
+        if not client_id or not client_secret:
+            self.google_status.setText(_("settings.agent.google_credentials_required"))
+            return
+        self._start_google_auth("connect", client_id, client_secret)
+
+    def _disconnect_google(self) -> None:
+        self._start_google_auth("disconnect", "", "")
+
+    def _start_google_auth(self, action: str, client_id: str, client_secret: str) -> None:
+        thread = _GoogleAuthThread(action, client_id, client_secret)
+        self._google_auth_thread = thread
+        self.google_connect_button.setEnabled(action == "connect")
+        self.google_connect_button.setText(_(
+            "settings.agent.google_cancel" if action == "connect"
+            else "settings.agent.google_connect"
+        ))
+        self.google_disconnect_button.setEnabled(False)
+        self.google_status.setText(_(
+            "settings.agent.google_connecting" if action == "connect"
+            else "settings.agent.google_disconnecting"
+        ))
+        thread.result.connect(self._on_google_auth_result)
+        thread.finished.connect(lambda t=thread: _google_auth_threads.discard(t))
+        thread.finished.connect(self._google_auth_finished)
+        _google_auth_threads.add(thread)
+        thread.start()
+
+    def _on_google_auth_result(self, success: bool, message: str) -> None:
+        from services.google_auth import is_connected
+        connected = is_connected()
+        state = _("settings.agent.google_connected" if connected else "settings.agent.google_not_connected")
+        if success:
+            detail = _(message)
+        elif message == "settings.agent.google_auth_cancelled":
+            detail = _(message)
+        else:
+            detail = _("settings.agent.google_auth_failed").format(error=_(message))
+        self.google_status.setText(f"{state}\n{detail}")
+        self.google_disconnect_button.setEnabled(connected)
+
+    def _google_auth_finished(self) -> None:
+        thread = self.sender()
+        if self._google_auth_thread is thread:
+            self._google_auth_thread = None
+        self.google_connect_button.setText(_("settings.agent.google_connect"))
+        self.google_connect_button.setEnabled(True)
 
     def _build_learning_metrics_group(self) -> QGroupBox:
         group = QGroupBox(_("학습 기여도 진단"))
@@ -262,3 +374,17 @@ class _AgentSettingsPage(QWidget):
             "local_decision_direct_execution": direct,
             "embedding_remote_enabled": self.embedding_remote_checkbox.isChecked(),
         }
+
+    def cleanup_threads(self):
+        thread = self._google_auth_thread
+        if thread is None:
+            return
+        thread.cancel_event.set()
+        if thread.isRunning():
+            thread.wait(1500)
+        if not thread.isRunning():
+            _google_auth_threads.discard(thread)
+            self._google_auth_thread = None
+        else:
+            thread.result.disconnect(self._on_google_auth_result)
+            thread.finished.disconnect(self._google_auth_finished)
