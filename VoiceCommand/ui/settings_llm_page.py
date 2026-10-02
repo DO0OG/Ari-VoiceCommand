@@ -19,7 +19,7 @@ from core.custom_llm_providers import (
     normalize_custom_provider_settings,
 )
 from i18n.translator import _
-from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
+from ui.theme import scrollbar_style, secondary_btn_style
 from ui.common import create_muted_label
 
 _live_validator_threads: set[QThread] = set()
@@ -230,7 +230,7 @@ class _LLMSettingsPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setStyleSheet(scrollbar_style())
 
         container = QWidget()
         vbox = QVBoxLayout(container)

@@ -46,9 +46,9 @@ from ui.theme import (
     SHADOW_BLUR, SHADOW_OFFSET,
     MARGIN_PANEL, SPACING_LG,
     ANIM_FAST, ANIM_NORMAL,
-    SUGGESTION_REFRESH, STATUS_REFRESH, DASHBOARD_AUTO_HIDE,
+    STATUS_REFRESH, DASHBOARD_AUTO_HIDE,
     WINDOW_W_CHAT, WINDOW_H_CHAT,
-    SCROLLBAR_STYLE, CHAT_INPUT_STYLE,
+    CHAT_INPUT_STYLE,
 )
 from ui import theme as theme_module
 from i18n.translator import _
@@ -253,6 +253,9 @@ class TextInterface(QMainWindow):
         self.status_summary = QLabel("")
         self.status_summary.setWordWrap(True)
         self.status_summary.setFont(QFont(FONT_KO, FONT_SIZE_SMALL))
+        self.status_summary.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.status_summary.setMinimumWidth(0)
+        self.status_summary.setMaximumHeight(self.status_summary.fontMetrics().lineSpacing() * 3)
         self.status_summary.setStyleSheet("color: #4f5b66;")
         status_lay.addWidget(self.status_summary)
         bg_lay.addWidget(status_frame)
@@ -265,7 +268,7 @@ class TextInterface(QMainWindow):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll_area.setStyleSheet(SCROLLBAR_STYLE)
+        self.scroll_area.setStyleSheet(theme_module.scrollbar_style())
         self.chat_widget = ChatWidget()
         self.scroll_area.setWidget(self.chat_widget)
         bg_lay.addWidget(self.scroll_area)
@@ -540,7 +543,9 @@ class TextInterface(QMainWindow):
 
     def refresh_status_panel(self) -> None:
         if not self.context_manager:
-            self.status_summary.setText(_("기억 시스템을 불러오지 못했습니다."))
+            text = _("기억 시스템을 불러오지 못했습니다.")
+            self.status_summary.setText(text)
+            self.status_summary.setToolTip(text)
             return
         try:
             predictions = self.context_manager.get_predicted_next_commands()
@@ -558,7 +563,9 @@ class TextInterface(QMainWindow):
                 lines.append(_("선호 ") + " · ".join(prefs[:2]))
             if not lines:
                 lines.append(_("대화를 이어가면 이곳에 요약이 표시됩니다."))
-            self.status_summary.setText("\n".join(lines))
+            text = "\n".join(lines)
+            self.status_summary.setText(text)
+            self.status_summary.setToolTip(text)
         except Exception as e:
             logger.debug("상태 패널 갱신 실패: %s", e)
 

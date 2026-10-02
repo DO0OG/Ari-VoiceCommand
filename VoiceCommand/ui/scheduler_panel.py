@@ -22,7 +22,7 @@ from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_DANGER, COLOR_MUTED,
     COLOR_BG_WHITE, COLOR_BORDER_CARD,
-    SCROLLBAR_THIN_STYLE, primary_btn_style,
+    scrollbar_thin_style, primary_btn_style,
     WINDOW_W_SCHEDULER, WINDOW_H_SCHEDULER,
 )
 
@@ -137,7 +137,7 @@ class SchedulerPanel(FloatingPanel):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(SCROLLBAR_THIN_STYLE)
+        scroll.setStyleSheet(scrollbar_thin_style())
         self._scroll = scroll
 
         self._list_widget = QWidget()

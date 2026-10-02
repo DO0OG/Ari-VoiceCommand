@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from i18n.translator import _
-from ui.theme import SCROLLBAR_STYLE, secondary_btn_style
+from ui.theme import scrollbar_style, secondary_btn_style
 from ui.common import create_muted_label
 from ui.local_installers import (
     CosyVoiceInstallerThread,
@@ -76,7 +76,7 @@ class _TTSSettingsPage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(SCROLLBAR_STYLE)
+        scroll.setStyleSheet(scrollbar_style())
 
         container = QWidget()
         vbox = QVBoxLayout(container)

@@ -29,7 +29,7 @@ from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, FONT_SIZE_SMALL,
     COLOR_PRIMARY, COLOR_DANGER, COLOR_MUTED,
     COLOR_BG_WHITE, COLOR_BG_CHIP_PRIMARY, COLOR_BG_CHIP_WARN,
-    SCROLLBAR_THIN_STYLE, TAB_STYLE, primary_btn_style,
+    scrollbar_thin_style, TAB_STYLE, primary_btn_style,
     WINDOW_W_MEMORY, WINDOW_H_MEMORY,
 )
 
@@ -216,7 +216,7 @@ class _FactsTab(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(SCROLLBAR_THIN_STYLE)
+        scroll.setStyleSheet(scrollbar_thin_style())
 
         self._container = QWidget()
         self._inner = QVBoxLayout(self._container)
@@ -288,7 +288,7 @@ class _SuggestionsTab(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(SCROLLBAR_THIN_STYLE)
+        scroll.setStyleSheet(scrollbar_thin_style())
         self._container = QWidget()
         self._inner = QVBoxLayout(self._container)
         self._inner.setAlignment(Qt.AlignTop)

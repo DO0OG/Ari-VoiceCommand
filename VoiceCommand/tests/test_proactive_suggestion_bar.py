@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
 
 from ui.proactive_suggestion_bar import ProactiveSuggestionBar
+from ui import theme as theme_module
 
 _LONG = [
     (f"최근 주제 '{word}'와 관련된 반복 전략이 보여요. 이어서 정리해드릴까요?", word)
@@ -53,6 +54,17 @@ class ProactiveSuggestionBarTest(unittest.TestCase):
             bar._refresh_suggestions()
 
         self.assertEqual(before, bar.findChildren(QPushButton))
+
+    def test_refresh_theme_updates_active_timer_interval(self):
+        _host, bar = self._make_host()
+        bar.start_timer()
+        self.assertTrue(bar._refresh_timer.isActive())
+
+        with patch.object(theme_module, "SUGGESTION_REFRESH", 1234):
+            bar.refresh_theme()
+            self.assertTrue(bar._refresh_timer.isActive())
+            self.assertEqual(bar._refresh_timer.interval(), 1234)
+            bar.stop_timer()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import patch
 
 
 from ui.theme_runtime import apply_live_theme
+from ui import theme as theme_module
 
 
 class _DummyTextInterface:
@@ -31,6 +33,17 @@ class _DummyCharacter:
 
 
 class ThemeRuntimeTests(unittest.TestCase):
+    def test_scrollbar_styles_use_current_theme_colors(self):
+        # 테마를 다시 불러오면 모듈의 색 상수가 바뀐다. 그 상태를 직접 만든다.
+        with (
+            patch.object(theme_module, "COLOR_BG_INPUT", "#123456"),
+            patch.object(theme_module, "COLOR_BORDER_INPUT", "#abcdef"),
+        ):
+            self.assertIn("#123456", theme_module.scrollbar_style())
+            self.assertIn("#abcdef", theme_module.scrollbar_style())
+            self.assertIn("#123456", theme_module.scrollbar_thin_style())
+            self.assertIn("#abcdef", theme_module.scrollbar_thin_style())
+
     def test_apply_live_theme_refreshes_existing_widgets(self):
         text_interface = _DummyTextInterface()
         tray = _DummyTray(text_interface)
