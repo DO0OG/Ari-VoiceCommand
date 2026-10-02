@@ -525,8 +525,8 @@ class UserContextManagerTests(unittest.TestCase):
             manager = UserContextManager(context_file=path)
             manager.record_fact("favorite_drink", "coffee", source="user")
 
-            with patch("memory.memory_index.get_memory_index") as get_index:
-                get_index.return_value.delete_fact.return_value = True
+            index = Mock()
+            with patch("memory.memory_index.get_memory_index", return_value=index):
                 with patch(
                     "memory.user_context.write_text_atomic",
                     side_effect=OSError("disk full"),
@@ -536,7 +536,63 @@ class UserContextManagerTests(unittest.TestCase):
             self.assertEqual(
                 manager.context["facts"]["favorite_drink"]["value"], "coffee"
             )
-            get_index.return_value.index_fact.assert_called_once()
+            index.delete_fact.assert_not_called()
+            index.delete_conversations_containing.assert_not_called()
+
+    def test_delete_fact_save_failure_keeps_conversation_history_and_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            history = Mock()
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                manager.record_fact("drink", "coffee", source="user")
+                index.index_conversation("coffee", "noted", datetime.now().isoformat())
+                with (
+                    patch("memory.conversation_history.get_conversation_history", return_value=history),
+                    patch("memory.user_context.write_text_atomic", side_effect=OSError("disk full")),
+                ):
+                    self.assertFalse(manager.delete_fact("drink", delete_conversations=True))
+                    history.delete_containing.assert_not_called()
+            self.assertTrue(index.search("coffee", kind="conversation"))
+
+    def test_delete_preference_continues_conversation_cleanup_after_index_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            manager.context["preferences"] = {"drink": {"coffee": 1}}
+            history = Mock()
+            index = Mock()
+            index.delete_fact.side_effect = RuntimeError("index unavailable")
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ):
+                self.assertFalse(manager.delete_preference("drink", "coffee", True))
+                history.delete_containing.assert_called_once_with("coffee")
+                index.delete_conversations_containing.assert_called_once_with("coffee")
+
+    def test_record_preference_restores_bucket_when_save_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            manager.context["preferences"] = {"drink": {"tea": 2}}
+            with patch("memory.user_context.write_text_atomic", side_effect=OSError("disk full")):
+                self.assertFalse(manager.record_preference("drink", "coffee"))
+
+            self.assertEqual(manager.context["preferences"]["drink"], {"tea": 2})
+
+    def test_preference_index_keeps_values_separate_and_cleans_legacy_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                index.index_fact("선호: drink", "old", 1.0)
+                manager.record_preference("drink", "coffee")
+                manager.record_preference("drink", "tea")
+                self.assertTrue(index.search("coffee", kind="fact"))
+                self.assertTrue(index.search("tea", kind="fact"))
+                manager.delete_preference("drink", "coffee")
+
+            self.assertFalse(index.search("coffee", kind="fact"))
+            self.assertTrue(index.search("tea", kind="fact"))
+            self.assertFalse(index.search("old", kind="fact"))
 
     def test_default_fact_survives_180_day_decay(self):
         with tempfile.TemporaryDirectory() as tmp:

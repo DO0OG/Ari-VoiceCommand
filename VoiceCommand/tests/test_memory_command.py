@@ -286,6 +286,33 @@ class MemoryCommandTests(unittest.TestCase):
             self.assertEqual(len(history.active), 1)
             self.assertTrue(index.search("initial", kind="conversation"))
 
+    def test_forget_one_character_fact_does_not_delete_category_preferences(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            context = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                context.record_fact("drink", "A", source="user")
+                context.record_preference("drink", "coffee")
+                context.record_preference("drink", "tea")
+            index.index_conversation("My drink initial is A", "", "2026-09-29T10:00:00")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history._lock = threading.RLock()
+            history.active = [{"user": "My drink initial is A", "ai": ""}]
+            history.summaries = []
+            history.save = Mock()
+
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.user_context.get_context_manager", return_value=context
+            ), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                get_manager.return_value.request_confirmation.return_value = True
+                MemoryCommand(lambda _message: None).execute("drink 잊어줘")
+
+            self.assertNotIn("drink", context.context["facts"])
+            self.assertEqual(context.context["preferences"]["drink"], {"coffee": 1, "tea": 1})
+            self.assertEqual(len(history.active), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

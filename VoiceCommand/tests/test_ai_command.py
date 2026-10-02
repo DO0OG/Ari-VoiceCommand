@@ -535,6 +535,63 @@ class AICommandTests(unittest.TestCase):
             lang="ja",
         )
 
+    def test_chat_only_assistant_records_interaction_once(self):
+        class _ChatOnlyAssistant:
+            def chat(self, text, include_context=True):
+                return "hello back"
+
+        command = AICommand(_ChatOnlyAssistant(), lambda _message: None, {"enabled": False})
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            self.assertEqual(command.run_interaction("hello"), "hello back")
+
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertEqual(
+            memory_manager.return_value.process_interaction.call_args.args,
+            ("hello", "hello back"),
+        )
+
+    def test_cancelled_response_uses_successful_marker_without_duplicate_history(self):
+        class _HistoryAssistant:
+            def __init__(self):
+                self.history = []
+                self.marker_succeeded = False
+
+            def add_to_history(self, role, content):
+                self.history.append({"role": role, "content": content})
+
+            def chat_with_tools(self, _text, stream_callback=None, **_kwargs):
+                self.add_to_history("user", "question")
+                self.add_to_history("assistant", "partial")
+                stream_callback("partial")
+                return "partial plus hidden", []
+
+            def mark_last_response_interrupted(self, _expected, replacement):
+                self.history[-1]["content"] = replacement
+                self.marker_succeeded = True
+                return True
+
+        assistant = _HistoryAssistant()
+        command = AICommand(assistant, lambda _message: None, {"enabled": False})
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager"),
+        ):
+            command.run_interaction(
+                "question",
+                stream_callback=lambda _chunk: command.cancel_current_response(),
+            )
+            self.assertTrue(assistant.marker_succeeded)
+        self.assertEqual(
+            [item["role"] for item in assistant.history], ["user", "assistant"]
+        )
+        self.assertIn("응답 중단", assistant.history[-1]["content"])
+
     def test_plain_response_recovered_as_tool_is_recorded_once_as_final_result(self):
         assistant = _FakeAssistant()
         command = AICommand(assistant, lambda msg: None, {"enabled": False})
@@ -910,7 +967,10 @@ class AICommandTests(unittest.TestCase):
         self.assertIn("실행 보고서", memory_manager.return_value.process_interaction.call_args.args[1])
 
     def test_script_skill_escalation_routes_to_run_agent_task_and_records_metadata(self):
-        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        assistant = _FakeAssistant()
+        assistant.history = []
+        assistant.add_to_history = lambda role, content: assistant.history.append((role, content))
+        command = AICommand(assistant, lambda msg: None, {"enabled": False})
         command._dispatch["run_agent_task"] = lambda args: "작업 완료. 스크립트 스킬을 실행했습니다."
 
         skill_ctx = {
@@ -923,14 +983,43 @@ class AICommandTests(unittest.TestCase):
             "search_query_template": "",
         }
 
-        with patch.object(command, "_get_skill_context", return_value=skill_ctx):
-            with patch("memory.memory_manager.get_memory_manager") as memory_manager:
-                combined = command.run_interaction("실록에서 세종 기록 찾아줘")
+        with (
+            patch.object(command, "_get_skill_context", return_value=skill_ctx),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            combined = command.run_interaction("실록에서 세종 기록 찾아줘")
+            self.assertIn("작업 완료.", combined)
+            memory_manager.return_value.process_interaction.assert_called_once()
+            self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["skill_used"], "joseon-sillok-search")
+            self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["data_source"], "agent")
+        self.assertEqual(assistant.history[0], ("user", "실록에서 세종 기록 찾아줘"))
+        self.assertEqual(assistant.history[1][0], "assistant")
+        self.assertIn("작업 완료.", assistant.history[1][1])
 
-        self.assertIn("작업 완료.", combined)
-        memory_manager.return_value.process_interaction.assert_called_once()
-        self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["skill_used"], "joseon-sillok-search")
-        self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["data_source"], "agent")
+    def test_groq_assistant_forwards_record_interaction_option(self):
+        from assistant.groq_assistant import GroqAssistant
+
+        provider = Mock()
+        provider.chat_with_tools.return_value = ("response", [])
+        assistant = GroqAssistant()
+        command = AICommand(assistant, lambda _message: None, {"enabled": False})
+        with (
+            patch("agent.llm_provider.get_llm_provider", return_value=provider),
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            self.assertEqual(command.run_interaction("question"), "response")
+            provider.chat_with_tools.assert_called_once_with(
+                "question",
+                include_context=True,
+                stream_callback=None,
+                cancel_event=ANY,
+                record_interaction=False,
+            )
+            memory_manager.return_value.process_interaction.assert_called_once()
 
     def test_extract_saved_path_ignores_scanned_markdown_path_without_save_signal(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

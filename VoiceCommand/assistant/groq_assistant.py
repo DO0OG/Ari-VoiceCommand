@@ -46,12 +46,14 @@ class GroqAssistant:
         include_context=True,
         stream_callback=None,
         cancel_event=None,
+        record_interaction=True,
     ):
         return self._provider.chat_with_tools(
             user_message,
             include_context=include_context,
             stream_callback=stream_callback,
             cancel_event=cancel_event,
+            record_interaction=record_interaction,
         )
 
     def chat(

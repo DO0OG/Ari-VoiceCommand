@@ -449,6 +449,10 @@ class MemoryIndex:
     def _fact_ref_key(key: str) -> str:
         return f"fact:{key}"
 
+    @staticmethod
+    def preference_key(category: str, value: str) -> str:
+        return f"선호: {category}={value}"
+
     def search_by_date(self, start: datetime, end: datetime) -> List[MemorySearchResult]:
         try:
             with self._lock, self._connect() as conn:

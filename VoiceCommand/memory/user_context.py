@@ -492,17 +492,6 @@ class UserContextManager:
         fact = facts[key]
         if expected_value is not None and fact.get("value", "") != expected_value:
             return False
-        from memory.memory_index import get_memory_index
-
-        index = get_memory_index()
-        index.delete_fact(key)
-        if delete_conversations:
-            value = str(fact.get("value", ""))
-            if value:
-                from memory.conversation_history import get_conversation_history
-
-                get_conversation_history().delete_containing(value)
-                index.delete_conversations_containing(value)
         facts.pop(key)
         fact_history = self.context.get("fact_history", {})
         old_history = fact_history.pop(key, None)
@@ -510,11 +499,33 @@ class UserContextManager:
             facts[key] = fact
             if old_history is not None:
                 fact_history[key] = old_history
-            index.index_fact(
-                key, str(fact.get("value", "")), float(fact.get("confidence", 0.7))
-            )
             return False
-        return True
+
+        failed = False
+        value = str(fact.get("value", ""))
+        try:
+            from memory.memory_index import get_memory_index
+
+            get_memory_index().delete_fact(key)
+        except Exception as exc:
+            logger.warning("사실 색인 삭제 실패: %s", exc)
+            failed = True
+        if delete_conversations and value:
+            try:
+                from memory.conversation_history import get_conversation_history
+
+                get_conversation_history().delete_containing(value)
+            except Exception as exc:
+                logger.warning("대화 기록 삭제 실패: %s", exc)
+                failed = True
+            try:
+                from memory.memory_index import get_memory_index
+
+                get_memory_index().delete_conversations_containing(value)
+            except Exception as exc:
+                logger.warning("대화 색인 삭제 실패: %s", exc)
+                failed = True
+        return not failed
 
     @_context_locked
     def request_bio_update(self, field: str, value: str, user_message: str = "") -> bool:
@@ -599,24 +610,52 @@ class UserContextManager:
         self.save_context()
 
     @_context_locked
-    def record_preference(self, category: str, value: str):
+    def record_preference(self, category: str, value: str) -> bool:
         """선호도 기록."""
         category = str(category or "").strip()
         value = str(value or "").strip()
         if not category or not value:
-            return
+            return False
 
         prefs = self.context.setdefault("preferences", {})
+        had_bucket = category in prefs
+        previous_bucket = dict(prefs.get(category, {}))
         bucket = prefs.setdefault(category, {})
         bucket[value] = bucket.get(value, 0) + 1
         prefs[category] = self._limit_frequency_map(bucket, max_items=50)
-        if self.save_context():
-            try:
-                from memory.memory_index import get_memory_index
+        if not self.save_context():
+            if had_bucket:
+                prefs[category] = previous_bucket
+            else:
+                prefs.pop(category, None)
+            return False
+        failed = False
+        try:
+            from memory.memory_index import get_memory_index
 
-                get_memory_index().index_fact(f"선호: {category}", value, 1.0)
+            index = get_memory_index()
+        except Exception as exc:
+            logger.warning("선호 색인 갱신 실패: %s", exc)
+            return False
+        try:
+            index.delete_fact(f"선호: {category}")
+            # 개수 상한으로 밀려난 값의 색인 행도 함께 지운다.
+            for evicted_value in set(previous_bucket) - set(prefs[category]):
+                index.delete_fact(index.preference_key(category, evicted_value))
+        except Exception as exc:
+            logger.warning("이전 선호 색인 삭제 실패: %s", exc)
+            failed = True
+        for preference_value in prefs[category]:
+            try:
+                index.index_fact(
+                    index.preference_key(category, preference_value),
+                    preference_value,
+                    1.0,
+                )
             except Exception as exc:
                 logger.warning("선호 색인 갱신 실패: %s", exc)
+                failed = True
+        return not failed
 
     @_context_locked
     def delete_preference(
@@ -634,22 +673,51 @@ class UserContextManager:
             preferences[category] = previous_bucket
             return False
 
+        failed = False
         try:
             from memory.memory_index import get_memory_index
 
             index = get_memory_index()
-            index.delete_fact(f"선호: {category}")
-            if delete_conversations and len(value.strip()) > 1:
+            index.delete_fact(index.preference_key(category, value))
+        except Exception as exc:
+            logger.warning("선호 색인 삭제 실패: %s", exc)
+            failed = True
+        try:
+            from memory.memory_index import get_memory_index
+
+            get_memory_index().delete_fact(f"선호: {category}")
+        except Exception as exc:
+            logger.warning("이전 선호 색인 삭제 실패: %s", exc)
+            failed = True
+        if delete_conversations and len(value.strip()) > 1:
+            try:
                 from memory.conversation_history import get_conversation_history
 
                 get_conversation_history().delete_containing(value)
-                index.delete_conversations_containing(value)
-            if bucket:
-                top_value = max(bucket.items(), key=lambda item: item[1])[0]
-                index.index_fact(f"선호: {category}", top_value, 1.0)
-        except Exception as exc:
-            logger.warning("선호 삭제 색인 갱신 실패: %s", exc)
-        return True
+            except Exception as exc:
+                logger.warning("선호 대화 기록 삭제 실패: %s", exc)
+                failed = True
+            try:
+                from memory.memory_index import get_memory_index
+
+                get_memory_index().delete_conversations_containing(value)
+            except Exception as exc:
+                logger.warning("선호 대화 색인 삭제 실패: %s", exc)
+                failed = True
+        for remaining_value in bucket:
+            try:
+                from memory.memory_index import get_memory_index
+
+                index = get_memory_index()
+                index.index_fact(
+                    index.preference_key(category, remaining_value),
+                    remaining_value,
+                    1.0,
+                )
+            except Exception as exc:
+                logger.warning("남은 선호 색인 갱신 실패: %s", exc)
+                failed = True
+        return not failed
 
     def get_top_preferences(self, limit: int = 3) -> List[str]:
         """상위 선호도를 '카테고리:값' 형식으로 반환."""

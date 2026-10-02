@@ -1,7 +1,7 @@
 import importlib
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 from agent.proactive_scheduler import ScheduledTask
 from ui import theme as theme_module
 from ui.scheduler_panel import SchedulerPanel, TaskRow
-from ui.text_interface import ChatWidget, TextInterface
+from ui.text_interface import ChatWidget, TextInterface, TextInterfaceThread
 
 
 class _DummyChatWidget:
@@ -74,6 +74,20 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         interface.scroll_to_bottom = lambda: None
         interface.refresh_status_panel = lambda: None
         return interface, spoken
+
+    def test_empty_ai_command_result_does_not_retry_with_provider(self):
+        from types import SimpleNamespace
+        from commands.ai_command import AICommand
+
+        command = AICommand(Mock(), lambda _message: None, {"enabled": False})
+        command.run_interaction = Mock(return_value="")
+        provider = Mock()
+        interface = TextInterfaceThread(provider, "cancel me")
+        state = SimpleNamespace(command_registry=SimpleNamespace(commands=[command]))
+
+        with patch("core.VoiceCommand._state", state):
+            self.assertEqual(interface._execute_query(), "")
+            provider.chat_with_tools.assert_not_called()
 
     def test_handle_stream_chunk_starts_tts_on_long_sentence_boundary(self):
         interface, spoken = self._make_interface()

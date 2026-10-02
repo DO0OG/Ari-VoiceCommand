@@ -324,7 +324,8 @@ class MemoryManager:
             preferences = context.context.setdefault("preferences", {})
             values = preferences.setdefault(suggestion["key"], {})
             if not values.get(suggestion["value"]):
-                context.record_preference(suggestion["key"], suggestion["value"])
+                if not context.record_preference(suggestion["key"], suggestion["value"]):
+                    return False
         return store.resolve(suggestion_id, approved=True) is not None
 
     def _is_persistent_fact(self, key: str) -> bool:

@@ -1858,12 +1858,16 @@ class AICommand(FastPathMixin, BaseCommand):
             data_source = ""
             lang = self._get_current_language()
             uses_chat_with_tools = hasattr(self.ai_assistant, 'chat_with_tools')
+            direct_skill_escalation = False
+            response = ""
+            tool_calls = []
 
             if uses_chat_with_tools:
                 if self.learning_mode_ref.get('enabled'):
                     self._record_user_pattern(text)
 
                 if skill_ctx.get("escalate_to_agent"):
+                    direct_skill_escalation = True
                     tool_calls = [self._build_script_skill_escalation_tool_call(text, skill_ctx)]
                 else:
                     response, tool_calls = self._invoke_with_optional_stream(
@@ -2020,13 +2024,16 @@ class AICommand(FastPathMixin, BaseCommand):
                     marker_record = getattr(
                         self.ai_assistant, "mark_last_response_interrupted", None
                     )
+                    marked = False
                     if callable(marker_record):
                         try:
-                            marker_record(response or partial, interrupted_response)
+                            marked = bool(
+                                marker_record(response or partial, interrupted_response)
+                            )
                         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                             logging.debug("LLM 중단 기록 갱신 생략: %s", exc)
                     history_recorder = getattr(self.ai_assistant, "add_to_history", None)
-                    if callable(history_recorder):
+                    if callable(history_recorder) and not marked:
                         try:
                             history_recorder("assistant", interrupted_response)
                         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
@@ -2034,7 +2041,15 @@ class AICommand(FastPathMixin, BaseCommand):
                     return interrupted_response
                 return ""
 
-            if response and uses_chat_with_tools:
+            if response:
+                if direct_skill_escalation:
+                    history_recorder = getattr(self.ai_assistant, "add_to_history", None)
+                    if callable(history_recorder):
+                        try:
+                            history_recorder("user", text)
+                            history_recorder("assistant", response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("스킬 승격 문맥 기록 생략: %s", exc)
                 try:
                     from memory.memory_manager import get_memory_manager
                     get_memory_manager().process_interaction(

@@ -293,21 +293,14 @@ class MemoryCommand(BaseCommand):
         )
         if deleted and kind == "fact":
             # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
-            needles = {
-                text
-                for text in (query, str(fact.get("value", "")).strip().casefold())
-                if len(text) > 1
-            }
-            for category, values in context.get_preferences_snapshot().items():
-                for value in values:
-                    if any(
-                        needle == str(category).casefold()
-                        or needle in str(value).casefold()
-                        for needle in needles
-                    ):
-                        context.delete_preference(
-                            category, value, delete_conversations=True
-                        )
+            fact_value = str(fact.get("value", "")).strip()
+            if len(fact_value) > 1:
+                for category, values in context.get_preferences_snapshot().items():
+                    for value in values:
+                        if fact_value.casefold() in str(value).casefold():
+                            context.delete_preference(
+                                category, value, delete_conversations=True
+                            )
         if deleted:
             self.tts_wrapper(_("기억을 잊었어요: {key}", key=key))
         else:
