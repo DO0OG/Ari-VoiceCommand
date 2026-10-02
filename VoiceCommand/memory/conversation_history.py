@@ -13,6 +13,30 @@ _INTERNAL_USER_PREFIXES = (
 )
 
 
+def memory_text_matches(text: str, value: str) -> bool:
+    # 영문·숫자로 시작하거나 끝나는 값은 그쪽이 단어 경계일 때만 맞춘다(tea가 steak·team에 걸리지 않게).
+    # 조사가 바로 붙는 한글 값은 포함 여부만 본다.
+    needle = str(value or "").strip().casefold()
+    haystack = str(text or "").casefold()
+    if not needle:
+        return False
+    start_is_ascii = needle[0].isascii() and needle[0].isalnum()
+    end_is_ascii = needle[-1].isascii() and needle[-1].isalnum()
+    position = haystack.find(needle)
+    while position >= 0:
+        end = position + len(needle)
+        left_ok = not start_is_ascii or position == 0 or not (
+            haystack[position - 1].isascii() and haystack[position - 1].isalnum()
+        )
+        right_ok = not end_is_ascii or end == len(haystack) or not (
+            haystack[end].isascii() and haystack[end].isalnum()
+        )
+        if left_ok and right_ok:
+            return True
+        position = haystack.find(needle, position + 1)
+    return False
+
+
 class ConversationHistory:
     """최근 대화와 압축 요약을 함께 관리한다."""
 
@@ -59,10 +83,10 @@ class ConversationHistory:
 
     def delete_containing(self, text: str) -> int:
         """특정 문구가 포함된 대화와 요약을 삭제한다."""
-        needle = str(text or "").strip().casefold()
-        if not needle:
+        if not str(text or "").strip():
             return 0
         with self._lock:
+            old_active, old_summaries = self.active, self.summaries
             remaining = []
             deleted = 0
             for item in self.active:
@@ -72,20 +96,24 @@ class ConversationHistory:
                     )
                 else:
                     content = str(item or "")
-                if needle in content.casefold():
+                if memory_text_matches(content, text):
                     deleted += 1
                 else:
                     remaining.append(item)
             summaries = []
             for summary in self.summaries:
-                if needle in str(summary or "").casefold():
+                if memory_text_matches(str(summary or ""), text):
                     deleted += 1
                 else:
                     summaries.append(summary)
             if deleted:
                 self.active = remaining
                 self.summaries = summaries
-                self.save()
+                try:
+                    self.save(raise_on_error=True)
+                except Exception:
+                    self.active, self.summaries = old_active, old_summaries
+                    raise
             return deleted
 
     def _compress_oldest(self):
@@ -290,7 +318,7 @@ class ConversationHistory:
         normalized = (user_msg or "").strip()
         return any(normalized.startswith(prefix) for prefix in _INTERNAL_USER_PREFIXES)
 
-    def save(self):
+    def save(self, raise_on_error=False):
         with self._lock:
             self._save_timer = None
             payload = {"active": self.active, "summaries": self.summaries}
@@ -298,6 +326,10 @@ class ConversationHistory:
                 write_json_atomic(self.file_path, payload, ensure_ascii=False, indent=2)
             except (OSError, TypeError, ValueError) as exc:
                 logging.error("대화 기록 저장 실패: %s", exc)
+                if raise_on_error:
+                    raise
+                return False
+            return True
 
     def load(self):
         with self._lock:

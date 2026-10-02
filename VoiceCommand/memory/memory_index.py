@@ -291,9 +291,10 @@ class MemoryIndex:
                 self.index_fact(key, value, confidence)
 
     def delete_conversations_containing(self, text: str) -> int:
-        needle = str(text or "").casefold()
-        if not needle:
+        if not str(text or "").strip():
             return 0
+        from memory.conversation_history import memory_text_matches
+
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 "SELECT rowid, content FROM memory_entries "
@@ -302,7 +303,7 @@ class MemoryIndex:
             rowids = [
                 (rowid,)
                 for rowid, content in rows
-                if needle in str(content or "").casefold()
+                if memory_text_matches(str(content or ""), text)
             ]
             conn.executemany(
                 "DELETE FROM memory_entries WHERE rowid=?",

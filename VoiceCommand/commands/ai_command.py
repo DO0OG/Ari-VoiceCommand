@@ -536,7 +536,7 @@ class AICommand(FastPathMixin, BaseCommand):
 
         responses = []
         command = MemoryCommand(responses.append)
-        command._forget(content, recent=explicit[0] == "forget_recent")
+        command._forget(content, recent=explicit[0] == "forget_recent", in_tool_call=True)
         return responses[-1] if responses else _("기억을 삭제하지 못했어요.")
 
     def _handle_mcp_call(self, args: dict) -> Optional[str]:

@@ -307,6 +307,19 @@ class ConversationHistoryTests(unittest.TestCase):
             self.assertEqual(saved["active"], history.active)
             self.assertEqual(saved["summaries"], history.summaries)
 
+    def test_delete_containing_restores_memory_when_file_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history = self._make_history(tmp)
+            history.active = [{"user": "I like tea.", "ai": "Noted"}]
+            before = list(history.active)
+            with patch(
+                "memory.conversation_history.write_json_atomic",
+                side_effect=OSError("disk full"),
+            ):
+                with self.assertRaises(OSError):
+                    history.delete_containing("tea")
+                self.assertEqual(history.active, before)
+
 
 if __name__ == "__main__":
     unittest.main()

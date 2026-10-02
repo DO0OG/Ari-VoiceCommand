@@ -288,6 +288,28 @@ class GoogleAuthTests(unittest.TestCase):
                 google_auth.get_access_token()
         self.assertFalse(self.token_path.exists())
 
+    def test_authorization_saves_token_while_holding_the_token_lock(self):
+        acquired = []
+
+        def probe():
+            got = google_auth._TOKEN_LOCK.acquire(blocking=False)
+            acquired.append(got)
+            if got:
+                google_auth._TOKEN_LOCK.release()
+
+        def save(_token):
+            other = threading.Thread(target=probe)
+            other.start()
+            other.join()
+
+        with patch.object(google_auth, "save_token", side_effect=save):
+            error, _, _ = self._authorize_callback(
+                lambda params: f"state={params['state'][0]}&code=auth-code"
+            )
+        self.assertIsNone(error)
+        # 갱신·연결 해제가 쥐는 잠금 안에서 저장해야 먼저 시작된 작업이 새 연결을 덮어쓰지 않는다.
+        self.assertEqual(acquired, [False])
+
     def test_oauth_error_does_not_expose_client_secret_or_refresh_token(self):
         rejected = Mock(ok=False)
         rejected.json.return_value = {

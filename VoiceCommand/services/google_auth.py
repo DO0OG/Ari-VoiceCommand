@@ -224,7 +224,12 @@ def authorize(client_id: str, client_secret: str, *, open_browser=webbrowser.ope
         token = exchange_code(client_id, client_secret, result["code"], verifier, redirect_uri)
         token["client_id"] = client_id
         token["client_secret"] = client_secret
-        if cancel_event is not None and cancel_event.is_set():
+        # 갱신·연결 해제와 같은 잠금 안에서 저장해, 먼저 시작된 그 작업이 새 연결을 덮어쓰거나 지우지 않게 한다.
+        with _TOKEN_LOCK:
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            if not cancelled:
+                save_token(token)
+        if cancelled:
             try:
                 requests.post(
                     REVOKE_URL,
@@ -234,7 +239,6 @@ def authorize(client_id: str, client_secret: str, *, open_browser=webbrowser.ope
             except requests.RequestException:
                 pass
             raise RuntimeError(_("Google 인증이 취소되었습니다."))
-        save_token(token)
     finally:
         server.server_close()
 

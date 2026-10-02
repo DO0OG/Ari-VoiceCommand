@@ -429,9 +429,18 @@ class LLMProvider:
             block.get("type") == "tool_result" for block in content
         )
 
-    def clear_history(self):
+    def clear_history(self, keep_current_turn=False):
         with self._history_lock:
-            self.conversation_history = []
+            history = self.conversation_history
+            start = len(history)
+            if keep_current_turn:
+                # 도구 호출 도중에 모두 지우면 그 호출과 결과의 짝이 깨지므로 이번 요청부터는 남긴다.
+                for index in range(len(history) - 1, -1, -1):
+                    message = history[index]
+                    if message.get("role") == "user" and isinstance(message.get("content"), str):
+                        start = index
+                        break
+            self.conversation_history = history[start:]
 
     def _history_snapshot(self) -> list[dict]:
         with self._history_lock:
