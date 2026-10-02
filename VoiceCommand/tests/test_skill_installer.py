@@ -13,7 +13,7 @@ from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QApplication
 
 from agent.skill_installer import SkillInstaller
-from ui.skills_dialog import SkillsDialog
+from ui.skills_dialog import SkillsDialog, _live_install_threads
 
 
 class _FakeResponse:
@@ -131,6 +131,45 @@ class SkillInstallerTests(unittest.TestCase):
                 )
                 start.assert_called_once()
                 dialog.close()
+
+    def test_install_thread_is_released_when_finished(self):
+        manager = mock.Mock()
+        manager.skills_dir = "skills"
+        manager.load_all.return_value = []
+        with mock.patch("agent.skill_manager.get_skill_manager", return_value=manager), \
+                mock.patch("ui.skills_dialog._SkillInstallThread.start"):
+            dialog = SkillsDialog()
+            dialog.source_input.setText("source")
+            dialog._on_install()
+            thread = dialog._install_thread
+
+            self.assertIn(thread, _live_install_threads)
+            thread.finished.emit()
+
+            self.assertNotIn(thread, _live_install_threads)
+            self.assertIsNone(dialog._install_thread)
+            dialog.close()
+
+    def test_closed_dialog_ignores_install_and_update_results(self):
+        manager = mock.Mock()
+        manager.load_all.return_value = []
+        with mock.patch("agent.skill_manager.get_skill_manager", return_value=manager):
+            dialog = SkillsDialog()
+        dialog.close()
+        progress = mock.Mock()
+        dialog._refresh_list = mock.Mock()
+
+        with mock.patch("ui.skills_dialog.QMessageBox.information") as information, \
+                mock.patch("ui.skills_dialog.QMessageBox.warning") as warning:
+            dialog._on_install_done(["skill"], progress)
+            dialog._on_install_error("error", progress)
+            dialog._on_update_done(True, "skill", progress)
+            dialog._on_update_error("error", progress)
+
+            progress.close.assert_not_called()
+            information.assert_not_called()
+            warning.assert_not_called()
+            dialog._refresh_list.assert_not_called()
 
 
 if __name__ == "__main__":

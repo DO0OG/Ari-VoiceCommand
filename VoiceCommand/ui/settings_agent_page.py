@@ -376,6 +376,7 @@ class _AgentSettingsPage(QWidget):
         }
 
     def cleanup_threads(self):
+        self.embedding_status_timer.stop()
         thread = self._google_auth_thread
         if thread is None:
             return

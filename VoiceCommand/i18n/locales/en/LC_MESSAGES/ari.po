@@ -4230,3 +4230,6 @@ msgstr "The response is not text: {content_type}"
 
 msgid "허용되지 않은 URL입니다: {reason}"
 msgstr "The URL is not allowed: {reason}"
+
+msgid "이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."
+msgstr "An installation started earlier is still running. Try again after it finishes."

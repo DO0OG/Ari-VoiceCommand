@@ -22,6 +22,14 @@ from ui.common import create_muted_label
 from ui.theme import secondary_btn_style, BUTTON_LG
 
 
+_live_install_threads: set[QThread] = set()
+
+
+def _release_install_thread(thread: QThread) -> None:
+    _live_install_threads.discard(thread)
+    thread.deleteLater()
+
+
 class _SkillInstallThread(QThread):
     done = Signal(object)
     error = Signal(str)
@@ -55,6 +63,7 @@ class SkillsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._install_thread: _SkillInstallThread | None = None
+        self._closed = False
         self.setWindowTitle(_("🧩 스킬 관리"))
         self.resize(860, 580)
         self._init_ui()
@@ -177,11 +186,20 @@ class SkillsDialog(QDialog):
         progress.show()
 
         self._install_thread = _SkillInstallThread(source, get_skill_manager().skills_dir)
+        _live_install_threads.add(self._install_thread)
+        self._install_thread.finished.connect(
+            lambda thread=self._install_thread: _release_install_thread(thread)
+        )
+        self._install_thread.finished.connect(
+            lambda thread=self._install_thread: self._on_install_thread_finished(thread)
+        )
         self._install_thread.done.connect(lambda names: self._on_install_done(names, progress))
         self._install_thread.error.connect(lambda message: self._on_install_error(message, progress))
         self._install_thread.start()
 
     def _on_install_done(self, names: object, progress: QProgressDialog) -> None:
+        if self._closed:
+            return
         progress.close()
         installed_names = list(names) if isinstance(names, (list, tuple)) else []
         if installed_names:
@@ -195,8 +213,14 @@ class SkillsDialog(QDialog):
             QMessageBox.warning(self, _("설치 실패"), _("스킬을 설치할 수 없었습니다."))
 
     def _on_install_error(self, message: str, progress: QProgressDialog) -> None:
+        if self._closed:
+            return
         progress.close()
         QMessageBox.warning(self, _("설치 실패"), message)
+
+    def _on_install_thread_finished(self, thread: _SkillInstallThread) -> None:
+        if self._install_thread is thread:
+            self._install_thread = None
 
     def _on_toggle(self) -> None:
         from agent.skill_manager import get_skill_manager
@@ -231,6 +255,13 @@ class SkillsDialog(QDialog):
         self._install_thread = _SkillInstallThread(
             "", skill_manager.skills_dir, skill.skill_dir
         )
+        _live_install_threads.add(self._install_thread)
+        self._install_thread.finished.connect(
+            lambda thread=self._install_thread: _release_install_thread(thread)
+        )
+        self._install_thread.finished.connect(
+            lambda thread=self._install_thread: self._on_install_thread_finished(thread)
+        )
         self._install_thread.done.connect(
             lambda result: self._on_update_done(result, name, progress)
         )
@@ -240,6 +271,8 @@ class SkillsDialog(QDialog):
         self._install_thread.start()
 
     def _on_update_done(self, result: object, name: str, progress: QProgressDialog) -> None:
+        if self._closed:
+            return
         progress.close()
         if result:
             self._refresh_list()
@@ -248,8 +281,18 @@ class SkillsDialog(QDialog):
             QMessageBox.warning(self, _("업데이트 실패"), _("설치 원본 정보가 없습니다."))
 
     def _on_update_error(self, message: str, progress: QProgressDialog) -> None:
+        if self._closed:
+            return
         progress.close()
         QMessageBox.warning(self, _("업데이트 실패"), message)
+
+    def done(self, result: int) -> None:
+        self._closed = True
+        super().done(result)
+
+    def closeEvent(self, event) -> None:
+        self._closed = True
+        super().closeEvent(event)
 
     def _on_delete(self) -> None:
         from agent.skill_manager import get_skill_manager
