@@ -2,6 +2,7 @@
 import atexit
 import json
 import logging
+import re
 import threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Callable
@@ -14,27 +15,15 @@ _INTERNAL_USER_PREFIXES = (
 
 
 def memory_text_matches(text: str, value: str) -> bool:
-    # 영문·숫자로 시작하거나 끝나는 값은 그쪽이 단어 경계일 때만 맞춘다(tea가 steak·team에 걸리지 않게).
-    # 조사가 바로 붙는 한글 값은 포함 여부만 본다.
+    # 영문·숫자·밑줄로 시작하거나 끝나는 값은 그쪽이 단어 경계일 때만 맞춘다
+    # (tea가 steak·team에, AB12가 AB12_X에 걸리지 않게). 조사가 바로 붙는 한글 값은 포함 여부만 본다.
     needle = str(value or "").strip().casefold()
-    haystack = str(text or "").casefold()
     if not needle:
         return False
-    start_is_ascii = needle[0].isascii() and needle[0].isalnum()
-    end_is_ascii = needle[-1].isascii() and needle[-1].isalnum()
-    position = haystack.find(needle)
-    while position >= 0:
-        end = position + len(needle)
-        left_ok = not start_is_ascii or position == 0 or not (
-            haystack[position - 1].isascii() and haystack[position - 1].isalnum()
-        )
-        right_ok = not end_is_ascii or end == len(haystack) or not (
-            haystack[end].isascii() and haystack[end].isalnum()
-        )
-        if left_ok and right_ok:
-            return True
-        position = haystack.find(needle, position + 1)
-    return False
+    word = "[a-z0-9_]"
+    left = f"(?<!{word})" if re.match(word, needle[0]) else ""
+    right = f"(?!{word})" if re.match(word, needle[-1]) else ""
+    return re.search(left + re.escape(needle) + right, str(text or "").casefold()) is not None
 
 
 class ConversationHistory:

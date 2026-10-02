@@ -433,8 +433,9 @@ class LLMProvider:
         with self._history_lock:
             history = self.conversation_history
             start = len(history)
-            if keep_current_turn:
-                # 도구 호출 도중에 모두 지우면 그 호출과 결과의 짝이 깨지므로 이번 요청부터는 남긴다.
+            # 도구 호출 도중(요청한 쪽이 알려 주거나 마지막 메시지가 도구 블록일 때)에 모두 지우면
+            # 그 호출과 결과의 짝이 깨지므로 이번 요청부터는 남긴다.
+            if keep_current_turn or (history and self._has_tool_blocks(history[-1])):
                 for index in range(len(history) - 1, -1, -1):
                     message = history[index]
                     if message.get("role") == "user" and isinstance(message.get("content"), str):

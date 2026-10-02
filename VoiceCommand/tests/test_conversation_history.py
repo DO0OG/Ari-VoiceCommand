@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 
-from memory.conversation_history import ConversationHistory
+from memory.conversation_history import ConversationHistory, memory_text_matches
 from memory.memory_consolidator import MemoryConsolidator
 
 
@@ -306,6 +306,13 @@ class ConversationHistoryTests(unittest.TestCase):
                 saved = json.load(handle)
             self.assertEqual(saved["active"], history.active)
             self.assertEqual(saved["summaries"], history.summaries)
+
+    def test_memory_text_matches_uses_word_boundaries_for_ascii_values(self):
+        self.assertTrue(memory_text_matches("I like Tea.", "tea"))
+        self.assertTrue(memory_text_matches("커피를 좋아해", "커피"))
+        self.assertFalse(memory_text_matches("steak for my team", "tea"))
+        self.assertFalse(memory_text_matches("code AB12_X", "AB12"))
+        self.assertFalse(memory_text_matches("anything", " "))
 
     def test_delete_containing_restores_memory_when_file_write_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -566,7 +566,7 @@ class UserContextManagerTests(unittest.TestCase):
             history.active = [{"user": "I like tea.", "ai": "Noted"}]
             history.summaries = []
             before = list(history.active)
-            with patch("memory.memory_index.get_memory_index") as get_index, patch(
+            with patch("memory.memory_index.get_memory_index"), patch(
                 "memory.conversation_history.get_conversation_history", return_value=history
             ), patch(
                 "memory.conversation_history.write_json_atomic",

@@ -72,7 +72,9 @@ class AppState:
 _state = AppState()
 # 시작 시 초기화와 설정 저장의 재초기화가 겹쳐 프로바이더가 둘 생기지 않게 한다.
 _TTS_INIT_LOCK = threading.Lock()
-_LOCAL_TTS_CLEANUP_THREAD = None
+# 정리 중인 로컬 TTS 워커가 끝나면 켜진다. 게임 모드 해제가 새 워커를 만들기 전에 기다린다.
+_LOCAL_TTS_CLEANUP_DONE = threading.Event()
+_LOCAL_TTS_CLEANUP_DONE.set()
 _TTS_WAKE_GUARD_SECONDS = 1.2
 
 
@@ -230,28 +232,27 @@ def start_tts_background():
         _state.tts_init_event.set()
 
 
-def _cleanup_tts_provider(provider) -> None:
+def _cleanup_tts_provider(provider, done=None) -> None:
     if provider is not None and hasattr(provider, "cleanup"):
         try:
             provider.cleanup()
         except Exception as exc:
             logging.debug("TTS 프로바이더 정리 중 무시된 오류: %s", exc)
+    if done is not None:
+        done.set()
 
 
-def _cleanup_tts_provider_async(provider, local=False):
-    global _LOCAL_TTS_CLEANUP_THREAD
+def _cleanup_tts_provider_async(provider, done=None) -> None:
     if provider is None or not hasattr(provider, "cleanup"):
-        return None
-    thread = threading.Thread(
+        if done is not None:
+            done.set()
+        return
+    threading.Thread(
         target=_cleanup_tts_provider,
-        args=(provider,),
+        args=(provider, done),
         daemon=True,
         name="TTS-Cleanup",
-    )
-    if local:
-        _LOCAL_TTS_CLEANUP_THREAD = thread
-    thread.start()
-    return thread
+    ).start()
 
 
 def _effective_tts_settings(settings: dict) -> dict:
@@ -273,11 +274,13 @@ def _create_fallback_tts(settings: dict):
 
 
 def initialize_tts():
+    global _LOCAL_TTS_CLEANUP_DONE
     from core.config_manager import ConfigManager
     from tts.tts_factory import create_tts_provider, build_tts_signature
     warming_provider = None
     old_provider = None
     old_provider_was_local = False
+    cleanup_done = None
     # 로컬 엔진끼리는 GPU 자원을 공유하므로 이전 워커 종료 후 새 워커를 만든다.
     with _TTS_INIT_LOCK:
         settings = _effective_tts_settings(ConfigManager.load_settings())
@@ -322,8 +325,11 @@ def initialize_tts():
                 )
             _state.tts_signature = next_signature
         _finish_tts_setup(settings)
+        if old_provider is not None and old_provider_was_local:
+            # 교체와 같은 잠금 안에서 알려, 곧바로 이어지는 게임 모드 해제가 이 정리를 놓치지 않게 한다.
+            cleanup_done = _LOCAL_TTS_CLEANUP_DONE = threading.Event()
 
-    _cleanup_tts_provider_async(old_provider, local=old_provider_was_local)
+    _cleanup_tts_provider_async(old_provider, done=cleanup_done)
 
     if warming_provider is not None and not (
         warming_provider.wait_until_ready() and warming_provider.wait_until_warmup_done()
@@ -1001,9 +1007,7 @@ def disable_game_mode():
 
     def _reinit():
         try:
-            cleanup_thread = _LOCAL_TTS_CLEANUP_THREAD
-            if cleanup_thread is not None:
-                cleanup_thread.join(timeout=5)
+            _LOCAL_TTS_CLEANUP_DONE.wait(timeout=5)
             initialize_tts()
         except Exception as e:
             logging.error("TTS 복원 실패: %s", e)

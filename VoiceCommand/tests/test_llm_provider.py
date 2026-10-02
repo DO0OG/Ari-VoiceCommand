@@ -534,12 +534,15 @@ class LLMProviderTests(unittest.TestCase):
         provider.add_to_history("user", "forget hometown")
         provider.add_to_history("assistant", tool_use)
 
-        provider.clear_history(keep_current_turn=True)
-        # 진행 중인 도구 호출은 남아야 그 결과를 이어 붙일 수 있다.
+        # 진행 중인 도구 호출은 다른 경로에서 지워도 남아야 그 결과를 이어 붙일 수 있다.
+        provider.clear_history()
         self.assertEqual(provider._history_snapshot(), [
             {"role": "user", "content": "forget hometown"},
             {"role": "assistant", "content": tool_use},
         ])
+        provider.add_to_history("assistant", "done")
+        provider.clear_history(keep_current_turn=True)
+        self.assertEqual(provider._history_snapshot()[0], {"role": "user", "content": "forget hometown"})
         provider.clear_history()
         self.assertEqual(provider._history_snapshot(), [])
 

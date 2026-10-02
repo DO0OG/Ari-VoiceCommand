@@ -151,19 +151,19 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand._state.game_mode,
             VoiceCommand._state.fish_tts,
             VoiceCommand._state.tts_signature,
-            VoiceCommand._LOCAL_TTS_CLEANUP_THREAD,
+            VoiceCommand._LOCAL_TTS_CLEANUP_DONE,
             VoiceCommand._state.tts_init_event.is_set(),
         )
         events = []
 
-        class CleanupThread:
-            def join(self, timeout=None):
+        class CleanupDone:
+            def wait(self, timeout=None):
                 events.append(("cleanup_wait", timeout))
 
         VoiceCommand._state.game_mode = True
         VoiceCommand._state.fish_tts = Mock()
         VoiceCommand._state.tts_signature = ("edge",)
-        VoiceCommand._LOCAL_TTS_CLEANUP_THREAD = CleanupThread()
+        VoiceCommand._LOCAL_TTS_CLEANUP_DONE = CleanupDone()
         restore_thread = Mock()
         try:
             with patch.object(VoiceCommand, "_cleanup_tts_provider_async"), patch.object(
@@ -181,7 +181,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                 VoiceCommand._state.game_mode,
                 VoiceCommand._state.fish_tts,
                 VoiceCommand._state.tts_signature,
-                VoiceCommand._LOCAL_TTS_CLEANUP_THREAD,
+                VoiceCommand._LOCAL_TTS_CLEANUP_DONE,
                 event_was_set,
             ) = previous
             if event_was_set:
