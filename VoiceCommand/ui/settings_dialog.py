@@ -903,6 +903,7 @@ class SettingsDialog(QDialog):
     def done(self, result):
         # 저장·취소·닫기 버튼이 모두 done()을 거치므로 여기서 스레드를 정리한다.
         self._llm_page.cleanup_threads()
+        self._agent_page.cleanup_threads()
         self._tts_page.cleanup_threads()
         self._plugin_page.cleanup_threads()
         super().done(result)

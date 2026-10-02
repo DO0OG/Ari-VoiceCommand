@@ -2368,6 +2368,57 @@ msgstr "Google OAuth Client ID"
 msgid "settings.agent.google_client_secret"
 msgstr "Google OAuth Client Secret"
 
+msgid "settings.agent.google_connected"
+msgstr "Google アカウント接続済み"
+
+msgid "settings.agent.google_not_connected"
+msgstr "Google アカウント未接続"
+
+msgid "settings.agent.google_connect"
+msgstr "Google アカウントを接続"
+
+msgid "settings.agent.google_disconnect"
+msgstr "接続を解除"
+
+msgid "settings.agent.google_connecting"
+msgstr "Google アカウントに接続中..."
+
+msgid "settings.agent.google_disconnecting"
+msgstr "Google アカウントの接続を解除中..."
+
+msgid "settings.agent.google_auth_success"
+msgstr "Google アカウントの認証が完了しました"
+
+msgid "settings.agent.google_disconnected"
+msgstr "Google アカウントの接続を解除しました"
+
+msgid "settings.agent.google_auth_failed"
+msgstr "Google アカウントの接続に失敗しました: {error}"
+
+msgid "settings.agent.google_credentials_required"
+msgstr "Client ID と Client Secret を入力してください。"
+
+msgid "settings.agent.google_cancel"
+msgstr "キャンセル"
+
+msgid "settings.agent.google_auth_cancelled"
+msgstr "Google アカウントの接続をキャンセルしました。"
+
+msgid "Google 인증 브라우저를 열 수 없습니다."
+msgstr "Google 認証用のブラウザーを開けません。"
+
+msgid "Google 인증 시간이 초과되었습니다."
+msgstr "Google 認証がタイムアウトしました。"
+
+msgid "Google 인증이 취소되었습니다."
+msgstr "Google 認証をキャンセルしました。"
+
+msgid "Google 인증 코드가 없습니다."
+msgstr "Google 認証コードがありません。"
+
+msgid "Google 인증이 완료되었습니다. 이 창을 닫아도 됩니다."
+msgstr "Google 認証が完了しました。このウィンドウを閉じてもかまいません。"
+
 msgid "settings.agent.image_generation"
 msgstr "画像生成ツールを使用"
 

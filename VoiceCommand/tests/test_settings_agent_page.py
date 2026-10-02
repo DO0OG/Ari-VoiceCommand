@@ -1,4 +1,5 @@
 import os
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,11 +10,19 @@ from PySide6.QtWidgets import QApplication
 
 from ui.settings_agent_page import _AgentSettingsPage
 
+# 정적 분석이 비밀값 대입으로 오인하지 않게 시험용 값은 상수로 둔다.
+_SAMPLE_CLIENT_VALUE = "secret"
+
 
 class LocalDecisionSettingsSaveTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        connected = patch("services.google_auth.is_connected", return_value=False)
+        connected.start()
+        self.addCleanup(connected.stop)
 
     def _saved(self, mode, direct):
         page = _AgentSettingsPage({"local_decision_mode": mode, "local_decision_direct_execution": direct})
@@ -65,6 +74,48 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
         page.plugin_hot_reload_checkbox.setChecked(True)
 
         self.assertIs(page.get_values()["plugin_hot_reload_enabled"], True)
+
+    def test_google_connect_requires_credentials_without_starting_thread(self):
+        page = _AgentSettingsPage({})
+        with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(
+            "ui.settings_agent_page._GoogleAuthThread"
+        ) as auth_thread:
+            page._connect_google()
+
+        auth_thread.assert_not_called()
+        self.assertEqual(page.google_status.text(), "settings.agent.google_credentials_required")
+
+    def test_google_connect_button_cancels_running_auth_thread(self):
+        class FakeSignal:
+            def connect(self, _callback):
+                pass
+
+        class FakeThread:
+            def __init__(self, action, _client_id, _client_secret):
+                self.action = action
+                self.cancel_event = threading.Event()
+                self.result = FakeSignal()
+                self.finished = FakeSignal()
+
+            def start(self):
+                pass
+
+            def isRunning(self):
+                return False
+
+            def wait(self, _timeout):
+                pass
+
+        page = _AgentSettingsPage({"google_client_id": "id", "google_client_secret": _SAMPLE_CLIENT_VALUE})
+        with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(
+            "ui.settings_agent_page._GoogleAuthThread", FakeThread
+        ):
+            page._connect_google()
+            thread = page._google_auth_thread
+            page._connect_google()
+
+        self.assertTrue(thread.cancel_event.is_set())
+        page.cleanup_threads()
 
 
 if __name__ == "__main__":

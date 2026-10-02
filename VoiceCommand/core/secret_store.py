@@ -40,6 +40,14 @@ def _unprotect(data: bytes) -> bytes:
         raise SecretStoreError("Credential decryption failed") from None
 
 
+def protect_bytes(data: bytes) -> bytes:
+    return _protect(data)
+
+
+def unprotect_bytes(data: bytes) -> bytes:
+    return _unprotect(data)
+
+
 def _write_encrypted(path: Path, data: bytes) -> None:
     """암호화·복호화 검증이 끝난 바이트만 원자적으로 기록한다."""
     encrypted = _protect(data)

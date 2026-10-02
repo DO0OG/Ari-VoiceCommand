@@ -2368,6 +2368,57 @@ msgstr "Google OAuth Client ID"
 msgid "settings.agent.google_client_secret"
 msgstr "Google OAuth Client Secret"
 
+msgid "settings.agent.google_connected"
+msgstr "Google account connected"
+
+msgid "settings.agent.google_not_connected"
+msgstr "Google account not connected"
+
+msgid "settings.agent.google_connect"
+msgstr "Connect Google account"
+
+msgid "settings.agent.google_disconnect"
+msgstr "Disconnect"
+
+msgid "settings.agent.google_connecting"
+msgstr "Connecting Google account..."
+
+msgid "settings.agent.google_disconnecting"
+msgstr "Disconnecting Google account..."
+
+msgid "settings.agent.google_auth_success"
+msgstr "Google account authorized"
+
+msgid "settings.agent.google_disconnected"
+msgstr "Google account disconnected"
+
+msgid "settings.agent.google_auth_failed"
+msgstr "Google account connection failed: {error}"
+
+msgid "settings.agent.google_credentials_required"
+msgstr "Enter the Client ID and Client Secret."
+
+msgid "settings.agent.google_cancel"
+msgstr "Cancel"
+
+msgid "settings.agent.google_auth_cancelled"
+msgstr "Google account connection was canceled."
+
+msgid "Google 인증 브라우저를 열 수 없습니다."
+msgstr "Could not open the Google authentication browser."
+
+msgid "Google 인증 시간이 초과되었습니다."
+msgstr "Google authentication timed out."
+
+msgid "Google 인증이 취소되었습니다."
+msgstr "Google authentication was canceled."
+
+msgid "Google 인증 코드가 없습니다."
+msgstr "The Google authorization code is missing."
+
+msgid "Google 인증이 완료되었습니다. 이 창을 닫아도 됩니다."
+msgstr "Google authentication is complete. You can close this window."
+
 msgid "settings.agent.image_generation"
 msgstr "Enable image generation tools"
 
