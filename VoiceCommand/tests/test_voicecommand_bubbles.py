@@ -126,10 +126,17 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             self.assertIn(voicecommand._handle_tts_playback_finished, provider.playback_finished.connected)
             voicecommand.disable_game_mode()
             save_settings.assert_not_called()
-            self.assertIn(
-                "TTS-GameModeRestore",
-                [call.kwargs.get("name") for call in thread.call_args_list],
-            )
+            restore_calls = [
+                call for call in thread.call_args_list
+                if call.kwargs.get("name") == "TTS-GameModeRestore"
+            ]
+            self.assertEqual(len(restore_calls), 1)
+            # 복원 전에는 발화가 기다리도록 준비 이벤트가 내려가 있고, 복원이 끝나면 올라간다.
+            self.assertFalse(voicecommand._state.tts_init_event.is_set())
+            with patch("core.VoiceCommand.tts_wrapper"):
+                restore_calls[0].kwargs["target"]()
+            self.assertTrue(voicecommand._state.tts_init_event.is_set())
+            self.assertIsNotNone(voicecommand._state.fish_tts)
 
     def test_game_mode_provider_cleanup_runs_outside_tts_initialization_lock(self):
         lock_states = []

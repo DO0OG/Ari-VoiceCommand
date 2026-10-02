@@ -984,15 +984,20 @@ def disable_game_mode():
         _state.fish_tts = None
         _state.tts_signature = None
         _state.game_mode = False
+        # 복원이 끝날 때까지 들어오는 발화가 버려지지 않고 기다리게 한다.
+        _state.tts_init_event.clear()
     _cleanup_tts_provider_async(old_provider)
     emit_plugin_event("on_game_mode_change", {"enabled": False})
 
     def _reinit():
         try:
             initialize_tts()
-            tts_wrapper(_("게임 모드 해제. 원래 TTS로 복원되었습니다."))
         except Exception as e:
             logging.error("TTS 복원 실패: %s", e)
+            return
+        finally:
+            _state.tts_init_event.set()
+        tts_wrapper(_("게임 모드 해제. 원래 TTS로 복원되었습니다."))
 
     threading.Thread(target=_reinit, daemon=True, name="TTS-GameModeRestore").start()
     logging.info("게임 모드 비활성화: 원래 TTS 복원 중")
