@@ -160,7 +160,16 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         provider.wait_until_warmup_done.return_value = False
         provider._warmup_error = "GPU warmup failed"
         fallback_provider = object()
+        cleanup_after_fallback = []
+        provider.cleanup.side_effect = lambda: cleanup_after_fallback.append(
+            VoiceCommand._state.fish_tts is fallback_provider
+        )
         settings = {"tts_mode": "local", "tts_fallback_provider": "openai_tts"}
+
+        def run_cleanup_thread(*, target, args=(), **_kwargs):
+            target(*args)
+            return Mock()
+
         try:
             with (
                 patch("core.config_manager.ConfigManager.load_settings", return_value=settings),
@@ -170,11 +179,13 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                     side_effect=[(provider, "local"), (fallback_provider, "openai_tts")],
                 ) as create_provider,
                 patch.object(VoiceCommand, "RPGenerator", return_value=SimpleNamespace(set_config=Mock())),
+                patch("core.VoiceCommand.threading.Thread", side_effect=run_cleanup_thread),
             ):
                 VoiceCommand.initialize_tts()
 
             self.assertIs(VoiceCommand._state.fish_tts, fallback_provider)
             provider.cleanup.assert_called_once_with()
+            self.assertEqual(cleanup_after_fallback, [True])
             self.assertEqual(
                 create_provider.call_args_list,
                 [call(settings, wait_ready=False), call({**settings, "tts_mode": "openai_tts"})],
@@ -357,7 +368,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                 patch.object(
                     VoiceCommand,
                     "initialize_tts",
-                    side_effect=[RuntimeError("edge failed"), None],
+                    side_effect=RuntimeError("edge failed"),
                 ) as initialize,
                 patch("core.config_manager.ConfigManager.save_settings") as save_settings,
                 patch.object(VoiceCommand, "emit_plugin_event"),
@@ -365,12 +376,86 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
                 VoiceCommand.enable_game_mode()
 
             self.assertFalse(VoiceCommand._state.game_mode)
-            self.assertEqual(initialize.call_count, 2)
+            self.assertEqual(initialize.call_count, 1)
             save_settings.assert_not_called()
         finally:
             VoiceCommand._state.game_mode = previous_mode
             VoiceCommand._state.fish_tts = previous_provider
             VoiceCommand._state.tts_signature = previous_signature
+
+    def test_game_mode_edge_failure_keeps_existing_provider_and_skips_local_fallback(self):
+        previous_mode = VoiceCommand._state.game_mode
+        previous_provider = VoiceCommand._state.fish_tts
+        previous_signature = VoiceCommand._state.tts_signature
+        existing_provider = Mock()
+        create_local = Mock(return_value=(Mock(), "local"))
+        VoiceCommand._state.game_mode = False
+        VoiceCommand._state.fish_tts = existing_provider
+        VoiceCommand._state.tts_signature = ("fish",)
+        try:
+            with (
+                patch(
+                    "core.config_manager.ConfigManager.load_settings",
+                    return_value={"tts_mode": "fish", "tts_fallback_provider": "local"},
+                ),
+                patch.dict(
+                    "tts.tts_factory._TTS_PROVIDER_CREATORS",
+                    {
+                        "edge": Mock(side_effect=RuntimeError("edge unavailable")),
+                        "local": create_local,
+                    },
+                ),
+                patch.object(VoiceCommand, "emit_plugin_event"),
+            ):
+                VoiceCommand.enable_game_mode()
+
+            self.assertIs(VoiceCommand._state.fish_tts, existing_provider)
+            self.assertFalse(VoiceCommand._state.game_mode)
+            create_local.assert_not_called()
+            existing_provider.cleanup.assert_not_called()
+        finally:
+            VoiceCommand._state.game_mode = previous_mode
+            VoiceCommand._state.fish_tts = previous_provider
+            VoiceCommand._state.tts_signature = previous_signature
+
+    def test_initialize_loads_latest_settings_after_acquiring_lock(self):
+        old_lock = VoiceCommand._TTS_INIT_LOCK
+        previous_provider = VoiceCommand._state.fish_tts
+        previous_signature = VoiceCommand._state.tts_signature
+        previous_widget = VoiceCommand._state.character_widget
+        loaded = {"value": {"tts_mode": "fish"}}
+        provider = object()
+
+        class SettingsChangingLock:
+            def __enter__(self):
+                loaded["value"] = {"tts_mode": "openai_tts"}
+
+            def __exit__(self, *_args):
+                return False
+
+        try:
+            VoiceCommand._state.fish_tts = None
+            VoiceCommand._state.tts_signature = None
+            VoiceCommand._state.character_widget = None
+            with (
+                patch.object(VoiceCommand, "_TTS_INIT_LOCK", SettingsChangingLock()),
+                patch(
+                    "core.config_manager.ConfigManager.load_settings",
+                    side_effect=lambda: loaded["value"],
+                ),
+                patch("tts.tts_factory.build_tts_signature", return_value=("sig",)),
+                patch("tts.tts_factory.create_tts_provider", return_value=(provider, "openai_tts")) as create_provider,
+                patch.object(VoiceCommand, "_finish_tts_setup"),
+            ):
+                VoiceCommand.initialize_tts()
+
+            self.assertEqual(create_provider.call_args, call({"tts_mode": "openai_tts"}, wait_ready=False))
+            self.assertIs(VoiceCommand._state.fish_tts, provider)
+        finally:
+            VoiceCommand._TTS_INIT_LOCK = old_lock
+            VoiceCommand._state.fish_tts = previous_provider
+            VoiceCommand._state.tts_signature = previous_signature
+            VoiceCommand._state.character_widget = previous_widget
 
     def test_character_widget_startup_survives_orchestrator_storage_failure(self):
         from types import SimpleNamespace

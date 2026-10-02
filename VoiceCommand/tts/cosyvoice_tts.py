@@ -699,36 +699,44 @@ class CosyVoiceTTS(QObject):
                 return False
             finally:
                 request_finished.set()
-                if stop_event.is_set():
-                    with self._state_lock:
-                        cancel_proc = (
-                            self._proc
-                            if self._active_request_id == request_id
-                            else None
-                        )
-                    if cancel_proc is not None:
-                        self._cancel_request(request_id, cancel_proc, stop_event)
-                    if request_sent and not worker_complete:
-                        self._start_drain(request_id, proc, reader_t, reader_state)
-                elif proc is not None and not worker_complete:
-                    self._abort_request(request_id, proc)
-                if watcher is not None:
-                    watcher.join(timeout=0.1)
-                if pa_stream is not None:
+                try:
+                    if stop_event.is_set():
+                        with self._state_lock:
+                            cancel_proc = (
+                                self._proc
+                                if self._active_request_id == request_id
+                                else None
+                            )
+                        if cancel_proc is not None:
+                            self._cancel_request(request_id, cancel_proc, stop_event)
+                        if request_sent and not worker_complete:
+                            self._start_drain(request_id, proc, reader_t, reader_state)
+                    elif proc is not None and not worker_complete:
+                        self._abort_request(request_id, proc)
+                    if watcher is not None:
+                        watcher.join(timeout=0.1)
+                    if pa_stream is not None:
+                        try:
+                            self._close_stream()
+                        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("CosyVoice 오디오 스트림 정리 실패: %s", exc)
+                except Exception as exc:
+                    logging.debug("CosyVoice TTS 정리 실패: %s", exc)
+                finally:
                     try:
-                        self._close_stream()
-                    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-                        logging.debug("CosyVoice 오디오 스트림 정리 실패: %s", exc)
-                if audio_lock_acquired:
-                    _audio_lock.release()
-                    audio_lock_acquired = False
-                with self._state_lock:
-                    if self._active_request_id == request_id:
-                        self._active_request_id = None
-                    if self._active_stop_event is stop_event:
-                        self._active_stop_event = None
-                    self.is_playing = False
-                self.playback_finished.emit()
+                        if audio_lock_acquired:
+                            _audio_lock.release()
+                            audio_lock_acquired = False
+                    finally:
+                        try:
+                            with self._state_lock:
+                                if self._active_request_id == request_id:
+                                    self._active_request_id = None
+                                if self._active_stop_event is stop_event:
+                                    self._active_stop_event = None
+                                self.is_playing = False
+                        finally:
+                            self.playback_finished.emit()
 
     def _read_exact(self, n: int, proc=None, stop_event=None):
         """stdout에서 정확히 n바이트 읽기"""

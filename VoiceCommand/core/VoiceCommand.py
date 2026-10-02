@@ -203,7 +203,8 @@ def start_tts_background():
 
     try:
         from core.config_manager import ConfigManager
-        tts_mode = _effective_tts_settings(ConfigManager.load_settings()).get("tts_mode", "fish")
+        with _TTS_INIT_LOCK:
+            tts_mode = _effective_tts_settings(ConfigManager.load_settings()).get("tts_mode", "fish")
 
         if tts_mode == "local":
             def _run():
@@ -236,6 +237,17 @@ def _cleanup_tts_provider(provider) -> None:
             logging.debug("TTS 프로바이더 정리 중 무시된 오류: %s", exc)
 
 
+def _cleanup_tts_provider_async(provider) -> None:
+    if provider is None or not hasattr(provider, "cleanup"):
+        return
+    threading.Thread(
+        target=_cleanup_tts_provider,
+        args=(provider,),
+        daemon=True,
+        name="TTS-Cleanup",
+    ).start()
+
+
 def _effective_tts_settings(settings: dict) -> dict:
     effective = dict(settings)
     if _state.game_mode:
@@ -251,38 +263,57 @@ def _create_fallback_tts(settings: dict):
     fallback_settings = dict(settings)
     fallback_settings["tts_mode"] = fallback
     logging.warning("[TTS] 폴백으로 전환: %s", fallback)
-    # 폴백 생성까지 실패해도 정리된 프로바이더가 재사용되지 않게 먼저 비운다.
-    _state.fish_tts = None
-    _state.tts_signature = None
     return create_tts_provider(fallback_settings)[0]
 
 
 def initialize_tts():
     from core.config_manager import ConfigManager
     from tts.tts_factory import create_tts_provider, build_tts_signature
-    loaded_settings = ConfigManager.load_settings()
     warming_provider = None
-    # 교체와 후처리만 잠근다. 로컬 엔진의 READY·warmup 대기는 잠금 밖에서 해 UI 호출을 막지 않는다.
+    old_provider = None
+    # 로컬 엔진끼리는 GPU 자원을 공유하므로 이전 워커 종료 후 새 워커를 만든다.
     with _TTS_INIT_LOCK:
-        settings = _effective_tts_settings(loaded_settings)
+        settings = _effective_tts_settings(ConfigManager.load_settings())
         next_signature = build_tts_signature(settings)
         if _state.fish_tts is not None and _state.tts_signature == next_signature:
             logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
         else:
-            _cleanup_tts_provider(_state.fish_tts)
+            current_provider = _state.fish_tts
+            local_provider_cleaned = False
+            if (
+                current_provider is not None
+                and _state.tts_signature is not None
+                and _state.tts_signature[0] == "local"
+                and next_signature[0] == "local"
+            ):
+                _cleanup_tts_provider(current_provider)
+                _state.fish_tts = None
+                local_provider_cleaned = True
             try:
                 provider, provider_mode = create_tts_provider(settings, wait_ready=False)
                 # 준비 중에도 등록해 둔다. 로컬 엔진의 speak()는 READY까지 기다린다.
                 _state.fish_tts = provider
+                old_provider = (
+                    None
+                    if local_provider_cleaned or current_provider is _state.fish_tts
+                    else current_provider
+                )
                 if provider_mode == "local" and hasattr(provider, "wait_until_warmup_done"):
                     warming_provider = provider
             except (ImportError, OSError, RuntimeError, ValueError) as exc:
                 logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", exc)
+                if _state.game_mode:
+                    raise
                 _state.fish_tts = _create_fallback_tts(settings)
+                old_provider = (
+                    None
+                    if local_provider_cleaned or current_provider is _state.fish_tts
+                    else current_provider
+                )
             _state.tts_signature = next_signature
-
-    # 준비 중 발화도 종료 시그널과 말투 설정을 쓰도록 warmup 대기 전에 마친다.
         _finish_tts_setup(settings)
+
+    _cleanup_tts_provider_async(old_provider)
 
     if warming_provider is not None and not (
         warming_provider.wait_until_ready() and warming_provider.wait_until_warmup_done()
@@ -293,6 +324,7 @@ def initialize_tts():
             or "CosyVoice3 warmup did not complete"
         )
         logging.error("[TTS] 기본 프로바이더 초기화 실패: %s", reason)
+        old_provider = None
         with _TTS_INIT_LOCK:
             if (
                 _state.fish_tts is not warming_provider
@@ -300,10 +332,18 @@ def initialize_tts():
             ):
                 # 그사이 다른 초기화나 게임 모드 전환이 프로바이더를 교체·정리했다.
                 return
-            _cleanup_tts_provider(warming_provider)
-            _state.fish_tts = _create_fallback_tts(settings)
+            old_provider = _state.fish_tts
+            _state.fish_tts = None
+            _state.tts_signature = None
+            try:
+                fallback_provider = _create_fallback_tts(settings)
+            except Exception:
+                _cleanup_tts_provider_async(old_provider)
+                raise
+            _state.fish_tts = fallback_provider
             _state.tts_signature = next_signature
             _finish_tts_setup(settings)
+        _cleanup_tts_provider_async(old_provider)
 
 
 def _finish_tts_setup(settings: dict) -> None:
@@ -923,9 +963,6 @@ def enable_game_mode():
 
     with _TTS_INIT_LOCK:
         _state.game_mode = True
-        _cleanup_tts_provider(_state.fish_tts)
-        _state.fish_tts = None
-        _state.tts_signature = None
     try:
         initialize_tts()
         reconnect_tts_signals()
@@ -934,14 +971,7 @@ def enable_game_mode():
     except Exception as e:
         logging.error("게임 모드 전환 실패: %s", e)
         with _TTS_INIT_LOCK:
-            _cleanup_tts_provider(_state.fish_tts)
-            _state.fish_tts = None
-            _state.tts_signature = None
             _state.game_mode = False
-        try:
-            initialize_tts()
-        except Exception as fallback_exc:
-            logging.error("게임 모드 실패 후 TTS 복원 실패: %s", fallback_exc)
 
 
 def disable_game_mode():
@@ -950,10 +980,11 @@ def disable_game_mode():
         return
 
     with _TTS_INIT_LOCK:
-        _cleanup_tts_provider(_state.fish_tts)
+        old_provider = _state.fish_tts
         _state.fish_tts = None
         _state.tts_signature = None
         _state.game_mode = False
+    _cleanup_tts_provider_async(old_provider)
     emit_plugin_event("on_game_mode_change", {"enabled": False})
 
     def _reinit():

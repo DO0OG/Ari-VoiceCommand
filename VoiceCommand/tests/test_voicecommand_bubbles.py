@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 import core.VoiceCommand as voicecommand
@@ -39,7 +39,10 @@ class _FakeCleanupProvider:
         self.lock_states = lock_states
 
     def cleanup(self):
-        self.lock_states.append(voicecommand._TTS_INIT_LOCK.locked())
+        acquired = voicecommand._TTS_INIT_LOCK.acquire(blocking=False)
+        self.lock_states.append(acquired)
+        if acquired:
+            voicecommand._TTS_INIT_LOCK.release()
 
 
 class VoiceCommandBubbleTests(unittest.TestCase):
@@ -123,20 +126,35 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             self.assertIn(voicecommand._handle_tts_playback_finished, provider.playback_finished.connected)
             voicecommand.disable_game_mode()
             save_settings.assert_not_called()
-            thread.assert_called_once()
+            self.assertIn(
+                "TTS-GameModeRestore",
+                [call.kwargs.get("name") for call in thread.call_args_list],
+            )
 
-    def test_game_mode_provider_cleanup_holds_tts_initialization_lock(self):
+    def test_game_mode_provider_cleanup_runs_outside_tts_initialization_lock(self):
         lock_states = []
         voicecommand._state.fish_tts = _FakeCleanupProvider(lock_states)
+
+        def run_cleanup_thread(*, target, args=(), **_kwargs):
+            if target.__name__ == "_cleanup_tts_provider":
+                target(*args)
+            else:
+                thread = Mock()
+                thread.start = Mock()
+                return thread
+            thread = Mock()
+            thread.start = Mock()
+            return thread
+
         with (
             patch("core.config_manager.ConfigManager.load_settings", return_value={"tts_mode": "fish"}),
             patch.dict("tts.tts_factory._TTS_PROVIDER_CREATORS", {"edge": lambda _settings: (_FakeFishProvider(), "edge")}),
             patch.object(voicecommand, "emit_plugin_event"),
+            patch("core.VoiceCommand.threading.Thread", side_effect=run_cleanup_thread),
         ):
             voicecommand.enable_game_mode()
             voicecommand._state.fish_tts = _FakeCleanupProvider(lock_states)
-            with patch("core.VoiceCommand.threading.Thread"):
-                voicecommand.disable_game_mode()
+            voicecommand.disable_game_mode()
 
         self.assertEqual(lock_states, [True, True])
 
