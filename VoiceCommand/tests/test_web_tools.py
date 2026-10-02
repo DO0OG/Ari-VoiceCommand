@@ -1,4 +1,5 @@
 import os
+import ipaddress
 import socket
 import tempfile
 import unittest
@@ -41,12 +42,12 @@ class WebToolsTests(unittest.TestCase):
             "file:///etc/passwd",
         )
 
-        addresses = {
-            "localhost": "127.0.0.1", "127.0.0.1": "127.0.0.1", "10.0.0.25": "10.0.0.25",
-            "192.168.0.10": "192.168.0.10", "::1": "::1", "fe80::1": "fe80::1", "0.0.0.0": "0.0.0.0",
-        }
         def resolve(host, *args, **kwargs):
-            address = addresses.get(host, "93.184.216.34")
+            # IP 리터럴은 그대로, 이름은 localhost만 루프백으로 해석한다.
+            try:
+                address = str(ipaddress.ip_address(host))
+            except ValueError:
+                address = "127.0.0.1" if host == "localhost" else "93.184.216.34"
             family = socket.AF_INET6 if ":" in address else socket.AF_INET
             sockaddr = (address, 443, 0, 0) if family == socket.AF_INET6 else (address, 443)
             return [(family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)]
