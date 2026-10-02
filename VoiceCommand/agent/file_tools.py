@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from core import atomic_io
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -330,8 +331,11 @@ def write_file(file_path: str, content: str, mode: str = "overwrite") -> Dict[st
         path = _normalize_path(file_path)
         file_mode = "a" if str(mode or "overwrite").lower() == "append" else "w"
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, file_mode, encoding="utf-8") as f:
-            f.write(content or "")
+        if file_mode == "a":
+            with open(path, file_mode, encoding="utf-8") as f:
+                f.write(content or "")
+        else:
+            atomic_io.write_text_atomic(path, content or "")
         return {
             "file_path": path,
             "mode": "append" if file_mode == "a" else "overwrite",
@@ -409,7 +413,7 @@ def edit_file(file_path: str, old_string: str, new_string: str) -> Dict[str, Any
             + content[offsets[match_end]:]
         )
         output = (bytes((239, 187, 191)) if has_utf8_bom else b"") + updated_content.encode(encoding)
-        Path(path).write_bytes(output)
+        atomic_io.write_bytes_atomic(path, output)
         return {
             "file_path": path,
             "replaced": True,

@@ -36,7 +36,8 @@ def _c(pattern: str, flags: int = 0) -> re.Pattern:
 
 
 _DANGEROUS_PYTHON: List[_CompiledRule] = [
-    (_c(r'os\s*\.\s*(remove|unlink|rmdir)\s*\('),  "파일/폴더 삭제"),
+    # 문자열로 실행하는 코드(exec 등)와 구문 오류가 있는 코드는 AST로 잡히지 않아 본문 검색도 함께 한다.
+    (_c(r'os\s*\.\s*(remove|unlink|rmdir|removedirs)\s*\('), "파일/폴더 삭제"),
     (_c(r'shutil\s*\.\s*rmtree\s*\('),             "폴더 강제 삭제"),
     (_c(r'ctypes\s*\.\s*(windll|cdll|CDLL|WinDLL)\s*[\.\(]'), "ctypes 저수준 DLL 로드"),
     (_c(r'ctypes\s*\.\s*cast\s*\('),                "ctypes 포인터 캐스팅"),
@@ -100,9 +101,6 @@ def _python_contains_delete_call(code: str) -> bool:
         return False
 
     os_modules = {"os"}
-    shutil_modules = {"shutil"}
-    pathlib_modules = {"pathlib"}
-    path_names = {"Path"}
     os_functions = set()
     shutil_functions = set()
     for node in ast.walk(tree):
@@ -110,22 +108,12 @@ def _python_contains_delete_call(code: str) -> bool:
             for alias in node.names:
                 if alias.name == "os":
                     os_modules.add(alias.asname or alias.name)
-                elif alias.name == "shutil":
-                    shutil_modules.add(alias.asname or alias.name)
-                elif alias.name == "pathlib":
-                    pathlib_modules.add(alias.asname or alias.name)
         elif isinstance(node, ast.ImportFrom):
-            if node.module == "pathlib":
-                path_names.update(
-                    alias.asname or alias.name
-                    for alias in node.names
-                    if alias.name == "Path"
-                )
-            elif node.module == "os":
+            if node.module == "os":
                 os_functions.update(
                     alias.asname or alias.name
                     for alias in node.names
-                    if alias.name in {"remove", "unlink", "rmdir"}
+                    if alias.name in {"remove", "unlink", "rmdir", "removedirs"}
                 )
             elif node.module == "shutil":
                 shutil_functions.update(
@@ -145,22 +133,11 @@ def _python_contains_delete_call(code: str) -> bool:
         if not isinstance(function, ast.Attribute):
             continue
         target = function.value
-        if function.attr in {"remove", "unlink", "rmdir"}:
+        if function.attr in {"unlink", "rmdir", "rmtree"}:
+            return True
+        if function.attr in {"remove", "removedirs"}:
             if isinstance(target, ast.Name) and target.id in os_modules:
                 return True
-            if function.attr in {"unlink", "rmdir"} and isinstance(target, ast.Call):
-                constructor = target.func
-                if isinstance(constructor, ast.Name) and constructor.id in path_names:
-                    return True
-                if (
-                    isinstance(constructor, ast.Attribute)
-                    and constructor.attr == "Path"
-                    and isinstance(constructor.value, ast.Name)
-                    and constructor.value.id in pathlib_modules
-                ):
-                    return True
-        if function.attr == "rmtree" and isinstance(target, ast.Name) and target.id in shutil_modules:
-            return True
     return False
 
 

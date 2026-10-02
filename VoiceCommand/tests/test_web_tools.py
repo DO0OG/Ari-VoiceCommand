@@ -174,20 +174,82 @@ class WebToolsTests(unittest.TestCase):
 
         self.assertEqual(seen, ["http://127.0.0.1:3000/"])
 
-    def test_wait_for_download_stability_clock_restarts_only_when_size_changes(self):
+    def test_wait_for_download_ignores_unchanged_existing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "download.bin")
+            path = os.path.join(tmp, "existing.bin")
             with open(path, "wb") as handle:
                 handle.write(b"x")
             browser = SmartBrowser.__new__(SmartBrowser)
             browser.download_dir = tmp
 
-            with patch.object(web_tools.time, "time", side_effect=(0, 0, 0, 0.5, 0.5, 1, 1, 1.5, 1.5, 2.1, 2.1)), \
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 2)), \
                  patch.object(web_tools.time, "sleep"), \
-                 patch.object(web_tools.os.path, "getsize", side_effect=(1, 1, 2, 2, 2)):
-                result = browser.wait_for_download(timeout=10, stable_seconds=1)
+                 self.assertRaises(TimeoutError):
+                browser.wait_for_download(timeout=1, stable_seconds=1)
 
-        self.assertEqual(result, path)
+    def test_wait_for_download_returns_new_stable_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "existing.bin"), "wb") as handle:
+                handle.write(b"old")
+            path = os.path.join(tmp, "download.bin")
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+            created = False
+
+            def create_download(_delay):
+                nonlocal created
+                if created:
+                    return
+                with open(path, "wb") as handle:
+                    handle.write(b"new")
+                created = True
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 0.5, 0.5, 1.5, 1.5)), \
+                 patch.object(web_tools.time, "sleep", side_effect=create_download):
+                result = browser.wait_for_download(timeout=10, stable_seconds=1)
+                self.assertEqual(result, path)
+
+    def test_wait_for_download_returns_file_finished_before_wait_started(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+            browser._download_baseline = browser._snapshot_downloads()
+            path = os.path.join(tmp, "fast.bin")
+            with open(path, "wb") as handle:
+                handle.write(b"done")
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 0.5, 0.5, 1.5, 1.5)), \
+                 patch.object(web_tools.time, "sleep"):
+                self.assertEqual(browser.wait_for_download(timeout=10, stable_seconds=1), path)
+            # 돌려준 파일은 다음 대기에서 기존 파일로 본다.
+            self.assertIn(path, browser._download_baseline)
+
+    def test_wait_for_download_returns_changed_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "download.bin")
+            with open(path, "wb") as handle:
+                handle.write(b"old")
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+            changed = False
+
+            def change_download(_delay):
+                nonlocal changed
+                if not changed:
+                    stat = os.stat(path)
+                    with open(path, "wb") as handle:
+                        handle.write(b"new")
+                    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
+                    changed = True
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 0.5, 0.5, 1.5, 1.5)), \
+                 patch.object(web_tools.time, "sleep", side_effect=change_download):
+                result = browser.wait_for_download(timeout=10, stable_seconds=1)
+                self.assertEqual(result, path)
 
     def test_create_search_client_prefers_ddgs_package_name(self):
         class _Client:

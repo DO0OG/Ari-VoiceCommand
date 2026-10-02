@@ -150,6 +150,34 @@ class FileToolsTests(unittest.TestCase):
                 self.assertIn("error", result)
                 self.assertEqual(path.read_bytes(), original)
 
+    def test_atomic_write_failures_preserve_existing_file_contents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sample.txt"
+            original = "기존 내용\n".encode("utf-8")
+            path.write_bytes(original)
+
+            with patch("core.atomic_io.write_text_atomic", side_effect=OSError("write failed")):
+                result = file_tools.write_file(str(path), "새 내용\n")
+                self.assertIn("error", result)
+                self.assertEqual(path.read_bytes(), original)
+
+            with patch("core.atomic_io.write_bytes_atomic", side_effect=OSError("write failed")):
+                result = file_tools.edit_file(str(path), "기존", "변경")
+                self.assertIn("error", result)
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_write_file_preserves_overwrite_and_append_results(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sample.txt"
+            overwritten = file_tools.write_file(str(path), "첫째\n둘째\n")
+            self.assertEqual(overwritten["mode"], "overwrite")
+            self.assertEqual(overwritten["bytes"], len("첫째\n둘째\n".encode("utf-8")))
+            self.assertEqual(path.read_bytes(), ("첫째\n둘째\n".replace("\n", os.linesep)).encode("utf-8"))
+
+            appended = file_tools.write_file(str(path), "셋째\n", mode="append")
+            self.assertEqual(appended["mode"], "append")
+            self.assertEqual(path.read_text(encoding="utf-8"), "첫째\n둘째\n셋째\n")
+
 
 if __name__ == "__main__":
     unittest.main()
