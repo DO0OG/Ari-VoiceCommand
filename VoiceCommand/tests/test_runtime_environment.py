@@ -16,6 +16,7 @@ class RuntimeEnvironmentTests(unittest.TestCase):
     def tearDown(self):
         ResourceManager.reset_cache()
         ConfigManager._cached_settings = None
+        ConfigManager._settings_read_failed = False
         proactive_scheduler_module._SCHEDULE_FILE = ""
         proactive_scheduler_module._SCHEDULE_RUN_LOG_FILE = ""
 
@@ -256,6 +257,49 @@ class RuntimeEnvironmentTests(unittest.TestCase):
                     runtime, (("data.json", "data.json"),), preserve=(), migrated=migrated
                 )
             self.assertFalse(os.path.exists(source))
+
+    def test_directory_link_prevents_legacy_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            legacy = os.path.join(temp_dir, "legacy")
+            runtime = os.path.join(temp_dir, "runtime")
+            source = os.path.join(legacy, "data")
+            destination = os.path.join(runtime, "data")
+            os.makedirs(os.path.join(source, "linked"), exist_ok=True)
+            os.makedirs(destination)
+            with open(os.path.join(source, "linked", "item.txt"), "w", encoding="utf-8") as handle:
+                handle.write("source")
+            with open(os.path.join(destination, "item.txt"), "w", encoding="utf-8") as handle:
+                handle.write("source")
+            try:
+                os.symlink(os.path.join(source, "linked"), os.path.join(source, "link"), target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlinks are unavailable")
+
+            with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=legacy):
+                ResourceManager._cleanup_legacy_runtime_state(
+                    runtime, (("data", "data"),), preserve=(), migrated={"data"}
+                )
+            self.assertTrue(os.path.isdir(source))
+
+    def test_directory_enumeration_error_prevents_legacy_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            legacy = os.path.join(temp_dir, "legacy")
+            runtime = os.path.join(temp_dir, "runtime")
+            source = os.path.join(legacy, "data")
+            destination = os.path.join(runtime, "data")
+            os.makedirs(source)
+            os.makedirs(destination)
+
+            def failed_walk(path, onerror):
+                onerror(PermissionError("enumeration denied"))
+                return iter(())
+
+            with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=legacy), \
+                    patch("core.resource_manager.os.walk", side_effect=failed_walk):
+                ResourceManager._cleanup_legacy_runtime_state(
+                    runtime, (("data", "data"),), preserve=(), migrated={"data"}
+                )
+            self.assertTrue(os.path.isdir(source))
 
     def test_missing_runtime_settings_bootstrap_from_template(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")

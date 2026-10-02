@@ -283,6 +283,8 @@ class SkillManager:
             self._skills.clear()
             os.makedirs(self.skills_dir, exist_ok=True)
             for entry in sorted(os.listdir(self.skills_dir)):
+                if entry.startswith(".ari-update-backup-"):
+                    continue
                 skill_dir = os.path.join(self.skills_dir, entry)
                 skill_md = os.path.join(skill_dir, _SKILL_FILE_NAME)
                 if not os.path.isdir(skill_dir) or not os.path.isfile(skill_md):

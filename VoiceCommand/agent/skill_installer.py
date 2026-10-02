@@ -12,6 +12,7 @@ import stat
 import tempfile
 import urllib.parse
 import urllib.request
+import uuid
 import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -52,6 +53,8 @@ class SkillInstaller:
 
     def __init__(self, skills_dir: str):
         self.skills_dir = skills_dir
+        # update() 실행 중에만 채운다: 바뀐 스킬 폴더 → 보관 경로(새로 생긴 폴더는 None)
+        self._update_backups: Optional[dict] = None
         os.makedirs(self.skills_dir, exist_ok=True)
 
     def install(self, source: str) -> List[str]:
@@ -79,24 +82,37 @@ class SkillInstaller:
         if not source:
             return False
         was_enabled = bool(metadata.get("enabled", True))
-
-        with tempfile.TemporaryDirectory() as temp_root:
-            current_backup = os.path.join(temp_root, "backup")
-            if os.path.isdir(skill_dir):
-                shutil.copytree(skill_dir, current_backup)
-            try:
-                shutil.rmtree(skill_dir, ignore_errors=True)
-                installed_names = self.install(source)
-                folder_name = os.path.basename(os.path.normpath(skill_dir))
-                if folder_name not in installed_names:
-                    raise ValueError(_("skills.update_missing_existing"))
-                self._write_metadata(skill_dir, source, enabled=was_enabled)
-                return True
-            except Exception:
-                shutil.rmtree(skill_dir, ignore_errors=True)
-                if os.path.isdir(current_backup):
-                    shutil.copytree(current_backup, skill_dir)
-                raise
+        self._update_backups = {}
+        folder_name = os.path.basename(os.path.normpath(skill_dir))
+        try:
+            installed_names = self.install(source)
+            if folder_name not in installed_names:
+                raise ValueError(_("skills.update_missing_existing"))
+            self._write_metadata(skill_dir, source, enabled=was_enabled)
+            for backup in self._update_backups.values():
+                if backup:
+                    shutil.rmtree(backup, ignore_errors=True)
+            return True
+        except Exception:
+            # 한 폴더의 복구가 실패해도 나머지는 계속 되돌리고, 실패한 경로는 모아서 알린다.
+            unrestored = []
+            for destination, backup in reversed(tuple(self._update_backups.items())):
+                shutil.rmtree(destination, ignore_errors=True)
+                try:
+                    if backup:
+                        os.replace(backup, destination)
+                    elif os.path.exists(destination):
+                        raise OSError("새 스킬 폴더를 지우지 못했습니다")
+                except OSError as exc:
+                    logger.warning("스킬 복구에 실패했습니다: %s (%s)", backup or destination, exc)
+                    unrestored.append(backup or destination)
+            if unrestored:
+                raise RuntimeError(
+                    _("skills.update_restore_failed").format(path=", ".join(unrestored))
+                )
+            raise
+        finally:
+            self._update_backups = None
 
     def _install_from_url(self, url: str, source_label: str) -> List[str]:
         validated = _require_https_url(url)
@@ -160,6 +176,12 @@ class SkillInstaller:
         folder_name = _slugify(os.path.basename(source_dir))
         destination = os.path.join(self.skills_dir, folder_name)
         if os.path.abspath(source_dir) != os.path.abspath(destination):
+            if self._update_backups is not None and destination not in self._update_backups:
+                backup = None
+                if os.path.isdir(destination):
+                    backup = os.path.join(self.skills_dir, f".ari-update-backup-{uuid.uuid4().hex}")
+                    os.replace(destination, backup)
+                self._update_backups[destination] = backup
             shutil.rmtree(destination, ignore_errors=True)
             shutil.copytree(
                 source_dir,

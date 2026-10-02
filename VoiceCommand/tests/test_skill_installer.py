@@ -128,6 +128,81 @@ class SkillInstallerTests(unittest.TestCase):
             with open(os.path.join(skill_dir, ".ari_skill_meta.json"), encoding="utf-8") as handle:
                 self.assertFalse(json.load(handle)["enabled"])
 
+    def test_failed_update_restores_every_other_skill_it_touched(self):
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as temp_dir:
+                skills_dir = os.path.join(temp_dir, "skills")
+                skill_dir = os.path.join(skills_dir, "existing")
+                other_dir = os.path.join(skills_dir, "other")
+                source_dir = os.path.join(temp_dir, "other")
+                os.makedirs(skill_dir)
+                os.makedirs(source_dir)
+                with open(os.path.join(skill_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                    handle.write("original target")
+                with open(os.path.join(skill_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                    json.dump({"enabled": False, "source": "source"}, handle)
+                with open(os.path.join(source_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                    handle.write("new other")
+                if existing:
+                    os.makedirs(other_dir)
+                    with open(os.path.join(other_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                        handle.write("original other")
+                    with open(os.path.join(other_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                        json.dump({"enabled": False, "source": "old source"}, handle)
+
+                installer = SkillInstaller(skills_dir)
+
+                def install_other(_source):
+                    return installer._install_from_local_dir(source_dir, "source")
+
+                with mock.patch.object(installer, "install", side_effect=install_other):
+                    with self.assertRaises(ValueError):
+                        installer.update(skill_dir)
+
+                if existing:
+                    with open(os.path.join(other_dir, "SKILL.md"), encoding="utf-8") as handle:
+                        self.assertEqual(handle.read(), "original other")
+                    with open(os.path.join(other_dir, ".ari_skill_meta.json"), encoding="utf-8") as handle:
+                        self.assertFalse(json.load(handle)["enabled"])
+                else:
+                    self.assertFalse(os.path.exists(other_dir))
+
+    def test_failed_update_keeps_backup_and_reports_path_when_restore_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = os.path.join(temp_dir, "skills")
+            skill_dir = os.path.join(skills_dir, "existing")
+            other_dir = os.path.join(skills_dir, "other")
+            source_dir = os.path.join(temp_dir, "other")
+            os.makedirs(skill_dir)
+            os.makedirs(other_dir)
+            os.makedirs(source_dir)
+            for directory, content in ((skill_dir, "target"), (other_dir, "original other"), (source_dir, "new other")):
+                with open(os.path.join(directory, "SKILL.md"), "w", encoding="utf-8") as handle:
+                    handle.write(content)
+            with open(os.path.join(skill_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"source": "source"}, handle)
+            installer = SkillInstaller(skills_dir)
+            replace = os.replace
+
+            def fail_restore(source, destination):
+                if os.path.basename(source).startswith(".ari-update-backup-"):
+                    raise OSError("restore failed")
+                replace(source, destination)
+
+            with mock.patch.object(installer, "install", side_effect=lambda _source: installer._install_from_local_dir(source_dir, "source")), \
+                    mock.patch("agent.skill_installer.os.replace", side_effect=fail_restore), \
+                    mock.patch("agent.skill_installer._", side_effect=lambda key: "복구 실패 {path}" if key == "skills.update_restore_failed" else key):
+                with self.assertRaisesRegex(RuntimeError, "\.ari-update-backup-") as raised:
+                    installer.update(skill_dir)
+
+            backup_path = next(
+                os.path.join(skills_dir, name)
+                for name in os.listdir(skills_dir)
+                if name.startswith(".ari-update-backup-")
+            )
+            self.assertIn(backup_path, str(raised.exception))
+            self.assertTrue(os.path.isfile(os.path.join(backup_path, "SKILL.md")))
+
     def test_update_dialog_runs_update_thread_with_skill_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = mock.Mock()

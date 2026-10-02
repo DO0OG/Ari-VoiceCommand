@@ -147,17 +147,37 @@ class ResourceManager:
         if not os.path.isdir(source) or not os.path.isdir(destination):
             return False
 
-        for current, _dirs, names in os.walk(source):
-            for name in names:
-                path = os.path.join(current, name)
-                target = os.path.join(destination, os.path.relpath(path, source))
-                if (
-                    not os.path.isfile(target)
-                    or os.path.getsize(path) != os.path.getsize(target)
-                    or digest(path) != digest(target)
-                ):
+        def is_directory_link(path: str) -> bool:
+            if os.path.islink(path) or getattr(os.path, "isjunction", lambda _path: False)(path):
+                return True
+            if os.name == "nt":
+                return getattr(os.lstat(path), "st_reparse_tag", None) == 0xA0000003
+            return False
+
+        walk_error = False
+
+        def onerror(_error: OSError) -> None:
+            nonlocal walk_error
+            walk_error = True
+
+        try:
+            if is_directory_link(source):
+                return False
+            for current, dirs, names in os.walk(source, onerror=onerror):
+                if any(is_directory_link(os.path.join(current, name)) for name in dirs):
                     return False
-        return True
+                for name in names:
+                    path = os.path.join(current, name)
+                    target = os.path.join(destination, os.path.relpath(path, source))
+                    if (
+                        not os.path.isfile(target)
+                        or os.path.getsize(path) != os.path.getsize(target)
+                        or digest(path) != digest(target)
+                    ):
+                        return False
+        except OSError:
+            return False
+        return not walk_error
 
     @staticmethod
     def _cleanup_legacy_runtime_state(

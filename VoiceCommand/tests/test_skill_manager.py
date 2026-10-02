@@ -52,6 +52,17 @@ tool: search_coupang_products
             self.assertEqual(skill.scripts_dir, scripts_dir)
             self.assertTrue(skill.is_mcp_skill)
 
+    def test_load_all_ignores_update_backup_directories(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = os.path.join(temp_dir, ".ari-update-backup-preserved")
+            os.makedirs(backup_dir)
+            with open(os.path.join(backup_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("backup")
+
+            manager = self._make_manager(temp_dir)
+
+            self.assertEqual(manager.load_all(), [])
+
     def test_build_match_context_includes_mcp_prompt_and_required_tool(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             skill_dir = os.path.join(temp_dir, "coupang-product-search")

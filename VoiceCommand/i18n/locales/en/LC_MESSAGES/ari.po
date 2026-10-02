@@ -3080,6 +3080,9 @@ msgstr "An error occurred while retrieving weather information."
 msgid "skills.update_missing_existing"
 msgstr "The update did not install the existing skill."
 
+msgid "skills.update_restore_failed"
+msgstr "Skill recovery failed. Check the preserved path: {path}"
+
 msgid "settings.save_failed"
 msgstr "Settings could not be saved"
 
