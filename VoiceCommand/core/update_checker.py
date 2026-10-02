@@ -401,6 +401,10 @@ def _check_for_updates() -> tuple[int, int]:
                 updates["last_modified"] = cache_headers["last-modified"]
             elif cache_status == 200:
                 updates["last_modified"] = ""
+        elif not same_channel:
+            # 이 채널의 응답을 받지 못했으면 다른 채널에서 받은 캐시 검증값을 넘겨받지 않는다.
+            updates["etag"] = ""
+            updates["last_modified"] = ""
 
         if status == 200 or manifests:
             current_version = get_version()

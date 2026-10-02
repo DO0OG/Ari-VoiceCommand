@@ -276,6 +276,23 @@ class UpdateCheckerTests(unittest.TestCase):
             self.assertEqual(result, (200, 0))
             self.assertEqual(state["pending_version"], "1.3.0")
 
+    def test_beta_failure_after_channel_switch_drops_stable_cache_validators(self):
+        responses = [
+            OSError("beta unavailable"),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.2.3", responses,
+            {
+                "last_checked_channel": "stable",
+                "etag": "stable-tag",
+                "last_modified": "Mon, 28 Sep 2026 00:00:00 GMT",
+            },
+        ) as (_, state, _):
+            self.assertEqual(state["last_checked_channel"], "beta")
+            self.assertEqual(state["etag"], "")
+            self.assertEqual(state["last_modified"], "")
+
     def test_stable_channel_does_not_request_beta_manifest(self):
         with self._check_with_responses(
             "stable", "1.2.3",
