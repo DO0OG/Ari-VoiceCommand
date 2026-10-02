@@ -177,7 +177,6 @@ class MemoryCommand(BaseCommand):
                 break
 
         from memory.user_context import get_context_manager
-        from memory.memory_index import get_memory_index
 
         context = get_context_manager()
         if not context.record_fact(
@@ -185,7 +184,6 @@ class MemoryCommand(BaseCommand):
         ):
             self.tts_wrapper(_("기억을 저장하지 못했어요."))
             return
-        get_memory_index().index_fact(key, value, 1.0)
         self.tts_wrapper(_("기억했어요: {value}", value=value))
 
     def _forget(self, content: str, recent: bool = False) -> None:
@@ -202,24 +200,44 @@ class MemoryCommand(BaseCommand):
             matches.sort(
                 key=lambda item: str(item[1].get("updated_at", "")), reverse=True
             )
-            candidates = matches[:1]
+            candidates = [("fact", key, fact) for key, fact in matches[:1]]
+            query = ""
         else:
             query = content.strip().rstrip(" .!?。！？,，:：;；").strip().casefold()
             if not query:
                 self.tts_wrapper(_("무엇을 잊을까요?"))
                 return
+            preference_items = [
+                (category, value, count)
+                for category, values in context.get_preferences_snapshot().items()
+                for value, count in values.items()
+            ]
             exact = [
-                (key, fact)
+                ("fact", key, fact)
                 for key, fact in facts.items()
                 if query == str(key).casefold()
                 or query == str(fact.get("value", "")).casefold()
             ]
             candidates = exact or [
-                (key, fact)
+                ("fact", key, fact)
                 for key, fact in facts.items()
                 if query in str(key).casefold()
                 or query in str(fact.get("value", "")).casefold()
             ]
+            if not candidates:
+                candidates.extend(
+                    ("preference", category, {"value": value, "count": count})
+                    for category, value, count in preference_items
+                    if query == str(category).casefold()
+                    or query == str(value).casefold()
+                )
+                if not candidates:
+                    candidates.extend(
+                        ("preference", category, {"value": value, "count": count})
+                        for category, value, count in preference_items
+                        if query in str(category).casefold()
+                        or query in str(value).casefold()
+                    )
 
         if not candidates:
             self.tts_wrapper(_("잊을 기억이 없어요."))
@@ -229,14 +247,17 @@ class MemoryCommand(BaseCommand):
                 _(
                     "여러 기억이 있어요: {items}. 어떤 기억인지 골라 주세요.",
                     items=", ".join(
-                        f"{key}: {fact.get('value', '')}" for key, fact in candidates
+                        f"{_('선호: {key}', key=key) if kind == 'preference' else key}: "
+                        f"{fact.get('value', '')}"
+                        for kind, key, fact in candidates
                     ),
                 )
             )
             return
 
-        key, fact = candidates[0]
-        display = html.escape(f"{key}: {fact.get('value', '')}")
+        kind, key, fact = candidates[0]
+        display_key = _("선호: {key}", key=key) if kind == "preference" else key
+        display = html.escape(f"{display_key}: {fact.get('value', '')}")
         try:
             from agent.confirmation_manager import get_confirmation_manager
             from agent.safety_checker import DangerLevel, SafetyReport
@@ -244,18 +265,50 @@ class MemoryCommand(BaseCommand):
             report = SafetyReport(
                 level=DangerLevel.DANGEROUS,
                 matched_patterns=[_("기억 삭제")],
-                summary=_("기억한 내용을 삭제합니다."),
+                summary=_("기억, 관련 대화 기록, 맞는 선호를 삭제합니다."),
                 category="memory",
             )
             confirmed = get_confirmation_manager().request_confirmation(
-                _("기억 삭제: {fact}", fact=display), report, self.tts_wrapper
+                _("기억·관련 대화 기록·맞는 선호 삭제: {fact}", fact=display),
+                report,
+                self.tts_wrapper,
             )
         except (ImportError, RuntimeError):
             confirmed = False
         if not confirmed:
             self.tts_wrapper(_("삭제를 취소했어요."))
             return
-        if context.delete_fact(key, expected_value=str(fact.get("value", ""))):
+        deleted = (
+            context.delete_fact(
+                key,
+                delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
+                expected_value=str(fact.get("value", "")),
+            )
+            if kind == "fact"
+            else context.delete_preference(
+                key,
+                str(fact.get("value", "")),
+                delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
+            )
+        )
+        if deleted and kind == "fact":
+            # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
+            needles = {
+                text
+                for text in (query, str(fact.get("value", "")).strip().casefold())
+                if len(text) > 1
+            }
+            for category, values in context.get_preferences_snapshot().items():
+                for value in values:
+                    if any(
+                        needle == str(category).casefold()
+                        or needle in str(value).casefold()
+                        for needle in needles
+                    ):
+                        context.delete_preference(
+                            category, value, delete_conversations=True
+                        )
+        if deleted:
             self.tts_wrapper(_("기억을 잊었어요: {key}", key=key))
         else:
             self.tts_wrapper(_("기억을 삭제하지 못했어요."))

@@ -12,6 +12,14 @@ from memory.memory_index import MemoryIndex
 
 
 class UserContextManagerTests(unittest.TestCase):
+    def setUp(self):
+        self.index_temp_dir = tempfile.TemporaryDirectory()
+        self.test_index = MemoryIndex(os.path.join(self.index_temp_dir.name, "memory.db"))
+        patcher = patch("memory.memory_index.get_memory_index", return_value=self.test_index)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.index_temp_dir.cleanup)
+
     def test_topics_and_bounded_lists_are_tracked(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "user_context.json")
@@ -312,6 +320,48 @@ class UserContextManagerTests(unittest.TestCase):
             get_history.return_value.delete_containing.assert_called_once_with("coffee")
             self.assertFalse(index.search("favorite_drink"))
             self.assertFalse(index.search("coffee"))
+
+    def test_delete_fact_keeps_conversations_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                manager.record_fact("favorite_drink", "coffee", source="user")
+                index.index_conversation(
+                    "I like coffee", "Noted", datetime.now().isoformat()
+                )
+                self.assertTrue(manager.delete_fact("favorite_drink"))
+
+            self.assertTrue(index.search("coffee", kind="conversation"))
+
+    def test_record_fact_enforces_limit_and_removes_trimmed_index_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            facts = {
+                f"fact-{number}": {
+                    "value": "oldneedle" if number == 0 else f"value-{number}",
+                    "updated_at": f"2020-01-{(number % 28) + 1:02d}T00:00:{number:02d}",
+                    "confidence": 0.8,
+                }
+                for number in range(150)
+            }
+            manager.context["facts"] = facts
+            manager.context["fact_history"] = {"fact-0": [{"value": "oldneedle"}]}
+            manager.save_context()
+            self.test_index.index_fact("fact-0", "oldneedle", 0.8)
+
+            self.assertTrue(manager.record_fact("new-fact", "new-value"))
+
+            self.assertEqual(len(manager.context["facts"]), 150)
+            with open(manager.context_file, "r", encoding="utf-8") as handle:
+                self.assertEqual(len(json.load(handle)["facts"]), 150)
+            self.assertNotIn("fact-0", manager.context["facts"])
+            self.assertNotIn("fact-0", manager.context["fact_history"])
+            self.assertFalse(self.test_index.search("oldneedle", kind="fact"))
 
     def test_optimize_memory_removes_expired_and_low_confidence_facts_from_fts(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -357,13 +357,11 @@ class UserContextManager:
 
         facts = self.context["facts"]
         fact_history = self.context.setdefault("fact_history", {})
-        had_previous_history = key in fact_history
+        previous_facts = deepcopy(facts)
+        previous_fact_history = deepcopy(fact_history)
         history_bucket = fact_history.setdefault(key, [])
         now = datetime.now()
         existing = facts.get(key)
-        had_previous_fact = key in facts
-        previous_fact = deepcopy(existing) if had_previous_fact else None
-        previous_history = list(history_bucket)
 
         if existing:
             ex_value = existing.get("value", "")
@@ -433,16 +431,30 @@ class UserContextManager:
             "conflicted_with": existing.get("value", "") if existing and existing.get("value") != value else "",
         })
         self.context["fact_history"][key] = history_bucket[-_MAX_FACT_HISTORY:]
+        facts = self._limit_facts(facts)
+        removed_fact_keys = set(self.context["facts"]) - set(facts)
+        self.context["facts"] = facts
+        for removed_key in removed_fact_keys:
+            fact_history.pop(removed_key, None)
         if not self.save_context():
-            if had_previous_fact:
-                facts[key] = previous_fact
-            else:
-                facts.pop(key, None)
-            if had_previous_history:
-                fact_history[key] = previous_history
-            else:
-                fact_history.pop(key, None)
+            self.context["facts"] = previous_facts
+            self.context["fact_history"] = previous_fact_history
             return False
+        from memory.memory_index import get_memory_index
+
+        try:
+            index = get_memory_index()
+            for removed_key in removed_fact_keys:
+                index.delete_fact(removed_key)
+            current_fact = facts.get(key)
+            if current_fact:
+                index.index_fact(
+                    key,
+                    str(current_fact.get("value", "")),
+                    float(current_fact.get("confidence", 0.7)),
+                )
+        except Exception as exc:
+            logger.warning("사실 색인 갱신 실패: %s", exc)
         return True
 
     @_context_locked
@@ -452,6 +464,20 @@ class UserContextManager:
             for key, fact in self.context.get("facts", {}).items()
             if isinstance(fact, dict)
         }
+
+    @_context_locked
+    def get_preferences_snapshot(self) -> Dict[str, Dict[str, int]]:
+        return {
+            category: dict(values)
+            for category, values in self.context.get("preferences", {}).items()
+            if isinstance(values, dict)
+        }
+
+    @_context_locked
+    def sync_fact_index(self) -> None:
+        from memory.memory_index import get_memory_index
+
+        get_memory_index().sync_facts(self.context.get("facts", {}))
 
     @_context_locked
     def delete_fact(
@@ -584,7 +610,46 @@ class UserContextManager:
         bucket = prefs.setdefault(category, {})
         bucket[value] = bucket.get(value, 0) + 1
         prefs[category] = self._limit_frequency_map(bucket, max_items=50)
-        self.save_context()
+        if self.save_context():
+            try:
+                from memory.memory_index import get_memory_index
+
+                get_memory_index().index_fact(f"선호: {category}", value, 1.0)
+            except Exception as exc:
+                logger.warning("선호 색인 갱신 실패: %s", exc)
+
+    @_context_locked
+    def delete_preference(
+        self, category: str, value: str, delete_conversations: bool = False
+    ) -> bool:
+        preferences = self.context.get("preferences", {})
+        bucket = preferences.get(category, {})
+        if value not in bucket:
+            return False
+        previous_bucket = dict(bucket)
+        bucket.pop(value)
+        if not bucket:
+            preferences.pop(category)
+        if not self.save_context():
+            preferences[category] = previous_bucket
+            return False
+
+        try:
+            from memory.memory_index import get_memory_index
+
+            index = get_memory_index()
+            index.delete_fact(f"선호: {category}")
+            if delete_conversations and len(value.strip()) > 1:
+                from memory.conversation_history import get_conversation_history
+
+                get_conversation_history().delete_containing(value)
+                index.delete_conversations_containing(value)
+            if bucket:
+                top_value = max(bucket.items(), key=lambda item: item[1])[0]
+                index.index_fact(f"선호: {category}", top_value, 1.0)
+        except Exception as exc:
+            logger.warning("선호 삭제 색인 갱신 실패: %s", exc)
+        return True
 
     def get_top_preferences(self, limit: int = 3) -> List[str]:
         """상위 선호도를 '카테고리:값' 형식으로 반환."""

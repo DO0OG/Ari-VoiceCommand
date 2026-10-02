@@ -73,25 +73,37 @@ class MemoryManager:
         ai_response: str,
         contains_tool_result: bool = False,
         memory_extractor: Optional[Callable[[str], str]] = None,
+        *,
+        extract_response_info: bool = True,
+        skill_used: str = "",
+        data_source: str = "",
+        lang: str = "",
     ) -> None:
         """대화 상호작용 기록 및 정보 추출"""
         timestamp = datetime.now().isoformat()
         try:
-            add_conversation(user_msg, ai_response)
+            add_conversation(
+                user_msg,
+                ai_response,
+                skill_used=skill_used,
+                data_source=data_source,
+                lang=lang,
+            )
         except Exception as e:
             logging.warning("대화 저장 실패: %s", e)
         try:
             get_memory_index().index_conversation(user_msg, ai_response, timestamp)
         except Exception as e:
             logging.warning("대화 인덱싱 실패: %s", e)
-        try:
-            self._extract_info_from_response(
-                ai_response,
-                user_message=user_msg,
-                contains_tool_result=contains_tool_result,
-            )
-        except Exception as e:
-            logging.warning("응답 정보 추출 실패: %s", e)
+        if extract_response_info:
+            try:
+                self._extract_info_from_response(
+                    ai_response,
+                    user_message=user_msg,
+                    contains_tool_result=contains_tool_result,
+                )
+            except Exception as e:
+                logging.warning("응답 정보 추출 실패: %s", e)
         try:
             topics = self._extract_topics(user_msg, ai_response)
             if topics:
@@ -111,6 +123,10 @@ class MemoryManager:
         except (AttributeError, OSError, TypeError, ValueError) as e:
             logging.warning("상황 정보 기록 실패: %s", e)
         self.start_fact_suggestion_extraction(user_msg, memory_extractor)
+
+    def extract_response_tags(self, response: str, user_message: str = "") -> None:
+        """응답의 기억 태그만 추출한다."""
+        self._extract_info_from_response(response, user_message=user_message)
 
     def start_fact_suggestion_extraction(
         self,
@@ -304,19 +320,11 @@ class MemoryManager:
                     force=True,
                 ):
                     return False
-            index_key = suggestion["key"]
         else:
             preferences = context.context.setdefault("preferences", {})
             values = preferences.setdefault(suggestion["key"], {})
             if not values.get(suggestion["value"]):
                 context.record_preference(suggestion["key"], suggestion["value"])
-            index_key = f"선호: {suggestion['key']}"
-
-        get_memory_index().index_fact(
-            index_key,
-            suggestion["value"],
-            suggestion["confidence"],
-        )
         return store.resolve(suggestion_id, approved=True) is not None
 
     def _is_persistent_fact(self, key: str) -> bool:
@@ -341,16 +349,9 @@ class MemoryManager:
                 k = key.strip()
                 if self._is_persistent_fact(k):
                     logging.info("사실 기억함: %s = %s", k, value.strip())
-                    if self.context_manager.record_fact(
+                    self.context_manager.record_fact(
                         k, value.strip(), source="assistant_tag", confidence=0.75
-                    ):
-                        fact = self.context_manager.get_facts_snapshot().get(k)
-                        if fact:
-                            get_memory_index().index_fact(
-                                k,
-                                str(fact.get("value", "")),
-                                float(fact.get("confidence", 0.7)),
-                            )
+                    )
                 else:
                     logging.info("[MemoryManager] 일시적 FACT 무시 (비저장): %s=%s", k, value.strip())
 

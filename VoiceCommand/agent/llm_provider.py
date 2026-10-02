@@ -1003,12 +1003,17 @@ class LLMProvider:
             cached = self._response_cache.get(cache_key) if should_cache else None
             if cached:
                 if save_history:
-                    from memory.user_context import get_context_manager
-                    get_context_manager().record_interaction(user_message)
                     from memory.memory_manager import get_memory_manager
-                    get_memory_manager().start_fact_suggestion_extraction(
-                        user_message, self.extract_memory_suggestions
+                    memory_manager = get_memory_manager()
+                    self.add_to_history("user", user_message)
+                    memory_manager.process_interaction(
+                        user_message,
+                        cached,
+                        memory_extractor=self.extract_memory_suggestions,
+                        extract_response_info=False,
                     )
+                    cached = memory_manager.clean_response(cached)
+                    self.add_to_history("assistant", self._clean_response(cached))
                 if stream_callback:
                     self._emit_stream_text(cached, stream_callback)
                 return cached
@@ -1079,6 +1084,7 @@ class LLMProvider:
         model_override="",
         stream_callback=None,
         cancel_event=None,
+        record_interaction=True,
     ):
         """도구 포함 대화"""
         cancel_event = cancel_event or threading.Event()
@@ -1140,6 +1146,7 @@ class LLMProvider:
                     stream_callback=stream_callback,
                     tools=tools,
                     tool_choice=tool_choice,
+                    record_interaction=record_interaction,
                 )
 
             request_kwargs = {
@@ -1232,12 +1239,15 @@ class LLMProvider:
             
             from memory.memory_manager import get_memory_manager
             memory_manager = get_memory_manager()
-            memory_manager.process_interaction(
-                user_message,
-                raw_msg,
-                contains_tool_result=bool(tool_calls),
-                memory_extractor=self.extract_memory_suggestions,
-            )
+            if not tool_calls:
+                if record_interaction:
+                    memory_manager.process_interaction(
+                        user_message,
+                        raw_msg,
+                        memory_extractor=self.extract_memory_suggestions,
+                    )
+                else:
+                    memory_manager.extract_response_tags(raw_msg, user_message)
             if self._is_structured_response(raw_msg):
                 msg = raw_msg.strip()
             else:
@@ -1551,6 +1561,7 @@ class LLMProvider:
         stream_callback=None,
         tools=None,
         tool_choice="auto",
+        record_interaction=True,
     ):
         model = model_override or self.model
         client = client_override or self.client
@@ -1591,6 +1602,17 @@ class LLMProvider:
             
             raw_msg = " ".join(text_parts)
             msg = self._clean_response(raw_msg)
+            if use_tools and not tool_calls:
+                from memory.memory_manager import get_memory_manager
+                memory_manager = get_memory_manager()
+                if record_interaction:
+                    memory_manager.process_interaction(
+                        user_message,
+                        raw_msg,
+                        memory_extractor=self.extract_memory_suggestions,
+                    )
+                else:
+                    memory_manager.extract_response_tags(raw_msg, user_message)
             if stream_callback and msg and not tool_calls:
                 self._emit_stream_text(msg, stream_callback)
             if tool_calls:
