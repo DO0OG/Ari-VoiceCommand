@@ -208,6 +208,55 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             else:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_migration_failure_preserves_legacy_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            legacy = os.path.join(temp_dir, "legacy")
+            runtime = os.path.join(temp_dir, "runtime")
+            os.makedirs(legacy)
+            source = os.path.join(legacy, "data.json")
+            with open(source, "w", encoding="utf-8") as handle:
+                handle.write("source")
+            with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=legacy), \
+                    patch.object(ResourceManager, "_merge_path_if_missing", side_effect=OSError("copy failed")):
+                migrated = ResourceManager._migrate_dev_runtime_state(runtime, (("data.json", "data.json"),))
+            ResourceManager._cleanup_legacy_runtime_state(
+                runtime, (("data.json", "data.json"),), preserve=(), migrated=migrated
+            )
+            self.assertTrue(os.path.exists(source))
+
+    def test_migration_conflict_preserves_legacy_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            legacy = os.path.join(temp_dir, "legacy")
+            runtime = os.path.join(temp_dir, "runtime")
+            os.makedirs(legacy)
+            os.makedirs(runtime)
+            source = os.path.join(legacy, "data.json")
+            destination = os.path.join(runtime, "data.json")
+            for path, content in ((source, "source"), (destination, "different")):
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+            with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=legacy):
+                migrated = ResourceManager._migrate_dev_runtime_state(runtime, (("data.json", "data.json"),))
+                ResourceManager._cleanup_legacy_runtime_state(
+                    runtime, (("data.json", "data.json"),), preserve=(), migrated=migrated
+                )
+            self.assertTrue(os.path.exists(source))
+
+    def test_successful_matching_migration_removes_legacy_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            legacy = os.path.join(temp_dir, "legacy")
+            runtime = os.path.join(temp_dir, "runtime")
+            os.makedirs(legacy)
+            source = os.path.join(legacy, "data.json")
+            with open(source, "w", encoding="utf-8") as handle:
+                handle.write("same content")
+            with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=legacy):
+                migrated = ResourceManager._migrate_dev_runtime_state(runtime, (("data.json", "data.json"),))
+                ResourceManager._cleanup_legacy_runtime_state(
+                    runtime, (("data.json", "data.json"),), preserve=(), migrated=migrated
+                )
+            self.assertFalse(os.path.exists(source))
+
     def test_missing_runtime_settings_bootstrap_from_template(self):
         original_env = os.environ.get("ARI_APP_DATA_DIR")
         try:

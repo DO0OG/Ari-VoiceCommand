@@ -108,6 +108,26 @@ class SkillInstallerTests(unittest.TestCase):
             with open(os.path.join(skill_dir, "SKILL.md"), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "updated skill")
 
+    def test_update_restores_existing_skill_when_install_result_omits_it(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = os.path.join(temp_dir, "skills")
+            skill_dir = os.path.join(skills_dir, "existing")
+            os.makedirs(skill_dir)
+            with open(os.path.join(skill_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("original content")
+            with open(os.path.join(skill_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"enabled": False, "source": "https://example.test/skill"}, handle)
+
+            installer = SkillInstaller(skills_dir)
+            with mock.patch.object(installer, "install", return_value=[]):
+                with self.assertRaises(ValueError):
+                    installer.update(skill_dir)
+
+            with open(os.path.join(skill_dir, "SKILL.md"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "original content")
+            with open(os.path.join(skill_dir, ".ari_skill_meta.json"), encoding="utf-8") as handle:
+                self.assertFalse(json.load(handle)["enabled"])
+
     def test_update_dialog_runs_update_thread_with_skill_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = mock.Mock()

@@ -15,6 +15,7 @@ import urllib.request
 import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
+from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,9 @@ class SkillInstaller:
                 shutil.rmtree(skill_dir, ignore_errors=True)
                 installed_names = self.install(source)
                 folder_name = os.path.basename(os.path.normpath(skill_dir))
-                if folder_name in installed_names:
-                    self._write_metadata(skill_dir, source, enabled=was_enabled)
+                if folder_name not in installed_names:
+                    raise ValueError(_("skills.update_missing_existing"))
+                self._write_metadata(skill_dir, source, enabled=was_enabled)
                 return True
             except Exception:
                 shutil.rmtree(skill_dir, ignore_errors=True)

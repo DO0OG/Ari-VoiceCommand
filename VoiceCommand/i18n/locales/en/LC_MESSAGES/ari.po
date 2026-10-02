@@ -3077,6 +3077,9 @@ msgstr "."
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "An error occurred while retrieving weather information."
 
+msgid "skills.update_missing_existing"
+msgstr "The update did not install the existing skill."
+
 msgid "settings.save_failed"
 msgstr "Settings could not be saved"
 

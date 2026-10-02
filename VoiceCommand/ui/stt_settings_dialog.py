@@ -268,6 +268,8 @@ class STTSettingsDialog(QDialog):
             "stt_energy_threshold": int(self.stt_energy_slider.value()),
             "stt_dynamic_energy": self.stt_dynamic_checkbox.isChecked(),
         })
-        ConfigManager.save_settings(current)
+        if not ConfigManager.save_settings(current):
+            QMessageBox.warning(self, _("settings.save_failed"), _("settings.secret_save_failed"))
+            return
         logging.info("[STTSettingsDialog] STT 설정 저장 완료")
         self.accept()

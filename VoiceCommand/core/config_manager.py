@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-from core.atomic_io import write_json_atomic
+from core.atomic_io import backup_corrupt_file, write_json_atomic
 from core.settings_schema import (
     migrate_local_decision_settings,
     migrate_stt_settings,
@@ -44,6 +44,20 @@ class ConfigManager:
     # RLock: set_value → load_settings → save_settings 재진입 허용
     _lock: threading.RLock = threading.RLock()
 
+    @staticmethod
+    def _backup_corrupt_settings(path: str) -> None:
+        """손상된 설정 파일을 보존한다. 같은 내용의 백업이 이미 있으면 다시 만들지 않는다."""
+        try:
+            source = Path(path)
+            corrupt = source.read_bytes()
+            if not any(
+                candidate.read_bytes() == corrupt
+                for candidate in source.parent.glob(f"{source.stem}.corrupt-*{source.suffix}")
+            ):
+                backup_corrupt_file(path)
+        except OSError as exc:
+            logging.warning("손상된 설정 파일을 백업하지 못했습니다: %s", exc)
+
     @classmethod
     def load_settings(cls) -> SettingsDict:
         """설정 파일 로드. 캐시 적중 시 락 없이 반환(읽기 전용 사용 권장)."""
@@ -66,6 +80,7 @@ class ConfigManager:
                 original = b""
             except Exception:
                 logging.error("설정 파일을 읽을 수 없어 기본값을 사용합니다.")
+                cls._backup_corrupt_settings(path)
                 settings = cls.DEFAULT_SETTINGS.copy()
                 original = b""
             legacy = cls._secret_values(settings)
@@ -190,7 +205,16 @@ class ConfigManager:
                 requested = {key: value for key, value in requested.items()
                              if value != environment.get(key)}
                 original = Path(path).read_bytes() if Path(path).exists() else b""
-                previous = json.loads(original.decode("utf-8")) if original else {}
+                if original:
+                    try:
+                        previous = json.loads(original.decode("utf-8"))
+                        if not isinstance(previous, dict):
+                            raise ValueError("Invalid settings object")
+                    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                        cls._backup_corrupt_settings(path)
+                        previous = {}
+                else:
+                    previous = {}
                 legacy = cls._secret_values(previous)
                 store = SecretStore(path)
                 stored = store.read()

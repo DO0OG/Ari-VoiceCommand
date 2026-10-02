@@ -58,6 +58,48 @@ class ConfigManagerTests(unittest.TestCase):
                 self.assertEqual(json.load(handle), original)
             self.assertEqual(os.listdir(tmp), ["settings.json"])
 
+    def test_save_settings_repairs_corrupt_json_and_keeps_secret_private(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "ari_settings.json")
+            with open(path, "wb") as handle:
+                handle.write(b"{broken")
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=path), \
+                        patch("core.config_manager.SecretStore.read", return_value={}), \
+                        patch("core.config_manager.SecretStore.write"):
+                    ConfigManager._cached_settings = None
+                    self.assertTrue(ConfigManager.save_settings({
+                        "stt_energy_threshold": 500,
+                        "openai_api_key": "private-key",
+                    }))
+                with open(path, encoding="utf-8") as handle:
+                    saved = json.load(handle)
+                backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+                self.assertEqual(saved["stt_energy_threshold"], 500)
+                self.assertNotIn("openai_api_key", saved)
+                self.assertEqual(len(backups), 1)
+                with open(os.path.join(tmp, backups[0]), "rb") as handle:
+                    self.assertEqual(handle.read(), b"{broken")
+            finally:
+                ConfigManager._cached_settings = previous
+
+    def test_load_settings_backs_up_same_corrupt_file_only_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "ari_settings.json")
+            with open(path, "wb") as handle:
+                handle.write(b"{broken")
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=path):
+                    for _ in range(2):
+                        ConfigManager._cached_settings = None
+                        ConfigManager.load_settings()
+                backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+                self.assertEqual(len(backups), 1)
+            finally:
+                ConfigManager._cached_settings = previous
+
     def test_local_decision_contradictions_are_normalized(self):
         from core.settings_schema import normalize_local_decision_settings
 
