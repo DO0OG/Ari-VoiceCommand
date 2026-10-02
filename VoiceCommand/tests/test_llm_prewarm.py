@@ -29,8 +29,16 @@ class LlmPrewarmTests(unittest.TestCase):
         self.addCleanup(self.thread_patch.stop)
 
     def _configure(self, provider_id="groq", enabled=True, locked=False):
-        client = SimpleNamespace(models=SimpleNamespace(list=Mock()))
-        llm_provider = SimpleNamespace(provider=provider_id, client=client)
+        client = SimpleNamespace(
+            models=SimpleNamespace(list=Mock()),
+            base_url="https://api.example/v1",
+        )
+        llm_provider = SimpleNamespace(
+            provider=provider_id,
+            model="model-a",
+            client=client,
+            get_role_target=lambda role: (client, llm_provider.provider, llm_provider.model),
+        )
         self.settings_patch = patch(
             "core.config_manager.ConfigManager.get", return_value=enabled
         )
@@ -62,6 +70,15 @@ class LlmPrewarmTests(unittest.TestCase):
         client.models.list.assert_called_once_with()
         self.assertFalse(llm_prewarm.prewarm_current_llm_connection())
         self.assertEqual(len(_THREADS), 1)
+        # 성공 예열 뒤에도 모델이 달라지면 새 조합으로 예열한다.
+        llm_provider = self.provider_mock.return_value
+        llm_provider.model = "model-b"
+        self.assertTrue(llm_prewarm.prewarm_current_llm_connection())
+        self.assertEqual(len(_THREADS), 2)
+        _THREADS[1].target(*_THREADS[1].args)
+        client.base_url = "https://other.example/v1"
+        self.assertTrue(llm_prewarm.prewarm_current_llm_connection())
+        self.assertEqual(len(_THREADS), 3)
 
     def test_failed_request_is_ignored_and_can_be_retried(self):
         client = self._configure()
@@ -96,7 +113,7 @@ class LlmPrewarmTests(unittest.TestCase):
             _THREADS[0].target(*_THREADS[0].args)
 
         client.models.list.assert_not_called()
-        self.assertNotIn("groq", llm_prewarm._in_flight)
+        self.assertNotIn(("groq", "model-a", "https://api.example/v1"), llm_prewarm._in_flight)
 
     def test_unsupported_provider_is_skipped(self):
         self._configure(provider_id="custom_provider")

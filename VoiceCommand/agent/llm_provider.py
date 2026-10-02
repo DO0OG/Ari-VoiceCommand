@@ -30,6 +30,7 @@ from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
 from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, get_provider_configs
 from core.config_manager import ConfigManager
+from core.settings_schema import DEFAULT_SETTINGS
 from core.activity_monitor import get_activity_context
 from core.mood_state import get_mood_state
 from i18n.translator import _
@@ -53,7 +54,7 @@ class LLMProvider:
                  memory_extractor_provider="", memory_extractor_model="",
                  memory_extractor_api_key="",
                  system_prompt="", personality="", scenario="", history_instruction="",
-                 response_verbosity="concise", router_enabled=False,
+                 response_verbosity="concise", router_enabled=DEFAULT_SETTINGS["llm_router_enabled"],
                  provider_configs=None, personality_examples_en="", personality_examples_ja=""):
         self.provider = provider
         self.api_key = api_key
@@ -839,9 +840,13 @@ class LLMProvider:
         }.get(role, "기본")
         return f"{label} {role_label} 모델이 설정되지 않았습니다. 설정에서 선택한 모델을 지정해주세요."
 
-    def _get_role_target(self, role: str) -> tuple[Any, str, str]:
+    def get_role_target(self, role: str) -> tuple[Any, str, str]:
+        """역할의 (client, provider, model)을 재구성 도중의 값이 섞이지 않게 한 번에 돌려준다."""
         with self._config_lock:
             return self._read_role_target(role)
+
+    def _get_role_target(self, role: str) -> tuple[Any, str, str]:
+        return self.get_role_target(role)
 
     def _read_role_target(self, role: str) -> tuple[Any, str, str]:
         if role == "planner":
@@ -2213,7 +2218,7 @@ def _build_llm_provider() -> LLMProvider:
         personality_examples_en=s.get("personality_examples_en", ""),
         personality_examples_ja=s.get("personality_examples_ja", ""),
         response_verbosity=s.get("response_verbosity", "concise"),
-        router_enabled=s.get("llm_router_enabled", False),
+        router_enabled=s.get("llm_router_enabled", DEFAULT_SETTINGS["llm_router_enabled"]),
         provider_configs=provider_configs,
     )
 
@@ -2225,6 +2230,10 @@ def get_llm_provider() -> LLMProvider:
             if _instance is None:
                 _instance = _build_llm_provider()
     return _instance
+
+
+# 교체된 클라이언트를 닫기 전에 진행 중인 요청이 끝나기를 기다리는 시간.
+_OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS = 120.0
 
 
 def reload_llm_provider() -> None:
@@ -2242,6 +2251,7 @@ def reload_llm_provider() -> None:
             "_plugin_tools", "_plugin_tool_intents",
         }
         clients = ("client", "planner_client", "execution_client", "memory_extractor_client")
+        old_clients = [getattr(instance, name, None) for name in clients]
         config = (
             "provider_configs", "provider", "api_key", "model", "planner_provider",
             "planner_model", "execution_provider", "execution_model",
@@ -2256,6 +2266,37 @@ def reload_llm_provider() -> None:
                     setattr(instance, name, value)
             for name in clients:
                 setattr(instance, name, getattr(replacement, name))
+
+        new_client_ids = {id(getattr(instance, name, None)) for name in clients}
+        obsolete = []
+        for client in old_clients:
+            if client is None or id(client) in new_client_ids:
+                continue
+            if all(client is not seen for seen in obsolete):
+                obsolete.append(client)
+        if obsolete:
+            # 다른 스레드의 진행 중인 요청이 옛 클라이언트를 쓰고 있을 수 있어 바로 닫지 않는다.
+            timer = threading.Timer(
+                _OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS,
+                _close_obsolete_clients,
+                args=(instance, obsolete),
+            )
+            timer.daemon = True
+            timer.start()
+
+
+def _close_obsolete_clients(instance, obsolete_clients) -> None:
+    active_stream_lock = getattr(instance, "_active_stream_lock", None)
+    if active_stream_lock is not None:
+        with active_stream_lock:
+            if instance._active_stream is not None:
+                # 스트림이 아직 쓰는 중이면 닫지 않고 참조가 풀릴 때 정리되게 둔다.
+                return
+    for client in obsolete_clients:
+        try:
+            client.close()
+        except Exception as exc:
+            logging.debug("이전 LLM 클라이언트 종료 실패: %s", exc)
 
 
 def reset_llm_provider():

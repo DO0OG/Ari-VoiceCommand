@@ -135,13 +135,23 @@ class AgentPlanner(TemplatePlansMixin):
         self.llm = llm_provider
         self._last_learning_signals: Dict[str, bool] = {}
 
+    def _get_role_target(self, role: str) -> tuple:
+        getter = getattr(self.llm, "get_role_target", None)
+        if callable(getter):
+            return getter(role)
+        provider = getattr(self.llm, f"{role}_provider", "") or getattr(self.llm, "provider", "")
+        model = getattr(self.llm, f"{role}_model", "") or getattr(self.llm, "model", "")
+        client = getattr(self.llm, f"{role}_client", None) or getattr(self.llm, "client", None)
+        return client, provider, model
+
     def reflect(self, goal: str, history_summary: str) -> Dict[str, str]:
         """실패 원인 분석 및 교훈 도출 (planner_model 사용)"""
         prompt = _get_reflect_prompt().format(goal=goal, history_summary=history_summary)
         try:
-            resp = self._call_llm(prompt, model=self.llm.planner_model,
-                                  client_override=self.llm.planner_client,
-                                  provider_override=self.llm.planner_provider,
+            client, provider, model = self._get_role_target("planner")
+            resp = self._call_llm(prompt, model=model,
+                                  client_override=client,
+                                  provider_override=provider,
                                   role_hint="planner")
             return self._parse_object(resp) or {}
         except Exception as e:
@@ -223,9 +233,10 @@ class AgentPlanner(TemplatePlansMixin):
 
         prompt_template = _get_developer_decompose_prompt() if is_dev_goal else _get_decompose_prompt()
         prompt = prompt_template.format(goal=goal, context_block=ctx_block)
-        raw = self._call_llm(prompt, model=self.llm.planner_model,
-                             client_override=self.llm.planner_client,
-                             provider_override=self.llm.planner_provider,
+        client, provider, model = self._get_role_target("planner")
+        raw = self._call_llm(prompt, model=model,
+                             client_override=client,
+                             provider_override=provider,
                              role_hint="planner")
         self._write_trace("decompose", goal, raw)
         items = self._parse_array(raw)
@@ -280,11 +291,12 @@ class AgentPlanner(TemplatePlansMixin):
         # 재시도 시 컨텍스트를 최소화 — 실패 힌트/긴 로그 제외하고 순수 개발 컨텍스트만 사용
         retry_ctx = self._fmt_developer_context(context, goal=goal)
         retry_prompt = _get_developer_retry_prompt().format(goal=goal, context_block=retry_ctx)
+        client, provider, model = self._get_role_target("planner")
         retry_raw = self._call_llm(
             retry_prompt,
-            model=self.llm.planner_model,
-            client_override=self.llm.planner_client,
-            provider_override=self.llm.planner_provider,
+            model=model,
+            client_override=client,
+            provider_override=provider,
             role_hint="planner",
         )
         self._write_trace("decompose_retry", goal, retry_raw)
@@ -395,9 +407,10 @@ class AgentPlanner(TemplatePlansMixin):
             goal=goal,
             context_block=ctx_block,
         )
-        raw = self._call_llm(prompt, model=self.llm.execution_model,
-                             client_override=self.llm.execution_client,
-                             provider_override=self.llm.execution_provider,
+        client, provider, model = self._get_role_target("execution")
+        raw = self._call_llm(prompt, model=model,
+                             client_override=client,
+                             provider_override=provider,
                              role_hint="execution")
         self._write_trace("fix_step", goal, raw)
         data = self._parse_object(raw)
@@ -494,9 +507,10 @@ class AgentPlanner(TemplatePlansMixin):
             lines.append(f"  단계 {i+1} [{status}]: {out}")
         results_summary = "\n".join(lines)
         prompt = _get_verify_prompt().format(goal=goal, results_summary=results_summary)
-        raw = self._call_llm(prompt, model=self.llm.planner_model,
-                             client_override=self.llm.planner_client,
-                             provider_override=self.llm.planner_provider,
+        client, provider, model = self._get_role_target("planner")
+        raw = self._call_llm(prompt, model=model,
+                             client_override=client,
+                             provider_override=provider,
                              role_hint="planner")
         self._write_trace("verify", goal, raw)
         data = self._parse_object(raw)
@@ -654,14 +668,13 @@ class AgentPlanner(TemplatePlansMixin):
 
     def _get_llm_candidates(self, role_hint: str, model: str, client_override, provider_override: str) -> List[tuple]:
         candidates: List[tuple] = []
-        primary_model = model or getattr(self.llm, f"{role_hint}_model", "") or self.llm.model
-        primary_provider = provider_override or getattr(self.llm, f"{role_hint}_provider", "") or self.llm.provider
-        if client_override is not None:
-            primary_client = client_override
-        elif hasattr(self.llm, "get_role_fallback_targets"):
-            primary_client = None
+        if model and provider_override:
+            primary_client, primary_provider, primary_model = client_override, provider_override, model
         else:
-            primary_client = getattr(self.llm, f"{role_hint}_client", None) or getattr(self.llm, "client", None)
+            primary_client, primary_provider, primary_model = self._get_role_target(role_hint)
+            primary_model = model or primary_model
+            primary_provider = provider_override or primary_provider
+            primary_client = client_override or primary_client
 
         seen = set()
         if primary_client and primary_model:
