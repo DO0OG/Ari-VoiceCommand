@@ -154,9 +154,10 @@ class SmartBrowser:
         self._ensure_driver()
         # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
         self._browser_start_url = url
+        self._download_baseline = self._snapshot_downloads()
         self.driver.get(url)
         self._validate_current_page()
-        
+
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
@@ -227,6 +228,10 @@ class SmartBrowser:
         found_el, matched_selector = self._find_element_for_action(action, current_domain, action_key, wait, by_module, ec_module)
         if not found_el:
             return f"실패: {act_type} (셀렉터를 찾을 수 없음)"
+
+        if act_type in ("click", "click_text", "type"):
+            # 다운로드를 일으킬 수 있는 동작 직전의 폴더 상태가 기준이다.
+            self._download_baseline = self._snapshot_downloads()
 
         if act_type == "click":
             wait.until(ec_module.element_to_be_clickable((by_module.CSS_SELECTOR, matched_selector))).click()
@@ -360,6 +365,7 @@ class SmartBrowser:
         self._ensure_driver()
         # 명시적으로 지정한 이동은 그 주소가 새 기준이 된다.
         self._browser_start_url = url
+        self._download_baseline = self._snapshot_downloads()
         self.driver.get(url)
         self._validate_current_page()
         action_results: List[Dict[str, Any]] = []
@@ -484,7 +490,7 @@ class SmartBrowser:
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """다운로드 완료 파일을 감지해 경로를 반환한다."""
         end = time.time() + timeout
-        # 기준은 브라우저를 띄울 때(또는 직전 다운로드를 돌려준 뒤)의 폴더 상태다.
+        # 기준은 다운로드를 일으킬 수 있는 동작(이동·click·type) 직전의 폴더 상태다.
         # 대기를 시작할 때 찍으면 그 전에 이미 끝난 빠른 다운로드를 기존 파일로 오인한다.
         initial_files = getattr(self, "_download_baseline", None)
         if initial_files is None:
@@ -517,7 +523,8 @@ class SmartBrowser:
                 now = time.time()
                 if prev and prev[0] == state:
                     if now - prev[1] >= stable_seconds:
-                        self._download_baseline = self._snapshot_downloads()
+                        # 돌려준 파일만 기준에 넣어, 같은 동작의 다른 파일은 다음 대기에서 반환된다.
+                        self._download_baseline = {**initial_files, path: state}
                         return path
                 else:
                     last_seen[path] = (state, now)

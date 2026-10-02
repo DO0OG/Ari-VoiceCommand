@@ -1,4 +1,5 @@
 import os
+import itertools
 import ipaddress
 import socket
 import tempfile
@@ -104,6 +105,7 @@ class WebToolsTests(unittest.TestCase):
                 self.visited.append(url)
 
         browser = SmartBrowser.__new__(SmartBrowser)
+        browser.download_dir = ""
         driver = Driver()
         browser.driver = driver
         browser._ensure_driver = lambda: None
@@ -135,6 +137,7 @@ class WebToolsTests(unittest.TestCase):
                 self.current_url = url
 
         browser = SmartBrowser.__new__(SmartBrowser)
+        browser.download_dir = ""
         driver = Driver()
         browser.driver = driver
         browser._ensure_driver = lambda: None
@@ -159,6 +162,7 @@ class WebToolsTests(unittest.TestCase):
                 self.current_url = url
 
         browser = SmartBrowser.__new__(SmartBrowser)
+        browser.download_dir = ""
         browser.driver = Driver()
         browser._ensure_driver = lambda: None
         browser._browser_start_url = "https://example.com/"
@@ -226,6 +230,46 @@ class WebToolsTests(unittest.TestCase):
                 self.assertEqual(browser.wait_for_download(timeout=10, stable_seconds=1), path)
             # 돌려준 파일은 다음 대기에서 기존 파일로 본다.
             self.assertIn(path, browser._download_baseline)
+
+    def test_wait_for_download_returns_second_file_of_same_action_on_next_wait(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+            browser._download_baseline = browser._snapshot_downloads()
+            paths = {os.path.join(tmp, "a.bin"), os.path.join(tmp, "b.bin")}
+            for path in paths:
+                with open(path, "wb") as handle:
+                    handle.write(b"done")
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=itertools.count(0, 0.5)), \
+                 patch.object(web_tools.time, "sleep"):
+                first = browser.wait_for_download(timeout=100, stable_seconds=1)
+                second = browser.wait_for_download(timeout=100, stable_seconds=1)
+
+            self.assertNotEqual(first, second)
+            self.assertEqual({first, second}, paths)
+
+    def test_click_action_resets_download_baseline_before_acting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+            browser._download_baseline = browser._snapshot_downloads()
+            # 기준을 찍은 뒤 다른 앱이 받은 파일이다.
+            with open(os.path.join(tmp, "other_app.bin"), "wb") as handle:
+                handle.write(b"x")
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(browser, "_find_element_for_action", return_value=(object(), "#go")):
+                browser._execute_browser_action_unchecked(
+                    {"type": "click"}, "example.com", unittest.mock.MagicMock(), unittest.mock.MagicMock(), unittest.mock.MagicMock()
+                )
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 2)), \
+                 patch.object(web_tools.time, "sleep"), \
+                 self.assertRaises(TimeoutError):
+                browser.wait_for_download(timeout=1, stable_seconds=1)
 
     def test_wait_for_download_returns_changed_existing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -417,6 +461,7 @@ class WebToolsTests(unittest.TestCase):
 
     def test_browser_click_to_unexpected_local_address_blanks_page(self):
         browser = SmartBrowser.__new__(SmartBrowser)
+        browser.download_dir = ""
 
         class Driver:
             current_url = "https://example.com/start"

@@ -69,6 +69,10 @@ class SafetyCheckerTests(unittest.TestCase):
             "from os import unlink as remove_file\nremove_file('sample')",
             "import shutil as fs\nfs.rmtree('sample')",
             "from shutil import rmtree as remove_tree\nremove_tree('sample')",
+            "import os\nlist(map(os.remove, paths))",
+            "import os\nf = os.remove\nf(p)",
+            "from os import *\nremove(p)",
+            'exec("import os as o\\no.remove(p)")',
         )
         for code in snippets:
             with self.subTest(code=code):
@@ -78,6 +82,9 @@ class SafetyCheckerTests(unittest.TestCase):
         for code in (
             "text.strip()",
             "items.remove(item)",
+            "todos.remove(x)",
+            "videos.remove(item)",
+            "pos.remove(1)",
         ):
             with self.subTest(code=code):
                 self.assertEqual(self.checker.check_python(code).level, DangerLevel.SAFE)
