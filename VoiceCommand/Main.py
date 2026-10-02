@@ -402,7 +402,7 @@ def _setup_scheduler_activity(scheduler, activity_monitor):
         try:
             register_background_learning_tasks(scheduler)
         except Exception as exc:
-            logging.debug("백그라운드 학습 작업 등록 생략: %s", exc)
+            logging.warning("백그라운드 학습 작업 등록 생략: %s", exc)
 
 
 def _write_smoke_report(

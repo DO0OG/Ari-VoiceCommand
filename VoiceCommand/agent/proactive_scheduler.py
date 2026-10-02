@@ -13,12 +13,14 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional, Any
 
+from core.atomic_io import backup_corrupt_file, write_json_atomic
 from i18n.translator import _
 
 _SCHEDULE_FILE: str = ""  # _init_schedule_file() 에서 설정
 _SCHEDULE_RUN_LOG_FILE: str = ""  # _init_schedule_log_file() 에서 설정
 _TICK_INTERVAL = 30
 _MAX_TASKS = 50
+_INTERNAL_TASK_TYPES = frozenset({"maintenance", "weekly_report"})
 
 
 def _runtime_fallback_path(filename: str) -> str:
@@ -230,18 +232,25 @@ class ProactiveScheduler:
             enabled=enabled,
         )
         with self._lock:
-            if len(self._tasks) >= _MAX_TASKS:
-                # 일시중지한 예약은 남기고, 예정대로 실행을 마친 일회성 예약만 정리한다.
-                finished_ids = [
-                    task_id for task_id, current in self._tasks.items()
-                    if current.completed and not current.enabled
-                ]
-                for finished_id in finished_ids:
-                    del self._tasks[finished_id]
-                    if len(self._tasks) < _MAX_TASKS:
-                        break
-            if len(self._tasks) >= _MAX_TASKS:
-                raise ValueError(_("예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정리한 뒤 다시 시도해주세요."))
+            if task_type not in _INTERNAL_TASK_TYPES:
+                user_task_count = sum(
+                    current.task_type not in _INTERNAL_TASK_TYPES
+                    for current in self._tasks.values()
+                )
+                if user_task_count >= _MAX_TASKS:
+                    # 일시중지한 예약은 남기고, 예정대로 실행을 마친 일회성 예약만 정리한다.
+                    finished_ids = [
+                        task_id for task_id, current in self._tasks.items()
+                        if current.completed and not current.enabled
+                        and current.task_type not in _INTERNAL_TASK_TYPES
+                    ]
+                    for finished_id in finished_ids:
+                        del self._tasks[finished_id]
+                        user_task_count -= 1
+                        if user_task_count < _MAX_TASKS:
+                            break
+                if user_task_count >= _MAX_TASKS:
+                    raise ValueError(_("예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정리한 뒤 다시 시도해주세요."))
             self._tasks[task_id] = task
             self._save()
         logging.info("[Scheduler] 새 작업 등록: %s (%s)", task_id, desc)
@@ -584,17 +593,36 @@ class ProactiveScheduler:
             try:
                 with open(schedule_file, encoding="utf-8") as f:
                     data = json.load(f)
-                self._tasks = {it["task_id"]: self._normalize_task(it) for it in data}
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                self._backup_corrupt_schedule(schedule_file, e)
+                return
             except Exception as e:
                 logging.warning("[Scheduler] 로드 실패: %s", e)
+                return
+            if not isinstance(data, list):
+                self._backup_corrupt_schedule(schedule_file, "최상위 구조가 목록이 아닙니다")
+                return
+            try:
+                self._tasks = {it["task_id"]: self._normalize_task(it) for it in data}
+            except Exception as e:
+                # 항목 하나라도 읽지 못하면 빈 상태로 시작하므로, 다음 저장 전에 원본을 남긴다.
+                self._tasks = {}
+                self._backup_corrupt_schedule(schedule_file, e)
+
+    @staticmethod
+    def _backup_corrupt_schedule(schedule_file: str, error: Any) -> None:
+        try:
+            backup_path = backup_corrupt_file(schedule_file)
+        except OSError as backup_error:
+            logging.error("[Scheduler] 예약 파일 손상, 백업 실패: %s (%s)", error, backup_error)
+        else:
+            logging.error("[Scheduler] 예약 파일 손상, 백업 저장: %s (%s)", backup_path, error)
 
     def _save(self):
         try:
             schedule_file = self._get_schedule_file()
-            os.makedirs(os.path.dirname(schedule_file), exist_ok=True)
             data = [asdict(t) for t in self._tasks.values()]
-            with open(schedule_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            write_json_atomic(schedule_file, data, ensure_ascii=False, indent=2)
         except Exception as e:
             logging.error("[Scheduler] 저장 실패: %s", e)
 

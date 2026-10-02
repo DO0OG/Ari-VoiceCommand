@@ -281,6 +281,129 @@ class ProactiveSchedulerTests(unittest.TestCase):
             with open(scheduler._schedule_file, encoding="utf-8") as handle:
                 self.assertEqual(len(json.load(handle)), 51)
 
+    def test_corrupt_schedule_is_backed_up_and_remains_preserved_after_save(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_file = os.path.join(tmp, "scheduled_tasks.json")
+            scheduler._lock = threading.Lock()
+            original = b"[{broken json"
+            with open(scheduler._schedule_file, "wb") as handle:
+                handle.write(original)
+
+            scheduler._tasks = {}
+            scheduler._load()
+            backups = [
+                os.path.join(tmp, filename)
+                for filename in os.listdir(tmp)
+                if ".corrupt-" in filename
+            ]
+
+            self.assertEqual(len(scheduler._tasks), 0)
+            self.assertEqual(len(backups), 1)
+            with open(backups[0], "rb") as handle:
+                self.assertEqual(handle.read(), original)
+
+            scheduler.schedule("새 작업", datetime.now(), "10시")
+
+            with open(backups[0], "rb") as handle:
+                self.assertEqual(handle.read(), original)
+
+    def test_unexpected_schedule_root_is_backed_up(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_file = os.path.join(tmp, "scheduled_tasks.json")
+            original = b'{"task_id": "not-a-list"}'
+            with open(scheduler._schedule_file, "wb") as handle:
+                handle.write(original)
+            scheduler._tasks = {}
+
+            scheduler._load()
+
+            backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tmp, backups[0]), "rb") as handle:
+                self.assertEqual(handle.read(), original)
+
+    def test_missing_schedule_starts_empty_without_backup(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_file = os.path.join(tmp, "scheduled_tasks.json")
+            scheduler._tasks = {}
+
+            scheduler._load()
+
+            self.assertEqual(scheduler._tasks, {})
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_save_writes_valid_json_without_leaving_temporary_file(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        with tempfile.TemporaryDirectory() as tmp:
+            scheduler._schedule_file = os.path.join(tmp, "scheduled_tasks.json")
+            scheduler._tasks = {
+                "saved": ScheduledTask(
+                    task_id="saved",
+                    goal="저장",
+                    schedule_expr="1분 뒤",
+                    next_run="2026-03-25T09:00:00",
+                )
+            }
+
+            scheduler._save()
+
+            with open(scheduler._schedule_file, encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)[0]["task_id"], "saved")
+            self.assertEqual(os.listdir(tmp), ["scheduled_tasks.json"])
+
+    def test_ensure_task_allows_maintenance_at_user_task_limit(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._tasks = {
+            str(number): ScheduledTask(
+                task_id=str(number),
+                goal="사용자 작업",
+                schedule_expr="매일 9시",
+                next_run="2026-03-25T09:00:00",
+            )
+            for number in range(50)
+        }
+        scheduler._save = Mock()
+
+        with patch.object(scheduler, "_calc_next_run", return_value=datetime(2026, 3, 25, 9)):
+            task_id = scheduler.ensure_task(
+                "유지 작업", "정리", "매일 9시", task_type="maintenance"
+            )
+
+        self.assertEqual(scheduler._tasks[task_id].task_type, "maintenance")
+        self.assertEqual(sum(task.task_type == "agent" for task in scheduler._tasks.values()), 50)
+
+    def test_internal_tasks_do_not_reduce_user_task_limit(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._tasks = {
+            "maintenance": ScheduledTask(
+                task_id="maintenance",
+                goal="정리",
+                schedule_expr="매일 3시",
+                next_run="2026-03-25T03:00:00",
+                task_type="maintenance",
+            ),
+            "weekly": ScheduledTask(
+                task_id="weekly",
+                goal="보고서",
+                schedule_expr="매주 월요일",
+                next_run="2026-03-25T09:00:00",
+                task_type="weekly_report",
+            ),
+        }
+        scheduler._save = Mock()
+
+        for number in range(50):
+            scheduler.schedule("사용자 작업", datetime(2026, 3, 25, 10), "10시")
+
+        self.assertEqual(len(scheduler._tasks), 52)
+        with self.assertRaisesRegex(ValueError, "예약 작업이 가득 찼습니다"):
+            scheduler.schedule("초과 작업", datetime(2026, 3, 25, 11), "11시")
+
     def test_add_task_persists_weekday_repeat_rule(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         scheduler._lock = threading.Lock()
