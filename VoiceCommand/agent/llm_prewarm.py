@@ -55,9 +55,8 @@ def prewarm_current_llm_connection() -> bool:
         from agent.llm_provider import get_llm_provider
 
         llm_provider = get_llm_provider()
-        getter = getattr(llm_provider, "get_role_target", None)
-        if callable(getter):
-            client, provider, model = getter("default")
+        if hasattr(llm_provider, "get_role_target"):
+            client, provider, model = llm_provider.get_role_target("default")
         else:
             provider = getattr(llm_provider, "provider", "")
             model = getattr(llm_provider, "model", "")
