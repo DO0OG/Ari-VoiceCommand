@@ -6,14 +6,20 @@ from PySide6.QtWidgets import QApplication, QDialog
 from ui.stt_settings_dialog import STTSettingsDialog
 
 
+class _BareSTTSettingsDialog(STTSettingsDialog):
+    """위젯 구성을 건너뛰고 저장 로직만 시험하기 위한 대화상자."""
+
+    def __init__(self):
+        QDialog.__init__(self)
+
+
 class STTSettingsDialogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def _dialog(self):
-        dialog = STTSettingsDialog.__new__(STTSettingsDialog)
-        QDialog.__init__(dialog)
+        dialog = _BareSTTSettingsDialog()
         dialog.voice_hotkey_edit = Mock()
         dialog.voice_hotkey_edit.keySequence.return_value.toString.return_value = "Ctrl+Alt+Space"
         dialog.wake_words_list = Mock()
