@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-from core.atomic_io import write_json_atomic
+from core.atomic_io import backup_corrupt_file, write_json_atomic
 from core.settings_schema import (
     migrate_local_decision_settings,
     migrate_stt_settings,
@@ -41,8 +41,27 @@ class ConfigManager:
     DEFAULT_SETTINGS = SETTINGS_DEFAULTS
     _cached_settings: Optional[SettingsDict] = None
     _dotenv_settings: dict[str, str] = {}
+    _settings_read_failed = False
     # RLock: set_value → load_settings → save_settings 재진입 허용
     _lock: threading.RLock = threading.RLock()
+
+    @staticmethod
+    def _backup_corrupt_settings(path: str) -> bool:
+        """손상된 설정 파일을 보존한다. 같은 내용의 백업이 이미 있으면 다시 만들지 않는다."""
+        try:
+            source = Path(path)
+            corrupt = source.read_bytes()
+            for candidate in source.parent.glob(f"{source.stem}.corrupt-*{source.suffix}"):
+                try:
+                    if candidate.read_bytes() == corrupt:
+                        return True
+                except OSError:
+                    continue
+            backup_corrupt_file(path)
+            return True
+        except OSError as exc:
+            logging.warning("손상된 설정 파일을 백업하지 못했습니다: %s", exc)
+            return False
 
     @classmethod
     def load_settings(cls) -> SettingsDict:
@@ -62,12 +81,22 @@ class ConfigManager:
                     raise ValueError("Invalid settings object")
                 logging.info("설정 파일을 로드했습니다.")
             except FileNotFoundError:
+                cls._settings_read_failed = False
                 settings = cls._restore_default_settings(path)
                 original = b""
-            except Exception:
-                logging.error("설정 파일을 읽을 수 없어 기본값을 사용합니다.")
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                logging.error("설정 파일이 손상되어 기본값을 사용합니다.")
+                cls._settings_read_failed = False
+                cls._backup_corrupt_settings(path)
                 settings = cls.DEFAULT_SETTINGS.copy()
                 original = b""
+            except OSError:
+                logging.error("설정 파일에 접근할 수 없어 기본값을 사용합니다.")
+                cls._settings_read_failed = True
+                settings = cls.DEFAULT_SETTINGS.copy()
+                original = b""
+            else:
+                cls._settings_read_failed = False
             legacy = cls._secret_values(settings)
             public = cls._public_settings(settings)
             public_source = {key: value for key, value in settings.items() if not cls._is_secret_key(key)}
@@ -181,6 +210,17 @@ class ConfigManager:
         with cls._lock:
             path = _settings_path()
             try:
+                if cls._settings_read_failed:
+                    # 시작할 때 파일을 읽지 못해 기본값으로 실행 중이었다. 이제 읽히면 그 설정 위에
+                    # 이번에 바뀐 값만 얹어, 기본값이 사용자의 설정을 덮어쓰지 않게 한다.
+                    stale = cls._effective_settings()
+                    cls._cached_settings = None
+                    loaded = cls.load_settings()
+                    if not cls._settings_read_failed:
+                        settings = {**loaded, **{
+                            key: value for key, value in settings.items()
+                            if (stale.get(key) or None) != (value or None)
+                        }}
                 requested = {key: value for key, value in settings.items() if cls._is_secret_key(key)}
                 if any(not isinstance(value, str) for value in requested.values()):
                     raise SecretStoreError("Invalid credential type")
@@ -189,8 +229,28 @@ class ConfigManager:
                 environment = cls._environment_secrets(normalized)
                 requested = {key: value for key, value in requested.items()
                              if value != environment.get(key)}
-                original = Path(path).read_bytes() if Path(path).exists() else b""
-                previous = json.loads(original.decode("utf-8")) if original else {}
+                try:
+                    original = Path(path).read_bytes()
+                except FileNotFoundError:
+                    original = b""
+                if original:
+                    corrupt = False
+                    try:
+                        previous = json.loads(original.decode("utf-8"))
+                        if not isinstance(previous, dict):
+                            raise ValueError("Invalid settings object")
+                    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                        corrupt = True
+                        if not cls._backup_corrupt_settings(path):
+                            return False
+                        previous = {}
+                else:
+                    corrupt = False
+                    previous = {}
+                read_failed = cls._settings_read_failed and bool(original) and not corrupt
+                # 파일을 읽지 못해 기본값으로 실행 중이었다면 정상 파일을 덮어쓰기 전에 사본을 남긴다.
+                if read_failed and not cls._backup_corrupt_settings(path):
+                    return False
                 legacy = cls._secret_values(previous)
                 store = SecretStore(path)
                 stored = store.read()
@@ -200,10 +260,12 @@ class ConfigManager:
                         updated[key] = value
                     else:
                         updated.pop(key, None)
-                if "custom_llm_providers" in settings:
-                    provider_ids = set(get_custom_providers(normalized))
+                if "custom_llm_providers" in settings and not read_failed:
+                    # 이번 저장에서 지운 제공자의 키만 지운다. 설정 파일이 손상돼 제공자 목록을
+                    # 잃었을 때 남은 키까지 지우면 파일을 되살려도 키를 되찾을 수 없다.
+                    removed = set(get_custom_providers(previous)) - set(get_custom_providers(normalized))
                     for key in tuple(updated):
-                        if is_custom_secret_key(key) and key[:-len("_api_key")] not in provider_ids:
+                        if is_custom_secret_key(key) and key[:-len("_api_key")] in removed:
                             updated.pop(key, None)
                 if any(cls._is_secret_key(key) and previous.get(key) for key in previous):
                     store.backup(original)
@@ -220,6 +282,7 @@ class ConfigManager:
                     raise
                 logging.info("설정을 저장했습니다.")
                 cls._cached_settings = {**cls.DEFAULT_SETTINGS, **public, **updated}
+                cls._settings_read_failed = False
                 return True
             except Exception:
                 logging.error("Settings save failed; existing files and encrypted backups were preserved")

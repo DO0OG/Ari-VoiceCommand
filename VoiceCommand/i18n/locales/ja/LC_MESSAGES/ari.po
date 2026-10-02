@@ -3077,6 +3077,12 @@ msgstr "です。"
 msgid "날씨 정보를 가져오는 중 오류가 발생했습니다."
 msgstr "天気情報の取得中にエラーが発生しました。"
 
+msgid "skills.update_missing_existing"
+msgstr "既存のスキルが更新結果に含まれていません。"
+
+msgid "skills.update_restore_failed"
+msgstr "スキルを復元できませんでした。保全されたパスを確認してください: {path}"
+
 msgid "settings.save_failed"
 msgstr "設定を保存できませんでした"
 

@@ -1,5 +1,6 @@
 """PyInstaller 번들 리소스 관리"""
 import filecmp
+import hashlib
 import os
 import sys
 import shutil
@@ -102,40 +103,112 @@ class ResourceManager:
     def _migrate_dev_runtime_state(
         destination_root: str,
         mappings: Iterable[tuple[str, str]] = _LEGACY_RUNTIME_MAPPINGS,
-    ) -> None:
+    ) -> set[str]:
         legacy_root = ResourceManager._legacy_project_runtime_dir()
         if os.path.abspath(destination_root) == os.path.abspath(legacy_root):
-            return
+            return set()
 
+        migrated = set()
         for source_rel, destination_rel in mappings:
             source = os.path.join(legacy_root, source_rel)
             destination = os.path.join(destination_root, destination_rel)
             try:
-                ResourceManager._merge_path_if_missing(source, destination)
+                copied = ResourceManager._merge_path_if_missing(source, destination)
+                if not os.path.exists(source):
+                    continue
+                if ResourceManager._contents_match(source, destination):
+                    migrated.add(os.path.normpath(source_rel))
+                elif copied:
+                    logging.warning("이전된 내용이 달라 원본을 보존합니다: %s", source_rel)
+                else:
+                    logging.debug("이전 대상과 내용이 달라 원본을 보존합니다: %s", source_rel)
             except Exception as e:
-                logging.debug("런타임 상태 마이그레이션 실패 %s: %s", source_rel, e)
+                logging.warning("데이터 이전에 실패하여 원본을 보존합니다 %s: %s", source_rel, e)
+        return migrated
+
+    @staticmethod
+    def _contents_match(source: str, destination: str) -> bool:
+        """원본의 모든 파일이 대상에 같은 내용으로 있는지 확인한다.
+
+        여러 원본 폴더가 한 대상 폴더로 합쳐지므로 대상에만 있는 파일은 따지지 않는다.
+        """
+        def digest(path: str) -> bytes:
+            hasher = hashlib.sha256()
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            return hasher.digest()
+
+        if os.path.isfile(source) and os.path.isfile(destination):
+            return (
+                os.path.getsize(source) == os.path.getsize(destination)
+                and digest(source) == digest(destination)
+            )
+        if not os.path.isdir(source) or not os.path.isdir(destination):
+            return False
+
+        def is_directory_link(path: str) -> bool:
+            if os.path.islink(path) or getattr(os.path, "isjunction", lambda _path: False)(path):
+                return True
+            if os.name == "nt":
+                return getattr(os.lstat(path), "st_reparse_tag", None) == 0xA0000003
+            return False
+
+        walk_error = False
+
+        def onerror(_error: OSError) -> None:
+            nonlocal walk_error
+            walk_error = True
+
+        try:
+            if is_directory_link(source):
+                return False
+            for current, dirs, names in os.walk(source, onerror=onerror):
+                if any(is_directory_link(os.path.join(current, name)) for name in dirs):
+                    return False
+                for name in names:
+                    path = os.path.join(current, name)
+                    target = os.path.join(destination, os.path.relpath(path, source))
+                    if (
+                        not os.path.isfile(target)
+                        or os.path.getsize(path) != os.path.getsize(target)
+                        or digest(path) != digest(target)
+                    ):
+                        return False
+        except OSError:
+            return False
+        return not walk_error
 
     @staticmethod
     def _cleanup_legacy_runtime_state(
         destination_root: str,
         mappings: Iterable[tuple[str, str]] = _LEGACY_RUNTIME_MAPPINGS,
         preserve: Iterable[str] = ("ari_settings.json",),
+        migrated: Iterable[str] = (),
     ) -> None:
         legacy_root = os.path.abspath(ResourceManager._legacy_project_runtime_dir())
         if os.path.abspath(destination_root) == legacy_root:
             return
 
         preserved = {os.path.normpath(item) for item in preserve}
+        migrated_sources = {os.path.normpath(item) for item in migrated}
         cleaned_sources: set[str] = set()
         for source_rel, destination_rel in mappings:
             normalized_source = os.path.normpath(source_rel)
-            if normalized_source in preserved or normalized_source in cleaned_sources:
+            if (
+                normalized_source in preserved
+                or normalized_source in cleaned_sources
+                or normalized_source not in migrated_sources
+            ):
                 continue
             source = os.path.join(legacy_root, source_rel)
             destination = os.path.join(destination_root, destination_rel)
             if not os.path.exists(source) or not os.path.exists(destination):
                 continue
             try:
+                if not ResourceManager._contents_match(source, destination):
+                    logging.warning("이전 대상 내용이 달라 원본을 보존합니다: %s", source_rel)
+                    continue
                 if os.path.isdir(source):
                     shutil.rmtree(source, ignore_errors=True)
                 else:
@@ -175,8 +248,8 @@ class ResourceManager:
             ResourceManager._app_data_dir = base
             return base
         if not _is_bundled():
-            ResourceManager._migrate_dev_runtime_state(base)
-            ResourceManager._cleanup_legacy_runtime_state(base)
+            migrated = ResourceManager._migrate_dev_runtime_state(base)
+            ResourceManager._cleanup_legacy_runtime_state(base, migrated=migrated)
         ResourceManager._app_data_dir = base
         return base
 
