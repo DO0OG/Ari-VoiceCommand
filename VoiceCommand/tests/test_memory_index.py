@@ -151,6 +151,40 @@ class MemoryIndexTests(unittest.TestCase):
             ).fetchall()
         self.assertEqual(rows, [("conversation", "사용자: I like tea\n아리: ")])
 
+    def test_sync_facts_preserves_conversations_and_preferences(self):
+        self.index.index_fact("stale", "remove me", 0.5)
+        self.index.index_fact("changed", "old value", 0.5)
+        self.index.index_fact("선호: 음료", "커피", 1.0)
+        self.index.index_conversation(
+            "keep this conversation", "", "2026-09-29T10:00:00"
+        )
+        facts = {
+            "changed": {"value": "new value", "confidence": 0.8},
+            "new": {"value": "new fact", "confidence": 0.7},
+        }
+
+        self.index.sync_facts(facts)
+
+        self.assertFalse(self.index.search("remove me", kind="fact"))
+        self.assertTrue(self.index.search("new value", kind="fact"))
+        self.assertTrue(self.index.search("new fact", kind="fact"))
+        self.assertTrue(self.index.search("커피", kind="fact"))
+        self.assertTrue(self.index.search("keep this conversation", kind="conversation"))
+
+    def test_sync_facts_does_not_write_when_already_aligned(self):
+        facts = {"aligned": {"value": "same", "confidence": 0.8}}
+        self.index.index_fact("aligned", "same", 0.8)
+
+        with patch.object(
+            self.index, "index_fact", wraps=self.index.index_fact
+        ) as index_fact, patch.object(
+            self.index, "delete_fact", wraps=self.index.delete_fact
+        ) as delete_fact:
+            self.index.sync_facts(facts)
+
+        index_fact.assert_not_called()
+        delete_fact.assert_not_called()
+
     def test_prune_removes_only_old_conversations(self):
         old = (datetime.now() - timedelta(days=181)).isoformat()
         recent = datetime.now().isoformat()

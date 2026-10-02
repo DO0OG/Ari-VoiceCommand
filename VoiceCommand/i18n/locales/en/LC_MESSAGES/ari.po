@@ -3618,6 +3618,15 @@ msgstr "Delete the saved memory."
 msgid "기억 삭제: {fact}"
 msgstr "Delete memory: {fact}"
 
+msgid "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
+msgstr "Delete memory, related conversations, and matching preferences: {fact}"
+
+msgid "기억, 관련 대화 기록, 맞는 선호를 삭제합니다."
+msgstr "This deletes the memory, related conversations, and matching preferences."
+
+msgid "선호: {key}"
+msgstr "Preference: {key}"
+
 msgid "삭제를 취소했어요."
 msgstr "I canceled the deletion."
 

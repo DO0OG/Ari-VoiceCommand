@@ -3618,6 +3618,15 @@ msgstr "기억한 내용을 삭제합니다."
 msgid "기억 삭제: {fact}"
 msgstr "기억 삭제: {fact}"
 
+msgid "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
+msgstr "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
+
+msgid "기억, 관련 대화 기록, 맞는 선호를 삭제합니다."
+msgstr "기억, 관련 대화 기록, 맞는 선호를 삭제합니다."
+
+msgid "선호: {key}"
+msgstr "선호: {key}"
+
 msgid "삭제를 취소했어요."
 msgstr "삭제를 취소했어요."
 

@@ -32,7 +32,9 @@ class SafeFastPathTests(unittest.TestCase):
             "local_decision_direct_execution": True,
         }
         self.enterContext(patch("core.config_manager.ConfigManager.get", side_effect=lambda key, default=None: values.get(key, default)))
-        self.history = self.enterContext(patch("memory.conversation_history.add_conversation"))
+        self.history = self.enterContext(
+            patch("memory.memory_manager.get_memory_manager")
+        ).return_value.process_interaction
         self.events = self.enterContext(patch("core.VoiceCommand.emit_plugin_event"))
 
     def predict(self, name, confidence=1.0, margin=1.0):
@@ -45,7 +47,7 @@ class SafeFastPathTests(unittest.TestCase):
     def assert_fallback(self, text):
         self.command.run_interaction(text)
         self.assistant.chat_with_tools.assert_called_once_with(
-            text, include_context=True, cancel_event=ANY
+            text, include_context=True, cancel_event=ANY, record_interaction=False
         )
         self.assistant.feed_tool_result.assert_not_called()
         for handler in self.handlers.values():

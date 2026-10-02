@@ -1,7 +1,13 @@
+import os
+import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
 from commands.memory_command import MemoryCommand, _parse_explicit_command
+from memory.conversation_history import ConversationHistory
+from memory.memory_index import MemoryIndex
+from memory.user_context import UserContextManager
 
 
 class MemoryCommandTests(unittest.TestCase):
@@ -33,20 +39,16 @@ class MemoryCommandTests(unittest.TestCase):
 
     def test_remember_records_and_indexes_explicit_fact(self):
         context = Mock()
-        memory_index = Mock()
         spoken = []
         command = MemoryCommand(spoken.append)
 
-        with patch("memory.user_context.get_context_manager", return_value=context), patch(
-            "memory.memory_index.get_memory_index", return_value=memory_index
-        ):
+        with patch("memory.user_context.get_context_manager", return_value=context):
             command.execute("remember: favorite drink=tea")
 
         context.record_fact.assert_called_once_with(
             "favorite drink", "tea", source="user", confidence=1.0,
             ttl_days=0, force=True,
         )
-        memory_index.index_fact.assert_called_once_with("favorite drink", "tea", 1.0)
         self.assertEqual(spoken, ["기억했어요: tea"])
 
     def test_remember_rejects_card_resident_id_and_ssn_numbers(self):
@@ -131,13 +133,11 @@ class MemoryCommandTests(unittest.TestCase):
             "I prefer green tea.", "I prefer green tea.", source="user",
             confidence=1.0, ttl_days=0, force=True,
         )
-        memory_index.index_fact.assert_called_once_with(
-            "I prefer green tea.", "I prefer green tea.", 1.0
-        )
         self.assertEqual(spoken, ["기억했어요: I prefer green tea."])
 
     def test_forget_prefers_exact_matches_and_confirms_before_deleting(self):
         context = Mock()
+        context.get_preferences_snapshot.return_value = {}
         context.get_facts_snapshot.return_value = {
             "favorite tea": {"value": "green tea"},
             "drink": {"value": "tea"},
@@ -151,11 +151,14 @@ class MemoryCommandTests(unittest.TestCase):
             command.execute("forget tea")
 
         get_manager.return_value.request_confirmation.assert_called_once()
-        context.delete_fact.assert_called_once_with("drink", expected_value="tea")
+        context.delete_fact.assert_called_once_with(
+            "drink", delete_conversations=True, expected_value="tea"
+        )
         self.assertEqual(spoken, ["기억을 잊었어요: drink"])
 
     def test_ambiguous_forget_lists_matches_without_deleting(self):
         context = Mock()
+        context.get_preferences_snapshot.return_value = {}
         context.get_facts_snapshot.return_value = {
             "favorite coffee": {"value": "iced coffee"},
             "coffee shop": {"value": "near home"},
@@ -177,6 +180,7 @@ class MemoryCommandTests(unittest.TestCase):
 
     def test_recent_alias_targets_latest_updated_fact(self):
         context = Mock()
+        context.get_preferences_snapshot.return_value = {}
         context.get_facts_snapshot.return_value = {
             "older user fact": {
                 "source": "user",
@@ -202,11 +206,12 @@ class MemoryCommandTests(unittest.TestCase):
             command.execute("방금 거 잊어")
 
         context.delete_fact.assert_called_once_with(
-            "assistant fact", expected_value="latest fact"
+            "assistant fact", delete_conversations=True, expected_value="latest fact"
         )
 
     def test_confirmation_failure_keeps_fact(self):
         context = Mock()
+        context.get_preferences_snapshot.return_value = {}
         context.get_facts_snapshot.return_value = {
             "hobby": {"value": "hiking"}
         }
@@ -222,6 +227,91 @@ class MemoryCommandTests(unittest.TestCase):
 
         context.delete_fact.assert_not_called()
         self.assertEqual(spoken, ["삭제를 취소했어요."])
+
+    def test_forget_removes_fact_related_conversations_and_matching_preference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            context = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                context.record_fact("favorite drink", "coffee", source="user")
+                context.record_preference("drink", "coffee")
+            index.index_conversation("I like coffee", "Noted", "2026-09-29T10:00:00")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history._lock = threading.RLock()
+            history.active = [{"user": "I like coffee", "ai": "Noted"}]
+            history.summaries = []
+            history.save = Mock()
+
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.user_context.get_context_manager", return_value=context
+            ), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch(
+                "agent.confirmation_manager.get_confirmation_manager"
+            ) as get_manager:
+                get_manager.return_value.request_confirmation.return_value = True
+                MemoryCommand(lambda _message: None).execute("forget coffee")
+
+            self.assertNotIn("favorite drink", context.context["facts"])
+            self.assertNotIn("drink", context.context["preferences"])
+            self.assertEqual(history.active, [])
+            self.assertFalse(index.search("coffee"))
+
+    def test_forget_one_character_keeps_conversation_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            context = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                context.record_fact("initial", "A", source="user")
+                context.record_preference("drink", "latte")
+            index.index_conversation("My initial is A", "", "2026-09-29T10:00:00")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history._lock = threading.RLock()
+            history.active = [{"user": "My initial is A", "ai": ""}]
+            history.summaries = []
+            history.save = Mock()
+
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.user_context.get_context_manager", return_value=context
+            ), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch(
+                "agent.confirmation_manager.get_confirmation_manager"
+            ) as get_manager:
+                get_manager.return_value.request_confirmation.return_value = True
+                MemoryCommand(lambda _message: None).execute("forget A")
+
+            self.assertNotIn("initial", context.context["facts"])
+            self.assertIn("latte", context.context["preferences"]["drink"])
+            self.assertEqual(len(history.active), 1)
+            self.assertTrue(index.search("initial", kind="conversation"))
+
+    def test_forget_one_character_fact_does_not_delete_category_preferences(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index = MemoryIndex(os.path.join(tmp, "memory.db"))
+            context = UserContextManager(context_file=os.path.join(tmp, "context.json"))
+            with patch("memory.memory_index.get_memory_index", return_value=index):
+                context.record_fact("drink", "A", source="user")
+                context.record_preference("drink", "coffee")
+                context.record_preference("drink", "tea")
+            index.index_conversation("My drink initial is A", "", "2026-09-29T10:00:00")
+            history = ConversationHistory.__new__(ConversationHistory)
+            history._lock = threading.RLock()
+            history.active = [{"user": "My drink initial is A", "ai": ""}]
+            history.summaries = []
+            history.save = Mock()
+
+            with patch("memory.memory_index.get_memory_index", return_value=index), patch(
+                "memory.user_context.get_context_manager", return_value=context
+            ), patch(
+                "memory.conversation_history.get_conversation_history", return_value=history
+            ), patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                get_manager.return_value.request_confirmation.return_value = True
+                MemoryCommand(lambda _message: None).execute("drink 잊어줘")
+
+            self.assertNotIn("drink", context.context["facts"])
+            self.assertEqual(context.context["preferences"]["drink"], {"coffee": 1, "tea": 1})
+            self.assertEqual(len(history.active), 1)
 
 
 if __name__ == "__main__":

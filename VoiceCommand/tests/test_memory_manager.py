@@ -5,11 +5,20 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from memory.fact_suggestions import FactSuggestionStore
+from memory.memory_index import MemoryIndex
 from memory.memory_manager import MemoryManager
 from memory.user_context import UserContextManager
 
 
 class MemoryManagerTests(unittest.TestCase):
+    def setUp(self):
+        self.index_temp_dir = tempfile.TemporaryDirectory()
+        self.test_index = MemoryIndex(f"{self.index_temp_dir.name}/memory.db")
+        patcher = patch("memory.memory_index.get_memory_index", return_value=self.test_index)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.index_temp_dir.cleanup)
+
     def test_process_interaction_records_situation_after_conversation_save(self):
         events = []
         fake_context = Mock()
@@ -25,7 +34,7 @@ class MemoryManagerTests(unittest.TestCase):
             manager = MemoryManager()
         with patch(
             "memory.memory_manager.add_conversation",
-            side_effect=lambda user, response: events.append(("saved", user, response)),
+            side_effect=lambda user, response, **kwargs: events.append(("saved", user, response)),
         ), patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
             "memory.memory_manager.get_user_profile_engine", return_value=fake_profile
         ):
@@ -33,7 +42,24 @@ class MemoryManagerTests(unittest.TestCase):
 
         self.assertEqual(events[0], ("saved", "Great job", "Done"))
         self.assertEqual(events[1], ("situation", "Great job"))
+        self.assertEqual(sum(event[0] == "saved" for event in events), 1)
+        fake_index.index_conversation.assert_called_once()
         fake_context.record_interaction.assert_called_once_with("Great job")
+
+    def test_extract_response_tags_only_saves_fact_and_preference_tags(self):
+        fake_context = Mock()
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+
+        manager.extract_response_tags(
+            "[FACT: favorite_color=blue] [PREF: food=tea]"
+        )
+
+        fake_context.record_fact.assert_called_once_with(
+            "favorite_color", "blue", source="assistant_tag", confidence=0.75
+        )
+        fake_context.record_preference.assert_called_once_with("food", "tea")
+        fake_context.record_interaction.assert_not_called()
 
     def test_process_interaction_counts_when_conversation_save_fails(self):
         fake_context = Mock()
@@ -323,16 +349,23 @@ class MemoryManagerTests(unittest.TestCase):
             )
             manager = MemoryManager.__new__(MemoryManager)
             manager.context_manager = context
-            index = Mock()
-
-            with patch("memory.memory_manager.get_memory_index", return_value=index):
-                manager._extract_info_from_response("[FACT: favorite_color=red]")
+            manager._extract_info_from_response("[FACT: favorite_color=red]")
 
             stored = context.get_facts_snapshot()["favorite_color"]
             self.assertEqual(stored["value"], "blue")
-            index.index_fact.assert_called_once_with(
-                "favorite_color", "blue", stored["confidence"]
-            )
+            self.assertTrue(self.test_index.search("blue", kind="fact"))
+
+    def test_preference_tag_updates_search_index(self):
+        context = UserContextManager(
+            context_file=f"{self.index_temp_dir.name}/user_context.json"
+        )
+        manager = MemoryManager.__new__(MemoryManager)
+        manager.context_manager = context
+
+        manager._extract_info_from_response("[PREF: 음료=커피]")
+
+        self.assertEqual(context.context["preferences"]["음료"]["커피"], 1)
+        self.assertTrue(self.test_index.search("커피", kind="fact"))
 
     def test_invalid_evidence_and_sensitive_candidates_are_dropped(self):
         user_message = "나는 요리를 좋아하고 계좌번호 12345678901234를 쓴다."
@@ -422,7 +455,6 @@ class MemoryManagerTests(unittest.TestCase):
             store = FactSuggestionStore(f"{tmp}/fact_suggestions.json")
             manager = MemoryManager.__new__(MemoryManager)
             manager.context_manager = context
-            index = Mock()
             expected_days = {"state": 1, "plan": 30, "stable": 180}
 
             for kind, ttl_days in expected_days.items():
@@ -438,9 +470,6 @@ class MemoryManagerTests(unittest.TestCase):
                 with patch(
                     "memory.memory_manager.get_fact_suggestion_store",
                     return_value=store,
-                ), patch(
-                    "memory.memory_manager.get_memory_index",
-                    return_value=index,
                 ):
                     self.assertTrue(
                         manager.approve_fact_suggestion(suggestion["id"])
@@ -456,7 +485,7 @@ class MemoryManagerTests(unittest.TestCase):
                     delta=1,
                 )
 
-            self.assertEqual(index.index_fact.call_count, 3)
+                self.assertTrue(self.test_index.search(f"{kind} value", kind="fact"))
             self.assertEqual(store.get_stats(), {"approved": 3, "rejected": 0})
 
     def test_approved_preferences_update_context_and_fts(self):
@@ -474,14 +503,9 @@ class MemoryManagerTests(unittest.TestCase):
                 "confidence": 0.8,
             }])
             suggestion = store.get_suggestions()[0]
-            index = Mock()
-
             with patch(
                 "memory.memory_manager.get_fact_suggestion_store",
                 return_value=store,
-            ), patch(
-                "memory.memory_manager.get_memory_index",
-                return_value=index,
             ):
                 self.assertTrue(manager.approve_fact_suggestion(suggestion["id"]))
 
@@ -489,7 +513,7 @@ class MemoryManagerTests(unittest.TestCase):
                 context.context["preferences"]["응답 길이"]["짧게"],
                 1,
             )
-            index.index_fact.assert_called_once_with("선호: 응답 길이", "짧게", 0.8)
+            self.assertTrue(self.test_index.search("짧게", kind="fact"))
 
 
 if __name__ == "__main__":

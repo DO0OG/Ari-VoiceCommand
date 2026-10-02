@@ -236,8 +236,8 @@ class LLMProviderTests(unittest.TestCase):
         provider.client = Mock()
         provider._response_cache = Mock()
         provider._response_cache.get.return_value = "cached answer"
-        context = Mock()
         memory_manager = Mock()
+        memory_manager.clean_response.return_value = "cached answer"
         with (
             patch.object(
                 provider,
@@ -247,17 +247,21 @@ class LLMProviderTests(unittest.TestCase):
             patch.object(provider, "_should_cache", return_value=True),
             patch.object(provider, "_build_situation_prompt", return_value="[Situation]"),
             patch.object(provider, "_build_cache_key", return_value="cache-key"),
-            patch("memory.user_context.get_context_manager", return_value=context),
             patch("memory.memory_manager.get_memory_manager", return_value=memory_manager),
+            patch.object(provider, "add_to_history") as add_to_history,
             patch.object(provider, "_stream_or_chat_completion") as completion,
         ):
             result = provider.chat("repeat this", include_context=False)
 
         self.assertEqual(result, "cached answer")
-        context.record_interaction.assert_called_once_with("repeat this")
-        memory_manager.start_fact_suggestion_extraction.assert_called_once_with(
-            "repeat this", provider.extract_memory_suggestions
+        memory_manager.process_interaction.assert_called_once_with(
+            "repeat this",
+            "cached answer",
+            memory_extractor=provider.extract_memory_suggestions,
+            extract_response_info=False,
         )
+        self.assertEqual(add_to_history.call_args_list[0].args, ("user", "repeat this"))
+        self.assertEqual(add_to_history.call_args_list[1].args, ("assistant", "cached answer"))
         completion.assert_not_called()
 
     def test_situation_prompt_stays_within_the_50_token_budget(self):
@@ -407,16 +411,73 @@ class LLMProviderTests(unittest.TestCase):
                 request = provider.client.chat.completions.create.call_args.kwargs
                 names = {item["function"]["name"] for item in request["tools"]}
                 self.assertIn("launch_app", names)
-                self.assertTrue(
-                    memory.return_value.process_interaction.call_args.kwargs[
-                        "contains_tool_result"
-                    ]
-                )
+                memory.return_value.process_interaction.assert_not_called()
         request = provider.client.chat.completions.create.call_args.kwargs
         names = {item["function"]["name"] for item in request["tools"]}
         self.assertTrue({"launch_app", "close_app", "get_running_apps", "focus_window"} <= names)
         self.assertEqual(request["tool_choice"], "required")
         self.assertEqual(calls, [{"id": "open-1", "name": "launch_app", "arguments": {"app_name": "네이버 웨일"}}])
+
+    def test_chat_with_tools_records_plain_response_once(self):
+        provider = self._stream_provider()
+        provider.client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[])),
+        ])
+        request_context = {
+            "intent": "conversation",
+            "force_tool": False,
+            "preferred_tool": None,
+        }
+        with (
+            patch.object(provider, "_resolve_route", return_value=(provider.client, "openai", "test")),
+            patch.object(provider, "_build_system", return_value="system"),
+            patch.object(provider, "_get_skill_context", return_value={}),
+            patch.object(provider, "_analyze_request", return_value=request_context),
+            patch.object(provider, "_select_tools_for_request", return_value=([], "auto")),
+            patch.object(provider, "_load_int_setting", return_value=0),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            memory_manager.return_value.clean_response.side_effect = lambda value: value
+            result = provider.chat_with_tools("hello")
+
+        self.assertEqual(result, ("done", []))
+        memory_manager.return_value.process_interaction.assert_called_once_with(
+            "hello",
+            "done",
+            memory_extractor=provider.extract_memory_suggestions,
+        )
+        self.assertEqual(
+            provider._history_snapshot()[-2:],
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "done"},
+            ],
+        )
+
+        provider.client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="[FACT: favorite_color=blue] [PREF: food=tea]",
+                    tool_calls=[],
+                ),
+            ),
+        ])
+        with (
+            patch.object(provider, "_resolve_route", return_value=(provider.client, "openai", "test")),
+            patch.object(provider, "_build_system", return_value="system"),
+            patch.object(provider, "_get_skill_context", return_value={}),
+            patch.object(provider, "_analyze_request", return_value=request_context),
+            patch.object(provider, "_select_tools_for_request", return_value=([], "auto")),
+            patch.object(provider, "_load_int_setting", return_value=0),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            memory_manager.return_value.clean_response.side_effect = lambda value: value
+            provider.chat_with_tools("hello", record_interaction=False)
+
+        memory_manager.return_value.process_interaction.assert_not_called()
+        memory_manager.return_value.extract_response_tags.assert_called_once_with(
+            "[FACT: favorite_color=blue] [PREF: food=tea]", "hello"
+        )
 
     def test_unsaved_chat_sends_current_message_without_memory_side_effects(self):
         for backend in ("openai", "anthropic"):

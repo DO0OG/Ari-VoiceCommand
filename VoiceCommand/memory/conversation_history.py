@@ -321,15 +321,17 @@ class ConversationHistory:
                 with open(self.file_path, "r", encoding="utf-8") as f:
                     payload = json.load(f)
                 if isinstance(payload, list):
-                    self.active = list(payload)[-self.MAX_ACTIVE:]
+                    self.active = list(payload)
                     self.summaries = []
                 else:
-                    self.active = list(payload.get("active", []))[-self.MAX_ACTIVE:]
+                    self.active = list(payload.get("active", []))
                     self.summaries = list(payload.get("summaries", []))[-self.MAX_SUMMARIES:]
                 self.active = [
                     item for item in self.active
                     if not self._is_internal_entry(item.get("user", ""), item.get("ai", ""))
-                ][-self.MAX_ACTIVE:]
+                ]
+                if len(self.active) > self.MAX_ACTIVE:
+                    self._compress_oldest()
                 logging.info(
                     "대화 기록 로드: active=%s, summaries=%s",
                     len(self.active),

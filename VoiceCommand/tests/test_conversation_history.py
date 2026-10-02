@@ -159,6 +159,26 @@ class ConversationHistoryTests(unittest.TestCase):
             self.assertEqual(len(history.active), 1)
             self.assertEqual(history.active[0]["user"], "실사용 질문")
 
+    def test_load_preserves_overflow_entries_and_retries_compression(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history = self._make_history(tmp)
+            entries = [
+                {"timestamp": str(number), "user": f"user {number}", "ai": f"answer {number}"}
+                for number in range(history.MAX_ACTIVE + 3)
+            ]
+            with open(history.file_path, "w", encoding="utf-8") as handle:
+                json.dump({"active": entries, "summaries": []}, handle)
+
+            with patch.object(history, "_compress_oldest") as compress_oldest:
+                history.load()
+                self.assertEqual(len(history.active), len(entries))
+                compress_oldest.assert_called_once_with()
+                history.save()
+
+            with open(history.file_path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            self.assertEqual(len(payload["active"]), len(entries))
+
     def test_async_compression_keeps_active_entries_until_summary_finishes(self):
         history = self._make_history(tempfile.gettempdir())
         history.MAX_ACTIVE = 2

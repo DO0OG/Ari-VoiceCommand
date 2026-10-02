@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 
 from commands.ai_command import AICommand
@@ -272,7 +272,7 @@ class AICommandTests(unittest.TestCase):
             "favorite drink", "tea", source="user_request", confidence=1.0,
             ttl_days=0, force=True,
         )
-        memory_index.index_fact.assert_called_once_with("favorite drink", "tea", 1.0)
+        memory_index.index_fact.assert_not_called()
         self.assertEqual(result, "기억했어요: tea")
 
     def test_memory_remember_rejects_non_explicit_turn(self):
@@ -289,6 +289,7 @@ class AICommandTests(unittest.TestCase):
         command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
         command._current_goal = "forget favorite drink"
         context = Mock()
+        context.get_preferences_snapshot.return_value = {}
         context.get_facts_snapshot.return_value = {
             "favorite drink": {"value": "tea"}
         }
@@ -302,7 +303,7 @@ class AICommandTests(unittest.TestCase):
 
         get_manager.return_value.request_confirmation.assert_called_once()
         context.delete_fact.assert_called_once_with(
-            "favorite drink", expected_value="tea"
+            "favorite drink", delete_conversations=True, expected_value="tea"
         )
         self.assertEqual(result, "기억을 잊었어요: favorite drink")
 
@@ -457,7 +458,7 @@ class AICommandTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(command._sanitize_user_facing_text(text), text)
 
-    def test_run_interaction_strips_trailing_symbol_tokens_before_history(self):
+    def test_run_interaction_strips_trailing_symbol_tokens(self):
         class _Assistant:
             def chat_with_tools(self, text, include_context=True):
                 del text, include_context
@@ -468,12 +469,157 @@ class AICommandTests(unittest.TestCase):
             patch.object(command, "try_fast_path", return_value=None),
             patch.object(command, "_get_skill_context", return_value={}),
             patch.object(command, "_start_instant_ack", return_value=None),
-            patch("memory.conversation_history.add_conversation") as add_conversation,
         ):
             response = command.run_interaction("What time is it?")
 
         self.assertEqual(response, "The time is 23:09.")
-        self.assertEqual(add_conversation.call_args.args[1], "The time is 23:09.")
+
+    def test_fast_path_records_conversation_through_memory_manager(self):
+        class _Assistant:
+            def __init__(self):
+                self.history = []
+
+            def add_to_history(self, role, content):
+                self.history.append((role, content))
+
+        assistant = _Assistant()
+        command = AICommand(assistant, lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: object()
+
+        def execute_fast_path(*args, **kwargs):
+            command._emit_user_message("local answer")
+            return True
+
+        with patch.object(command, "_execute_fast_path_result", side_effect=execute_fast_path), \
+             patch("memory.memory_manager.get_memory_manager") as memory_manager:
+            response = command.run_interaction("local question")
+
+        self.assertEqual(response, "local answer")
+        self.assertEqual(assistant.history, [
+            ("user", "local question"),
+            ("assistant", "local answer"),
+        ])
+        memory_manager.return_value.process_interaction.assert_called_once_with(
+            "local question", "local answer", data_source="local", lang=ANY
+        )
+
+    def test_plain_response_records_metadata_with_assistant_without_record_option(self):
+        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        skill_ctx = {
+            "skills": [SimpleNamespace(name="test-skill")],
+            "prompt": "",
+            "required_tool_names": [],
+            "preferred_tool": "",
+            "force_web_search": False,
+            "escalate_to_agent": False,
+            "search_query_template": "",
+        }
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value=skill_ctx),
+            patch.object(command, "_get_current_language", return_value="ja"),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            result = command.run_interaction("hello")
+
+        self.assertTrue(result)
+        memory_manager.return_value.process_interaction.assert_called_once_with(
+            "hello",
+            result,
+            contains_tool_result=False,
+            memory_extractor=None,
+            extract_response_info=False,
+            skill_used="test-skill",
+            data_source="",
+            lang="ja",
+        )
+
+    def test_chat_only_assistant_records_interaction_once(self):
+        class _ChatOnlyAssistant:
+            def chat(self, text, include_context=True):
+                return "hello back"
+
+        command = AICommand(_ChatOnlyAssistant(), lambda _message: None, {"enabled": False})
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            self.assertEqual(command.run_interaction("hello"), "hello back")
+
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertEqual(
+            memory_manager.return_value.process_interaction.call_args.args,
+            ("hello", "hello back"),
+        )
+
+    def test_cancelled_response_uses_successful_marker_without_duplicate_history(self):
+        class _HistoryAssistant:
+            def __init__(self):
+                self.history = []
+                self.marker_succeeded = False
+
+            def add_to_history(self, role, content):
+                self.history.append({"role": role, "content": content})
+
+            def chat_with_tools(self, _text, stream_callback=None, **_kwargs):
+                self.add_to_history("user", "question")
+                self.add_to_history("assistant", "partial")
+                stream_callback("partial")
+                return "partial plus hidden", []
+
+            def mark_last_response_interrupted(self, _expected, replacement):
+                self.history[-1]["content"] = replacement
+                self.marker_succeeded = True
+                return True
+
+        assistant = _HistoryAssistant()
+        command = AICommand(assistant, lambda _message: None, {"enabled": False})
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager"),
+        ):
+            command.run_interaction(
+                "question",
+                stream_callback=lambda _chunk: command.cancel_current_response(),
+            )
+            self.assertTrue(assistant.marker_succeeded)
+        self.assertEqual(
+            [item["role"] for item in assistant.history], ["user", "assistant"]
+        )
+        self.assertIn("응답 중단", assistant.history[-1]["content"])
+
+    def test_plain_response_recovered_as_tool_is_recorded_once_as_final_result(self):
+        assistant = _FakeAssistant()
+        command = AICommand(assistant, lambda msg: None, {"enabled": False})
+        command._dispatch["json_echo"] = lambda args: "done"
+        recovered_call = {
+            "id": "call-1",
+            "name": "json_echo",
+            "arguments": {"value": "done"},
+        }
+        with (
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_recover_tool_calls_from_response", return_value=[recovered_call]),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            result = command.run_interaction("run test")
+
+        # 반환값에는 복구 전 일반 응답도 이어 붙지만, 기록은 최종 응답 한 번이다.
+        self.assertTrue(result.endswith("done"))
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertEqual(
+            memory_manager.return_value.process_interaction.call_args.args[1], "done"
+        )
+        self.assertTrue(
+            memory_manager.return_value.process_interaction.call_args.kwargs[
+                "contains_tool_result"
+            ]
+        )
 
     def test_sanitize_user_facing_text_discards_json_and_code_fences(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
@@ -505,7 +651,7 @@ class AICommandTests(unittest.TestCase):
 
         tool_results = []
         with patch("core.config_manager.ConfigManager.get", return_value=True), \
-             patch("memory.conversation_history.add_conversation") as add_conversation:
+             patch("memory.memory_manager.get_memory_manager") as memory_manager:
             response = command.run_interaction(
                 "메모장을 열어줘",
                 stream_callback=streamed.append,
@@ -518,8 +664,8 @@ class AICommandTests(unittest.TestCase):
         self.assertIn("앱을 실행했습니다.", assistant.recorded_results[0][2])
         self.assertEqual(streamed, ["앱을 실행했습니다."])
         self.assertEqual(tool_results, [("launch_app", "메모장")])
-        add_conversation.assert_called_once()
-        self.assertIn("앱을 실행했습니다.", add_conversation.call_args.args[1])
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertIn("앱을 실행했습니다.", memory_manager.return_value.process_interaction.call_args.args[1])
 
     def test_tool_followup_handles_failures_and_empty_results(self):
         cases = (
@@ -709,7 +855,7 @@ class AICommandTests(unittest.TestCase):
         with (
             patch.object(command, "try_fast_path", return_value=None),
             patch.object(command, "_get_skill_context", return_value={}),
-            patch("memory.conversation_history.add_conversation") as add_conversation,
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
         ):
             worker = threading.Thread(
                 target=lambda: result.append(
@@ -730,8 +876,8 @@ class AICommandTests(unittest.TestCase):
             result,
             ["표시된 문장.\n\n(응답 중단)"],
         )
-        add_conversation.assert_called_once()
-        self.assertEqual(add_conversation.call_args.args[1], result[0])
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertEqual(memory_manager.return_value.process_interaction.call_args.args[1], result[0])
 
     def test_busy_run_interaction_notifies_once_per_five_seconds(self):
         now = [100.0]
@@ -813,15 +959,18 @@ class AICommandTests(unittest.TestCase):
         command = AICommand(_AgentTaskAssistant(), lambda msg: None, {"enabled": False})
         command._dispatch["run_agent_task"] = lambda args: "작업 실패 (2회 시도). 계획 수립에 실패했습니다. 실행 보고서는 바탕화면 Ari Reports 폴더의 agent_run_test.md에 저장했습니다."
 
-        with patch("memory.conversation_history.add_conversation") as add_conversation:
+        with patch("memory.memory_manager.get_memory_manager") as memory_manager:
             combined = command.run_interaction("VoiceCommand 저장소 전체 파악 후 코드 변경 및 검증")
 
         self.assertIn("실행 보고서", combined)
-        add_conversation.assert_called_once()
-        self.assertIn("실행 보고서", add_conversation.call_args[0][1])
+        memory_manager.return_value.process_interaction.assert_called_once()
+        self.assertIn("실행 보고서", memory_manager.return_value.process_interaction.call_args.args[1])
 
     def test_script_skill_escalation_routes_to_run_agent_task_and_records_metadata(self):
-        command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+        assistant = _FakeAssistant()
+        assistant.history = []
+        assistant.add_to_history = lambda role, content: assistant.history.append((role, content))
+        command = AICommand(assistant, lambda msg: None, {"enabled": False})
         command._dispatch["run_agent_task"] = lambda args: "작업 완료. 스크립트 스킬을 실행했습니다."
 
         skill_ctx = {
@@ -834,14 +983,43 @@ class AICommandTests(unittest.TestCase):
             "search_query_template": "",
         }
 
-        with patch.object(command, "_get_skill_context", return_value=skill_ctx):
-            with patch("memory.conversation_history.add_conversation") as add_conversation:
-                combined = command.run_interaction("실록에서 세종 기록 찾아줘")
+        with (
+            patch.object(command, "_get_skill_context", return_value=skill_ctx),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            combined = command.run_interaction("실록에서 세종 기록 찾아줘")
+            self.assertIn("작업 완료.", combined)
+            memory_manager.return_value.process_interaction.assert_called_once()
+            self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["skill_used"], "joseon-sillok-search")
+            self.assertEqual(memory_manager.return_value.process_interaction.call_args.kwargs["data_source"], "agent")
+        self.assertEqual(assistant.history[0], ("user", "실록에서 세종 기록 찾아줘"))
+        self.assertEqual(assistant.history[1][0], "assistant")
+        self.assertIn("작업 완료.", assistant.history[1][1])
 
-        self.assertIn("작업 완료.", combined)
-        add_conversation.assert_called_once()
-        self.assertEqual(add_conversation.call_args.kwargs["skill_used"], "joseon-sillok-search")
-        self.assertEqual(add_conversation.call_args.kwargs["data_source"], "agent")
+    def test_groq_assistant_forwards_record_interaction_option(self):
+        from assistant.groq_assistant import GroqAssistant
+
+        provider = Mock()
+        provider.chat_with_tools.return_value = ("response", [])
+        assistant = GroqAssistant()
+        command = AICommand(assistant, lambda _message: None, {"enabled": False})
+        with (
+            patch("agent.llm_provider.get_llm_provider", return_value=provider),
+            patch.object(command, "try_fast_path", return_value=None),
+            patch.object(command, "_get_skill_context", return_value={}),
+            patch.object(command, "_start_instant_ack", return_value=None),
+            patch("memory.memory_manager.get_memory_manager") as memory_manager,
+        ):
+            self.assertEqual(command.run_interaction("question"), "response")
+            provider.chat_with_tools.assert_called_once_with(
+                "question",
+                include_context=True,
+                stream_callback=None,
+                cancel_event=ANY,
+                record_interaction=False,
+            )
+            memory_manager.return_value.process_interaction.assert_called_once()
 
     def test_extract_saved_path_ignores_scanned_markdown_path_without_save_signal(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

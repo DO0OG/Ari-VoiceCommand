@@ -249,6 +249,47 @@ class MemoryIndex:
             )
             return max(0, cursor.rowcount)
 
+    def sync_facts(self, facts: dict) -> None:
+        expected = {}
+        for key, raw in (facts or {}).items():
+            if isinstance(raw, dict):
+                value = str(raw.get("value", "") or "")
+                confidence = float(raw.get("confidence", 0.0))
+            else:
+                value = str(raw or "")
+                confidence = 0.0
+            if key and value:
+                expected[self._fact_ref_key(str(key))] = (
+                    value,
+                    confidence,
+                    f"{key}: {value} (confidence={confidence:.2f})",
+                )
+
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT rowid, ref_key, content FROM memory_entries "
+                "WHERE entry_type='fact'"
+            ).fetchall()
+        indexed = {}
+        stale_rowids = []
+        for rowid, raw_ref_key, content in rows:
+            ref_key = str(raw_ref_key or "")
+            fact_key = ref_key.removeprefix("fact:")
+            if ref_key not in expected and not fact_key.startswith("선호: "):
+                stale_rowids.append((rowid,))
+            else:
+                indexed.setdefault(ref_key, []).append((rowid, str(content)))
+        if stale_rowids:
+            with self._lock, self._connect() as conn:
+                conn.executemany(
+                    "DELETE FROM memory_entries WHERE rowid=?", stale_rowids
+                )
+        for ref_key, (value, confidence, content) in expected.items():
+            entries = indexed.get(ref_key, [])
+            if len(entries) != 1 or entries[0][1] != content:
+                key = ref_key[len("fact:"):]
+                self.index_fact(key, value, confidence)
+
     def delete_conversations_containing(self, text: str) -> int:
         needle = str(text or "").casefold()
         if not needle:
@@ -407,6 +448,10 @@ class MemoryIndex:
     @staticmethod
     def _fact_ref_key(key: str) -> str:
         return f"fact:{key}"
+
+    @staticmethod
+    def preference_key(category: str, value: str) -> str:
+        return f"선호: {category}={value}"
 
     def search_by_date(self, start: datetime, end: datetime) -> List[MemorySearchResult]:
         try:

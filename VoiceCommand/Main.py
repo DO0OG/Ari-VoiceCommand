@@ -578,6 +578,21 @@ def main():
 
         ari_core = AriCore()
 
+        def _sync_memory_fact_index():
+            try:
+                from memory.user_context import get_context_manager
+
+                get_context_manager().sync_fact_index()
+            except Exception as exc:
+                logging.warning("기억 사실 색인을 맞추지 못했습니다: %s", exc)
+
+        import threading
+        threading.Thread(
+            target=_sync_memory_fact_index,
+            name="memory-fact-index-sync",
+            daemon=True,
+        ).start()
+
         # 전역 오디오 초기화는 선택 기능이므로 장치/권한 오류로 앱 시작을 중단하지 않는다.
         from audio.audio_manager import initialize_global_audio
         initialize_global_audio()

@@ -1837,8 +1837,10 @@ class AICommand(FastPathMixin, BaseCommand):
                             logging.debug("빠른 처리 대화 이력 기록 생략: %s", exc)
                     lang = self._get_current_language()
                     try:
-                        from memory.conversation_history import add_conversation
-                        add_conversation(text, response, data_source="local", lang=lang)
+                        from memory.memory_manager import get_memory_manager
+                        get_memory_manager().process_interaction(
+                            text, response, data_source="local", lang=lang
+                        )
                     except Exception as exc:
                         logging.debug("빠른 처리 대화 기록 저장 생략: %s", exc)
                     try:
@@ -1855,12 +1857,17 @@ class AICommand(FastPathMixin, BaseCommand):
             instant_ack = self._start_instant_ack(text, skill_ctx, cancel_event)
             data_source = ""
             lang = self._get_current_language()
+            uses_chat_with_tools = hasattr(self.ai_assistant, 'chat_with_tools')
+            direct_skill_escalation = False
+            response = ""
+            tool_calls = []
 
-            if hasattr(self.ai_assistant, 'chat_with_tools'):
+            if uses_chat_with_tools:
                 if self.learning_mode_ref.get('enabled'):
                     self._record_user_pattern(text)
 
                 if skill_ctx.get("escalate_to_agent"):
+                    direct_skill_escalation = True
                     tool_calls = [self._build_script_skill_escalation_tool_call(text, skill_ctx)]
                 else:
                     response, tool_calls = self._invoke_with_optional_stream(
@@ -1869,6 +1876,7 @@ class AICommand(FastPathMixin, BaseCommand):
                         include_context=True,
                         stream_callback=emit_stream if stream_callback else None,
                         cancel_event=cancel_event,
+                        record_interaction=False,
                     )
                     mark_first_response()
 
@@ -1996,8 +2004,8 @@ class AICommand(FastPathMixin, BaseCommand):
                 if partial:
                     interrupted_response = f"{partial}\n\n{_('(응답 중단)')}"
                     try:
-                        from memory.conversation_history import add_conversation
-                        add_conversation(
+                        from memory.memory_manager import get_memory_manager
+                        get_memory_manager().process_interaction(
                             text,
                             interrupted_response,
                             skill_used=skill_used,
@@ -2016,20 +2024,42 @@ class AICommand(FastPathMixin, BaseCommand):
                     marker_record = getattr(
                         self.ai_assistant, "mark_last_response_interrupted", None
                     )
+                    marked = False
                     if callable(marker_record):
                         try:
-                            marker_record(response or partial, interrupted_response)
+                            marked = bool(
+                                marker_record(response or partial, interrupted_response)
+                            )
                         except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                             logging.debug("LLM 중단 기록 갱신 생략: %s", exc)
+                    history_recorder = getattr(self.ai_assistant, "add_to_history", None)
+                    if callable(history_recorder) and not marked:
+                        try:
+                            history_recorder("assistant", interrupted_response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("중단 응답 문맥 기록 생략: %s", exc)
                     return interrupted_response
                 return ""
 
             if response:
+                if direct_skill_escalation:
+                    history_recorder = getattr(self.ai_assistant, "add_to_history", None)
+                    if callable(history_recorder):
+                        try:
+                            history_recorder("user", text)
+                            history_recorder("assistant", response)
+                        except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                            logging.debug("스킬 승격 문맥 기록 생략: %s", exc)
                 try:
-                    from memory.conversation_history import add_conversation
-                    add_conversation(
+                    from memory.memory_manager import get_memory_manager
+                    get_memory_manager().process_interaction(
                         text,
                         response,
+                        contains_tool_result=bool(tool_calls),
+                        memory_extractor=getattr(
+                            self.ai_assistant, "extract_memory_suggestions", None
+                        ),
+                        extract_response_info=False,
                         skill_used=skill_used,
                         data_source=data_source,
                         lang=lang,
@@ -2122,6 +2152,7 @@ class AICommand(FastPathMixin, BaseCommand):
         *args,
         stream_callback=None,
         cancel_event=None,
+        record_interaction=None,
         **kwargs,
     ):
         try:
@@ -2146,6 +2177,10 @@ class AICommand(FastPathMixin, BaseCommand):
             kwargs["stream_callback"] = stream_callback
         if cancel_event is not None and ("cancel_event" in parameters or accepts_kwargs):
             kwargs["cancel_event"] = cancel_event
+        if record_interaction is not None and (
+            "record_interaction" in parameters or accepts_kwargs
+        ):
+            kwargs["record_interaction"] = record_interaction
         return func(*args, **kwargs)
 
     def _should_emit_preface_response(self, response: str) -> bool:

@@ -94,9 +94,9 @@ class TextInterfaceThread(QThread):
                 from commands.ai_command import AICommand
                 for command in _command_registry.commands:
                     if isinstance(command, AICommand):
-                        result = command.run_interaction(self.query, stream_callback=self._on_stream_chunk)
-                        if result:
-                            return result
+                        return command.run_interaction(
+                            self.query, stream_callback=self._on_stream_chunk
+                        )
         except Exception as e:
             logger.error("AICommand 경로 실행 실패: %s", e)
 
@@ -400,13 +400,14 @@ class TextInterface(QMainWindow):
         interrupted = _("(응답 중단)") in final_response
         if self._stream_message_index is not None:
             self.chat_widget.update_message(self._stream_message_index, final_response)
-        else:
+        elif final_response:
+            # 첫 출력 전에 취소된 요청은 보여 줄 내용이 없다.
             self.chat_widget.add_message(final_response, is_user=False)
         self._stream_message_index = None
         self._stream_response_buffer = ""
         self.scroll_to_bottom()
         self.refresh_status_panel()
-        if self.tts_callback and not interrupted and not self._speech_stopped:
+        if self.tts_callback and final_response and not interrupted and not self._speech_stopped:
             from core.VoiceCommand import set_active_conversation_response
             set_active_conversation_response(final_response)
             # 스트리밍 중 문장 단위 TTS가 이미 시작된 경우: 남은 버퍼만 처리
