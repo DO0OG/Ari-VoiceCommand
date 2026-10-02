@@ -12,13 +12,10 @@ from typing import List, Optional, Dict
 
 from agent.execution_analysis import is_read_only_step_content
 from agent.learning_metrics import get_learning_metrics
+from agent.llm_retry import extract_retry_delay_seconds, is_retryable_llm_error
 from agent.planner_json_utils import (
-    extract_balanced,
-    extract_partial_object,
     parse_json_array,
     parse_json_object,
-    recover_partial_array,
-    recover_partial_object,
 )
 from agent.planner.action_step import ActionStep
 from agent.planner.template_plans import TemplatePlansMixin
@@ -33,15 +30,6 @@ _DEV_ACTION_RE = re.compile(
     re.IGNORECASE,
 )
 _DEV_REPO_RE = re.compile(r"(저장소|repository|codebase|\brepo\b|프로젝트)", re.IGNORECASE)
-_LLM_RETRYABLE_ERROR_RE = re.compile(
-    r"(429|resource_exhausted|quota exceeded|rate limit|retry in|retrydelay|temporar|timeout|overloaded|too many requests)",
-    re.IGNORECASE,
-)
-_LLM_RETRY_DELAY_RE_LIST = (
-    re.compile(r"retry in\s*([\d.]+)\s*s", re.IGNORECASE),
-    re.compile(r"retrydelay['\"]?\s*[:=]\s*['\"]?([\d.]+)\s*s", re.IGNORECASE),
-    re.compile(r"'retryDelay':\s*'([\d.]+)s'", re.IGNORECASE),
-)
 _DISALLOWED_DEVELOPER_PATTERNS = (
     (re.compile(r"step_outputs\s*\[\s*\d+\s*\]"), "numeric step_outputs access"),
     (re.compile(r"os\.environ\s*\[\s*['\"]repo_root['\"]\s*\]"), "repo_root env access"),
@@ -608,7 +596,7 @@ class AgentPlanner(TemplatePlansMixin):
                             else e
                         )
                         has_fallback = candidate_index < len(candidates) - 1
-                        delay = self._extract_retry_delay_seconds(e, attempt) if self._is_retryable_llm_error(e) else 0.0
+                        delay = extract_retry_delay_seconds(e, attempt) if is_retryable_llm_error(e) else 0.0
                         if has_fallback and delay >= 8.0:
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
@@ -620,7 +608,7 @@ class AgentPlanner(TemplatePlansMixin):
                             )
                             failed = True
                             break
-                        if attempt < 2 and self._is_retryable_llm_error(e):
+                        if attempt < 2 and is_retryable_llm_error(e):
                             logging.warning(
                                 "[Planner] LLM 일시 오류 (%s) → %.1fs 대기 후 재시도: %s",
                                 target_model,
@@ -629,7 +617,7 @@ class AgentPlanner(TemplatePlansMixin):
                             )
                             time.sleep(delay)
                             continue
-                        if has_fallback and self._is_retryable_llm_error(e):
+                        if has_fallback and is_retryable_llm_error(e):
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
                                 "[Planner] %s 호출 실패 → 선택된 대체 모델 %s로 전환: %s",
@@ -834,21 +822,6 @@ class AgentPlanner(TemplatePlansMixin):
             return False
         return "voicecommand/tests/" in normalized or "voicecommand.tests." in normalized
 
-    def _is_retryable_llm_error(self, error: Exception) -> bool:
-        return bool(_LLM_RETRYABLE_ERROR_RE.search(str(error or "")))
-
-    def _extract_retry_delay_seconds(self, error: Exception, attempt: int) -> float:
-        text = str(error or "")
-        for pattern in _LLM_RETRY_DELAY_RE_LIST:
-            match = pattern.search(text)
-            if match:
-                try:
-                    return max(0.5, min(float(match.group(1)), 60.0))
-                except Exception as exc:
-                    logging.debug("[Planner] 재시도 지연 파싱 실패, 다음 패턴 확인: %s", exc)
-                    continue
-        return min(2.0 * (attempt + 1), 10.0)
-
     def _should_continue_llm_output(self, finish_reason: str, text: str) -> bool:
         normalized = (finish_reason or "").lower()
         if normalized in {"length", "max_tokens"}:
@@ -867,18 +840,6 @@ class AgentPlanner(TemplatePlansMixin):
 
     def _parse_object(self, text: str) -> dict:
         return parse_json_object(text)
-
-    def _recover_partial_array(self, text: str) -> list:
-        return recover_partial_array(text)
-
-    def _recover_partial_object(self, text: str) -> dict:
-        return recover_partial_object(text)
-
-    def _extract_partial_object(self, text: str, start: int) -> tuple[str, int]:
-        return extract_partial_object(text, start)
-
-    def _extract_balanced(self, text: str, open_char: str, close_char: str) -> str:
-        return extract_balanced(text, open_char, close_char)
 
     def _fmt_context(self, context: Dict[str, str]) -> str:
         if not context:

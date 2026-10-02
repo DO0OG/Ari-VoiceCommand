@@ -16,8 +16,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 from agent.assistant_text_utils import (
     analyze_tool_request,
     clean_tool_artifact_text,
-    contains_specific_goal_markers,
-    is_generic_agent_explanation,
     resolve_agent_task_goal,
     strip_trailing_symbol_tokens,
 )
@@ -1190,12 +1188,6 @@ class AICommand(FastPathMixin, BaseCommand):
                 if path_match:
                     return path_match.group(1)
         return ""
-
-    def _is_generic_agent_explanation(self, text: str) -> bool:
-        return is_generic_agent_explanation(text)
-
-    def _contains_specific_goal_markers(self, text: str) -> bool:
-        return contains_specific_goal_markers(text)
 
     def _resolve_agent_task_goal(self, args: dict) -> str:
         goal = str(args.get("goal", "") or "").strip()

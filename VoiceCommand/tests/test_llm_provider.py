@@ -1296,8 +1296,6 @@ class LLMProviderTests(unittest.TestCase):
         manager.get_current_time_prompt.return_value = "시간 블록"
         profile = Mock()
         profile.get_prompt_injection.return_value = "프로필 블록"
-        knowledge_base = Mock()
-        knowledge_base.prompt_for.return_value = "지식 베이스 블록"
 
         with patch.object(
             provider.rp_generator,
@@ -1307,7 +1305,7 @@ class LLMProviderTests(unittest.TestCase):
              patch("i18n.translator.get_language", return_value="ko"), \
              patch("memory.user_profile_engine.get_user_profile_engine", return_value=profile), \
              patch("memory.memory_manager.get_memory_manager", return_value=manager), \
-             patch("memory.knowledge_base.get_knowledge_base", return_value=knowledge_base), \
+\
              patch.object(provider, "_get_skill_context", return_value={"prompt": "스킬 블록"}):
             first = provider._build_system(include_context=True, user_message="첫 요청")
             second = provider._build_system(include_context=True, user_message="둘째 요청")
@@ -1324,7 +1322,6 @@ class LLMProviderTests(unittest.TestCase):
             "프로필 블록",
             "사실 블록",
             "요약 블록",
-            "지식 베이스 블록",
             "스킬 블록",
             "시간 블록",
         )

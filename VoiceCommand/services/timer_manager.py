@@ -109,13 +109,6 @@ class TimerManager:
                 self.tts_callback(_("'{name}' 타이머를 취소했습니다.", name=target_name))
         return True
 
-    def get_remaining_time(self):
-        with self._lock:
-            if not self._timers:
-                return None
-            latest = max(self._timers.values(), key=lambda item: item.order)
-            return latest.remaining_seconds()
-
     def list_timers(self) -> list[dict]:
         with self._lock:
             return [

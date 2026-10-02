@@ -36,24 +36,6 @@ class _MonitorInfo(ctypes.Structure):
     ]
 
 
-def get_foreground_window_title() -> str:
-    """현재 활성 창 제목을 소문자로 반환한다."""
-    if sys.platform != "win32":
-        return ""
-    try:
-        hwnd = _dll("user32").GetForegroundWindow()
-        if not hwnd:
-            return ""
-        length = _dll("user32").GetWindowTextLengthW(hwnd)
-        if length == 0:
-            return ""
-        buf = ctypes.create_unicode_buffer(length + 1)
-        _dll("user32").GetWindowTextW(hwnd, buf, length + 1)
-        return buf.value.lower()
-    except (AttributeError, OSError, TypeError, ValueError, ctypes.ArgumentError):
-        return ""
-
-
 def get_foreground_process_name() -> str:
     """현재 활성 창 프로세스 이름을 소문자로 반환한다."""
     if sys.platform != "win32":
@@ -250,12 +232,6 @@ def get_foreground_window_rect() -> tuple[int, int, int, int] | None:
     if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
         return None
     return rect.left, rect.top, rect.right, rect.bottom
-
-
-def foreground_covers_screen(width: int, height: int) -> bool:
-    """활성 창이 화면 크기와 거의 같은지 확인한다."""
-    rect = get_foreground_window_rect()
-    return rect_covers_screen(rect, width, height)
 
 
 def rect_covers_screen(

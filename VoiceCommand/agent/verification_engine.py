@@ -4,11 +4,12 @@
 개발자 목표 전용 사전 검사와 RealVerifier / Planner 폴백을 포함한다.
 """
 import logging
+import os
 from typing import List, Optional, Tuple
 
 from agent.agent_planner import AgentPlanner
 
-from agent.execution_analysis import is_read_only_step_content
+from agent.execution_analysis import extract_developer_result_paths, is_read_only_step_content
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
@@ -106,63 +107,16 @@ class VerificationEngine:
         step_results: List,
     ) -> str:
         """ExecutionEngine 의 동일 메서드에 위임 — 중복을 피하기 위해 planner만 직접 사용."""
-        import json
-        import os
-        import re
-
-        def _extract_paths(text: str) -> List[str]:
-            candidates: List[str] = []
-            normalized_repo_root = (
-                os.path.abspath(os.getcwd()).replace("\\", "/").lower()
-            )
-
-            def add_candidate(value: str) -> None:
-                if not value:
-                    return
-                normalized = (
-                    str(value).strip().strip('"').strip("'").replace("\\", "/")
-                )
-                if not normalized:
-                    return
-                lowered = normalized.lower().lstrip("./")
-                if re.match(r"^[a-z]:/", lowered):
-                    repo_prefix = normalized_repo_root + "/"
-                    if lowered.startswith(repo_prefix):
-                        lowered = lowered[len(repo_prefix):]
-                if lowered and lowered not in candidates:
-                    candidates.append(lowered)
-
-            def visit(value) -> None:
-                if isinstance(value, str):
-                    for match in re.findall(
-                        r"(?:VoiceCommand|docs|tests|market|supabase|\.github|\.claude|\.idea)"
-                        r"[/\\][A-Za-z0-9_./\\-]+",
-                        value,
-                        flags=re.IGNORECASE,
-                    ):
-                        add_candidate(match)
-                elif isinstance(value, dict):
-                    for nested in value.values():
-                        visit(nested)
-                elif isinstance(value, list):
-                    for nested in value:
-                        visit(nested)
-
-            try:
-                payload = json.loads(text)
-            except Exception:
-                payload = None
-            if payload is not None:
-                visit(payload)
-            visit(text)
-            return candidates
+        repo_root = os.getcwd()
 
         for sr in step_results:
             step = getattr(sr, "step", None)
             exec_result = getattr(sr, "exec_result", None)
             content = getattr(step, "content", "") or ""
             output = getattr(exec_result, "output", "") or ""
-            for path in _extract_paths("\n".join([content, output])):
+            for path in extract_developer_result_paths(
+                "\n".join([content, output]), repo_root
+            ):
                 if not self.planner.is_allowed_developer_path(
                     path, goal=goal, context=None
                 ):

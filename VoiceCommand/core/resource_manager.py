@@ -270,14 +270,6 @@ class ResourceManager:
         return ResourceManager.get_bundle_path('images')
 
     @staticmethod
-    def get_theme_dir() -> str:
-        """테마 디렉토리 경로 반환 (appdata > 프로젝트/번들 순)."""
-        writable = ResourceManager.get_writable_path("theme")
-        if os.path.exists(writable):
-            return writable
-        return ResourceManager.get_bundle_path("theme")
-
-    @staticmethod
     def ensure_theme_files() -> str:
         """테마 JSON 파일을 사용자 편집 가능한 위치에 보장한다."""
         writable = ResourceManager.get_writable_path("theme")
@@ -317,25 +309,4 @@ class ResourceManager:
                         shutil.copy2(src, dst)
         except Exception as e:
             logging.warning("플러그인 파일 준비 실패: %s", e)
-        return writable
-
-    @staticmethod
-    def ensure_skill_files() -> str:
-        """스킬 폴더를 사용자 편집 가능한 위치에 보장한다."""
-        writable = ResourceManager.get_writable_path("skills")
-        source = ResourceManager.get_bundle_path("skills")
-        os.makedirs(writable, exist_ok=True)
-
-        try:
-            if os.path.isdir(source):
-                for name in os.listdir(source):
-                    src = os.path.join(source, name)
-                    dst = os.path.join(writable, name)
-                    if os.path.isdir(src):
-                        if not os.path.exists(dst):
-                            shutil.copytree(src, dst)
-                    elif not os.path.exists(dst):
-                        shutil.copy2(src, dst)
-        except Exception as e:
-            logging.warning("스킬 파일 준비 실패: %s", e)
         return writable

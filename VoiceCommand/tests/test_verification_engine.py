@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 
+from agent.execution_engine import ExecutionEngine
 from agent.verification_engine import VerificationEngine
 
 
@@ -140,6 +141,25 @@ class VerificationEngineTests(unittest.TestCase):
         self.assertFalse(verified)
         self.assertEqual(summary, "일부 단계 실패")
         planner.verify.assert_not_called()
+
+    def test_scope_violation_matches_execution_engine(self):
+        results = [_step_result(content="open('VoiceCommand/core/x.py')", output="docs/NOTES.md")]
+        seen = []
+
+        class _RecordingPlanner(_PlannerStub):
+            def is_allowed_developer_path(self, path, goal="", context=None):
+                seen.append(path)
+                return path != "docs/notes.md"
+
+        verification = VerificationEngine(_RecordingPlanner())
+        execution = ExecutionEngine.__new__(ExecutionEngine)
+        execution.planner = _RecordingPlanner()
+
+        expected = verification._find_developer_scope_violation("목표", results)
+        actual = execution._find_developer_scope_violation("목표", results)
+
+        self.assertIn("docs/notes.md", expected)
+        self.assertEqual(actual, expected)
 
 
 if __name__ == "__main__":

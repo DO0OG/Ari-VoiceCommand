@@ -14,6 +14,7 @@ from agent.execution_analysis import (
     extract_artifacts,
     is_read_only_step_content,
 )
+from agent.llm_retry import extract_retry_delay_seconds, is_retryable_llm_error
 from agent.ocr_helper import ocr_screen
 from agent.safety_checker import DangerLevel, get_safety_checker
 from i18n.translator import _
@@ -69,15 +70,6 @@ _DEVELOPER_FAILURE_HINTS = (
     "modulenotfounderror",
     "계획 수립에 실패",
     "실행 실패",
-)
-_LLM_RETRYABLE_ERROR_RE = re.compile(
-    r"(429|resource_exhausted|quota exceeded|rate limit|retry in|retrydelay|temporar|timeout|overloaded|too many requests)",
-    re.IGNORECASE,
-)
-_LLM_RETRY_DELAY_RE_LIST = (
-    re.compile(r"retry in\s*([\d.]+)\s*s", re.IGNORECASE),
-    re.compile(r"retrydelay['\"]?\s*[:=]\s*['\"]?([\d.]+)\s*s", re.IGNORECASE),
-    re.compile(r"'retryDelay':\s*'([\d.]+)s'", re.IGNORECASE),
 )
 _CONTINUE_SYNTAX_HINTS = (
     "unexpected eof",
@@ -451,7 +443,7 @@ class RealVerifier:
                             else e
                         )
                         has_fallback = candidate_index < len(candidates) - 1
-                        delay = self._extract_retry_delay_seconds(e, attempt) if self._is_retryable_llm_error(e) else 0.0
+                        delay = extract_retry_delay_seconds(e, attempt) if is_retryable_llm_error(e) else 0.0
                         if has_fallback and delay >= 8.0:
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
@@ -459,13 +451,13 @@ class RealVerifier:
                             )
                             failed = True
                             break
-                        if attempt < 2 and self._is_retryable_llm_error(e):
+                        if attempt < 2 and is_retryable_llm_error(e):
                             logging.warning(
                                 f"[RealVerifier] LLM 일시 오류 ({target_model}) → {delay:.1f}s 대기 후 재시도: {error_for_log}"
                             )
                             time.sleep(delay)
                             continue
-                        if has_fallback and self._is_retryable_llm_error(e):
+                        if has_fallback and is_retryable_llm_error(e):
                             next_model = candidates[candidate_index + 1][2]
                             logging.warning(
                                 f"[RealVerifier] {target_model} 호출 실패 → 선택된 대체 모델 {next_model}로 전환: {error_for_log}"
@@ -516,20 +508,6 @@ class RealVerifier:
         if not client or not target_model:
             return []
         return [(client, provider, target_model)]
-
-    def _is_retryable_llm_error(self, error: Exception) -> bool:
-        return bool(_LLM_RETRYABLE_ERROR_RE.search(str(error or "")))
-
-    def _extract_retry_delay_seconds(self, error: Exception, attempt: int) -> float:
-        text = str(error or "")
-        for pattern in _LLM_RETRY_DELAY_RE_LIST:
-            match = pattern.search(text)
-            if match:
-                try:
-                    return max(0.5, min(float(match.group(1)), 60.0))
-                except Exception:
-                    continue
-        return min(2.0 * (attempt + 1), 10.0)
 
     def _should_continue_planner_output(self, finish_reason: str, text: str) -> bool:
         normalized = (finish_reason or "").lower()

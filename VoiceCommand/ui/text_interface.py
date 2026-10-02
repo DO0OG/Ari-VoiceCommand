@@ -630,27 +630,6 @@ class TextInterface(QMainWindow):
         self.activateWindow()
         self.input_field.setFocus()
 
-    def close_with_animation(self) -> None:
-        self.anim.stop()
-        start_rect = self.geometry()
-        end_rect   = QRect(start_rect.x(), start_rect.y() + 30, start_rect.width(), start_rect.height())
-
-        self.anim.setEasingCurve(QEasingCurve.InBack)
-        self.anim.setStartValue(start_rect)
-        self.anim.setEndValue(end_rect)
-        self.anim.start()
-
-        try:
-            self.opacity_anim.finished.disconnect(self.hide)
-        except (RuntimeError, TypeError):
-            pass
-
-        self.opacity_anim.stop()
-        self.opacity_anim.setStartValue(self.windowOpacity())
-        self.opacity_anim.setEndValue(0.0)
-        self.opacity_anim.finished.connect(self.hide)
-        self.opacity_anim.start()
-
     def cleanup(self) -> None:
         thread = self._detach_processing_thread()
         if thread and thread.isRunning():

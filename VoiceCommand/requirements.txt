@@ -44,7 +44,6 @@ opencv-python-headless>=4.9.0.80
 
 # ── AI / LLM ───────────────────────────────────────────────────────────────────
 # OpenAI SDK: OpenAI, Groq, Mistral, Gemini, OpenRouter, NVIDIA NIM 공용
-groq>=0.11.0
 openai>=1.0.0
 anthropic>=0.25.0
 onnxruntime>=1.17.0
@@ -53,7 +52,6 @@ tokenizers>=0.19.0
 # ── TTS / 오디오 ───────────────────────────────────────────────────────────────
 ormsgpack>=1.5.0
 numpy>=1.26.0,<2  # NumPy 2.x는 shiboken6(PySide6), easyocr 등 C 확장과 충돌
-websockets==12.0
 edge-tts>=7.2.8,<8
 # elevenlabs>=1.0.0
 # torch>=2.0.0
@@ -88,7 +86,6 @@ comtypes>=1.4.1
 psutil>=5.9.0
 pycaw>=20230407
 pywin32>=306             # Windows API — 레지스트리·COM·셸·프로세스 관리
-wmi>=1.5.1               # CPU·GPU 온도·하드웨어 정보 (pywin32 기반)
 
 # ── 빌드 및 유틸리티 ───────────────────────────────────────────────────────────
 huggingface_hub>=0.22.0

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -232,3 +233,48 @@ def extract_workflow_hints(texts: Iterable[str]) -> List[str]:
             if compact:
                 hints.append(compact[:120])
     return list(dict.fromkeys(hints))
+
+
+def extract_developer_result_paths(text: str, repo_root: str) -> List[str]:
+    """실행 결과 텍스트에서 저장소 안 파일 경로 후보를 소문자 상대 경로로 뽑는다."""
+    candidates: List[str] = []
+    normalized_repo_root = os.path.abspath(repo_root).replace("\\", "/").lower()
+
+    def add_candidate(value: str) -> None:
+        if not value:
+            return
+        normalized = str(value).strip().strip('"').strip("'").replace("\\", "/")
+        if not normalized:
+            return
+        lowered = normalized.lower().lstrip("./")
+        if re.match(r"^[a-z]:/", lowered):
+            repo_prefix = normalized_repo_root + "/"
+            if lowered.startswith(repo_prefix):
+                lowered = lowered[len(repo_prefix):]
+        if lowered and lowered not in candidates:
+            candidates.append(lowered)
+
+    def visit(value) -> None:
+        if isinstance(value, str):
+            for match in re.findall(
+                r"(?:VoiceCommand|docs|tests|market|supabase|\.github|\.claude|\.idea)"
+                r"[/\\][A-Za-z0-9_./\\-]+",
+                value,
+                flags=re.IGNORECASE,
+            ):
+                add_candidate(match)
+        elif isinstance(value, dict):
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    try:
+        payload = json.loads(text)
+    except Exception:
+        payload = None
+    if payload is not None:
+        visit(payload)
+    visit(text)
+    return candidates

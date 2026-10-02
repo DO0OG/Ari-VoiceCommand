@@ -240,20 +240,3 @@ def migrate_stt_settings(settings: dict) -> bool:
         settings["stt_dynamic_energy"] = False
     settings["stt_settings_version"] = STT_SETTINGS_VERSION
     return True
-
-
-_TTS_VOICE_BY_LANG = {
-    "ko": "ko-KR-SunHiNeural",
-    "en": "en-US-JennyNeural",
-    "ja": "ja-JP-NanamiNeural",
-}
-
-
-def get_default_edge_tts_voice() -> str:
-    """언어 설정에 따른 기본 Edge TTS 음성을 반환한다."""
-    try:
-        from i18n.translator import get_language
-        lang = get_language()
-        return _TTS_VOICE_BY_LANG.get(lang, "ko-KR-SunHiNeural")
-    except Exception:
-        return "ko-KR-SunHiNeural"
