@@ -1,7 +1,7 @@
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 from ui.common import show_temp_status
 from ui.settings_dialog import SettingsDialog
+from ui.skills_dialog import SkillsDialog, _live_install_threads
 from ui.settings_tts_page import (
     _TTSSettingsPage,
     _live_installer_threads,
@@ -46,6 +47,25 @@ class DialogThreadTimerLifecycleTests(unittest.TestCase):
             self.assertEqual(information.call_count, 2)
             cosyvoice_thread.assert_not_called()
             ollama_dialog.assert_not_called()
+
+    def test_skill_install_and_update_wait_for_install_started_by_closed_dialog(self):
+        previous = MagicMock()
+        previous.isRunning.return_value = True
+        dialog = SimpleNamespace(
+            source_input=SimpleNamespace(text=lambda: "https://example.com/skill.git"),
+            _install_thread=None,
+            _selected_skill_name=lambda: "sample",
+        )
+        _live_install_threads.add(previous)
+        try:
+            with patch("ui.skills_dialog.QMessageBox.information") as information,                     patch("ui.skills_dialog._SkillInstallThread") as install_thread:
+                SkillsDialog._on_install(dialog)
+                SkillsDialog._on_update(dialog)
+
+                self.assertEqual(information.call_count, 2)
+                install_thread.assert_not_called()
+        finally:
+            _live_install_threads.discard(previous)
 
     def test_done_stops_embedding_timers_without_leaking_threads(self):
         with patch("ui.settings_dialog.ConfigManager.load_settings", return_value={}), \

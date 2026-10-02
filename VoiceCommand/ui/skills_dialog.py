@@ -30,6 +30,18 @@ def _release_install_thread(thread: QThread) -> None:
     thread.deleteLater()
 
 
+def _install_running() -> bool:
+    """창을 닫았다 다시 열어도 앞서 시작한 설치가 돌고 있는지 알려 준다."""
+    for thread in list(_live_install_threads):
+        try:
+            if thread.isRunning():
+                return True
+        except RuntimeError:
+            # 이미 지워진 Qt 객체는 실행 중이 아니다.
+            continue
+    return False
+
+
 class _SkillInstallThread(QThread):
     done = Signal(object)
     error = Signal(str)
@@ -177,6 +189,9 @@ class SkillsDialog(QDialog):
             return
         if self._install_thread and self._install_thread.isRunning():
             return
+        if _install_running():
+            QMessageBox.information(self, _("설치 중"), _("이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."))
+            return
 
         from agent.skill_manager import get_skill_manager
 
@@ -242,6 +257,9 @@ class SkillsDialog(QDialog):
         if not name:
             return
         if self._install_thread and self._install_thread.isRunning():
+            return
+        if _install_running():
+            QMessageBox.information(self, _("업데이트"), _("이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."))
             return
         skill_manager = get_skill_manager()
         skill = skill_manager.get_skill(name)
