@@ -73,6 +73,7 @@ class SafetyCheckerTests(unittest.TestCase):
             "import os\nf = os.remove\nf(p)",
             "from os import *\nremove(p)",
             'exec("import os as o\\no.remove(p)")',
+            "self._os.remove(p)",
         )
         for code in snippets:
             with self.subTest(code=code):

@@ -229,10 +229,6 @@ class SmartBrowser:
         if not found_el:
             return f"실패: {act_type} (셀렉터를 찾을 수 없음)"
 
-        if act_type in ("click", "click_text", "type"):
-            # 다운로드를 일으킬 수 있는 동작 직전의 폴더 상태가 기준이다.
-            self._download_baseline = self._snapshot_downloads()
-
         if act_type == "click":
             wait.until(ec_module.element_to_be_clickable((by_module.CSS_SELECTOR, matched_selector))).click()
             self._validate_current_page()
@@ -490,7 +486,7 @@ class SmartBrowser:
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """다운로드 완료 파일을 감지해 경로를 반환한다."""
         end = time.time() + timeout
-        # 기준은 다운로드를 일으킬 수 있는 동작(이동·click·type) 직전의 폴더 상태다.
+        # 기준은 페이지를 열기 직전의 폴더 상태다. 동작마다 다시 찍으면 앞 동작이 받은 파일을 놓친다.
         # 대기를 시작할 때 찍으면 그 전에 이미 끝난 빠른 다운로드를 기존 파일로 오인한다.
         initial_files = getattr(self, "_download_baseline", None)
         if initial_files is None:
