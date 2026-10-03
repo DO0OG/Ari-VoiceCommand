@@ -89,6 +89,7 @@ class SafetyCheckerTests(unittest.TestCase):
             'import os\ncommand: str = "del /f notes.txt"\nos.system(command)',
             'import os\ncommand = other = "del /f notes.txt"\nos.system(command)',
             'import os\nos.system("C:/tmp/echo.bat del /f notes.txt")',
+            'import os\nos.system("echo.exe /c del notes.txt")',
             'import os\nos.system("echo %X% del /f notes.txt")',
             'import os\nextra = "& del /f notes.txt"\nos.system(f"echo {extra} del /f notes.txt")',
             'import subprocess\nargs = ["rm", "-rf", "out"]\nsubprocess.run(args)',

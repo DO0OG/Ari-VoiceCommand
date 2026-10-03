@@ -111,7 +111,7 @@ def _is_plain_read_only_command(command: str) -> bool:
         return False
     words = command.split()
     # 경로가 붙은 실행 파일(C:/tmp/echo.bat 등)은 이름이 같아도 다른 프로그램일 수 있다.
-    return bool(words) and words[0].lower().removesuffix(".exe") in _READ_ONLY_COMMANDS
+    return bool(words) and words[0].lower() in _READ_ONLY_COMMANDS
 
 
 def _python_contains_delete_call(code: str) -> bool:
