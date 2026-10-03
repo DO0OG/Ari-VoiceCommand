@@ -4119,3 +4119,6 @@ msgstr "The URL is not allowed: {reason}"
 
 msgid "이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."
 msgstr "An installation started earlier is still running. Try again after it finishes."
+
+msgid "스킬 업데이트 기록을 지우지 못해 업데이트를 되돌렸습니다."
+msgstr "The skill update record could not be cleared, so the update was rolled back."

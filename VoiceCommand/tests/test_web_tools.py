@@ -79,6 +79,34 @@ class WebToolsTests(unittest.TestCase):
                     browser.wait_for_download(timeout=10), os.path.join(tmp, "report.pdf")
                 )
 
+    def test_collect_after_close_leaves_download_folder_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "mine.bin"), "wb") as handle:
+                handle.write(b"x")
+            browser = self._isolated_download_browser(tmp)
+            session_dir = browser._browser_download_dir
+            browser.driver = None
+            entered = []
+
+            class LockClosingBrowserFirst:
+                """수집이 잠금을 기다리는 사이 브라우저가 닫히는 순서를 만든다."""
+
+                def __enter__(self_inner):
+                    if not entered:
+                        entered.append(True)
+                        browser._download_lock = threading.Lock()
+                        browser.close()
+                    return self_inner
+
+                def __exit__(self_inner, *exc):
+                    return False
+
+            browser._download_lock = LockClosingBrowserFirst()
+            browser._collect_downloads()
+
+            self.assertFalse(os.path.exists(session_dir))
+            self.assertEqual(os.listdir(tmp), ["mine.bin"])
+
     def test_stale_session_folder_is_recovered(self):
         with tempfile.TemporaryDirectory() as tmp:
             stale = os.path.join(tmp, ".ari-browser-old")

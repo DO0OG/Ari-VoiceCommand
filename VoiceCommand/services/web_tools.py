@@ -773,7 +773,10 @@ class SmartBrowser:
         if not getattr(self, "_download_isolated", False):
             return
         with self._download_lock:
-            self._pending_downloads.extend(self._move_completed_downloads(self._browser_download_dir))
+            # 잠금을 기다리는 사이 브라우저가 닫혔으면 폴더가 일반 다운로드 폴더로 바뀌어 있다.
+            # 그 폴더의 파일을 옮기면 안 되므로 잠금 안에서 다시 확인한다.
+            if self._download_isolated:
+                self._pending_downloads.extend(self._move_completed_downloads(self._browser_download_dir))
 
     def _collect_loop(self, folder: str) -> None:
         # 다운로드 완료를 기다리지 않는 작업에서도 받은 파일이 다운로드 폴더에 나타나게 한다.
@@ -807,10 +810,13 @@ class SmartBrowser:
     def _flush_browser_downloads(self):
         if not getattr(self, "_download_isolated", False):
             return
-        folder = self._browser_download_dir
-        self._collect_downloads()
-        self._download_isolated = False
-        self._browser_download_dir = self.download_dir
+        with self._download_lock:
+            if not self._download_isolated:
+                return
+            folder = self._browser_download_dir
+            self._pending_downloads.extend(self._move_completed_downloads(folder))
+            self._download_isolated = False
+            self._browser_download_dir = self.download_dir
         try:
             os.rmdir(folder)
         except OSError as exc:

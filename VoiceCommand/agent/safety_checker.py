@@ -112,7 +112,9 @@ def _python_contains_delete_call(code: str) -> bool:
     shell_functions = set()
     import_module_functions = set()
     os_shell_calls = {"system", "popen"}
-    subprocess_shell_calls = {"run", "call", "check_call", "check_output", "Popen"}
+    subprocess_shell_calls = {
+        "run", "call", "check_call", "check_output", "Popen", "getoutput", "getstatusoutput",
+    }
     shell_calls = os_shell_calls | subprocess_shell_calls
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -191,6 +193,18 @@ def _python_contains_delete_call(code: str) -> bool:
         if node.args[1].value in {"unlink", "rmdir", "rmtree"}:
             return True
         return module_name(node.args[0]) == "os" and node.args[1].value in {"remove", "removedirs"}
+
+    # execute = os.system 처럼 변수에 담아 부르는 경우도 같은 명령 검사를 받게 한다.
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)):
+            continue
+        value = node.value
+        if (
+            isinstance(value, ast.Attribute)
+            and module_name(value.value) in {"os", "subprocess"}
+            and value.attr in shell_calls
+        ) or (isinstance(value, ast.Name) and value.id in shell_functions):
+            shell_functions.add(node.targets[0].id)
 
     delete_names = os_functions | shutil_functions
     for node in ast.walk(tree):
