@@ -85,6 +85,16 @@ class SafetyCheckerTests(unittest.TestCase):
             'from subprocess import getstatusoutput as g\ng("rmdir /s out")',
             'import os\nexecute = os.system\nexecute("del /f notes.txt")',
             'import subprocess\nrunner = subprocess.run\nrunner(["rm", "-rf", target])',
+            'import os\ncommand = "del /f notes.txt"\nos.system(command)',
+            'import os\ncommand: str = "del /f notes.txt"\nos.system(command)',
+            'import os\ncommand = other = "del /f notes.txt"\nos.system(command)',
+            'import os\nos.system("C:/tmp/echo.bat del /f notes.txt")',
+            'import os\nos.system("echo.exe /c del notes.txt")',
+            'import os\nos.system("echo %X% del /f notes.txt")',
+            'import os\nextra = "& del /f notes.txt"\nos.system(f"echo {extra} del /f notes.txt")',
+            'import subprocess\nargs = ["rm", "-rf", "out"]\nsubprocess.run(args)',
+            'import os\nos.system("echo done && del /q notes.txt")',
+            'import os\nos.system("cmd /c echo x & rmdir /s out")',
             'getattr(os, "remove")(p)',
             'getattr(shutil, "rmtree")(path)',
             '__import__("os").remove(p)',
@@ -107,6 +117,8 @@ class SafetyCheckerTests(unittest.TestCase):
             "videos.remove(item)",
             "pos.remove(1)",
             'import os\nos.system("dir")',
+            'import os\nos.system("echo del")',
+            'import os\nmessage = "echo rm is not run"\nos.system(message)',
         ):
             with self.subTest(code=code):
                 self.assertEqual(self.checker.check_python(code).level, DangerLevel.SAFE)
