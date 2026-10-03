@@ -85,6 +85,52 @@ v1.3.1에서는 프록시·NAT64 경유 접근 제한, 파일 삭제 판정, 기
 - [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — 팔레트 에디터와 JSON 테마 파일 편집 방법, `DNFBitBitv2` 폰트 출처
 - [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 
+## 동작 구조
+
+```mermaid
+graph TD
+    Wake["웨이크워드"] --> STT["STT: Google / Whisper"]
+    Manual["음성 단축키 / 캐릭터 클릭"] --> STT
+    Manual --> Warm
+    Wake --> Warm["LLM 연결 예열"]
+    STT --> Registry["명령 레지스트리"]
+    Chat["텍스트 채팅 / Telegram"] --> Handler["요청 처리기"]
+    Registry --> Handler
+    Handler --> Decision["로컬 판정 엔진"]
+    Decision -- "대상 + 높은 확신" --> Fast["직접 로컬 명령"]
+    Decision -- "불확실 / 복합" --> Ack["즉시 반응 문구"]
+    Decision -- "불확실 / 복합" --> LLM["LLM 제공자 + 도구 호출"]
+    Ack -.-> LLM
+    Warm --> LLM
+    LLM --> Tools["도구 실행"]
+    Tools --> Policy["도구 결과 후속 호출 정책"]
+    Policy --> LLM
+    Memory["사실 + 대화 기억"] --> LLM
+    Tools --> Agent["자율 에이전트"]
+    Agent --> Loop["계획 / 실행 / 검증 / 반성"]
+    Loop --> Strategy["전략 기억 / 스킬"]
+    Strategy -.-> Agent
+    Fast --> TTS["문장 단위 스트리밍 TTS"]
+    LLM --> TTS
+    Agent --> TTS
+    Agent --> Character["캐릭터 기분 / 사건 발화"]
+    TTS --> Character
+    Stop["중단 / 취소"] --> TTS
+    Stop --> Agent
+```
+
+## 로컬 판정 평가 결과
+
+로컬 판정 엔진의 지원 명령 경로에는 별도의 홀드아웃 평가가 있습니다.
+
+- 생성 평가 문장 **7,407개**
+- 파서 확인 직접 선택 **367건**
+- 해당 선택의 **측정 정밀도 100.0%**
+- 이 평가에서 **잘못된 직접 선택 0건**
+- AMD64 Windows 데스크톱 1,000회 웜 추론: **p50 0.048ms**, **p95 0.071ms**
+
+이 수치는 판정기/파서 경로만 평가합니다. 마이크 음성 인식 정확도, 전체 에이전트 성공률, 모든 종류의 사용자 요청을 의미하지 않습니다.
+
 ## 개발 및 운영 참고
 
 실행 경로와 검증 흐름을 빠르게 확인할 때 보는 메모입니다.
