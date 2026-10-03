@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import http.client
 import ipaddress
+import logging
 import re
 import socket
 import urllib.error
@@ -19,6 +20,10 @@ def _is_public_address(value: str) -> bool:
     address = ipaddress.ip_address(str(value).split("%", 1)[0])
     if address.version == 6 and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
+    elif address.version == 6 and address in ipaddress.ip_network("64:ff9b::/96"):
+        address = ipaddress.IPv4Address(int(address) & 0xffffffff)
+    elif address.version == 6 and address in ipaddress.ip_network("64:ff9b:1::/48"):
+        return False
     return address.is_global and not address.is_multicast
 
 
@@ -42,14 +47,14 @@ def _parse_http_url(url: str, allowed_schemes, *, allow_local: bool):
         literal = None
     if literal is not None:
         if allow_local or _is_public_address(str(literal)):
-            return parsed, host, port
+            return parsed, host, port, str(literal)
         raise UnsafeUrlError(f"공개 주소가 아닙니다: {host}")
     normalized_host = host[:-1] if host.endswith(".") else host
     last_label = normalized_host.rsplit(".", 1)[-1]
     if re.fullmatch(r"(?:[0-9]+|0x[0-9a-f]+)", last_label, re.IGNORECASE):
         raise UnsafeUrlError(f"표준 형식이 아닌 숫자 주소입니다: {host}")
     if allow_local and normalized_host.lower() == "localhost":
-        return parsed, host, port
+        return parsed, host, port, host
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except (OSError, socket.gaierror) as exc:
@@ -64,7 +69,8 @@ def _parse_http_url(url: str, allowed_schemes, *, allow_local: bool):
             raise UnsafeUrlError(f"잘못된 주소입니다: {host}") from exc
         if not safe:
             raise UnsafeUrlError(f"공개 주소가 아닙니다: {address}")
-    return parsed, host, port
+    pinned = next((item[4][0] for item in addresses if item[0] == socket.AF_INET), addresses[0][4][0])
+    return parsed, host, port, pinned
 
 
 def validate_public_http_url(url: str, *, allowed_schemes=("http", "https")) -> str:
@@ -165,6 +171,18 @@ class _SafeHTTPConnection(http.client.HTTPConnection):
 
 class _SafeHTTPSConnection(http.client.HTTPSConnection):
     def connect(self):
+        pinned = getattr(self, "_safe_proxy_ip", None)
+        if pinned and self._tunnel_host:
+            # 프록시가 이름을 다시 해석해 사설 주소로 가지 못하게, 검증한 IP로 CONNECT한다.
+            # TLS 검증에는 원래 호스트 이름을 쓴다.
+            origin_host = self._tunnel_host
+            self._tunnel_host = f"[{pinned}]" if ":" in pinned else pinned
+            try:
+                http.client.HTTPConnection.connect(self)
+            finally:
+                self._tunnel_host = origin_host
+            self.sock = self._context.wrap_socket(self.sock, server_hostname=origin_host)
+            return
         if self._safe_check:
             sock = _checked_socket(self)
             if self._tunnel_host:
@@ -178,16 +196,42 @@ class _SafeHTTPSConnection(http.client.HTTPSConnection):
 
 class _SafeHTTPHandler(urllib.request.HTTPHandler):
     def http_open(self, req):
-        connection = type("RequestHTTPConnection", (_SafeHTTPConnection,), {"_safe_check": not _uses_proxy(req.full_url)})
+        proxied = _uses_proxy(req.full_url)
+        address = getattr(req, "_safe_destination_ip", None) if proxied else None
+        if address:
+            # 프록시에 보내는 요청 대상을 검증한 IP로 바꾸고, Host에는 원래 이름을 남긴다.
+            original = urllib.parse.urlsplit(req.full_url)
+            port = "" if original.port is None else f":{original.port}"
+            origin_host = original.hostname or ""
+            req.selector = urllib.parse.urlunsplit(
+                original._replace(netloc=(f"[{address}]" if ":" in address else address) + port)
+            )
+            req.remove_header("Host")
+            req.add_unredirected_header("Host", (f"[{origin_host}]" if ":" in origin_host else origin_host) + port)
+        connection = type("RequestHTTPConnection", (_SafeHTTPConnection,), {"_safe_check": not proxied})
         return self.do_open(connection, req)
 
 
 class _SafeHTTPSHandler(urllib.request.HTTPSHandler):
     def https_open(self, req):
-        connection = type("RequestHTTPSConnection", (_SafeHTTPSConnection,), {"_safe_check": not _uses_proxy(req.full_url)})
+        proxied = _uses_proxy(req.full_url)
         kwargs = {"context": self._context}
         if hasattr(self, "_check_hostname"):
             kwargs["check_hostname"] = self._check_hostname
+        address = getattr(req, "_safe_destination_ip", None) if proxied else None
+        if address:
+            pinned = type(
+                "RequestHTTPSConnection", (_SafeHTTPSConnection,), {"_safe_check": False, "_safe_proxy_ip": address}
+            )
+            try:
+                return self.do_open(pinned, req, **kwargs)
+            except urllib.error.URLError as exc:
+                # IP 목적지를 정책으로 거절(403)하는 프록시에서만 호스트 이름으로 한 번 더 보낸다.
+                # 그 밖의 실패에서 이름으로 바꾸면 프록시가 이름을 다시 해석하는 길이 열린다.
+                if "Tunnel connection failed: 403" not in str(exc.reason):
+                    raise
+                logging.info("프록시가 IP 목적지 연결을 거절해 호스트 이름으로 다시 시도합니다: %s", exc.reason)
+        connection = type("RequestHTTPSConnection", (_SafeHTTPSConnection,), {"_safe_check": not proxied})
         return self.do_open(connection, req, **kwargs)
 
 
@@ -201,10 +245,11 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         count = getattr(req, "_safe_redirect_count", 0) + 1
         if count > self.max_redirects:
             raise urllib.error.HTTPError(req.full_url, code, "최대 리디렉션 횟수를 초과했습니다.", headers, fp)
-        validate_public_http_url(newurl, allowed_schemes=self.allowed_schemes)
+        _parsed, _host, _port, address = _parse_http_url(newurl, self.allowed_schemes, allow_local=False)
         redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
         if redirected is not None:
             redirected._safe_redirect_count = count
+            redirected._safe_destination_ip = address
         return redirected
 
 
@@ -212,7 +257,8 @@ def safe_urlopen(request_or_url, *, timeout, max_redirects=5, allowed_schemes=("
     request = request_or_url if isinstance(request_or_url, urllib.request.Request) else urllib.request.Request(request_or_url)
     if not request.has_header("Accept-encoding"):
         request.add_header("Accept-encoding", "identity")
-    validate_public_http_url(request.full_url, allowed_schemes=allowed_schemes)
+    _parsed, _host, _port, address = _parse_http_url(request.full_url, allowed_schemes, allow_local=False)
+    request._safe_destination_ip = address
     opener = urllib.request.build_opener(
         _SafeHTTPHandler(),
         _SafeHTTPSHandler(),
