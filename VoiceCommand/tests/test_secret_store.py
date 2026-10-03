@@ -53,6 +53,19 @@ def _read_json(path):
 
 
 class SecretStoreTests(unittest.TestCase):
+    def test_corrupt_settings_backup_is_encrypted_and_restorable(self):
+        with _isolated_settings() as path, _opaque_crypto():
+            original = b'{"openai_api_key":"plain-secret"'
+            path.write_bytes(original)
+
+            self.assertTrue(ConfigManager._backup_corrupt_settings(str(path)))
+
+            backups = list(path.parent.glob("ari_settings.pre-secrets.*.dpapi"))
+            self.assertEqual(len(backups), 1)
+            self.assertNotIn(b"plain-secret", backups[0].read_bytes())
+            self.assertEqual(secret_store._unprotect(backups[0].read_bytes()), original)
+            self.assertEqual(list(path.parent.glob("*.corrupt-*.json")), [])
+
     def test_secret_precedence_is_environment_then_dotenv_then_encrypted_then_legacy(self):
         legacy = {
             "openai_api_key": "legacy-openai",

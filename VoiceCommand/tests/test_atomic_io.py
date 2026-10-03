@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from core.atomic_io import backup_corrupt_file, write_json_atomic, write_text_atomic
+from core.atomic_io import backup_corrupt_file, write_bytes_atomic, write_json_atomic, write_text_atomic
 
 
 class AtomicIoTests(unittest.TestCase):
@@ -45,6 +45,24 @@ class AtomicIoTests(unittest.TestCase):
 
             self.assertEqual(path.read_text(encoding="utf-8"), '{"value": 1}')
             self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+    def test_atomic_writes_follow_symbolic_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "target.json"
+            link = Path(tmp) / "link.json"
+            target.write_text('{"old": true}', encoding="utf-8")
+            try:
+                link.symlink_to(target)
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"symbolic links unavailable: {exc}")
+
+            write_json_atomic(link, {"new": True})
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"new": True})
+
+            write_bytes_atomic(link, b"bytes")
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(target.read_bytes(), b"bytes")
 
     def test_corrupt_backup_preserves_bytes_and_avoids_collisions(self):
         with tempfile.TemporaryDirectory() as tmp:

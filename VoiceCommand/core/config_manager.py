@@ -4,10 +4,11 @@ import json
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-from core.atomic_io import backup_corrupt_file, write_json_atomic
+from core.atomic_io import write_json_atomic
 from core.settings_schema import (
     migrate_local_decision_settings,
     migrate_stt_settings,
@@ -31,6 +32,9 @@ def _settings_path() -> str:
     return ResourceManager.get_writable_path(SETTINGS_FILENAME)
 
 
+_MISSING = object()
+
+
 class ConfigManager:
     """설정 파일 관리 클래스"""
 
@@ -42,6 +46,8 @@ class ConfigManager:
     _cached_settings: Optional[SettingsDict] = None
     _dotenv_settings: dict[str, str] = {}
     _settings_read_failed = False
+    _settings_last_read_attempt = 0.0
+    _settings_read_failure_logged = False
     # RLock: set_value → load_settings → save_settings 재진입 허용
     _lock: threading.RLock = threading.RLock()
 
@@ -51,29 +57,27 @@ class ConfigManager:
         try:
             source = Path(path)
             corrupt = source.read_bytes()
-            for candidate in source.parent.glob(f"{source.stem}.corrupt-*{source.suffix}"):
-                try:
-                    if candidate.read_bytes() == corrupt:
-                        return True
-                except OSError:
-                    continue
-            backup_corrupt_file(path)
+            SecretStore(path).backup(corrupt)
             return True
-        except OSError as exc:
+        except Exception as exc:
             logging.warning("손상된 설정 파일을 백업하지 못했습니다: %s", exc)
             return False
 
     @classmethod
     def load_settings(cls) -> SettingsDict:
         """설정 파일 로드. 캐시 적중 시 락 없이 반환(읽기 전용 사용 권장)."""
-        if cls._cached_settings is not None:
+        if cls._cached_settings is not None and not cls._settings_read_failed:
             return cls._effective_settings()
         with cls._lock:
             # 락 획득 후 재확인 (다른 스레드가 먼저 로드했을 수 있음)
             if cls._cached_settings is not None:
-                return cls._effective_settings()
+                if not cls._settings_read_failed:
+                    return cls._effective_settings()
+                if time.monotonic() - cls._settings_last_read_attempt < 5:
+                    return cls._effective_settings()
             path = _settings_path()
             cls._load_dotenv(path)
+            cls._settings_last_read_attempt = time.monotonic()
             try:
                 original = Path(path).read_bytes()
                 settings = json.loads(original.decode("utf-8"))
@@ -82,21 +86,26 @@ class ConfigManager:
                 logging.info("설정 파일을 로드했습니다.")
             except FileNotFoundError:
                 cls._settings_read_failed = False
+                cls._settings_read_failure_logged = False
                 settings = cls._restore_default_settings(path)
                 original = b""
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
                 logging.error("설정 파일이 손상되어 기본값을 사용합니다.")
                 cls._settings_read_failed = False
+                cls._settings_read_failure_logged = False
                 cls._backup_corrupt_settings(path)
                 settings = cls.DEFAULT_SETTINGS.copy()
                 original = b""
             except OSError:
-                logging.error("설정 파일에 접근할 수 없어 기본값을 사용합니다.")
+                if not cls._settings_read_failure_logged:
+                    logging.error("설정 파일에 접근할 수 없어 기본값을 사용합니다.")
+                    cls._settings_read_failure_logged = True
                 cls._settings_read_failed = True
                 settings = cls.DEFAULT_SETTINGS.copy()
                 original = b""
             else:
                 cls._settings_read_failed = False
+                cls._settings_read_failure_logged = False
             legacy = cls._secret_values(settings)
             public = cls._public_settings(settings)
             public_source = {key: value for key, value in settings.items() if not cls._is_secret_key(key)}
@@ -222,7 +231,7 @@ class ConfigManager:
                             key: {**loaded[key], **value}
                             if isinstance(value, dict) and isinstance(loaded.get(key), dict) else value
                             for key, value in settings.items()
-                            if (stale.get(key) or None) != (value or None)
+                            if stale.get(key, _MISSING) != value
                         }}
                 requested = {key: value for key, value in settings.items() if cls._is_secret_key(key)}
                 if any(not isinstance(value, str) for value in requested.values()):

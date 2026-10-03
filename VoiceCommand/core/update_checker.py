@@ -421,6 +421,7 @@ def _check_for_updates() -> tuple[int, int]:
                 # 정식판을 건너뛴 사용자에게 그보다 낮은 시험판을 권하지 않는다.
                 if (
                     skipped
+                    and "-" not in skipped
                     and "-" in manifest["version"]
                     and compare_versions(manifest["version"], skipped) < 0
                 ):

@@ -312,6 +312,26 @@ class UpdateCheckerTests(unittest.TestCase):
         ) as (_, state, _):
             self.assertEqual(state["pending_version"], "")
 
+    def test_skipped_prerelease_does_not_hide_lower_prerelease(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.3.1-rc.1")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.3.0")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.3.0", responses, {"skipped_version": "1.4.0-beta.1"}
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "1.3.1-rc.1")
+
+    def test_skipped_stable_hides_lower_prerelease(self):
+        responses = [
+            (200, {}, json.dumps(_manifest("1.4.0-beta.2")).encode("utf-8")),
+            (200, {}, json.dumps(_manifest("1.2.9")).encode("utf-8")),
+        ]
+        with self._check_with_responses(
+            "beta", "1.3.0", responses, {"skipped_version": "1.4.0"}
+        ) as (_, state, _):
+            self.assertEqual(state["pending_version"], "")
+
     def test_beta_channel_announces_stable_when_highest_candidate_is_skipped(self):
         responses = [
             (200, {}, json.dumps(_manifest("1.3.0-beta.1")).encode("utf-8")),

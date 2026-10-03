@@ -12,6 +12,8 @@ from typing import Any, Callable, TextIO
 
 def _write_atomic(path: str | PathLike[str], write: Callable[[TextIO], None]) -> None:
     target = os.fspath(path)
+    if os.path.islink(target):
+        target = os.path.realpath(target)
     directory = os.path.dirname(target) or "."
     os.makedirs(directory, exist_ok=True)
 
@@ -62,6 +64,8 @@ def write_text_atomic(path: str | PathLike[str], text: str) -> None:
 def write_bytes_atomic(path: str | PathLike[str], data: bytes) -> None:
     """같은 디렉터리의 임시 파일에 바이트를 쓴 뒤 원자적으로 교체한다."""
     target = os.fspath(path)
+    if os.path.islink(target):
+        target = os.path.realpath(target)
     directory = os.path.dirname(target) or "."
     os.makedirs(directory, exist_ok=True)
 

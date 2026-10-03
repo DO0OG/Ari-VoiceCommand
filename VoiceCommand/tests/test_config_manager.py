@@ -11,6 +11,8 @@ from core.config_manager import ConfigManager
 class ConfigManagerTests(unittest.TestCase):
     def tearDown(self):
         ConfigManager._settings_read_failed = False
+        ConfigManager._settings_read_failure_logged = False
+        ConfigManager._settings_last_read_attempt = 0.0
 
     def test_normalize_settings_rejects_bool_for_int_field(self):
         with patch.object(
@@ -71,6 +73,8 @@ class ConfigManagerTests(unittest.TestCase):
             try:
                 with patch("core.config_manager._settings_path", return_value=path), \
                         patch("core.config_manager.SecretStore.read", return_value={}), \
+                        patch("core.secret_store._protect", side_effect=lambda data: b"encrypted:" + data), \
+                        patch("core.secret_store._unprotect", side_effect=lambda data: data[len(b"encrypted:"):]), \
                         patch("core.config_manager.SecretStore.write"):
                     ConfigManager._cached_settings = None
                     self.assertTrue(ConfigManager.save_settings({
@@ -79,12 +83,11 @@ class ConfigManagerTests(unittest.TestCase):
                     }))
                 with open(path, encoding="utf-8") as handle:
                     saved = json.load(handle)
-                backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+                backups = [name for name in os.listdir(tmp) if name.endswith(".dpapi")]
                 self.assertEqual(saved["stt_energy_threshold"], 500)
                 self.assertNotIn("openai_api_key", saved)
                 self.assertEqual(len(backups), 1)
-                with open(os.path.join(tmp, backups[0]), "rb") as handle:
-                    self.assertEqual(handle.read(), b"{broken")
+                self.assertNotIn("ari_settings.json", backups)
             finally:
                 ConfigManager._cached_settings = previous
 
@@ -95,11 +98,13 @@ class ConfigManagerTests(unittest.TestCase):
                 handle.write(b"{broken")
             previous = ConfigManager._cached_settings
             try:
-                with patch("core.config_manager._settings_path", return_value=path):
+                with patch("core.config_manager._settings_path", return_value=path), \
+                        patch("core.secret_store._protect", side_effect=lambda data: b"encrypted:" + data), \
+                        patch("core.secret_store._unprotect", side_effect=lambda data: data[len(b"encrypted:"):]):
                     for _ in range(2):
                         ConfigManager._cached_settings = None
                         ConfigManager.load_settings()
-                backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+                backups = [name for name in os.listdir(tmp) if name.endswith(".dpapi")]
                 self.assertEqual(len(backups), 1)
             finally:
                 ConfigManager._cached_settings = previous
@@ -117,24 +122,14 @@ class ConfigManagerTests(unittest.TestCase):
                 # 키가 그대로 남으므로 비밀 저장소를 다시 쓰지 않는다.
                 write.assert_not_called()
 
-    def test_corrupt_settings_backup_skips_unreadable_candidate_and_creates_one(self):
+    def test_corrupt_settings_backup_uses_encrypted_store_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ari_settings.json"
-            candidate = Path(tmp) / "ari_settings.corrupt-old.json"
             path.write_bytes(b"{broken")
-            candidate.write_bytes(b"unreadable candidate")
-            read_bytes = Path.read_bytes
-
-            def read(candidate_path):
-                if candidate_path == candidate:
-                    raise PermissionError("unreadable")
-                return read_bytes(candidate_path)
-
-            with patch.object(Path, "read_bytes", read):
+            with patch("core.config_manager.SecretStore.backup") as backup:
                 self.assertTrue(ConfigManager._backup_corrupt_settings(str(path)))
-            backups = [item for item in Path(tmp).glob("ari_settings.corrupt-*.json") if item != candidate]
-            self.assertEqual(len(backups), 1)
-            self.assertEqual(backups[0].read_bytes(), b"{broken")
+            backup.assert_called_once_with(b"{broken")
+            self.assertEqual(list(Path(tmp).glob("*.corrupt-*.json")), [])
 
     def test_corrupt_backup_failure_keeps_original_and_fails_save(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -142,7 +137,7 @@ class ConfigManagerTests(unittest.TestCase):
             with open(path, "wb") as handle:
                 handle.write(b"{broken")
             with patch("core.config_manager._settings_path", return_value=path), \
-                    patch("core.config_manager.backup_corrupt_file", side_effect=OSError("disk full")):
+                    patch("core.config_manager.SecretStore.backup", side_effect=OSError("disk full")):
                 self.assertFalse(ConfigManager.save_settings({"stt_energy_threshold": 500}))
             with open(path, "rb") as handle:
                 self.assertEqual(handle.read(), b"{broken")
@@ -177,6 +172,61 @@ class ConfigManagerTests(unittest.TestCase):
             self.assertEqual(saved["llm_provider"], "openai")
             self.assertEqual(saved["stt_energy_threshold"], 500)
             self.assertEqual(list(Path(tmp).glob("*.corrupt-*.json")), [])
+
+    def test_failed_settings_read_retries_after_five_seconds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ari_settings.json"
+            path.write_text('{"llm_provider":"openai"}', encoding="utf-8")
+            original_read = Path.read_bytes
+            blocked = True
+            now = [10.0]
+
+            def read(candidate):
+                nonlocal blocked
+                if candidate == path and blocked:
+                    raise PermissionError("temporarily unreadable")
+                return original_read(candidate)
+
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=str(path)), \
+                        patch.object(Path, "read_bytes", read), \
+                        patch("core.config_manager.time.monotonic", side_effect=lambda: now[0]), \
+                        patch("core.config_manager.SecretStore.read", return_value={}), \
+                        patch("core.config_manager.logging.error") as log_error:
+                    ConfigManager._cached_settings = None
+                    ConfigManager._settings_read_failed = False
+                    ConfigManager._settings_read_failure_logged = False
+                    self.assertEqual(ConfigManager.load_settings()["llm_provider"], "groq")
+                    blocked = False
+                    now[0] += 4
+                    self.assertEqual(ConfigManager.load_settings()["llm_provider"], "groq")
+                    now[0] += 1
+                    self.assertEqual(ConfigManager.load_settings()["llm_provider"], "openai")
+                    log_error.assert_called_once()
+            finally:
+                ConfigManager._cached_settings = previous
+
+    def test_read_failure_save_applies_empty_and_false_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ari_settings.json"
+            path.write_text('{"custom_path":"stored","custom_flag":true}', encoding="utf-8")
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=str(path)), \
+                        patch("core.config_manager.SecretStore.read", return_value={}), \
+                        patch("core.config_manager.SecretStore.backup"):
+                    ConfigManager._settings_read_failed = True
+                    ConfigManager._settings_last_read_attempt = 0
+                    ConfigManager._cached_settings = dict(ConfigManager.DEFAULT_SETTINGS)
+                    self.assertTrue(ConfigManager.save_settings({**ConfigManager.DEFAULT_SETTINGS,
+                                                                 "custom_path": "",
+                                                                 "custom_flag": False}))
+                saved = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(saved["custom_path"], "")
+                self.assertIs(saved["custom_flag"], False)
+            finally:
+                ConfigManager._cached_settings = previous
 
     def test_access_failure_then_adding_provider_keeps_existing_providers_and_secrets(self):
         existing = "custom_0123456789abcdef0123456789abcdef"
