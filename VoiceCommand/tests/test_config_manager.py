@@ -182,7 +182,6 @@ class ConfigManagerTests(unittest.TestCase):
             now = [10.0]
 
             def read(candidate):
-                nonlocal blocked
                 if candidate == path and blocked:
                     raise PermissionError("temporarily unreadable")
                 return original_read(candidate)
