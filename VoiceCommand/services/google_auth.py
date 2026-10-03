@@ -89,10 +89,12 @@ def save_token(token: dict) -> None:
 
 
 def clear_token() -> None:
-    try:
-        os.remove(_token_path())
-    except FileNotFoundError:
-        pass
+    with _TOKEN_LOCK:
+        for path in (_legacy_token_path(), _token_path()):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
 
 
 def build_authorization_request(client_id: str, redirect_uri: str) -> tuple[str, str, str]:

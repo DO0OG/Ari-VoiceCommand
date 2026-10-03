@@ -74,6 +74,17 @@ class SafetyCheckerTests(unittest.TestCase):
             "from os import *\nremove(p)",
             'exec("import os as o\\no.remove(p)")',
             "self._os.remove(p)",
+            "from os import system\nsystem('del /q notes.txt')",
+            "from subprocess import run as r\nr(['cmd', '/c', 'rmdir', '/s', 'out'])",
+            'getattr(os, "remove")(p)',
+            'getattr(shutil, "rmtree")(path)',
+            '__import__("os").remove(p)',
+            'import importlib\nimportlib.import_module("os").unlink(p)',
+            'from os import remove\nmap(remove, files)',
+            'from os import remove as r\nconsume(r)',
+            'import os\nos.system("rm -rf /tmp/x")',
+            'import subprocess\nsubprocess.run(["erase", "x"])',
+            'import subprocess\nsubprocess.Popen(f"Remove-Item {target}")',
         )
         for code in snippets:
             with self.subTest(code=code):
@@ -86,10 +97,17 @@ class SafetyCheckerTests(unittest.TestCase):
             "todos.remove(x)",
             "videos.remove(item)",
             "pos.remove(1)",
+            'import os\nos.system("dir")',
         ):
             with self.subTest(code=code):
                 self.assertEqual(self.checker.check_python(code).level, DangerLevel.SAFE)
-
-
+        self.assertEqual(
+            self.checker.check_python('import subprocess\nsubprocess.run(["git", "status"])').level,
+            DangerLevel.CAUTION,
+        )
+        self.assertEqual(
+            self.checker.check_python("import subprocess\nsubprocess.run(command_variable)").level,
+            DangerLevel.CAUTION,
+        )
 if __name__ == "__main__":
     unittest.main()

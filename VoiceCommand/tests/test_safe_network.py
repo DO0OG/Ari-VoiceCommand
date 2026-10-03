@@ -1,14 +1,18 @@
+import http.client
 import socket
 import unittest
 import gzip
+import ipaddress
 from io import BytesIO
-from unittest.mock import patch
-from urllib.error import HTTPError
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 from core.safe_network import (
     UnsafeUrlError,
+    _SafeHTTPHandler,
     _SafeHTTPConnection,
+    _SafeHTTPSConnection,
     _SafeHTTPSHandler,
     _SafeRedirectHandler,
     read_limited,
@@ -16,6 +20,7 @@ from core.safe_network import (
     validate_browser_landing,
     validate_browser_url,
     validate_public_http_url,
+    _is_public_address,
 )
 
 
@@ -33,6 +38,83 @@ class SafeNetworkTests(unittest.TestCase):
         with patch("core.safe_network._uses_proxy", return_value=False):
             kwargs = handler.https_open(Request("https://example.com"))
         self.assertEqual(kwargs, {"context": handler._context})
+
+    def test_proxy_http_request_uses_resolved_ip_and_original_host_header(self):
+        handler = _SafeHTTPHandler()
+        request = Request("http://example.com:8080/path")
+        request.set_proxy("proxy.example:3128", "http")
+        request._safe_destination_ip = "93.184.216.34"
+        captured = {}
+        handler.do_open = lambda connection, req: captured.update(connection=connection, request=req)
+        with patch("core.safe_network._uses_proxy", return_value=True):
+            handler.http_open(request)
+            self.assertEqual(request.selector, "http://93.184.216.34:8080/path")
+            self.assertEqual(request.get_header("Host"), "example.com:8080")
+
+    def test_proxy_https_connects_to_ip_and_uses_original_tls_name(self):
+        handler = object.__new__(_SafeHTTPSHandler)
+        handler._context = Mock()
+        captured = {}
+        handler.do_open = lambda connection, req, **kwargs: captured.update(connection=connection, kwargs=kwargs)
+        request = Request("https://example.com/path")
+        request.set_proxy("proxy.example:3128", "http")
+        request._safe_destination_ip = "93.184.216.34"
+        with patch("core.safe_network._uses_proxy", return_value=True):
+            handler.https_open(request)
+        conn = captured["connection"]("proxy.example", 3128, context=handler._context)
+        conn.set_tunnel("example.com")
+        tunnel_targets = []
+
+        def connect_to_proxy(connection):
+            tunnel_targets.append(connection._tunnel_host)
+            connection.sock = "tunnel"
+
+        with patch.object(http.client.HTTPConnection, "connect", autospec=True, side_effect=connect_to_proxy):
+            conn.connect()
+        self.assertEqual(tunnel_targets, ["93.184.216.34"])
+        self.assertEqual(conn._tunnel_host, "example.com")
+        handler._context.wrap_socket.assert_called_once_with("tunnel", server_hostname="example.com")
+
+    def test_proxy_https_retries_original_host_when_ip_connect_is_rejected(self):
+        handler = object.__new__(_SafeHTTPSHandler)
+        handler._context = Mock()
+        attempts = []
+
+        def do_open(connection, req, **kwargs):
+            attempts.append(getattr(connection, "_safe_proxy_ip", None))
+            if len(attempts) == 1:
+                raise URLError(OSError("Tunnel connection failed: 403 Forbidden"))
+            return "response"
+
+        handler.do_open = do_open
+        request = Request("https://example.com/path")
+        request._safe_destination_ip = "93.184.216.34"
+        with patch("core.safe_network._uses_proxy", return_value=True), patch(
+            "core.safe_network.logging.info"
+        ) as log:
+            self.assertEqual(handler.https_open(request), "response")
+            self.assertEqual(attempts, ["93.184.216.34", None])
+            log.assert_called_once()
+
+    def test_proxy_https_does_not_retry_other_failures(self):
+        handler = object.__new__(_SafeHTTPSHandler)
+        handler._context = Mock()
+        handler.do_open = Mock(side_effect=URLError(OSError("certificate verify failed")))
+        request = Request("https://example.com/path")
+        request._safe_destination_ip = "93.184.216.34"
+        with patch("core.safe_network._uses_proxy", return_value=True):
+            with self.assertRaises(URLError):
+                handler.https_open(request)
+            self.assertEqual(handler.do_open.call_count, 1)
+
+    def test_handlers_keep_direct_connection_when_no_proxy_is_used(self):
+        request = Request("https://example.com")
+        handler = object.__new__(_SafeHTTPSHandler)
+        handler._context = object()
+        handler.do_open = lambda connection, req, **kwargs: connection
+        with patch("core.safe_network._uses_proxy", return_value=False):
+            connection = handler.https_open(request)
+            self.assertTrue(connection._safe_check)
 
     def test_browser_accepts_localhost_and_standard_ip_literals(self):
         for url in ("http://localhost:3000/", "http://127.0.0.1:8080/", "http://192.168.0.10/"):
@@ -75,6 +157,18 @@ class SafeNetworkTests(unittest.TestCase):
                 validate("http://8.8.8.8/")
                 validate("http://example.com/")
             self.assertEqual(resolve.call_count, 2)
+
+    def test_nat64_embedded_ipv4_uses_ipv4_publicness_rules(self):
+        nat64 = ipaddress.ip_network("64:ff9b::/96")
+        for ipv4, expected in (("8.8.8.8", True), ("10.0.0.1", False), ("127.0.0.1", False), ("169.254.1.1", False), ("100.64.0.1", False)):
+            address = ipaddress.IPv6Address(int(nat64.network_address) | int(ipaddress.IPv4Address(ipv4)))
+            with self.subTest(ipv4=ipv4):
+                self.assertEqual(_is_public_address(str(address)), expected)
+        self.assertFalse(_is_public_address("64:ff9b:1::808:808"))
+        self.assertTrue(_is_public_address("2001:4860:4860::8888"))
+        self.assertTrue(_is_public_address("2001:4860::a00:1"))
+        self.assertTrue(_is_public_address("::ffff:8.8.8.8"))
+        self.assertFalse(_is_public_address("::ffff:127.0.0.1"))
 
     def test_web_fetch_still_rejects_localhost(self):
         from services.web_tools import web_fetch
@@ -225,7 +319,7 @@ class SafeNetworkTests(unittest.TestCase):
             def open(self, request, timeout):
                 return request
 
-        with patch("core.safe_network.validate_public_http_url"), patch(
+        with patch("core.safe_network.socket.getaddrinfo", return_value=[_result("93.184.216.34")]), patch(
             "core.safe_network.urllib.request.build_opener", return_value=Opener()
         ):
             request = safe_urlopen("https://example.com", timeout=1)

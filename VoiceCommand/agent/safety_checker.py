@@ -105,8 +105,12 @@ def _python_contains_delete_call(code: str) -> bool:
 
     os_modules = {"os"}
     shutil_modules = {"shutil"}
+    subprocess_modules = {"subprocess"}
+    importlib_modules = {"importlib"}
     os_functions = set()
     shutil_functions = set()
+    shell_functions = set()
+    shell_calls = {"system", "popen", "run", "call", "check_call", "check_output", "Popen"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -114,38 +118,76 @@ def _python_contains_delete_call(code: str) -> bool:
                     os_modules.add(alias.asname or alias.name)
                 elif alias.name == "shutil":
                     shutil_modules.add(alias.asname or alias.name)
+                elif alias.name == "subprocess":
+                    subprocess_modules.add(alias.asname or alias.name)
+                elif alias.name == "importlib":
+                    importlib_modules.add(alias.asname or alias.name)
         elif isinstance(node, ast.ImportFrom):
             if node.module == "os":
-                os_functions.update(
-                    alias.asname or alias.name
-                    for alias in node.names
-                    if alias.name in {"remove", "unlink", "rmdir", "removedirs"}
-                )
+                os_functions.update(alias.asname or alias.name for alias in node.names if alias.name in {"remove", "unlink", "rmdir", "removedirs"})
                 if any(alias.name == "*" for alias in node.names):
                     os_functions.update({"remove", "unlink", "rmdir", "removedirs"})
+                shell_functions.update(alias.asname or alias.name for alias in node.names if alias.name in {"system", "popen"})
+            elif node.module == "subprocess":
+                shell_functions.update(alias.asname or alias.name for alias in node.names if alias.name in shell_calls)
             elif node.module == "shutil":
-                shutil_functions.update(
-                    alias.asname or alias.name
-                    for alias in node.names
-                    if alias.name == "rmtree"
-                )
+                shutil_functions.update(alias.asname or alias.name for alias in node.names if alias.name == "rmtree")
                 if any(alias.name == "*" for alias in node.names):
                     shutil_functions.add("rmtree")
 
+    def module_name(node):
+        if isinstance(node, ast.Name):
+            if node.id in os_modules:
+                return "os"
+            if node.id in shutil_modules:
+                return "shutil"
+            if node.id in subprocess_modules:
+                return "subprocess"
+        if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant):
+            if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+                return node.args[0].value
+            if (isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id in importlib_modules):
+                return node.args[0].value
+        return None
+
+    def shell_text(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, (ast.List, ast.Tuple)) and all(
+            isinstance(item, ast.Constant) and isinstance(item.value, str) for item in node.elts
+        ):
+            return " ".join(item.value for item in node.elts)
+        if isinstance(node, ast.JoinedStr):
+            return " ".join(item.value for item in node.values if isinstance(item, ast.Constant) and isinstance(item.value, str))
+        return None
+
+    def dynamic_delete(node):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "getattr" or len(node.args) < 2:
+            return False
+        if not isinstance(node.args[1], ast.Constant) or not isinstance(node.args[1].value, str):
+            return False
+        target_module = module_name(node.args[0])
+        return ((target_module == "os" and node.args[1].value in {"remove", "unlink", "rmdir", "removedirs"})
+                or (target_module == "shutil" and node.args[1].value == "rmtree"))
+
+    delete_names = os_functions | shutil_functions
     for node in ast.walk(tree):
         # 호출하지 않고 참조만 해도(map(os.remove, ...), f = os.remove) 삭제 수단이다.
-        if (
-            isinstance(node, ast.Attribute)
-            and isinstance(node.value, ast.Name)
-            and (
-                (node.value.id in os_modules and node.attr in {"remove", "unlink", "rmdir", "removedirs"})
-                or (node.value.id in shutil_modules and node.attr == "rmtree")
-            )
-        ):
+        if dynamic_delete(node):
+            return True
+        if isinstance(node, ast.Attribute):
+            target_module = module_name(node.value)
+            if ((target_module == "os" and node.attr in {"remove", "unlink", "rmdir", "removedirs"})
+                    or (target_module == "shutil" and node.attr == "rmtree")):
+                return True
+        if isinstance(node, ast.Name) and node.id in delete_names and isinstance(node.ctx, ast.Load):
             return True
         if not isinstance(node, ast.Call):
             continue
         function = node.func
+        if dynamic_delete(function):
+            return True
         if (
             isinstance(function, ast.Name)
             and function.id in {"exec", "eval", "compile"}
@@ -155,17 +197,23 @@ def _python_contains_delete_call(code: str) -> bool:
             and _python_contains_delete_call(node.args[0].value)
         ):
             return True
-        if isinstance(function, ast.Name):
-            if function.id in os_functions or function.id in shutil_functions:
+        if isinstance(function, ast.Attribute):
+            if function.attr in {"unlink", "rmdir", "rmtree"}:
                 return True
-            continue
-        if not isinstance(function, ast.Attribute):
-            continue
-        target = function.value
-        if function.attr in {"unlink", "rmdir", "rmtree"}:
-            return True
-        if function.attr in {"remove", "removedirs"}:
-            if isinstance(target, ast.Name) and target.id in os_modules:
+            target_module = module_name(function.value)
+            if ((target_module == "os" and function.attr in {"remove", "unlink", "rmdir", "removedirs"})
+                    or (target_module == "shutil" and function.attr == "rmtree")):
+                return True
+            shell_call = target_module in {"os", "subprocess"} and function.attr in shell_calls
+        else:
+            shell_call = isinstance(function, ast.Name) and function.id in shell_functions
+        if shell_call:
+            # 볼 수 있는 상수 명령만 판정한다. 전부 변수인 명령은 올리지 않는다.
+            command_arg = node.args[0] if node.args else next(
+                (keyword.value for keyword in node.keywords if keyword.arg in {"args", "cmd"}), None
+            )
+            command = shell_text(command_arg) if command_arg is not None else None
+            if command is not None and any(pattern.search(command) for pattern, _label in _DANGEROUS_SHELL):
                 return True
     return False
 

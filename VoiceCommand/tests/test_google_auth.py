@@ -279,6 +279,19 @@ class GoogleAuthTests(unittest.TestCase):
             post.assert_not_called()
             self.assertFalse(self.token_path.exists())
 
+    def test_sign_out_removes_legacy_and_protected_tokens(self):
+        google_auth.save_token({"access_token": _SAMPLE_OLD})
+        self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD}), encoding="utf-8")
+        with patch.object(google_auth.requests, "post"):
+            google_auth.sign_out()
+            self.assertFalse(google_auth.is_connected())
+
+    def test_sign_out_propagates_legacy_delete_failure(self):
+        self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD}), encoding="utf-8")
+        with patch.object(google_auth.os, "remove", side_effect=PermissionError("denied")), patch.object(google_auth.requests, "post"):
+            with self.assertRaises(PermissionError):
+                google_auth.sign_out()
+
     def test_invalid_grant_clears_token_and_requires_authorization(self):
         google_auth.save_token({"access_token": _SAMPLE_OLD, "refresh_token": _SAMPLE_REFRESH, "expires_at": 1})
         rejected = Mock(ok=False)
