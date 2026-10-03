@@ -340,3 +340,49 @@ class ConfigManager:
             settings = copy.deepcopy(cls.load_settings())
             update(settings)
             return cls.save_settings(settings)
+
+    @classmethod
+    def _orphaned_custom_secret_keys(cls, stored: dict) -> set[str]:
+        settings = cls.load_settings()
+        # 설정을 읽지 못해 기본값으로 실행 중이면 제공자 목록을 믿을 수 없다. 아무 키도 고르지 않는다.
+        if cls._settings_read_failed:
+            return set()
+        active_providers = set(get_custom_providers(settings))
+        return {
+            key for key in stored
+            if is_custom_secret_key(key)
+            and key[:-len("_api_key")] not in active_providers
+        }
+
+    @classmethod
+    def get_orphaned_custom_secret_keys(cls) -> set[str]:
+        with cls._lock:
+            try:
+                stored = SecretStore(_settings_path()).read()
+            except SecretStoreError:
+                logging.warning("Unused custom API keys could not be checked")
+                return set()
+            return cls._orphaned_custom_secret_keys(stored)
+
+    @classmethod
+    def delete_orphaned_custom_secrets(cls) -> int:
+        with cls._lock:
+            store = SecretStore(_settings_path())
+            try:
+                stored = store.read()
+            except SecretStoreError:
+                logging.warning("Unused custom API keys could not be removed")
+                return 0
+            orphaned = cls._orphaned_custom_secret_keys(stored)
+            if not orphaned:
+                return 0
+            updated = {key: value for key, value in stored.items() if key not in orphaned}
+            try:
+                store.write(updated)
+            except (OSError, SecretStoreError):
+                logging.warning("Unused custom API keys could not be removed")
+                return 0
+            for key in orphaned:
+                if cls._cached_settings is not None:
+                    cls._cached_settings.pop(key, None)
+            return len(orphaned)

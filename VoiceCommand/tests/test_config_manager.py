@@ -260,6 +260,41 @@ class ConfigManagerTests(unittest.TestCase):
                 self.assertTrue(ConfigManager.save_settings({"custom_llm_providers": {}}))
                 self.assertNotIn(key, write.call_args.args[0])
 
+    def test_orphaned_custom_secrets_are_detected_and_deleted_without_touching_other_secrets(self):
+        active = "custom_0123456789abcdef0123456789abcdef"
+        orphan = "custom_fedcba9876543210fedcba9876543210"
+        details = {"label": "x", "base_url": "https://example.com/v1", "default_model": "m"}
+        active_key = active + "_api_key"
+        orphan_key = orphan + "_api_key"
+        stored = {
+            active_key: "active-secret",
+            orphan_key: "orphan-secret",
+            "openai_api_key": "provider-secret",
+        }
+        with patch.object(ConfigManager, "_cached_settings", {
+            **ConfigManager.DEFAULT_SETTINGS,
+            "custom_llm_providers": {active: details},
+        }), patch("core.config_manager._settings_path", return_value="unused"), \
+                patch("core.config_manager.SecretStore.read", return_value=stored), \
+                patch("core.config_manager.SecretStore.write") as write, \
+                patch.dict(os.environ, {"ARI_" + orphan_key.upper(): "environment-secret"}):
+            self.assertEqual(ConfigManager.get_orphaned_custom_secret_keys(), {orphan_key})
+
+            removed = ConfigManager.delete_orphaned_custom_secrets()
+            self.assertEqual(os.environ["ARI_" + orphan_key.upper()], "environment-secret")
+            write.assert_called_once_with({
+                active_key: "active-secret",
+                "openai_api_key": "provider-secret",
+            })
+            self.assertEqual(removed, 1)
+
+            # 설정을 읽지 못한 실행에서는 제공자 목록이 비어 보여도 키를 지우지 않는다.
+            with patch.object(ConfigManager, "_settings_read_failed", True), \
+                    patch.object(ConfigManager, "load_settings", return_value=dict(ConfigManager.DEFAULT_SETTINGS)):
+                self.assertEqual(ConfigManager.get_orphaned_custom_secret_keys(), set())
+                self.assertEqual(ConfigManager.delete_orphaned_custom_secrets(), 0)
+            write.assert_called_once()
+
     def test_custom_provider_secret_survives_saves_when_its_provider_was_lost_not_removed(self):
         key = "custom_0123456789abcdef0123456789abcdef_api_key"
         # 손상 복구 뒤의 저장(파일에 제공자가 없음)과 읽기 실패 뒤의 저장(기본값으로 실행 중)

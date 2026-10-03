@@ -210,6 +210,7 @@ class _LLMSettingsPage(QWidget):
         self._provider_setting_widgets: dict[str, QWidget] = {}
         self._provider_title_labels: dict[str, QLabel] = {}
         self._custom_list_widgets: list[QWidget] = []
+        self._orphaned_keys_button: QPushButton | None = None
         self._init_ui()
 
     def _provider_options(self):
@@ -341,6 +342,10 @@ class _LLMSettingsPage(QWidget):
         add_custom_btn.setStyleSheet(secondary_btn_style())
         add_custom_btn.clicked.connect(self._add_custom_provider)
         custom_vbox.addWidget(add_custom_btn)
+        self._orphaned_keys_button = QPushButton("")
+        self._orphaned_keys_button.setStyleSheet(secondary_btn_style())
+        self._orphaned_keys_button.clicked.connect(self._confirm_delete_orphaned_custom_keys)
+        custom_vbox.addWidget(self._orphaned_keys_button)
         self._refresh_custom_provider_list()
         vbox.addWidget(custom_group)
 
@@ -407,6 +412,12 @@ class _LLMSettingsPage(QWidget):
         validate_btn.clicked.connect(lambda checked=False, p=provider: self._run_validation(p))
 
     def _refresh_custom_provider_list(self):
+        orphaned_keys = ConfigManager.get_orphaned_custom_secret_keys()
+        if self._orphaned_keys_button:
+            self._orphaned_keys_button.setText(
+                _("쓰지 않는 API 키 {count}개 삭제").format(count=len(orphaned_keys))
+            )
+            self._orphaned_keys_button.setVisible(bool(orphaned_keys))
         for widget in self._custom_list_widgets:
             self._custom_provider_list_layout.removeWidget(widget)
             widget.deleteLater()
@@ -430,6 +441,21 @@ class _LLMSettingsPage(QWidget):
             layout.addWidget(delete_btn)
             self._custom_provider_list_layout.addWidget(row)
             self._custom_list_widgets.append(row)
+
+    def _confirm_delete_orphaned_custom_keys(self):
+        count = len(ConfigManager.get_orphaned_custom_secret_keys())
+        if not count:
+            self._refresh_custom_provider_list()
+            return
+        if QMessageBox.question(
+            self,
+            _("쓰지 않는 API 키 삭제"),
+            _("쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다.").format(count=count),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes:
+            ConfigManager.delete_orphaned_custom_secrets()
+            self._refresh_custom_provider_list()
 
     def _add_custom_provider(self):
         dialog = _CustomProviderDialog(parent=self)
@@ -469,7 +495,7 @@ class _LLMSettingsPage(QWidget):
         if QMessageBox.question(
             self,
             _("제공자 삭제"),
-            _("'{name}' 제공자를 삭제할까요?").format(name=provider.get("label", provider_id)),
+            _("'{name}' 제공자를 삭제할까요? 저장된 API 키도 함께 삭제됩니다.").format(name=provider.get("label", provider_id)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         ) == QMessageBox.StandardButton.Yes:
