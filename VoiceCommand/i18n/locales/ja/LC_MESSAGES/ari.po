@@ -68,9 +68,6 @@ msgstr "ゲームモードON。GPUメモリを解放しました。"
 msgid "게임 모드 OFF. TTS 복원 중..."
 msgstr "ゲームモードOFF。TTSを復元中..."
 
-msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
-msgstr "ゲームモード解除。CosyVoiceに復元されました。"
-
 msgid "유튜브를 열게요."
 msgstr "YouTubeを開きます。"
 
@@ -462,9 +459,6 @@ msgstr "RP設定"
 msgid "Reference ID:"
 msgstr "Reference ID:"
 
-msgid "Reference WAV 텍스트 (Cross-lingual 시 비움):"
-msgstr "Reference WAVテキスト（クロスリンガル時は空欄）:"
-
 msgid "STT 엔진"
 msgstr "STTエンジン"
 
@@ -485,9 +479,6 @@ msgstr "UIテーマ設定"
 
 msgid "URL"
 msgstr "URL"
-
-msgid "Voice ID:"
-msgstr "Voice ID:"
 
 msgid "Whisper (오프라인)"
 msgstr "Whisper（オフライン）"
@@ -921,9 +912,6 @@ msgstr "スマートアシスタントモードが{status}されました。"
 msgid "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
 msgstr "スケジュール（例: 毎日09:00  /  毎週月曜日09:00  /  30分ごと）"
 
-msgid "스피커 출력 장치:"
-msgstr "スピーカー出力デバイス:"
-
 msgid "시"
 msgstr "時"
 
@@ -1293,9 +1281,6 @@ msgstr "して"
 msgid "현재 감도: {value}"
 msgstr "現在の感度: {value}"
 
-msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-msgstr "システムの「デフォルト再生デバイス」を通じて音が出力されます。"
-
 msgid "현재 예약된 종료가 없거나 취소에 실패했습니다."
 msgstr "現在予約されたシャットダウンがないか、キャンセルに失敗しました。"
 
@@ -1581,9 +1566,6 @@ msgstr "明けましておめでとうございます！"
 msgid "BOO! 깜짝이야~"
 msgstr "BOO！びっくりした〜"
 
-msgid "저녁 시간이에요"
-msgstr "夕方ですね"
-
 msgid "이제 많이 친해진 것 같아요."
 msgstr "今一番好きですよ！"
 
@@ -1595,9 +1577,6 @@ msgstr "開天節ですよ！"
 
 msgid "💝 친밀도 확인"
 msgstr "💝 親密度確認"
-
-msgid "늦은 시간이네요"
-msgstr "遅い時間ですね"
 
 msgid "그냥 두세요."
 msgstr "へへ"
@@ -1625,9 +1604,6 @@ msgstr "きれいにしてますね〜"
 
 msgid "CPU가 너무 바빠요! 좀 쉬게 해줘요!"
 msgstr "CPUが忙しすぎです！休ませてあげて！"
-
-msgid "밤이 깊었어요"
-msgstr "夜が更けましたね"
 
 msgid "CPU가 힘들어하고 있어요!"
 msgstr "CPUが大変そうです！"
@@ -1662,9 +1638,6 @@ msgstr "はぁ〜...眠いです。"
 msgid "왜~?"
 msgstr "なんで〜？"
 
-msgid "맛있게 드세요!"
-msgstr "美味しく召し上がってください！"
-
 msgid "응?"
 msgstr "ん？"
 
@@ -1677,12 +1650,6 @@ msgstr "メモリがいっぱいです..."
 msgid "램이 부족해요!"
 msgstr "RAMが足りません！"
 
-msgid "푹 쉬세요!"
-msgstr "ゆっくり休んでください！"
-
-msgid "빨리 주무세요..."
-msgstr "早く休んでください..."
-
 msgid "말풍선 히스토리"
 msgstr "吹き出し履歴"
 
@@ -1694,9 +1661,6 @@ msgstr "何ですか？"
 
 msgid "지인"
 msgstr "知人"
-
-msgid "이제 쉬세요~"
-msgstr "もう休んでください〜"
 
 msgid "올해도 잘 부탁해요~"
 msgstr "今年もよろしくお願いします〜"
@@ -1722,9 +1686,6 @@ msgstr "頑張ってください！"
 msgid "으스스~ 할로윈이에요!"
 msgstr "こわ〜いハロウィンです！"
 
-msgid "하암... 밤이 깊었어요."
-msgstr "はぁ...夜が更けましたね。"
-
 msgid "뭐예요?"
 msgstr "なんですか？"
 
@@ -1737,9 +1698,6 @@ msgstr "充電器を挿してください〜"
 msgid "왜 그러세요."
 msgstr "くすぐったいです！"
 
-msgid "힘내세요!"
-msgstr "頑張ってください！"
-
 msgid "앞으로 잘 부탁드려요."
 msgstr "よろしくお願いします！"
 
@@ -1748,9 +1706,6 @@ msgstr "誰と話してますか？"
 
 msgid "생일 축하드려요. 좋은 하루 되세요."
 msgstr "へへ、お誕生日おめでとうございます！良い一日を！"
-
-msgid "잘 주무셨어요?"
-msgstr "よく眠れましたか？"
 
 msgid "많이 친해졌네요."
 msgstr "だいぶ仲良くなりましたね！"
@@ -1788,9 +1743,6 @@ msgstr "気持ちいいです〜"
 msgid "뭐 찾고 계세요?"
 msgstr "何かお探しですか？"
 
-msgid "오후네요~"
-msgstr "午後ですね〜"
-
 msgid "적당히 해요."
 msgstr "また撫でてください〜"
 
@@ -1799,9 +1751,6 @@ msgstr "お誕生日です！ケーキをどうぞ〜"
 
 msgid "과부하예요, 조심해요!"
 msgstr "過負荷です、気をつけて！"
-
-msgid "하루 어떠셨어요?"
-msgstr "今日はどうでしたか？"
 
 msgid "뭐 보세요?"
 msgstr "何を見ているんですか？"
@@ -1821,9 +1770,6 @@ msgstr "プログラムが多すぎます〜"
 msgid "생일 축하드려요. 오늘 하루 즐겁게 보내세요."
 msgstr "お誕生日おめでとうございます〜今日の主役はあなたです！"
 
-msgid "졸려요... 같이 쉬어요."
-msgstr "眠い...一緒に休みましょう。"
-
 msgid "초콜릿... 드릴까요."
 msgstr "チョコレート...あげます へへ"
 
@@ -1832,9 +1778,6 @@ msgstr "登録済みメッセージ一覧"
 
 msgid "한글날이에요. 한글은 정말 멋져요!"
 msgstr "ハングルの日です。ハングルは本当にすごいです！"
-
-msgid "아침이네요!"
-msgstr "朝ですね！"
 
 msgid "절친"
 msgstr "大親友"
@@ -1875,9 +1818,6 @@ msgstr "うとうと..."
 msgid "충전 빨리요!!"
 msgstr "早く充電して！！"
 
-msgid "...자고 있었는데."
-msgstr "...寝てたのに。"
-
 msgid "저도 보고 싶어요!"
 msgstr "私も見たいです！"
 
@@ -1893,14 +1833,8 @@ msgstr "親友"
 msgid "나무 심어요~"
 msgstr "木を植えましょう〜"
 
-msgid "점심 시간이에요!"
-msgstr "お昼の時間ですよ！"
-
 msgid "하아암... 주무실 시간이에요."
 msgstr "はぁあ〜...お休みくださいご主人様〜"
-
-msgid "이제 그만 자요~"
-msgstr "もう寝ましょう〜"
 
 msgid "...알겠어요."
 msgstr "ふーん〜いいです..."
@@ -2450,9 +2384,6 @@ msgstr "\n[3/4] モデルはすでに存在します: {path}"
 msgid "\n[4/4] 세부 의존성 설치 중 (시간이 다소 소요될 수 있습니다)..."
 msgstr "\n[4/4] 追加の依存関係をインストールしています（時間がかかる場合があります）..."
 
-msgid "\n[4/4] requirements.txt 없음, 건너뜀"
-msgstr "\n[4/4] requirements.txtが見つからないため、スキップします"
-
 msgid "✨ CosyVoice3 설치가 완료되었습니다!"
 msgstr "✨ CosyVoice3のインストールが完了しました！"
 
@@ -2783,44 +2714,11 @@ msgstr "応答の生成中にエラーが発生しました。"
 msgid "일부 단계가 실패하여 목표를 달성하지 못했습니다."
 msgstr "一部の手順に失敗したため、目標を達成できませんでした。"
 
-msgid "실제 경로({filename})가 확인되어 작업을 완료했습니다."
-msgstr "実際のパス（{filename}）が確認されたため、タスクを完了しました。"
-
-msgid "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
-msgstr "実行後の状態変化の記録から、ブラウザーまたはアプリの状態変化を確認しました。"
-
 msgid "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
 msgstr "ブラウザーまたはアプリの状態が目標と一致したため、タスクを完了しました。"
 
-msgid "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
-msgstr "アクティブウィンドウのタイトルを確認し、アプリの実行状態を検証しました。"
-
-msgid "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
-msgstr "開いているウィンドウの一覧で、目標 URL と一致する状態を確認しました。"
-
-msgid "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
-msgstr "開いているウィンドウの一覧で、目標と一致するアプリの状態を確認しました。"
-
 msgid "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
 msgstr "画面画像の認識により、目標の状態を確認しました。"
-
-msgid "화면 상단에서 '{app_name}' 텍스트 확인됨"
-msgstr "画面上部で「{app_name}」というテキストを確認しました"
-
-msgid "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
-msgstr "OCR により「{app_name}」アプリが画面上で開いていることを確認しました"
-
-msgid "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
-msgstr "ワークフローの実行結果に開いた URL が記録されていたため、目標を達成しました。"
-
-msgid "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
-msgstr "ワークフローの実行結果にウィンドウタイトルと成功アクションが記録されていたため、タスクを完了しました。"
-
-msgid "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
-msgstr "現在のブラウザー状態を読み取り、目標と一致する実行結果を確認しました。"
-
-msgid "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
-msgstr "ブラウザーの最後のアクション記録から、目標と一致する実行状態を確認しました。"
 
 msgid "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
 msgstr "検証ステップに失敗したため、リポジトリの作業を完了できませんでした。"
@@ -2845,9 +2743,6 @@ msgstr "未達成"
 
 msgid "LLM 검증 실패"
 msgstr "LLM 検証に失敗しました"
-
-msgid "검증 프로세스 오류"
-msgstr "検証プロセスでエラーが発生しました"
 
 msgid "주의! {summary}"
 msgstr "警告！{summary}"
@@ -2932,9 +2827,6 @@ msgstr "タイトルなし"
 
 msgid "검색 중 오류 발생: {error}"
 msgstr "検索中にエラーが発生しました: {error}"
-
-msgid "허용되지 않은 URL 스킴: {scheme}"
-msgstr "許可されていないURLスキーム: {scheme}"
 
 msgid "페이지 로드 실패: {error}"
 msgstr "ページの読み込みに失敗しました: {error}"
@@ -3509,9 +3401,6 @@ msgstr "事実「{key}」を削除しますか？"
 msgid "이 사실이 언급된 대화 기록도 삭제"
 msgstr "この事実に言及している会話履歴も削除"
 
-msgid "Edge/OpenAI/ElevenLabs 감정 조절"
-msgstr "Edge/OpenAI/ElevenLabs の感情調整"
-
 msgid ""
 "[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
 "시각{time} · 칭찬24h {praise}회"
@@ -3617,12 +3506,6 @@ msgstr "複数の記憶があります: {items}。どれを削除するか選ん
 
 msgid "기억 삭제"
 msgstr "記憶の削除"
-
-msgid "기억한 내용을 삭제합니다."
-msgstr "保存した記憶を削除します。"
-
-msgid "기억 삭제: {fact}"
-msgstr "記憶を削除: {fact}"
 
 msgid "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
 msgstr "記憶・関連する会話履歴・一致する好みを削除: {fact}"
@@ -4197,9 +4080,6 @@ msgstr "開始"
 
 msgid "끝"
 msgstr "終了"
-
-msgid "검색 실패: {error}"
-msgstr "検索に失敗しました: {error}"
 
 msgid "관심사"
 msgstr "興味・関心"
