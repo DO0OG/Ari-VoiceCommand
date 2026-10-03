@@ -4,6 +4,7 @@ from __future__ import annotations
 import http.client
 import ipaddress
 import logging
+import os
 import re
 import socket
 import urllib.error
@@ -128,6 +129,11 @@ def is_public_http_url(url: str) -> bool:
     return True
 
 
+def _proxy_name_fallback_enabled() -> bool:
+    # 이름으로 다시 보내면 프록시가 이름을 다시 해석한다. 그것까지 막으려면 환경 변수로 끈다.
+    return os.environ.get("ARI_PROXY_NAME_FALLBACK", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _uses_proxy(url: str) -> bool:
     parsed = urllib.parse.urlsplit(url)
     scheme = parsed.scheme.lower()
@@ -228,7 +234,7 @@ class _SafeHTTPSHandler(urllib.request.HTTPSHandler):
             except urllib.error.URLError as exc:
                 # IP 목적지를 정책으로 거절(403)하는 프록시에서만 호스트 이름으로 한 번 더 보낸다.
                 # 그 밖의 실패에서 이름으로 바꾸면 프록시가 이름을 다시 해석하는 길이 열린다.
-                if "Tunnel connection failed: 403" not in str(exc.reason):
+                if "Tunnel connection failed: 403" not in str(exc.reason) or not _proxy_name_fallback_enabled():
                     raise
                 logging.info("프록시가 IP 목적지 연결을 거절해 호스트 이름으로 다시 시도합니다: %s", exc.reason)
         connection = type("RequestHTTPSConnection", (_SafeHTTPSConnection,), {"_safe_check": not proxied})
