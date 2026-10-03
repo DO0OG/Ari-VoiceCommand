@@ -1508,19 +1508,20 @@ class LLMProvider:
                     if part
                 ),
             }]
-            history = self._history_for_context(tool_blocks=provider == "anthropic")
-            last_user_text = next(
-                (
-                    message["content"]
-                    for message in reversed(history)
-                    if message.get("role") == "user"
-                    and isinstance(message.get("content"), str)
-                ),
-                "",
-            )
             # 도구 실행 도중 기록이 비워졌으면 이번 요청이 문맥에 없다. 그때만 다시 넣는다.
-            # 앞선 사용자 메시지와 합쳐져 있을 수 있어 끝부분으로 확인한다.
-            if original_msg and not last_user_text.endswith(original_msg):
+            # 문맥용 기록은 긴 메시지를 줄이거나 합치므로 원본 기록으로 확인한다.
+            with self._history_lock:
+                last_user_text = next(
+                    (
+                        message["content"]
+                        for message in reversed(self.conversation_history)
+                        if message.get("role") == "user"
+                        and isinstance(message.get("content"), str)
+                    ),
+                    None,
+                )
+            history = self._history_for_context(tool_blocks=provider == "anthropic")
+            if original_msg and last_user_text != original_msg:
                 history.append({"role": "user", "content": original_msg})
             messages.extend(history)
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})

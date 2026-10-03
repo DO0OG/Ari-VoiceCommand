@@ -545,6 +545,26 @@ class LLMProviderTests(unittest.TestCase):
             1,
         )
 
+    def test_feed_tool_result_does_not_repeat_long_user_message(self):
+        provider = self._stream_provider()
+        long_message = "read files " * 400
+        provider.add_to_history("user", long_message)
+        provider.client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done"))]
+        )
+        with patch.object(
+            provider, "_resolve_route", return_value=(provider.client, "openai", "test")
+        ), patch.object(provider, "_build_system", return_value="system"):
+            provider.feed_tool_result(
+                long_message, [{"id": "call-1", "name": "read_file", "arguments": {}}], ["data"]
+            )
+
+        roles = [
+            message["role"]
+            for message in provider.client.chat.completions.create.call_args.kwargs["messages"]
+        ]
+        self.assertEqual(roles.count("user"), 1)
+
     def test_feed_tool_result_restores_user_message_after_history_clear(self):
         provider = self._stream_provider()
         provider.add_to_history("user", "forget this")

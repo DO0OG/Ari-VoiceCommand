@@ -282,29 +282,36 @@ class MemoryCommand(BaseCommand):
         # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
         preference_delete_failed = False
         fact_value = str(fact.get("value", "")).strip()
-        if kind == "fact" and len(fact_value) > 1:
-            for category, values in context.get_preferences_snapshot().items():
-                for value in values:
-                    if fact_value.casefold() == str(value).strip().casefold():
-                        if not context.delete_preference(
-                            category, value, delete_conversations=True
-                        ):
-                            preference_delete_failed = True
+        # 확인을 기다리는 동안 사실이 바뀌었으면 아무것도 지우지 않는다.
+        # 검사와 삭제 사이에 다른 변경이 끼어들지 못하게 한 번에 잠근다.
+        with context._lock:
+            current = context.get_facts_snapshot().get(key)
+            stale = kind == "fact" and (
+                current is None or current.get("value", "") != fact.get("value", "")
+            )
+            if not stale and kind == "fact" and len(fact_value) > 1:
+                for category, values in context.get_preferences_snapshot().items():
+                    for value in values:
+                        if fact_value.casefold() == str(value).strip().casefold():
+                            if not context.delete_preference(
+                                category, value, delete_conversations=True
+                            ):
+                                preference_delete_failed = True
 
-        if preference_delete_failed:
-            deleted = False
-        elif kind == "fact":
-            deleted = context.delete_fact(
-                key,
-                delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
-                expected_value=str(fact.get("value", "")),
-            )
-        else:
-            deleted = context.delete_preference(
-                key,
-                str(fact.get("value", "")),
-                delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
-            )
+            if stale or preference_delete_failed:
+                deleted = False
+            elif kind == "fact":
+                deleted = context.delete_fact(
+                    key,
+                    delete_conversations=len(fact_value) > 1,
+                    expected_value=str(fact.get("value", "")),
+                )
+            else:
+                deleted = context.delete_preference(
+                    key,
+                    str(fact.get("value", "")),
+                    delete_conversations=len(fact_value) > 1,
+                )
 
         if deleted:
             # 지운 내용이 LLM 대화 문맥에 남아 다음 요청에 다시 실려 가지 않게 한다.
