@@ -102,14 +102,16 @@ _READ_ONLY_COMMANDS = frozenset({
     "echo", "dir", "ls", "type", "cat", "findstr", "grep", "where", "which",
     "ping", "tasklist", "ipconfig", "whoami", "hostname", "ver",
 })
-_SHELL_META = re.compile(r"[;&|`$(){}<>\r\n]")
+# %VAR%·!VAR!처럼 실행할 때 펼쳐지는 값은 볼 수 없으므로 셸 기호와 같이 취급한다.
+_SHELL_META = re.compile(r"[;&|`$(){}<>%!^\r\n]")
 
 
 def _is_plain_read_only_command(command: str) -> bool:
     if _SHELL_META.search(command):
         return False
     words = command.split()
-    return bool(words) and Path(words[0].strip("\"'")).stem.lower() in _READ_ONLY_COMMANDS
+    # 경로가 붙은 실행 파일(C:/tmp/echo.bat 등)은 이름이 같아도 다른 프로그램일 수 있다.
+    return bool(words) and words[0].lower().removesuffix(".exe") in _READ_ONLY_COMMANDS
 
 
 def _python_contains_delete_call(code: str) -> bool:
@@ -214,17 +216,24 @@ def _python_contains_delete_call(code: str) -> bool:
     constant_values = {}
     # execute = os.system 처럼 변수에 담아 부르는 경우도 같은 명령 검사를 받게 한다.
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
+            targets = [node.target]
+        else:
             continue
         value = node.value
-        if isinstance(value, (ast.Constant, ast.List, ast.Tuple, ast.JoinedStr)):
-            constant_values.setdefault(node.targets[0].id, []).append(value)
-        if (
-            isinstance(value, ast.Attribute)
-            and module_name(value.value) in {"os", "subprocess"}
-            and value.attr in shell_calls
-        ) or (isinstance(value, ast.Name) and value.id in shell_functions):
-            shell_functions.add(node.targets[0].id)
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                continue
+            if isinstance(value, (ast.Constant, ast.List, ast.Tuple, ast.JoinedStr)):
+                constant_values.setdefault(target.id, []).append(value)
+            if (
+                isinstance(value, ast.Attribute)
+                and module_name(value.value) in {"os", "subprocess"}
+                and value.attr in shell_calls
+            ) or (isinstance(value, ast.Name) and value.id in shell_functions):
+                shell_functions.add(target.id)
 
     delete_names = os_functions | shutil_functions
     for node in ast.walk(tree):
@@ -273,9 +282,11 @@ def _python_contains_delete_call(code: str) -> bool:
                 candidates = [] if command_arg is None else [command_arg]
             for candidate in candidates:
                 command = shell_text(candidate)
+                # 읽기 전용 예외는 전체가 보이는 문자열에만 준다. f-string의 변수 자리는 무엇이든 될 수 있다.
+                whole = isinstance(candidate, ast.Constant)
                 if (
                     command is not None
-                    and not _is_plain_read_only_command(command)
+                    and not (whole and _is_plain_read_only_command(command))
                     and any(pattern.search(command) for pattern, _label in _DANGEROUS_SHELL)
                 ):
                     return True
