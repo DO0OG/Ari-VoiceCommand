@@ -1,3 +1,13 @@
+# 서비스가 끝난 모델 이름. 설정에 저장돼 있으면 뒤의 모델로 바꿔 쓴다.
+_RETIRED_MODELS = {
+    "nvidia/nemotron-3-super-120b-a12b": "nvidia/nemotron-3-ultra-550b-a55b",
+}
+
+
+def current_model(name: str) -> str:
+    return _RETIRED_MODELS.get(name, name)
+
+
 _PROVIDER_CONFIG = {
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
@@ -32,7 +42,7 @@ _PROVIDER_CONFIG = {
     "nvidia_nim": {
         "base_url": "https://integrate.api.nvidia.com/v1",
         "label": "NVIDIA NIM",
-        "default_model": "nvidia/nemotron-3-super-120b-a12b",
+        "default_model": "nvidia/nemotron-3-ultra-550b-a55b",
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
