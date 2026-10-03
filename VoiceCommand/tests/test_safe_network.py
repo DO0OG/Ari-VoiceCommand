@@ -96,6 +96,19 @@ class SafeNetworkTests(unittest.TestCase):
             self.assertEqual(attempts, ["93.184.216.34", None])
             log.assert_called_once()
 
+    def test_proxy_https_name_retry_can_be_turned_off(self):
+        handler = object.__new__(_SafeHTTPSHandler)
+        handler._context = Mock()
+        handler.do_open = Mock(side_effect=URLError(OSError("Tunnel connection failed: 403 Forbidden")))
+        request = Request("https://example.com/path")
+        request._safe_destination_ip = "93.184.216.34"
+        with patch("core.safe_network._uses_proxy", return_value=True), patch.dict(
+            "os.environ", {"ARI_PROXY_NAME_FALLBACK": "0"}
+        ):
+            with self.assertRaises(URLError):
+                handler.https_open(request)
+            self.assertEqual(handler.do_open.call_count, 1)
+
     def test_proxy_https_does_not_retry_other_failures(self):
         # 이름으로 바꿔 보내면 프록시가 이름을 다시 해석한다. IP 거절(403)이 아니면 다시 보내지 않는다.
         for reason in ("certificate verify failed", "Tunnel connection failed: 502 Bad Gateway"):
