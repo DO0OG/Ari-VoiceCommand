@@ -306,6 +306,24 @@ class CustomLLMProviderTests(unittest.TestCase):
             openai.call_args_list[2], "execution-key", "https://execution.example/v1", 30
         )
 
+    def test_retired_model_saved_in_settings_is_replaced(self):
+        retired = "nvidia/nemotron-3-super-120b-a12b"
+        settings = {
+            "llm_provider": "nvidia_nim",
+            "llm_model": retired,
+            "llm_planner_provider": "",
+            "llm_planner_model": retired,
+            "llm_execution_provider": "",
+            "llm_execution_model": "",
+            "nvidia_nim_api_key": "key",
+        }
+        with patch.dict(sys.modules, {"core.custom_llm_providers": _custom_module({})}),              patch.dict(sys.modules, {"openai": _openai_module(Mock(return_value=Mock()))}),              patch("core.config_manager.ConfigManager.load_settings", return_value=settings),              patch.object(LLMProvider, "_load_int_setting", side_effect=lambda key, default: default),              patch("agent.llm_provider.ResponseCache.from_config", return_value=Mock()):
+            provider = get_llm_provider()
+
+        self.assertEqual(provider.model, "nvidia/nemotron-3-ultra-550b-a55b")
+        self.assertEqual(provider.planner_model, "nvidia/nemotron-3-ultra-550b-a55b")
+        self.assertEqual(provider.execution_model, "nvidia/nemotron-3-ultra-550b-a55b")
+
     def test_blank_same_provider_role_models_inherit_main_custom_override(self):
         custom = {CUSTOM_A: _config("Main", "https://main.example/v1", "provider-default")}
         settings = {

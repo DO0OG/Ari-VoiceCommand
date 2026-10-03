@@ -26,7 +26,7 @@ from agent.assistant_text_utils import (
 from agent.response_cache import ResponseCache, build_response_cache_key
 from agent.tool_schemas import CORE_TOOL_SCHEMAS, build_available_tools
 
-from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, get_provider_configs
+from agent.provider_config import _PROVIDER_CONFIG, _KEY_MAP, current_model, get_provider_configs
 from core.config_manager import ConfigManager
 from core.settings_schema import DEFAULT_SETTINGS
 from core.activity_monitor import get_activity_context
@@ -2187,12 +2187,12 @@ def _build_llm_provider() -> LLMProvider:
         if memory_extractor_provider not in {provider, execution_provider}
         else ""
     )
-    model = s.get("llm_model", "") or ""
+    model = current_model(s.get("llm_model", "") or "")
     if not model and provider not in _PROVIDER_CONFIG:
         model = provider_configs[provider].get("default_model", "") or ""
 
     def role_model(setting_key, selected):
-        value = s.get(setting_key, "") or ""
+        value = current_model(s.get(setting_key, "") or "")
         if value or selected == provider:
             return value or model
         if selected not in _PROVIDER_CONFIG:
@@ -2201,7 +2201,7 @@ def _build_llm_provider() -> LLMProvider:
 
     planner_model = role_model("llm_planner_model", planner_provider)
     execution_model = role_model("llm_execution_model", execution_provider)
-    memory_extractor_model = s.get("llm_memory_extractor_model", "") or ""
+    memory_extractor_model = current_model(s.get("llm_memory_extractor_model", "") or "")
     if memory_extractor_provider != execution_provider and not memory_extractor_model:
         memory_extractor_model = (
             model

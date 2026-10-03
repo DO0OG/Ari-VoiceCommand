@@ -421,7 +421,7 @@ Ollama를 쓰면 인터넷 연결이나 API 비용 없이 로컬에서 LLM을 �
 1. `https://build.nvidia.com` 에서 `nvapi-...` 형식의 API 키를 발급받습니다.
 2. 설정창 → **AI 설정** 탭에서 제공자를 **NVIDIA NIM** 으로 바꿉니다.
 3. API 키를 넣고 저장합니다.
-4. 모델 이름을 비워 두면 `nvidia/nemotron-3-super-120b-a12b` 가 기본값으로 쓰입니다.
+4. 모델 이름을 비워 두면 `nvidia/nemotron-3-ultra-550b-a55b` 가 기본값으로 쓰입니다.
    다른 모델을 쓰려면 NIM 카탈로그에서 모델 ID를 복사해 직접 넣으세요.
 5. Nemotron 3 계열처럼 추론 과정을 출력하는 모델은 Ari가 추론 모드를 꺼서 요청합니다.
    추론 문장이 답변이나 음성에 섞여 나오지 않습니다.
