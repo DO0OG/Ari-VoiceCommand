@@ -109,7 +109,7 @@ class SkillInstaller:
             # 기록을 먼저 지운다. 백업을 지우다 종료돼도 반쯤 지워진 백업으로 되돌리지 않는다.
             # 기록을 지우지 못했으면 백업에 손대지 않고 업데이트를 되돌린다.
             if not self._clear_update_journal():
-                raise OSError("스킬 업데이트 기록을 지우지 못했습니다")
+                raise OSError(_("스킬 업데이트 기록을 지우지 못해 업데이트를 되돌렸습니다."))
             for backup in self._update_backups.values():
                 if backup:
                     shutil.rmtree(backup, ignore_errors=True)
