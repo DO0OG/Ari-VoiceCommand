@@ -559,6 +559,9 @@ class SmartBrowser:
                 state = (stat.st_size, stat.st_mtime_ns)
                 if initial_files.get(path) == state:
                     continue
+                # 이번 실행 전에 받기 시작한 파일은 결과로 돌려주지 않는다.
+                if stat.st_ctime < getattr(self, "_download_scope_started", 0.0):
+                    continue
                 prev = last_seen.get(path)
                 now = time.time()
                 if prev and prev[0] == state:
@@ -800,6 +803,8 @@ class SmartBrowser:
             with self._download_lock:
                 self._pending_downloads.clear()
                 self._download_scope_started = time.time()
+        else:
+            self._download_scope_started = time.time()
 
     def _recover_stale_downloads(self) -> None:
         """이전 실행이 남긴 전용 폴더의 파일을 다운로드 폴더로 옮긴다."""

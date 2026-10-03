@@ -297,6 +297,22 @@ class WebToolsTests(unittest.TestCase):
                  self.assertRaises(TimeoutError):
                 browser.wait_for_download(timeout=1, stable_seconds=1)
 
+    def test_shared_folder_wait_skips_file_started_before_this_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = self._isolated_download_browser(tmp)
+            browser._download_isolated = False
+            browser._download_baseline = {}
+            with open(os.path.join(tmp, "late.bin"), "wb") as handle:
+                handle.write(b"x")
+            browser._download_scope_started = web_tools.time.time() + 60
+            with patch.object(browser, "_validate_current_page"):
+                with self.assertRaises(TimeoutError):
+                    browser.wait_for_download(timeout=0.6, stable_seconds=0.1)
+                browser._download_scope_started = 0.0
+                self.assertEqual(
+                    browser.wait_for_download(timeout=5, stable_seconds=0.1), os.path.join(tmp, "late.bin")
+                )
+
     def test_wait_for_download_returns_new_stable_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
