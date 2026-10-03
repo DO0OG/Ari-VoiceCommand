@@ -38,16 +38,20 @@ class WebToolsTests(unittest.TestCase):
         browser.download_dir = parent
         browser._browser_download_dir = os.path.join(parent, ".ari-browser-test")
         os.mkdir(browser._browser_download_dir)
+        browser._active_download_dir = os.path.join(browser._browser_download_dir, "run-test")
+        os.mkdir(browser._active_download_dir)
+        browser._download_run_scoped = True
         browser._download_isolated = True
         browser._download_baseline = None
         browser._download_lock = threading.Lock()
         browser._pending_downloads = []
+        browser.driver = type("Driver", (), {"execute_cdp_cmd": lambda *_args: None})()
         return browser
 
     def test_new_run_does_not_return_file_left_by_previous_run(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
-            with open(os.path.join(browser._browser_download_dir, "previous.bin"), "wb") as handle:
+            with open(os.path.join(browser._active_download_dir, "previous.bin"), "wb") as handle:
                 handle.write(b"x")
 
             browser._begin_download_scope()
@@ -60,18 +64,66 @@ class WebToolsTests(unittest.TestCase):
                 with self.assertRaises(TimeoutError):
                     browser.wait_for_download(timeout=1, stable_seconds=1)
 
+    def test_late_previous_run_file_is_moved_but_current_run_file_is_returned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = self._isolated_download_browser(tmp)
+            previous_run = browser._active_download_dir
+            partial_path = os.path.join(previous_run, "late.bin.crdownload")
+            with open(partial_path, "wb") as handle:
+                handle.write(b"partial")
+
+            browser._begin_download_scope()
+            current_run = browser._active_download_dir
+            self.assertNotEqual(previous_run, current_run)
+
+            os.remove(partial_path)
+            with open(os.path.join(previous_run, "late.bin"), "wb") as handle:
+                handle.write(b"old")
+            with open(os.path.join(current_run, "current.bin"), "wb") as handle:
+                handle.write(b"new")
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0)), \
+                 patch.object(web_tools.time, "sleep"):
+                self.assertEqual(browser.wait_for_download(timeout=10), os.path.join(tmp, "current.bin"))
+
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "late.bin")))
+            self.assertFalse(os.path.exists(previous_run))
+
+    def test_cdp_failure_uses_shared_download_folder_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = self._isolated_download_browser(tmp)
+
+            def fail_cdp(*_args):
+                raise RuntimeError("CDP unavailable")
+
+            # 첫 실행부터 경로를 바꾸지 못한 경우다. 폴더 하나를 계속 쓴다.
+            browser._download_run_scoped = False
+            browser._active_download_dir = browser._browser_download_dir
+            browser.driver.execute_cdp_cmd = fail_cdp
+            browser._begin_download_scope()
+            self.assertFalse(browser._download_run_scoped)
+            fallback_path = os.path.join(tmp, "fallback.bin")
+            with open(os.path.join(browser._browser_download_dir, "fallback.bin"), "wb") as handle:
+                handle.write(b"done")
+
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 0.5, 0.5, 1.5, 1.5)), \
+                 patch.object(web_tools.time, "sleep"):
+                self.assertEqual(browser.wait_for_download(timeout=10, stable_seconds=1), fallback_path)
+
     def test_collected_download_is_moved_without_waiting_and_returned_later(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
-            with open(os.path.join(browser._browser_download_dir, "report.pdf"), "wb") as handle:
+            with open(os.path.join(browser._active_download_dir, "report.pdf"), "wb") as handle:
                 handle.write(b"pdf")
-            with open(os.path.join(browser._browser_download_dir, "partial.crdownload"), "wb") as handle:
+            with open(os.path.join(browser._active_download_dir, "partial.crdownload"), "wb") as handle:
                 handle.write(b"...")
 
             browser._collect_downloads()
 
             self.assertTrue(os.path.isfile(os.path.join(tmp, "report.pdf")))
-            self.assertTrue(os.path.isfile(os.path.join(browser._browser_download_dir, "partial.crdownload")))
+            self.assertTrue(os.path.isfile(os.path.join(browser._active_download_dir, "partial.crdownload")))
             with patch.object(browser, "_validate_current_page"), \
                  patch.object(web_tools.time, "time", side_effect=(0, 0)), \
                  patch.object(web_tools.time, "sleep"):
@@ -111,7 +163,9 @@ class WebToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             stale = os.path.join(tmp, ".ari-browser-old")
             os.mkdir(stale)
-            with open(os.path.join(stale, "late.zip"), "wb") as handle:
+            old_run = os.path.join(stale, "run-old")
+            os.mkdir(old_run)
+            with open(os.path.join(old_run, "late.zip"), "wb") as handle:
                 handle.write(b"zip")
             browser = SmartBrowser.__new__(SmartBrowser)
             browser.download_dir = tmp
@@ -284,7 +338,7 @@ class WebToolsTests(unittest.TestCase):
             browser = self._isolated_download_browser(tmp)
             with open(os.path.join(tmp, "existing.bin"), "wb") as handle:
                 handle.write(b"old")
-            path = os.path.join(browser._browser_download_dir, "download.bin")
+            path = os.path.join(browser._active_download_dir, "download.bin")
             created = False
 
             def create_download(_delay):
@@ -306,7 +360,7 @@ class WebToolsTests(unittest.TestCase):
             with open(os.path.join(tmp, "other-app.bin"), "wb") as handle:
                 handle.write(b"unrelated")
             browser = self._isolated_download_browser(tmp)
-            isolated_path = os.path.join(browser._browser_download_dir, "ari.bin")
+            isolated_path = os.path.join(browser._active_download_dir, "ari.bin")
             with open(isolated_path, "wb") as handle:
                 handle.write(b"browser")
 
@@ -321,7 +375,7 @@ class WebToolsTests(unittest.TestCase):
     def test_wait_for_download_moves_completed_file_to_parent(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
-            path = os.path.join(browser._browser_download_dir, "report.pdf")
+            path = os.path.join(browser._active_download_dir, "report.pdf")
             with open(path, "wb") as handle:
                 handle.write(b"pdf")
 
@@ -339,7 +393,7 @@ class WebToolsTests(unittest.TestCase):
             with open(os.path.join(tmp, "report.pdf"), "wb") as handle:
                 handle.write(b"existing")
             browser = self._isolated_download_browser(tmp)
-            with open(os.path.join(browser._browser_download_dir, "report.pdf"), "wb") as handle:
+            with open(os.path.join(browser._active_download_dir, "report.pdf"), "wb") as handle:
                 handle.write(b"new")
 
             with patch.object(browser, "_validate_current_page"), \
@@ -367,7 +421,7 @@ class WebToolsTests(unittest.TestCase):
     def test_wait_for_download_returns_file_finished_before_wait_started(self):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
-            path = os.path.join(browser._browser_download_dir, "fast.bin")
+            path = os.path.join(browser._active_download_dir, "fast.bin")
             with open(path, "wb") as handle:
                 handle.write(b"done")
 
@@ -383,8 +437,8 @@ class WebToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
             paths = {
-                os.path.join(browser._browser_download_dir, "a.bin"),
-                os.path.join(browser._browser_download_dir, "b.bin"),
+                os.path.join(browser._active_download_dir, "a.bin"),
+                os.path.join(browser._active_download_dir, "b.bin"),
             }
             for path in paths:
                 with open(path, "wb") as handle:
@@ -406,7 +460,7 @@ class WebToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             browser = self._isolated_download_browser(tmp)
             # 대기를 시작하기 전에 끝난 파일도 전용 폴더에서 감지한다.
-            path = os.path.join(browser._browser_download_dir, "first.bin")
+            path = os.path.join(browser._active_download_dir, "first.bin")
             with open(path, "wb") as handle:
                 handle.write(b"x")
 
