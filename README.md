@@ -23,66 +23,51 @@
 
 ---
 
-Ari is an **open-source Windows AI voice assistant and autonomous desktop agent** built with Python and PySide6. It combines wake-word voice control, speech-to-text (STT), text-to-speech (TTS), Windows automation, persistent memory, local or hosted LLMs, Model Context Protocol (MCP), plugins, and skills in one desktop application.
-
-It is designed for people who want a Windows voice assistant that can do more than chat: Ari can route supported commands locally, hand complex goals to an agent workflow, use tools, verify results, remember useful context, and speak the result back.
+Ari is an **open-source AI voice assistant for Windows**. Call it with a wake word or a hotkey, or click the desktop character, and it listens, answers out loud, and gets things done on your PC. Simple commands run locally right away. Bigger jobs are planned, carried out with tools, and checked step by step.
 
 > [!NOTE]
-> Ari currently targets **Windows 10/11 (64-bit)**. Telegram remote commands and remote embeddings are disabled by default.
+> Ari runs on **Windows 10/11 (64-bit)** only.
 
 ## What Ari can do
 
-| Area | Capabilities |
+| Area | Description |
 | :--- | :--- |
-| **Voice assistant** | Wake word, voice shortcut, character click, Google STT, offline Whisper STT, streamed speech output |
-| **Windows automation** | Supported local commands plus multi-step desktop tasks through tools and the autonomous agent |
-| **Fast local commands** | High-confidence supported commands use this path by default; it can be disabled in Settings → Agent |
-| **Local AI** | Ollama local LLMs, local CosyVoice3, local ONNX embeddings, and offline Whisper options |
-| **Hosted AI** | OpenAI-compatible providers for models hosted locally or remotely |
-| **Memory** | Relevant fact and conversation retrieval, explicit remember/forget commands, reviewable memory suggestions |
-| **Agent workflows** | Plan, execute, verify, reflect, reuse strategies, interrupt active work, and resume supported flows |
-| **Extensions** | Plugins, installable `SKILL.md` skills, MCP servers and tools |
-| **Remote control** | Optional allow-listed Telegram commands through the same request pipeline |
-| **Languages** | Korean, English, and Japanese UI/command routing |
+| **Voice conversation** | Start talking with a wake word, a hotkey, or a click on the character. Answers are spoken sentence by sentence, and you can interrupt at any time. |
+| **PC control** | Handles commands such as volume, screenshots, and launching apps, as well as multi-step desktop tasks. |
+| **Fast responses** | Common commands are recognized and run on your PC without waiting for an LLM. |
+| **Model choice** | Use local Ollama models, hosted providers, or any OpenAI-compatible server. |
+| **Speech engines** | Speech recognition with Google or offline Whisper. Speech synthesis with Edge, local CosyVoice3, OpenAI, ElevenLabs, Fish Audio, and more. |
+| **Memory** | Remembers what it learns in conversation and brings it up when relevant. Manage it yourself with "remember" and "forget". |
+| **Extensions** | Add features with plugins, `SKILL.md` skills, and MCP servers. |
+| **Remote commands** | Send commands from Telegram accounts you allow. Off by default. |
+| **Character** | A desktop character shows what Ari is doing and how it feels, and speaks up when something happens. |
+| **Languages** | Korean, English, Japanese |
 
-## Why Ari
-
-- **Windows-first, not browser-first.** Ari is built around desktop interaction, voice control, system commands, and Windows automation.
-- **Local-first options.** Use Ollama, Whisper, CosyVoice3, and local embeddings when you want more of the stack to stay on-device.
-- **Fast when a full model is unnecessary.** Supported high-confidence commands can use the local decision path without waiting on an LLM.
-- **More than a chatbot.** Complex requests can enter a plan → execute → verify → reflect loop and use tools or reusable strategies.
-- **A visible assistant.** The desktop character reflects activity and mood, supports event-based speech, and can be clicked to start talking.
-- **Built to extend.** Add plugins, `SKILL.md` packages, MCP tools, or OpenAI-compatible model providers without replacing the core app.
-
-## Example interactions
-
-Ari's exact behavior depends on enabled features and your selected model/provider, but supported requests include things like:
+## Things you can say
 
 ```text
-"What's the current time?"
+"What time is it?"
 "Set the volume to 30%."
 "Take a screenshot."
-"What apps are running?"
-"Remember that I prefer concise answers."
+"Which apps are running?"
+"Remember that I prefer short answers."
 "Forget what I told you about that preference."
 ```
 
-For larger goals, Ari can pass the request into its autonomous agent workflow and use the tools available in your configuration.
+For more complex requests, the agent makes a plan and works through it step by step. What Ari can actually do depends on the features you enable and the model you choose.
 
-## Quick start
+## Install
 
 ### Requirements
 
 - Windows 10/11 (64-bit)
-- Python 3.11 for source installs
 - 8 GB RAM recommended
-- 4 GB GPU VRAM recommended when using local GPU-backed models
+- 4 GB VRAM recommended for running local models on a GPU
+- Python 3.11 if you run from source
 
-### Install the Windows build
+### Installer
 
-Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)**.
-
-The installer uses `Program Files\Ari` by default. User settings, history, and runtime data are stored under `%AppData%\Ari`.
+Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** and run it. Ari installs to `Program Files\Ari` by default and keeps settings and history in `%AppData%\Ari`.
 
 ### Run from source
 
@@ -93,101 +78,25 @@ setup.bat
 Ari.vbs
 ```
 
-For local CosyVoice3, run `setup.bat --with-tts`. Use `Ari.bat` when you need startup diagnostics. See the **[Usage Guide](./docs/USAGE.md)** for configuration, providers, voice settings, skills, and advanced features.
+Use `setup.bat --with-tts` to install local CosyVoice3 as well. If Ari does not start, run `Ari.bat` to see the error.
 
-## Local-first and privacy-aware defaults
+## Privacy and running locally
 
-Ari can use cloud services, but the project also supports a more local setup:
+With Ollama for the LLM, Whisper for speech recognition, CosyVoice3 for speech synthesis, and local embeddings for memory search, all of that processing stays on your PC. What leaves your PC depends on the providers and features you turn on.
 
-- Ollama for local LLM inference
-- Offline Whisper for speech recognition
-- CosyVoice3 for local TTS
-- Local ONNX embeddings for memory and strategy retrieval
-- Remote embeddings disabled by default
-- Telegram integration disabled by default
-- Direct local handling applies only to allow-listed high-confidence commands and can be disabled in Settings → Agent
-- Plugins are not automatically loaded without user consent (approved plugins run with the app's privileges, not in a sandbox)
+- Remote embeddings and the Telegram integration are off by default.
+- Only plugins you approve are loaded. Approved plugins run with the app's permissions and are not sandboxed, so approve only the ones you trust.
 
-The exact data flow depends on the providers and optional integrations you enable.
+## Documentation
 
-## How it works
+The documents below are written in Korean.
 
-```mermaid
-graph TD
-    Wake["Wake word"] --> STT["STT: Google / Whisper"]
-    Manual["Voice shortcut / character click"] --> STT
-    Manual --> Warm
-    Wake --> Warm["LLM connection prewarm"]
-    STT --> Registry["Command registry"]
-    Chat["Text chat / Telegram"] --> Handler["Request handler"]
-    Registry --> Handler
-    Handler --> Decision["Local decision engine"]
-    Decision -- "Eligible + high confidence" --> Fast["Direct local command"]
-    Decision -- "Uncertain / complex" --> Ack["Instant acknowledgement"]
-    Decision -- "Uncertain / complex" --> LLM["LLM provider + tool calls"]
-    Ack -.-> LLM
-    Warm --> LLM
-    LLM --> Tools["Tool execution"]
-    Tools --> Policy["Tool-result follow-up policy"]
-    Policy --> LLM
-    Memory["Fact + conversation memory"] --> LLM
-    Tools --> Agent["Autonomous agent"]
-    Agent --> Loop["Plan / execute / verify / reflect"]
-    Loop --> Strategy["Strategy memory / skills"]
-    Strategy -.-> Agent
-    Fast --> TTS["Sentence-streamed TTS"]
-    LLM --> TTS
-    Agent --> TTS
-    Agent --> Character["Character mood / event speech"]
-    TTS --> Character
-    Stop["Stop / interrupt"] --> TTS
-    Stop --> Agent
-```
+- **[User guide](./docs/USAGE.md)** — settings, providers and speech engines, skills, automation examples
+- **[Documentation index](./docs/README.md)** — all documents, architecture diagram, local decision evaluation results
+- **[Release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases)** — changes in each version
+- For developers: [Plugins](./docs/PLUGIN_GUIDE.md) · [MCP server and tools](./docs/MCP_SERVER.md) · [Autonomous agent](./docs/AGENT_ADVANCED.md) · [Local decision engine](./docs/LOCAL_DECISION_ENGINE.md) · [Themes](./docs/THEME_CUSTOMIZATION.md) · [Credentials](./docs/CREDENTIALS.md) · [Contributing](./docs/CONTRIBUTING.md)
 
-## Verified local-decision evaluation
-
-The local decision engine has a separate held-out evaluation for its supported command path:
-
-- **7,407** generated evaluation examples
-- **367** parser-confirmed direct selections
-- **100.0% measured precision** for those selections
-- **0 false direct selections** in that evaluation
-- Warm inference: **p50 0.048 ms**, **p95 0.071 ms** over 1,000 iterations on an AMD64 Windows desktop
-
-These numbers evaluate the decision/parser path only. They do **not** measure microphone recognition accuracy, overall agent success rate, or every possible user request.
-
-## What's new in v1.1
-
-- Faster voice interaction with wake-time connection prewarming and instant acknowledgement
-- Wake word + command in one utterance
-- Faster end-of-speech handling and improved Whisper behavior
-- Streaming Edge TTS with caching and sentence-level playback
-- Interrupt Ari while it is speaking or generating a response
-- Explicit remember/forget commands and improved multilingual memory retrieval
-- Persistent mood, conversational context, and event-based character speech
-- Update checks, notifications, and installer reliability improvements
-- v1.2.0: voice cloning and emotional speech across TTS providers (OpenAI-compatible TTS, ElevenLabs voice cloning and v3 emotion tags, OpenAI custom voices), plus a fix for the installed app closing right after startup
-- v1.2.1: Fish Audio and ElevenLabs TTS start playing from the first audio chunk, the TTS volume setting applies to every engine, and TTS failures are shown in the speech bubble
-- v1.2.1: speech bubble sits right above the character's head, "open Naver"-style requests fall back to the browser for known sites, and missing translations were filled in
-- v1.2.2: microphone auto-sensitivity is off and fast local handling is on by default; fixed chat flicker and widening, Python tool WinError 6, CosyVoice reloading after a stop, and paused schedules being removed
-- v1.2.3: settings tabs scroll when the window is small, LLM provider changes apply without a restart, and the CosyVoice installer finds Python 3.10/3.11 on its own
-- v1.3.0: network tools can no longer reach internal network addresses, Google account connection is completed from Settings, and game mode, memory deletion, the beta update channel, and settings saving are more reliable
-
-See the **[v1.3.0 release notes](https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.3.0)**.
-
-## For developers
-
-Ari is a Python/PySide6 Windows desktop project with multiple extension points:
-
-- **[Plugin development](./docs/PLUGIN_GUIDE.md)**
-- **[MCP server and tools](./docs/MCP_SERVER.md)**
-- **[Advanced agent guide](./docs/AGENT_ADVANCED.md)**
-- **[Local decision engine](./docs/LOCAL_DECISION_ENGINE.md)**
-- **[Theme customization](./docs/THEME_CUSTOMIZATION.md)**
-- **[Credential handling](./docs/CREDENTIALS.md)**
-- **[Contributing](./docs/CONTRIBUTING.md)**
-
-Useful areas for contributions include Windows automation, STT/TTS, local model integrations, PySide6 UX, plugins, skills, MCP workflows, reliability, and multilingual support.
+Contributions are always welcome.
 
 ## Assets & credits
 
