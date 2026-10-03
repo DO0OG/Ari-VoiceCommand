@@ -68,9 +68,6 @@ msgstr "게임 모드 ON. GPU 메모리 해제했습니다."
 msgid "게임 모드 OFF. TTS 복원 중..."
 msgstr "게임 모드 OFF. TTS 복원 중..."
 
-msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
-msgstr "게임 모드 해제. CosyVoice로 복원되었습니다."
-
 msgid "유튜브를 열게요."
 msgstr "유튜브를 열게요."
 
@@ -462,9 +459,6 @@ msgstr "RP 설정"
 msgid "Reference ID:"
 msgstr "Reference ID:"
 
-msgid "Reference WAV 텍스트 (Cross-lingual 시 비움):"
-msgstr "Reference WAV 텍스트 (Cross-lingual 시 비움):"
-
 msgid "STT 엔진"
 msgstr "STT 엔진"
 
@@ -485,9 +479,6 @@ msgstr "UI 테마 설정"
 
 msgid "URL"
 msgstr "URL"
-
-msgid "Voice ID:"
-msgstr "Voice ID:"
 
 msgid "Whisper (오프라인)"
 msgstr "Whisper (오프라인)"
@@ -921,9 +912,6 @@ msgstr "스마트 어시스턴트 모드가 {status}되었습니다."
 msgid "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
 msgstr "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
 
-msgid "스피커 출력 장치:"
-msgstr "스피커 출력 장치:"
-
 msgid "시"
 msgstr "시"
 
@@ -1293,9 +1281,6 @@ msgstr "해줘"
 msgid "현재 감도: {value}"
 msgstr "현재 감도: {value}"
 
-msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-msgstr "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-
 msgid "현재 예약된 종료가 없거나 취소에 실패했습니다."
 msgstr "현재 예약된 종료가 없거나 취소에 실패했습니다."
 
@@ -1581,9 +1566,6 @@ msgstr "새해 복 많이 받으세요!"
 msgid "BOO! 깜짝이야~"
 msgstr "BOO! 깜짝이야~"
 
-msgid "저녁 시간이에요"
-msgstr "저녁 시간이에요"
-
 msgid "이제 많이 친해진 것 같아요."
 msgstr "이제 많이 친해진 것 같아요."
 
@@ -1595,9 +1577,6 @@ msgstr "개천절이에요!"
 
 msgid "💝 친밀도 확인"
 msgstr "💝 친밀도 확인"
-
-msgid "늦은 시간이네요"
-msgstr "늦은 시간이네요"
 
 msgid "그냥 두세요."
 msgstr "그냥 두세요."
@@ -1625,9 +1604,6 @@ msgstr "깔끔하게요~"
 
 msgid "CPU가 너무 바빠요! 좀 쉬게 해줘요!"
 msgstr "CPU가 너무 바빠요! 좀 쉬게 해줘요!"
-
-msgid "밤이 깊었어요"
-msgstr "밤이 깊었어요"
 
 msgid "CPU가 힘들어하고 있어요!"
 msgstr "CPU가 힘들어하고 있어요!"
@@ -1662,9 +1638,6 @@ msgstr "하암~... 졸려요."
 msgid "왜~?"
 msgstr "왜~?"
 
-msgid "맛있게 드세요!"
-msgstr "맛있게 드세요!"
-
 msgid "응?"
 msgstr "응?"
 
@@ -1677,12 +1650,6 @@ msgstr "메모리가 꽉 찼어요..."
 msgid "램이 부족해요!"
 msgstr "램이 부족해요!"
 
-msgid "푹 쉬세요!"
-msgstr "푹 쉬세요!"
-
-msgid "빨리 주무세요..."
-msgstr "빨리 주무세요..."
-
 msgid "말풍선 히스토리"
 msgstr "말풍선 히스토리"
 
@@ -1694,9 +1661,6 @@ msgstr "왜요?"
 
 msgid "지인"
 msgstr "지인"
-
-msgid "이제 쉬세요~"
-msgstr "이제 쉬세요~"
 
 msgid "올해도 잘 부탁해요~"
 msgstr "올해도 잘 부탁해요~"
@@ -1722,9 +1686,6 @@ msgstr "화이팅!"
 msgid "으스스~ 할로윈이에요!"
 msgstr "으스스~ 할로윈이에요!"
 
-msgid "하암... 밤이 깊었어요."
-msgstr "하암... 밤이 깊었어요."
-
 msgid "뭐예요?"
 msgstr "뭐예요?"
 
@@ -1737,9 +1698,6 @@ msgstr "충전기 꽂아주세요~"
 msgid "왜 그러세요."
 msgstr "왜 그러세요."
 
-msgid "힘내세요!"
-msgstr "힘내세요!"
-
 msgid "앞으로 잘 부탁드려요."
 msgstr "앞으로 잘 부탁드려요."
 
@@ -1748,9 +1706,6 @@ msgstr "누구랑 얘기 중이에요?"
 
 msgid "생일 축하드려요. 좋은 하루 되세요."
 msgstr "생일 축하드려요. 좋은 하루 되세요."
-
-msgid "잘 주무셨어요?"
-msgstr "잘 주무셨어요?"
 
 msgid "많이 친해졌네요."
 msgstr "많이 친해졌네요."
@@ -1788,9 +1743,6 @@ msgstr "그만해요."
 msgid "뭐 찾고 계세요?"
 msgstr "뭐 찾고 계세요?"
 
-msgid "오후네요~"
-msgstr "오후네요~"
-
 msgid "적당히 해요."
 msgstr "적당히 해요."
 
@@ -1799,9 +1751,6 @@ msgstr "생일이에요. 케이크 드세요."
 
 msgid "과부하예요, 조심해요!"
 msgstr "과부하예요, 조심해요!"
-
-msgid "하루 어떠셨어요?"
-msgstr "하루 어떠셨어요?"
 
 msgid "뭐 보세요?"
 msgstr "뭐 보세요?"
@@ -1821,9 +1770,6 @@ msgstr "프로그램이 너무 많아요~"
 msgid "생일 축하드려요. 오늘 하루 즐겁게 보내세요."
 msgstr "생일 축하드려요. 오늘 하루 즐겁게 보내세요."
 
-msgid "졸려요... 같이 쉬어요."
-msgstr "졸려요... 같이 쉬어요."
-
 msgid "초콜릿... 드릴까요."
 msgstr "초콜릿... 드릴까요."
 
@@ -1832,9 +1778,6 @@ msgstr "등록된 메시지 목록"
 
 msgid "한글날이에요. 한글은 정말 멋져요!"
 msgstr "한글날이에요. 한글은 정말 멋져요!"
-
-msgid "아침이네요!"
-msgstr "아침이네요!"
 
 msgid "절친"
 msgstr "절친"
@@ -1875,9 +1818,6 @@ msgstr "꾸벅..."
 msgid "충전 빨리요!!"
 msgstr "충전 빨리요!!"
 
-msgid "...자고 있었는데."
-msgstr "...자고 있었는데."
-
 msgid "저도 보고 싶어요!"
 msgstr "저도 보고 싶어요!"
 
@@ -1893,14 +1833,8 @@ msgstr "친한친구"
 msgid "나무 심어요~"
 msgstr "나무 심어요~"
 
-msgid "점심 시간이에요!"
-msgstr "점심 시간이에요!"
-
 msgid "하아암... 주무실 시간이에요."
 msgstr "하아암... 주무실 시간이에요."
-
-msgid "이제 그만 자요~"
-msgstr "이제 그만 자요~"
 
 msgid "...알겠어요."
 msgstr "...알겠어요."
@@ -2450,9 +2384,6 @@ msgstr "\n[3/4] 모델 이미 존재: {path}"
 msgid "\n[4/4] 세부 의존성 설치 중 (시간이 다소 소요될 수 있습니다)..."
 msgstr "\n[4/4] 세부 의존성 설치 중 (시간이 다소 소요될 수 있습니다)..."
 
-msgid "\n[4/4] requirements.txt 없음, 건너뜀"
-msgstr "\n[4/4] requirements.txt 없음, 건너뜀"
-
 msgid "✨ CosyVoice3 설치가 완료되었습니다!"
 msgstr "✨ CosyVoice3 설치가 완료되었습니다!"
 
@@ -2783,44 +2714,11 @@ msgstr "응답 생성 중 오류가 발생했습니다."
 msgid "일부 단계가 실패하여 목표를 달성하지 못했습니다."
 msgstr "일부 단계가 실패하여 목표를 달성하지 못했습니다."
 
-msgid "실제 경로({filename})가 확인되어 작업을 완료했습니다."
-msgstr "실제 경로({filename})가 확인되어 작업을 완료했습니다."
-
-msgid "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
-msgstr "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
-
 msgid "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
 msgstr "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
 
-msgid "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
-msgstr "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
-
-msgid "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
-msgstr "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
-
-msgid "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
-msgstr "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
-
 msgid "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
 msgstr "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
-
-msgid "화면 상단에서 '{app_name}' 텍스트 확인됨"
-msgstr "화면 상단에서 '{app_name}' 텍스트 확인됨"
-
-msgid "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
-msgstr "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
-
-msgid "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
-msgstr "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
-
-msgid "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
-msgstr "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
-
-msgid "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
-msgstr "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
-
-msgid "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
-msgstr "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
 
 msgid "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
 msgstr "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
@@ -2845,9 +2743,6 @@ msgstr "미달성"
 
 msgid "LLM 검증 실패"
 msgstr "LLM 검증 실패"
-
-msgid "검증 프로세스 오류"
-msgstr "검증 프로세스 오류"
 
 msgid "주의! {summary}"
 msgstr "주의! {summary}"
@@ -2932,9 +2827,6 @@ msgstr "제목 없음"
 
 msgid "검색 중 오류 발생: {error}"
 msgstr "검색 중 오류 발생: {error}"
-
-msgid "허용되지 않은 URL 스킴: {scheme}"
-msgstr "허용되지 않은 URL 스킴: {scheme}"
 
 msgid "페이지 로드 실패: {error}"
 msgstr "페이지 로드 실패: {error}"
@@ -3509,9 +3401,6 @@ msgstr "'{key}' 사실을 삭제할까요?"
 msgid "이 사실이 언급된 대화 기록도 삭제"
 msgstr "이 사실이 언급된 대화 기록도 삭제"
 
-msgid "Edge/OpenAI/ElevenLabs 감정 조절"
-msgstr "Edge/OpenAI/ElevenLabs 감정 조절"
-
 msgid ""
 "[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
 "시각{time} · 칭찬24h {praise}회"
@@ -3617,12 +3506,6 @@ msgstr "여러 기억이 있어요: {items}. 어떤 기억인지 골라 주세�
 
 msgid "기억 삭제"
 msgstr "기억 삭제"
-
-msgid "기억한 내용을 삭제합니다."
-msgstr "기억한 내용을 삭제합니다."
-
-msgid "기억 삭제: {fact}"
-msgstr "기억 삭제: {fact}"
 
 msgid "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
 msgstr "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
@@ -4197,9 +4080,6 @@ msgstr "시작"
 
 msgid "끝"
 msgstr "끝"
-
-msgid "검색 실패: {error}"
-msgstr "검색 실패: {error}"
 
 msgid "관심사"
 msgstr "관심사"

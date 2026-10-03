@@ -68,9 +68,6 @@ msgstr "Game Mode ON. GPU memory released."
 msgid "게임 모드 OFF. TTS 복원 중..."
 msgstr "Game Mode OFF. Restoring TTS..."
 
-msgid "게임 모드 해제. CosyVoice로 복원되었습니다."
-msgstr "Game Mode disabled. Restored to CosyVoice."
-
 msgid "유튜브를 열게요."
 msgstr "Opening YouTube."
 
@@ -462,9 +459,6 @@ msgstr "RP Settings"
 msgid "Reference ID:"
 msgstr "Reference ID:"
 
-msgid "Reference WAV 텍스트 (Cross-lingual 시 비움):"
-msgstr "Reference WAV text (leave empty for cross-lingual):"
-
 msgid "STT 엔진"
 msgstr "STT Engine"
 
@@ -485,9 +479,6 @@ msgstr "UI Theme Settings"
 
 msgid "URL"
 msgstr "URL"
-
-msgid "Voice ID:"
-msgstr "Voice ID:"
 
 msgid "Whisper (오프라인)"
 msgstr "Whisper (Offline)"
@@ -921,9 +912,6 @@ msgstr "Smart assistant mode has been {status}."
 msgid "스케줄 (예: 매일 09:00  /  매주 월요일 09:00  /  30분마다)"
 msgstr "Schedule (e.g., daily 09:00  /  every Monday 09:00  /  every 30 minutes)"
 
-msgid "스피커 출력 장치:"
-msgstr "Speaker output device:"
-
 msgid "시"
 msgstr "hr"
 
@@ -1293,9 +1281,6 @@ msgstr "do it"
 msgid "현재 감도: {value}"
 msgstr "Current sensitivity: {value}"
 
-msgid "현재 시스템의 '기본 재생 장치'를 통해 소리가 출력됩니다."
-msgstr "Sound is output through the system's default playback device."
-
 msgid "현재 예약된 종료가 없거나 취소에 실패했습니다."
 msgstr "No shutdown is currently scheduled, or cancellation failed."
 
@@ -1581,9 +1566,6 @@ msgstr "Happy New Year!"
 msgid "BOO! 깜짝이야~"
 msgstr "BOO! Gotcha~"
 
-msgid "저녁 시간이에요"
-msgstr "It's evening"
-
 msgid "이제 많이 친해진 것 같아요."
 msgstr "You're my favorite now!"
 
@@ -1595,9 +1577,6 @@ msgstr "It's National Foundation Day!"
 
 msgid "💝 친밀도 확인"
 msgstr "💝 Check Affinity"
-
-msgid "늦은 시간이네요"
-msgstr "It's getting late"
 
 msgid "그냥 두세요."
 msgstr "Hehe"
@@ -1625,9 +1604,6 @@ msgstr "Keeping it neat~"
 
 msgid "CPU가 너무 바빠요! 좀 쉬게 해줘요!"
 msgstr "CPU is too busy! Give it a rest!"
-
-msgid "밤이 깊었어요"
-msgstr "The night is deep"
 
 msgid "CPU가 힘들어하고 있어요!"
 msgstr "CPU is struggling!"
@@ -1662,9 +1638,6 @@ msgstr "Yawn~... I'm sleepy."
 msgid "왜~?"
 msgstr "Why~?"
 
-msgid "맛있게 드세요!"
-msgstr "Enjoy your meal!"
-
 msgid "응?"
 msgstr "Hmm?"
 
@@ -1677,12 +1650,6 @@ msgstr "Memory is full..."
 msgid "램이 부족해요!"
 msgstr "RAM is low!"
 
-msgid "푹 쉬세요!"
-msgstr "Get some good rest!"
-
-msgid "빨리 주무세요..."
-msgstr "Please get some rest soon..."
-
 msgid "말풍선 히스토리"
 msgstr "Speech History"
 
@@ -1694,9 +1661,6 @@ msgstr "What's up?"
 
 msgid "지인"
 msgstr "Acquaintance"
-
-msgid "이제 쉬세요~"
-msgstr "Please rest now~"
 
 msgid "올해도 잘 부탁해요~"
 msgstr "Looking forward to this year~"
@@ -1722,9 +1686,6 @@ msgstr "Keep it up!"
 msgid "으스스~ 할로윈이에요!"
 msgstr "Spooky~ It's Halloween!"
 
-msgid "하암... 밤이 깊었어요."
-msgstr "Yawn... The night is deep."
-
 msgid "뭐예요?"
 msgstr "What is it?"
 
@@ -1737,9 +1698,6 @@ msgstr "Please plug in the charger~"
 msgid "왜 그러세요."
 msgstr "That tickles!"
 
-msgid "힘내세요!"
-msgstr "Hang in there!"
-
 msgid "앞으로 잘 부탁드려요."
 msgstr "Nice to meet you!"
 
@@ -1748,9 +1706,6 @@ msgstr "Who are you talking to?"
 
 msgid "생일 축하드려요. 좋은 하루 되세요."
 msgstr "Hehe, happy birthday! Have a great day!"
-
-msgid "잘 주무셨어요?"
-msgstr "Did you sleep well?"
 
 msgid "많이 친해졌네요."
 msgstr "We've gotten really close!"
@@ -1788,9 +1743,6 @@ msgstr "That feels good~"
 msgid "뭐 찾고 계세요?"
 msgstr "Looking for something?"
 
-msgid "오후네요~"
-msgstr "It's afternoon~"
-
 msgid "적당히 해요."
 msgstr "Do it again~"
 
@@ -1799,9 +1751,6 @@ msgstr "It's your birthday! Have some cake~"
 
 msgid "과부하예요, 조심해요!"
 msgstr "Overloaded, be careful!"
-
-msgid "하루 어떠셨어요?"
-msgstr "How was your day?"
 
 msgid "뭐 보세요?"
 msgstr "What are you watching?"
@@ -1821,9 +1770,6 @@ msgstr "Too many programs running~"
 msgid "생일 축하드려요. 오늘 하루 즐겁게 보내세요."
 msgstr "Happy birthday~ Today's star is you!"
 
-msgid "졸려요... 같이 쉬어요."
-msgstr "Sleepy... let's rest together."
-
 msgid "초콜릿... 드릴까요."
 msgstr "Chocolate... I'll give you some hehe"
 
@@ -1832,9 +1778,6 @@ msgstr "Registered message list"
 
 msgid "한글날이에요. 한글은 정말 멋져요!"
 msgstr "It's Hangul Day. Hangul is truly amazing!"
-
-msgid "아침이네요!"
-msgstr "It's morning!"
 
 msgid "절친"
 msgstr "Best Friend"
@@ -1875,9 +1818,6 @@ msgstr "Nodding off..."
 msgid "충전 빨리요!!"
 msgstr "Charge it quickly!!"
 
-msgid "...자고 있었는데."
-msgstr "...I was sleeping."
-
 msgid "저도 보고 싶어요!"
 msgstr "I want to watch too!"
 
@@ -1893,14 +1833,8 @@ msgstr "Close Friend"
 msgid "나무 심어요~"
 msgstr "Let's plant trees~"
 
-msgid "점심 시간이에요!"
-msgstr "It's lunchtime!"
-
 msgid "하아암... 주무실 시간이에요."
 msgstr "Yaaawn... Please rest, Master~"
-
-msgid "이제 그만 자요~"
-msgstr "Time to sleep now~"
 
 msgid "...알겠어요."
 msgstr "Mmm~ That's nice..."
@@ -2450,9 +2384,6 @@ msgstr "\n[3/4] Model already exists: {path}"
 msgid "\n[4/4] 세부 의존성 설치 중 (시간이 다소 소요될 수 있습니다)..."
 msgstr "\n[4/4] Installing additional dependencies (this may take a while)..."
 
-msgid "\n[4/4] requirements.txt 없음, 건너뜀"
-msgstr "\n[4/4] requirements.txt not found; skipping"
-
 msgid "✨ CosyVoice3 설치가 완료되었습니다!"
 msgstr "✨ CosyVoice3 installation is complete!"
 
@@ -2783,44 +2714,11 @@ msgstr "An error occurred while generating a response."
 msgid "일부 단계가 실패하여 목표를 달성하지 못했습니다."
 msgstr "Some steps failed, so the goal was not achieved."
 
-msgid "실제 경로({filename})가 확인되어 작업을 완료했습니다."
-msgstr "The actual path ({filename}) was confirmed, so the task is complete."
-
-msgid "실행 후 상태 변화 기록을 통해 브라우저 또는 앱 상태 변화를 확인했습니다."
-msgstr "The browser or app state change was confirmed through the post-execution state-change record."
-
 msgid "브라우저 또는 앱 상태가 목표와 일치해 작업을 완료했습니다."
 msgstr "The browser or app state matches the goal, so the task is complete."
 
-msgid "활성 창 제목이 확인되어 앱 실행 상태를 검증했습니다."
-msgstr "The app execution state was verified by confirming the active window title."
-
-msgid "열린 창 목록에서 목표 URL과 일치하는 상태를 확인했습니다."
-msgstr "A state matching the target URL was confirmed in the list of open windows."
-
-msgid "열린 창 목록에서 목표와 일치하는 앱 상태를 확인했습니다."
-msgstr "An app state matching the goal was confirmed in the list of open windows."
-
 msgid "화면 이미지 인식을 통해 목표 상태를 확인했습니다."
 msgstr "The target state was confirmed through screen image recognition."
-
-msgid "화면 상단에서 '{app_name}' 텍스트 확인됨"
-msgstr "The text '{app_name}' was confirmed at the top of the screen"
-
-msgid "'{app_name}' 앱이 화면에 열려 있음이 OCR로 확인됨"
-msgstr "OCR confirmed that the '{app_name}' app is open on the screen"
-
-msgid "워크플로우 실행 결과에 열린 URL이 기록되어 목표를 달성했습니다."
-msgstr "The opened URL was recorded in the workflow execution result, so the goal was achieved."
-
-msgid "워크플로우 실행 결과에 창 제목과 성공 액션이 기록되어 작업을 완료했습니다."
-msgstr "The window title and a success action were recorded in the workflow execution result, so the task is complete."
-
-msgid "현재 브라우저 상태를 읽어 목표와 일치하는 실행 결과를 확인했습니다."
-msgstr "The current browser state was read to confirm an execution result matching the goal."
-
-msgid "브라우저 마지막 액션 기록을 통해 목표와 일치하는 실행 상태를 확인했습니다."
-msgstr "The browser's last action record confirmed an execution state matching the goal."
 
 msgid "검증 단계가 실패하여 저장소 작업을 완료하지 못했습니다."
 msgstr "The repository task could not be completed because the verification step failed."
@@ -2845,9 +2743,6 @@ msgstr "Not achieved"
 
 msgid "LLM 검증 실패"
 msgstr "LLM verification failed"
-
-msgid "검증 프로세스 오류"
-msgstr "Verification process error"
 
 msgid "주의! {summary}"
 msgstr "Warning! {summary}"
@@ -2932,9 +2827,6 @@ msgstr "Untitled"
 
 msgid "검색 중 오류 발생: {error}"
 msgstr "An error occurred while searching: {error}"
-
-msgid "허용되지 않은 URL 스킴: {scheme}"
-msgstr "URL scheme not allowed: {scheme}"
 
 msgid "페이지 로드 실패: {error}"
 msgstr "Failed to load page: {error}"
@@ -3509,9 +3401,6 @@ msgstr "Delete the fact '{key}'?"
 msgid "이 사실이 언급된 대화 기록도 삭제"
 msgstr "Also delete conversation records mentioning this fact"
 
-msgid "Edge/OpenAI/ElevenLabs 감정 조절"
-msgstr "Edge/OpenAI/ElevenLabs emotion adjustments"
-
 msgid ""
 "[상황] 전{elapsed} · 오늘{today}회 · 연속{continuous} · "
 "시각{time} · 칭찬24h {praise}회"
@@ -3617,12 +3506,6 @@ msgstr "I found multiple memories: {items}. Please choose which one to forget."
 
 msgid "기억 삭제"
 msgstr "Delete memory"
-
-msgid "기억한 내용을 삭제합니다."
-msgstr "Delete the saved memory."
-
-msgid "기억 삭제: {fact}"
-msgstr "Delete memory: {fact}"
 
 msgid "기억·관련 대화 기록·맞는 선호 삭제: {fact}"
 msgstr "Delete memory, related conversations, and matching preferences: {fact}"
@@ -4200,9 +4083,6 @@ msgstr "Start"
 
 msgid "끝"
 msgstr "End"
-
-msgid "검색 실패: {error}"
-msgstr "Search failed: {error}"
 
 msgid "관심사"
 msgstr "Interests"
