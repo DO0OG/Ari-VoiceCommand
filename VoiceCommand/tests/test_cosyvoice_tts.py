@@ -1,6 +1,5 @@
 import os
 import queue
-import subprocess
 import struct
 import threading
 import time
@@ -16,6 +15,7 @@ from tts.cosyvoice_utils import (
     apply_emotion_prosody,
     inject_breath_cues,
 )
+from tts import cosyvoice_tts
 from tts.cosyvoice_tts import CosyVoiceTTS, _get_reference_wav
 
 
@@ -202,9 +202,9 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
             def wait(self, timeout):
                 self.wait_calls.append(timeout)
                 if len(self.wait_calls) == 1:
-                    raise subprocess.TimeoutExpired("worker", timeout)
+                    raise cosyvoice_tts.subprocess.TimeoutExpired("worker", timeout)
                 if len(self.wait_calls) == 2:
-                    raise subprocess.TimeoutExpired("worker", timeout)
+                    raise cosyvoice_tts.subprocess.TimeoutExpired("worker", timeout)
                 self.alive = False
                 return 0
 
