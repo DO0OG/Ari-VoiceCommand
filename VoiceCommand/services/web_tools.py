@@ -559,6 +559,9 @@ class SmartBrowser:
                 state = (stat.st_size, stat.st_mtime_ns)
                 if initial_files.get(path) == state:
                     continue
+                # 이번 실행 전에 받기 시작한 파일은 결과로 돌려주지 않는다.
+                if stat.st_ctime < getattr(self, "_download_scope_started", 0.0):
+                    continue
                 prev = last_seen.get(path)
                 now = time.time()
                 if prev and prev[0] == state:
@@ -753,6 +756,8 @@ class SmartBrowser:
             return path
 
     def _move_completed_downloads(self, folder: str) -> List[str]:
+        """다 받은 파일을 다운로드 폴더로 옮기고, 이번 실행에서 받기 시작한 것만 돌려준다."""
+        scope_started = getattr(self, "_download_scope_started", 0.0)
         moved = []
         try:
             names = os.listdir(folder)
@@ -763,8 +768,14 @@ class SmartBrowser:
             # 크롬은 받는 동안 임시 이름을 쓰고 끝나면 이름을 바꾼다. 임시 이름이 아니면 다 받은 파일이다.
             if not os.path.isfile(path) or name.lower().endswith(_PARTIAL_DOWNLOAD_SUFFIXES):
                 continue
+            # 크롬은 받는 동안 쓰던 임시 파일의 이름만 바꾸므로 Windows에서는 생성 시각이 받기 시작한 시각이다.
+            # 이번 실행 전에 받기 시작한 파일은 옮기기만 하고 결과로 돌려주지 않는다.
+            try:
+                from_earlier_run = os.path.getctime(path) < scope_started
+            except OSError:
+                from_earlier_run = False
             destination = self._move_download_to_parent(path)
-            if destination != path:
+            if destination != path and not from_earlier_run:
                 moved.append(destination)
         return moved
 
@@ -791,6 +802,9 @@ class SmartBrowser:
             self._collect_downloads()
             with self._download_lock:
                 self._pending_downloads.clear()
+                self._download_scope_started = time.time()
+        else:
+            self._download_scope_started = time.time()
 
     def _recover_stale_downloads(self) -> None:
         """이전 실행이 남긴 전용 폴더의 파일을 다운로드 폴더로 옮긴다."""
