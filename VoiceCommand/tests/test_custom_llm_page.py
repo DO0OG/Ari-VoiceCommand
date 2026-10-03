@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from core.custom_llm_providers import custom_api_key_name
 from ui.settings_dialog import SettingsDialog
@@ -24,6 +24,14 @@ class CustomLLMSettingsPageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self._orphaned_keys_patch = patch(
+            "ui.settings_llm_page.ConfigManager.get_orphaned_custom_secret_keys",
+            return_value=set(),
+        )
+        self._orphaned_keys_patch.start()
+        self.addCleanup(self._orphaned_keys_patch.stop)
 
     def _settings(self):
         return {
@@ -67,6 +75,31 @@ class CustomLLMSettingsPageTests(unittest.TestCase):
         self.assertEqual(values["llm_execution_provider"], "")
         self.assertEqual(values["llm_execution_model"], "")
         self.assertEqual(values[custom_api_key_name(PROVIDER_ID)], "")
+
+    def test_delete_confirmation_mentions_saved_api_key(self):
+        page = _LLMSettingsPage(self._settings())
+
+        with patch("ui.settings_llm_page.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as question:
+            page._confirm_delete_custom_provider(PROVIDER_ID)
+            self.assertIn("저장된 API 키도 함께 삭제됩니다", question.call_args.args[2])
+            self.assertIn(PROVIDER["label"], question.call_args.args[2])
+
+    def test_orphaned_key_cleanup_button_is_shown_and_confirms_before_deleting(self):
+        orphan_key = "custom_fedcba9876543210fedcba9876543210_api_key"
+        with patch(
+            "ui.settings_llm_page.ConfigManager.get_orphaned_custom_secret_keys",
+            side_effect=[{orphan_key}, {orphan_key}, set()],
+        ), patch("ui.settings_llm_page.ConfigManager.delete_orphaned_custom_secrets", return_value=1) as delete, \
+                patch("ui.settings_llm_page.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes) as question:
+            page = _LLMSettingsPage({})
+            self.assertFalse(page._orphaned_keys_button.isHidden())
+            self.assertIn("1", page._orphaned_keys_button.text())
+
+            page._confirm_delete_orphaned_custom_keys()
+
+            delete.assert_called_once_with()
+            self.assertIn("1개", question.call_args.args[2])
+            self.assertTrue(page._orphaned_keys_button.isHidden())
 
     def test_optional_key_custom_validation_uses_unsaved_configuration(self):
         page = _LLMSettingsPage({

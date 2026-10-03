@@ -3173,9 +3173,6 @@ msgstr "API key (optional)"
 msgid "제공자 삭제"
 msgstr "Delete provider"
 
-msgid "'{name}' 제공자를 삭제할까요?"
-msgstr "Delete the '{name}' provider?"
-
 msgid "스마트 어시스턴트 모드가 비활성화되었습니다."
 msgstr "Smart assistant mode has been disabled."
 
@@ -4122,3 +4119,15 @@ msgstr "An installation started earlier is still running. Try again after it fin
 
 msgid "스킬 업데이트 기록을 지우지 못해 업데이트를 되돌렸습니다."
 msgstr "The skill update record could not be cleared, so the update was rolled back."
+
+msgid "'{name}' 제공자를 삭제할까요? 저장된 API 키도 함께 삭제됩니다."
+msgstr "Delete '{name}' provider? Its saved API key will also be deleted."
+
+msgid "쓰지 않는 API 키 {count}개 삭제"
+msgstr "Delete unused API keys ({count})"
+
+msgid "쓰지 않는 API 키 삭제"
+msgstr "Delete unused API keys"
+
+msgid "쓰지 않는 API 키 {count}개를 삭제할까요?"
+msgstr "Delete unused API keys ({count})?"
