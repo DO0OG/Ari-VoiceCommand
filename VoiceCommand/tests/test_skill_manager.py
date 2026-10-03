@@ -74,18 +74,23 @@ tool: search_coupang_products
                 os.makedirs(directory)
                 with open(os.path.join(directory, "SKILL.md"), "w", encoding="utf-8") as handle:
                     handle.write(content)
+            added_dir = os.path.join(temp_dir, "added")
+            os.makedirs(added_dir)
+            with open(os.path.join(added_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("half copied")
             journal = os.path.join(temp_dir, ".ari-update-journal.json")
             with open(journal, "w", encoding="utf-8") as handle:
-                json.dump({backup_name: "skill"}, handle)
+                json.dump({backup_name: "skill", "added": None}, handle)
 
-            manager = self._make_manager(temp_dir)
             # 실행 중 목록을 다시 불러오는 것만으로는 진행 중일 수 있는 업데이트를 되돌리지 않는다.
-            manager.load_all()
+            self._make_manager(temp_dir).load_all()
             self.assertTrue(os.path.exists(journal))
-            manager._recover_interrupted_update()
-            loaded = manager.load_all()
+            with patch("agent.skill_manager._get_skills_dir", return_value=temp_dir):
+                loaded = SkillManager().list_skills()
 
             self.assertEqual(len(loaded), 1)
+            # 업데이트가 새로 만든 폴더는 설치가 끝났는지 알 수 없어 지운다.
+            self.assertFalse(os.path.exists(added_dir))
             with open(os.path.join(current_dir, "SKILL.md"), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "original")
             self.assertTrue(os.path.isdir(unknown_dir))

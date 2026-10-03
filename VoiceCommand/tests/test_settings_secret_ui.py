@@ -161,7 +161,7 @@ class SettingsSecretUITests(unittest.TestCase):
             "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
             "activity_ide_long_use_checkbox",
         ), field))
-        dialog.original_settings = {"llm_router_enabled": False}
+        dialog.original_settings = {"llm_router_enabled": False, "llm_provider": "groq"}
         dialog.update_checker = None
         dialog._float = lambda value, default: float(value)
         dialog._llm_page = Mock()
@@ -187,7 +187,10 @@ class SettingsSecretUITests(unittest.TestCase):
             def start(self):
                 self.target()
 
-        with patch("ui.settings_dialog.ConfigManager.save_settings", return_value=True), \
+        # 창을 연 뒤 다른 경로가 설정을 바꿨다. 이 창에서 건드리지 않은 값은 그대로 저장돼야 한다.
+        current = {"llm_router_enabled": False, "llm_provider": "openai"}
+        with patch("ui.settings_dialog.ConfigManager.save_settings", return_value=True) as save, \
+             patch("ui.settings_dialog.ConfigManager.load_settings", return_value=current), \
              patch("ui.settings_dialog.refresh_activity_monitor"), \
              patch("ui.settings_dialog.get_language", return_value=None), \
              patch("agent.llm_provider.reload_llm_provider") as reload_provider, \
@@ -195,6 +198,9 @@ class SettingsSecretUITests(unittest.TestCase):
             SettingsDialog._save(dialog)
             reload_provider.assert_called_once_with()
             self.assertEqual(started_threads[0].kwargs["name"], "LLM-Reload")
+            saved = save.call_args.args[0]
+            self.assertEqual(saved["llm_provider"], "openai")
+            self.assertTrue(saved["llm_router_enabled"])
 
         self.assertIn("llm_router_enabled", dialog.changed_keys)
 

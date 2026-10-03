@@ -311,6 +311,19 @@ class SkillManager:
             if not isinstance(entries, dict):
                 raise ValueError("Invalid update journal")
             for backup_name, original_name in entries.items():
+                if original_name is None:
+                    # 업데이트가 새로 만든 폴더다. 설치가 끝났는지 알 수 없으므로 지운다.
+                    if (
+                        not isinstance(backup_name, str)
+                        or os.path.basename(backup_name) != backup_name
+                        or backup_name in {"", ".", ".."}
+                        or backup_name.startswith(".ari-")
+                    ):
+                        raise ValueError("Invalid update journal entry")
+                    created = os.path.join(self.skills_dir, backup_name)
+                    if os.path.isdir(created):
+                        shutil.rmtree(created)
+                    continue
                 if (
                     not isinstance(backup_name, str)
                     or not backup_name.startswith(".ari-update-backup-")
