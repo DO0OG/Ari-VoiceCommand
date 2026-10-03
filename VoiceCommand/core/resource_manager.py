@@ -10,6 +10,11 @@ from typing import Iterable
 # 앱 이름 (appdata 폴더명)
 APP_NAME = "Ari"
 _DEV_RUNTIME_DIR = ".ari_runtime"
+_LEGACY_KNOWLEDGE_BASE_FILES = (
+    "knowledge_base.db",
+    "knowledge_base.db-wal",
+    "knowledge_base.db-shm",
+)
 # 사용자가 편집하지 않는 앱 리소스. 업데이트 뒤 번들본과 다르면 새로 복사한다.
 _APP_MANAGED_FILES = frozenset({"icon.png"})
 _LEGACY_RUNTIME_MAPPINGS = (
@@ -50,6 +55,17 @@ def is_bundled() -> bool:
 
 class ResourceManager:
     _app_data_dir = None
+
+    @staticmethod
+    def _cleanup_legacy_knowledge_base(runtime_dir: str) -> None:
+        for name in _LEGACY_KNOWLEDGE_BASE_FILES:
+            path = os.path.join(runtime_dir, name)
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                logging.debug("이전 지식 베이스 파일 정리 실패 %s: %s", name, exc)
 
     @staticmethod
     def _project_root() -> str:
@@ -247,6 +263,7 @@ class ResourceManager:
             logging.warning("사용자 데이터 디렉터리를 만들 수 없어 저장 기능이 제한될 수 있습니다: %s", exc)
             ResourceManager._app_data_dir = base
             return base
+        ResourceManager._cleanup_legacy_knowledge_base(base)
         if not _is_bundled():
             migrated = ResourceManager._migrate_dev_runtime_state(base)
             ResourceManager._cleanup_legacy_runtime_state(base, migrated=migrated)
