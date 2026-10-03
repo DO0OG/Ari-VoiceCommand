@@ -526,6 +526,98 @@ class LLMProviderTests(unittest.TestCase):
         provider.conversation_history.pop()
         self.assertEqual(len(provider._history_for_context(max_tokens=1)), 2)
 
+    def test_feed_tool_result_keeps_current_user_message_once(self):
+        provider = self._stream_provider()
+        provider.add_to_history("user", "read files")
+        provider.client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done"))]
+        )
+        with patch.object(
+            provider, "_resolve_route", return_value=(provider.client, "openai", "test")
+        ), patch.object(provider, "_build_system", return_value="system"):
+            provider.feed_tool_result(
+                "read files", [{"id": "call-1", "name": "read_file", "arguments": {}}], ["data"]
+            )
+
+        messages = provider.client.chat.completions.create.call_args.kwargs["messages"]
+        self.assertEqual(
+            sum(message == {"role": "user", "content": "read files"} for message in messages),
+            1,
+        )
+
+    def test_feed_tool_result_does_not_repeat_long_user_message(self):
+        provider = self._stream_provider()
+        long_message = "read files " * 400
+        provider.add_to_history("user", long_message)
+        provider.client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done"))]
+        )
+        with patch.object(
+            provider, "_resolve_route", return_value=(provider.client, "openai", "test")
+        ), patch.object(provider, "_build_system", return_value="system"):
+            provider.feed_tool_result(
+                long_message, [{"id": "call-1", "name": "read_file", "arguments": {}}], ["data"]
+            )
+
+        roles = [
+            message["role"]
+            for message in provider.client.chat.completions.create.call_args.kwargs["messages"]
+        ]
+        self.assertEqual(roles.count("user"), 1)
+
+    def test_feed_tool_result_restores_user_message_after_history_clear(self):
+        provider = self._stream_provider()
+        provider.add_to_history("user", "forget this")
+        provider.clear_history()
+        provider.client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done"))]
+        )
+        with patch.object(
+            provider, "_resolve_route", return_value=(provider.client, "openai", "test")
+        ), patch.object(provider, "_build_system", return_value="system"):
+            provider.feed_tool_result(
+                "forget this", [{"id": "call-1", "name": "forget", "arguments": {}}], ["done"]
+            )
+
+        messages = provider.client.chat.completions.create.call_args.kwargs["messages"]
+        tool_call_index = next(
+            index for index, message in enumerate(messages) if message.get("tool_calls")
+        )
+        self.assertEqual(
+            messages[tool_call_index - 1], {"role": "user", "content": "forget this"}
+        )
+        self.assertEqual(
+            provider._history_snapshot(), [{"role": "assistant", "content": "done"}]
+        )
+
+    def test_reload_does_not_schedule_client_close(self):
+        from agent import llm_provider
+
+        client_names = ("client", "planner_client", "execution_client", "memory_extractor_client")
+        config_names = (
+            "provider_configs", "provider", "api_key", "model", "planner_provider",
+            "planner_model", "execution_provider", "execution_model",
+            "memory_extractor_provider", "memory_extractor_model",
+        )
+        old_clients = [Mock() for _ in client_names]
+        new_clients = [Mock() for _ in client_names]
+        instance = SimpleNamespace(
+            _config_lock=threading.RLock(),
+            **dict(zip(client_names, old_clients)),
+        )
+        replacement = SimpleNamespace(
+            **dict(zip(client_names, new_clients)),
+            **dict(zip(config_names, range(len(config_names)))),
+        )
+        with patch.object(llm_provider, "_instance", instance), patch.object(
+            llm_provider, "_build_llm_provider", return_value=replacement
+        ), patch("agent.llm_provider.threading.Timer") as timer:
+            llm_provider.reload_llm_provider()
+
+        timer.assert_not_called()
+        for client in old_clients:
+            client.close.assert_not_called()
+
     def test_clear_history_can_keep_the_turn_in_progress(self):
         provider = LLMProvider(provider="anthropic", model="test")
         tool_use = [{"type": "tool_use", "id": "call-1", "name": "memory_forget", "input": {}}]
