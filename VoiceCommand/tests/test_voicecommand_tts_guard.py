@@ -166,6 +166,7 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
         VoiceCommand._LOCAL_TTS_CLEANUP_DONE = CleanupDone()
         restore_thread = Mock()
         try:
+            self.assertEqual(VoiceCommand._LOCAL_TTS_CLEANUP_WAIT_SECONDS, 30)
             with patch.object(VoiceCommand, "_cleanup_tts_provider_async"), patch.object(
                 VoiceCommand.threading, "Thread", return_value=restore_thread
             ) as make_thread, patch.object(
@@ -175,7 +176,10 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             ):
                 VoiceCommand.disable_game_mode()
                 make_thread.call_args.kwargs["target"]()
-                self.assertEqual(events, [("cleanup_wait", 5), ("create", None)])
+                self.assertEqual(
+                    events,
+                    [("cleanup_wait", VoiceCommand._LOCAL_TTS_CLEANUP_WAIT_SECONDS), ("create", None)],
+                )
         finally:
             (
                 VoiceCommand._state.game_mode,

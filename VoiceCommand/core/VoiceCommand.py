@@ -75,6 +75,7 @@ _TTS_INIT_LOCK = threading.Lock()
 # 정리 중인 로컬 TTS 워커가 끝나면 켜진다. 게임 모드 해제가 새 워커를 만들기 전에 기다린다.
 _LOCAL_TTS_CLEANUP_DONE = threading.Event()
 _LOCAL_TTS_CLEANUP_DONE.set()
+_LOCAL_TTS_CLEANUP_WAIT_SECONDS = 30
 _TTS_WAKE_GUARD_SECONDS = 1.2
 
 
@@ -1007,7 +1008,8 @@ def disable_game_mode():
 
     def _reinit():
         try:
-            _LOCAL_TTS_CLEANUP_DONE.wait(timeout=5)
+            if not _LOCAL_TTS_CLEANUP_DONE.wait(timeout=_LOCAL_TTS_CLEANUP_WAIT_SECONDS):
+                logging.warning("로컬 TTS 정리 대기 시간이 지나 복원을 계속합니다")
             initialize_tts()
         except Exception as e:
             logging.error("TTS 복원 실패: %s", e)
