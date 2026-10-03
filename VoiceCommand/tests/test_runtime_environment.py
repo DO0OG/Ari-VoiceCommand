@@ -33,6 +33,46 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             if original_env is not None:
                 os.environ["ARI_APP_DATA_DIR"] = original_env
 
+    def test_startup_removes_legacy_knowledge_base_files_only(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            names = (
+                "knowledge_base.db",
+                "knowledge_base.db-wal",
+                "knowledge_base.db-shm",
+                "other.db",
+            )
+            for name in names:
+                with open(os.path.join(runtime_dir, name), "wb") as handle:
+                    handle.write(b"data")
+
+            with patch.dict(os.environ, {"ARI_APP_DATA_DIR": runtime_dir}), \
+                    patch("core.resource_manager._is_bundled", return_value=True):
+                ResourceManager.reset_cache()
+                ResourceManager.get_app_data_dir()
+
+            for name in names[:-1]:
+                self.assertFalse(os.path.exists(os.path.join(runtime_dir, name)))
+            self.assertTrue(os.path.exists(os.path.join(runtime_dir, names[-1])))
+
+    def test_startup_ignores_missing_legacy_knowledge_base_files(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            with patch.dict(os.environ, {"ARI_APP_DATA_DIR": runtime_dir}), \
+                    patch("core.resource_manager._is_bundled", return_value=True):
+                ResourceManager.reset_cache()
+                self.assertEqual(ResourceManager.get_app_data_dir(), runtime_dir)
+
+    def test_startup_continues_when_legacy_knowledge_base_file_cannot_be_removed(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            path = os.path.join(runtime_dir, "knowledge_base.db")
+            with open(path, "wb") as handle:
+                handle.write(b"data")
+            with patch.dict(os.environ, {"ARI_APP_DATA_DIR": runtime_dir}), \
+                    patch("core.resource_manager._is_bundled", return_value=True), \
+                    patch("core.resource_manager.os.remove", side_effect=PermissionError("locked")):
+                ResourceManager.reset_cache()
+                self.assertEqual(ResourceManager.get_app_data_dir(), runtime_dir)
+            self.assertTrue(os.path.exists(path))
+
     def test_nuitka_build_keeps_user_data_out_of_the_install_folder(self):
         # Nuitka 배포판은 sys.frozen 없이 __compiled__만 둔다. Program Files에 설치돼도
         # 설정과 기록은 사용자 AppData에 써야 한다.
