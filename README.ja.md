@@ -1,8 +1,8 @@
-# 🎙️ Ari — オープンソース Windows AI 音声アシスタント・デスクトップ自動化エージェント
+# 🎙️ Ari — Windows 向けオープンソース AI 音声アシスタント
 
 <div align="center">
   <img src="docs/assets/ari-idle.gif" width="180" alt="Ari デスクトップアシスタントのキャラクター" />
-  <p><strong>音声操作、デスクトップ自動化、ローカル AI、メモリ、MCP ツール、キャラクターアシスタントを一つの Windows アプリに。</strong></p>
+  <p><strong>声をかけると聞き取り、答え、PC の作業を代わりにこなすデスクトップアシスタント。</strong></p>
   <p>
     <a href="https://github.com/DO0OG/Ari-VoiceCommand/releases/latest"><img src="https://img.shields.io/github/v/release/DO0OG/Ari-VoiceCommand?display_name=tag&sort=semver" alt="最新リリース" /></a>
     <a href="https://github.com/DO0OG/Ari-VoiceCommand/stargazers"><img src="https://img.shields.io/github/stars/DO0OG/Ari-VoiceCommand?style=flat&logo=github" alt="GitHub Stars" /></a>

@@ -1,8 +1,8 @@
-# 🎙️ Ari — Open-Source Windows AI Voice Assistant & Desktop Automation Agent
+# 🎙️ Ari — Open-Source AI Voice Assistant for Windows
 
 <div align="center">
   <img src="docs/assets/ari-idle.gif" width="180" alt="Ari desktop assistant character" />
-  <p><strong>Voice control, desktop automation, local AI, memory, MCP tools, and an animated assistant — in one Windows app.</strong></p>
+  <p><strong>Talk to your PC. Ari listens, answers, and gets things done on your desktop.</strong></p>
   <p>
     <a href="https://github.com/DO0OG/Ari-VoiceCommand/releases/latest"><img src="https://img.shields.io/github/v/release/DO0OG/Ari-VoiceCommand?display_name=tag&sort=semver" alt="Latest release" /></a>
     <a href="https://github.com/DO0OG/Ari-VoiceCommand/stargazers"><img src="https://img.shields.io/github/stars/DO0OG/Ari-VoiceCommand?style=flat&logo=github" alt="GitHub stars" /></a>
