@@ -96,6 +96,22 @@ def _scan(rules: List[_CompiledRule], text: str) -> List[str]:
     return [desc for pattern, desc in rules if pattern.search(text)]
 
 
+# 셸 기호 없이 이 명령들로 시작하는 한 줄은 인수에 삭제 단어가 있어도 삭제가 아니다.
+# 다른 명령을 대신 실행해 주는 명령(git, cmd, xargs 등)은 넣지 않는다.
+_READ_ONLY_COMMANDS = frozenset({
+    "echo", "dir", "ls", "type", "cat", "findstr", "grep", "where", "which",
+    "ping", "tasklist", "ipconfig", "whoami", "hostname", "ver",
+})
+_SHELL_META = re.compile(r"[;&|`$(){}<>\r\n]")
+
+
+def _is_plain_read_only_command(command: str) -> bool:
+    if _SHELL_META.search(command):
+        return False
+    words = command.split()
+    return bool(words) and Path(words[0].strip("\"'")).stem.lower() in _READ_ONLY_COMMANDS
+
+
 def _python_contains_delete_call(code: str) -> bool:
     try:
         tree = ast.parse(code)
@@ -194,11 +210,15 @@ def _python_contains_delete_call(code: str) -> bool:
             return True
         return module_name(node.args[0]) == "os" and node.args[1].value in {"remove", "removedirs"}
 
+    # 상수로 대입된 변수에 담긴 명령은 그 값으로 판정한다. 여러 번 대입되면 모두 본다.
+    constant_values = {}
     # execute = os.system 처럼 변수에 담아 부르는 경우도 같은 명령 검사를 받게 한다.
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)):
             continue
         value = node.value
+        if isinstance(value, (ast.Constant, ast.List, ast.Tuple, ast.JoinedStr)):
+            constant_values.setdefault(node.targets[0].id, []).append(value)
         if (
             isinstance(value, ast.Attribute)
             and module_name(value.value) in {"os", "subprocess"}
@@ -243,13 +263,22 @@ def _python_contains_delete_call(code: str) -> bool:
         else:
             shell_call = isinstance(function, ast.Name) and function.id in shell_functions
         if shell_call:
-            # 볼 수 있는 상수 명령만 판정한다. 전부 변수인 명령은 올리지 않는다.
+            # 볼 수 있는 상수 명령만 판정한다. 변수는 상수로 대입된 값이 있을 때만 그 값으로 본다.
             command_arg = node.args[0] if node.args else next(
                 (keyword.value for keyword in node.keywords if keyword.arg in {"args", "cmd"}), None
             )
-            command = shell_text(command_arg) if command_arg is not None else None
-            if command is not None and any(pattern.search(command) for pattern, _label in _DANGEROUS_SHELL):
-                return True
+            if isinstance(command_arg, ast.Name):
+                candidates = constant_values.get(command_arg.id, [])
+            else:
+                candidates = [] if command_arg is None else [command_arg]
+            for candidate in candidates:
+                command = shell_text(candidate)
+                if (
+                    command is not None
+                    and not _is_plain_read_only_command(command)
+                    and any(pattern.search(command) for pattern, _label in _DANGEROUS_SHELL)
+                ):
+                    return True
     return False
 
 
