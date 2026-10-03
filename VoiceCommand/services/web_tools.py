@@ -122,8 +122,6 @@ class SmartBrowser:
         self.headless = headless
         self.download_dir = download_dir or os.path.join(os.path.expanduser("~"), "Downloads")
         self._browser_download_dir = self.download_dir
-        self._active_download_dir = self.download_dir
-        self._download_run_scoped = False
         self._download_isolated = False
         self._download_lock = threading.Lock()
         # 전용 폴더에서 옮겨 둔 파일. wait_for_download가 순서대로 돌려준다.
@@ -150,7 +148,6 @@ class SmartBrowser:
                 self._browser_download_dir = tempfile.mkdtemp(
                     prefix=_DOWNLOAD_FOLDER_PREFIX, dir=self.download_dir
                 )
-                self._active_download_dir = self._browser_download_dir
                 self._download_isolated = True
             except OSError as exc:
                 logging.warning("[SmartBrowser] 전용 다운로드 폴더 생성 실패, 기본 폴더 사용: %s", exc)
@@ -756,6 +753,8 @@ class SmartBrowser:
             return path
 
     def _move_completed_downloads(self, folder: str) -> List[str]:
+        """다 받은 파일을 다운로드 폴더로 옮기고, 이번 실행에서 받기 시작한 것만 돌려준다."""
+        scope_started = getattr(self, "_download_scope_started", 0.0)
         moved = []
         try:
             names = os.listdir(folder)
@@ -766,30 +765,15 @@ class SmartBrowser:
             # 크롬은 받는 동안 임시 이름을 쓰고 끝나면 이름을 바꾼다. 임시 이름이 아니면 다 받은 파일이다.
             if not os.path.isfile(path) or name.lower().endswith(_PARTIAL_DOWNLOAD_SUFFIXES):
                 continue
+            # 크롬은 받는 동안 쓰던 임시 파일의 이름만 바꾸므로 Windows에서는 생성 시각이 받기 시작한 시각이다.
+            # 이번 실행 전에 받기 시작한 파일은 옮기기만 하고 결과로 돌려주지 않는다.
+            try:
+                from_earlier_run = os.path.getctime(path) < scope_started
+            except OSError:
+                from_earlier_run = False
             destination = self._move_download_to_parent(path)
-            if destination != path:
+            if destination != path and not from_earlier_run:
                 moved.append(destination)
-        return moved
-
-    def _move_completed_download_tree(self, folder: str) -> List[str]:
-        """실행별 하위 폴더의 완료 파일을 옮기고 빈 폴더를 정리한다."""
-        moved = []
-        try:
-            names = os.listdir(folder)
-        except OSError:
-            return moved
-        for name in names:
-            path = os.path.join(folder, name)
-            if os.path.isdir(path):
-                moved.extend(self._move_completed_download_tree(path))
-            elif os.path.isfile(path) and not name.lower().endswith(_PARTIAL_DOWNLOAD_SUFFIXES):
-                destination = self._move_download_to_parent(path)
-                if destination != path:
-                    moved.append(destination)
-        try:
-            os.rmdir(folder)
-        except OSError:
-            pass
         return moved
 
     def _collect_downloads(self) -> None:
@@ -800,29 +784,7 @@ class SmartBrowser:
             # 잠금을 기다리는 사이 브라우저가 닫혔으면 폴더가 일반 다운로드 폴더로 바뀌어 있다.
             # 그 폴더의 파일을 옮기면 안 되므로 잠금 안에서 다시 확인한다.
             if self._download_isolated:
-                if self._download_run_scoped:
-                    root = self._browser_download_dir
-                    active = self._active_download_dir
-                    # 실행별 폴더로 바꾸기 전에 시작된 다운로드는 최상위에 끝난다. 결과로 돌려주지는 않는다.
-                    self._move_completed_downloads(root)
-                    try:
-                        names = os.listdir(root)
-                    except OSError:
-                        names = []
-                    for name in names:
-                        folder = os.path.join(root, name)
-                        if not os.path.isdir(folder):
-                            continue
-                        moved = self._move_completed_downloads(folder)
-                        if folder == active:
-                            self._pending_downloads.extend(moved)
-                        else:
-                            try:
-                                os.rmdir(folder)
-                            except OSError:
-                                pass
-                else:
-                    self._pending_downloads.extend(self._move_completed_downloads(self._browser_download_dir))
+                self._pending_downloads.extend(self._move_completed_downloads(self._browser_download_dir))
 
     def _collect_loop(self, folder: str) -> None:
         # 다운로드 완료를 기다리지 않는 작업에서도 받은 파일이 다운로드 폴더에 나타나게 한다.
@@ -837,30 +799,7 @@ class SmartBrowser:
             self._collect_downloads()
             with self._download_lock:
                 self._pending_downloads.clear()
-                previous_dir = self._active_download_dir
-                run_dir = None
-                try:
-                    run_dir = tempfile.mkdtemp(prefix="run-", dir=self._browser_download_dir)
-                    self.driver.execute_cdp_cmd(
-                        "Browser.setDownloadBehavior",
-                        {"behavior": "allow", "downloadPath": os.path.abspath(run_dir)},
-                    )
-                except Exception as exc:
-                    # 브라우저는 앞서 정한 폴더에 계속 받는다. 수집 대상도 그대로 둔다.
-                    logging.debug("[SmartBrowser] 실행별 다운로드 경로 설정 실패: %s", exc)
-                    if run_dir:
-                        try:
-                            os.rmdir(run_dir)
-                        except OSError:
-                            pass
-                else:
-                    self._download_run_scoped = True
-                    self._active_download_dir = run_dir
-                    if previous_dir != self._browser_download_dir:
-                        try:
-                            os.rmdir(previous_dir)
-                        except OSError:
-                            pass
+                self._download_scope_started = time.time()
 
     def _recover_stale_downloads(self) -> None:
         """이전 실행이 남긴 전용 폴더의 파일을 다운로드 폴더로 옮긴다."""
@@ -871,7 +810,7 @@ class SmartBrowser:
         for name in names:
             folder = os.path.join(self.download_dir, name)
             if name.startswith(_DOWNLOAD_FOLDER_PREFIX) and os.path.isdir(folder):
-                self._move_completed_download_tree(folder)
+                self._move_completed_downloads(folder)
                 try:
                     os.rmdir(folder)
                 except OSError:
@@ -884,11 +823,9 @@ class SmartBrowser:
             if not self._download_isolated:
                 return
             folder = self._browser_download_dir
-            self._pending_downloads.extend(self._move_completed_download_tree(folder))
+            self._pending_downloads.extend(self._move_completed_downloads(folder))
             self._download_isolated = False
             self._browser_download_dir = self.download_dir
-            self._active_download_dir = self.download_dir
-            self._download_run_scoped = False
         try:
             os.rmdir(folder)
         except OSError as exc:
