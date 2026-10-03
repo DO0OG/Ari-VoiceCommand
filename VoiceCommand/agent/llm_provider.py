@@ -1508,7 +1508,21 @@ class LLMProvider:
                     if part
                 ),
             }]
-            messages.extend(self._history_for_context(tool_blocks=provider == "anthropic"))
+            history = self._history_for_context(tool_blocks=provider == "anthropic")
+            last_user_text = next(
+                (
+                    message["content"]
+                    for message in reversed(history)
+                    if message.get("role") == "user"
+                    and isinstance(message.get("content"), str)
+                ),
+                "",
+            )
+            # 도구 실행 도중 기록이 비워졌으면 이번 요청이 문맥에 없다. 그때만 다시 넣는다.
+            # 앞선 사용자 메시지와 합쳐져 있을 수 있어 끝부분으로 확인한다.
+            if original_msg and not last_user_text.endswith(original_msg):
+                history.append({"role": "user", "content": original_msg})
+            messages.extend(history)
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
@@ -2227,13 +2241,6 @@ def get_llm_provider() -> LLMProvider:
     return _instance
 
 
-# 교체된 클라이언트를 닫기 전에 진행 중인 요청이 끝나기를 기다리는 시간.
-# 옛 클라이언트는 교체 전에 시작한 요청만 쓴다. 그 요청의 재시도·대체 모델 전환·이어받기가
-# 모두 끝날 만큼 길게 잡는다(요청 제한 시간 90초 기준으로 최악의 경우에도 넉넉하다).
-# ponytail: 고정 대기 시간, 요청별 사용 추적이 필요해지면 그때 바꾼다.
-_OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS = 1800.0
-
-
 def reload_llm_provider() -> None:
     if _instance is None:
         return
@@ -2249,13 +2256,13 @@ def reload_llm_provider() -> None:
             "_plugin_tools", "_plugin_tool_intents",
         }
         clients = ("client", "planner_client", "execution_client", "memory_extractor_client")
-        old_clients = [getattr(instance, name, None) for name in clients]
         config = (
             "provider_configs", "provider", "api_key", "model", "planner_provider",
             "planner_model", "execution_provider", "execution_model",
             "memory_extractor_provider", "memory_extractor_model",
         )
         # 진행 중인 호출이 기존 기록과 스트림 상태를 계속 사용하도록 보존한다.
+        # 이전 클라이언트는 닫지 않는다. 쓰던 요청이 끝나 참조가 사라지면 스스로 정리된다.
         with instance._config_lock:
             for name in config:
                 setattr(instance, name, getattr(replacement, name))
@@ -2264,37 +2271,6 @@ def reload_llm_provider() -> None:
                     setattr(instance, name, value)
             for name in clients:
                 setattr(instance, name, getattr(replacement, name))
-
-        new_client_ids = {id(getattr(instance, name, None)) for name in clients}
-        obsolete = []
-        for client in old_clients:
-            if client is None or id(client) in new_client_ids:
-                continue
-            if all(client is not seen for seen in obsolete):
-                obsolete.append(client)
-        if obsolete:
-            # 다른 스레드의 진행 중인 요청이 옛 클라이언트를 쓰고 있을 수 있어 바로 닫지 않는다.
-            timer = threading.Timer(
-                _OBSOLETE_CLIENT_CLOSE_DELAY_SECONDS,
-                _close_obsolete_clients,
-                args=(instance, obsolete),
-            )
-            timer.daemon = True
-            timer.start()
-
-
-def _close_obsolete_clients(instance, obsolete_clients) -> None:
-    active_stream_lock = getattr(instance, "_active_stream_lock", None)
-    if active_stream_lock is not None:
-        with active_stream_lock:
-            if instance._active_stream is not None:
-                # 스트림이 아직 쓰는 중이면 닫지 않고 참조가 풀릴 때 정리되게 둔다.
-                return
-    for client in obsolete_clients:
-        try:
-            client.close()
-        except Exception as exc:
-            logging.debug("이전 LLM 클라이언트 종료 실패: %s", exc)
 
 
 def reset_llm_provider():

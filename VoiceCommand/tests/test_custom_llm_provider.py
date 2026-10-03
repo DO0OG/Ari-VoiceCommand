@@ -84,7 +84,7 @@ class CustomLLMProviderTests(unittest.TestCase):
             (new_client, "new-provider", "new-model"),
         )
 
-    def _reload_with_clients(self, old_clients, new_clients, active_stream=None):
+    def _reload_with_clients(self, old_clients, new_clients):
         names = ("client", "planner_client", "execution_client", "memory_extractor_client")
         config = {
             "provider_configs": {}, "provider": "new", "api_key": "", "model": "new-model",
@@ -96,61 +96,29 @@ class CustomLLMProviderTests(unittest.TestCase):
             **config,
             **dict(zip(names, old_clients)),
             _config_lock=threading.RLock(),
-            _active_stream_lock=threading.Lock(),
-            _active_stream=active_stream,
         )
         replacement = SimpleNamespace(**config, **dict(zip(names, new_clients)))
-
-        class ImmediateTimer:
-            delays = []
-
-            def __init__(self, delay, function, args=()):
-                self.delays.append(delay)
-                self._function = function
-                self._args = args
-                self.daemon = False
-
-            def start(self):
-                self._function(*self._args)
+        timer = Mock()
 
         with patch("agent.llm_provider._instance", instance), \
              patch("agent.llm_provider._build_llm_provider", return_value=replacement), \
-             patch("agent.llm_provider.threading.Timer", ImmediateTimer):
+             patch("agent.llm_provider.threading.Timer", timer):
             reload_llm_provider()
-        return ImmediateTimer.delays
+        return timer
 
-    def test_reload_closes_each_obsolete_client_once_but_keeps_reused_client(self):
+    def test_reload_does_not_close_old_clients_or_schedule_timer(self):
         obsolete = Mock()
         reused = Mock()
         replacement = Mock()
 
-        self._reload_with_clients(
+        timer = self._reload_with_clients(
             [obsolete, obsolete, reused, None],
             [replacement, reused, replacement, None],
         )
 
-        obsolete.close.assert_called_once_with()
+        timer.assert_not_called()
+        obsolete.close.assert_not_called()
         reused.close.assert_not_called()
-
-    def test_reload_delays_closing_obsolete_clients(self):
-        delays = self._reload_with_clients(
-            [Mock(), None, None, None],
-            [Mock(), None, None, None],
-        )
-
-        self.assertEqual(len(delays), 1)
-        self.assertGreater(delays[0], 0)
-
-    def test_reload_keeps_old_clients_while_stream_is_active(self):
-        old_client = Mock()
-
-        self._reload_with_clients(
-            [old_client, None, None, None],
-            [Mock(), None, None, None],
-            active_stream=object(),
-        )
-
-        old_client.close.assert_not_called()
 
     def test_reload_preserves_singleton_history_and_plugin_tools(self):
         settings = {"llm_provider": "groq", "groq_api_key": ""}

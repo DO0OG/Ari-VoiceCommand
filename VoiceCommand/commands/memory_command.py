@@ -278,20 +278,34 @@ class MemoryCommand(BaseCommand):
         if not confirmed:
             self.tts_wrapper(_("삭제를 취소했어요."))
             return
-        deleted = (
-            context.delete_fact(
+        # 값이 같은 선호를 사실보다 먼저 지운다. 실패하면 사실이 남아 다시 시도할 수 있다.
+        # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
+        preference_delete_failed = False
+        fact_value = str(fact.get("value", "")).strip()
+        if kind == "fact" and len(fact_value) > 1:
+            for category, values in context.get_preferences_snapshot().items():
+                for value in values:
+                    if fact_value.casefold() == str(value).strip().casefold():
+                        if not context.delete_preference(
+                            category, value, delete_conversations=True
+                        ):
+                            preference_delete_failed = True
+
+        if preference_delete_failed:
+            deleted = False
+        elif kind == "fact":
+            deleted = context.delete_fact(
                 key,
                 delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
                 expected_value=str(fact.get("value", "")),
             )
-            if kind == "fact"
-            else context.delete_preference(
+        else:
+            deleted = context.delete_preference(
                 key,
                 str(fact.get("value", "")),
                 delete_conversations=len(str(fact.get("value", "")).strip()) > 1,
             )
-        )
-        preference_delete_failed = False
+
         if deleted:
             # 지운 내용이 LLM 대화 문맥에 남아 다음 요청에 다시 실려 가지 않게 한다.
             from agent import llm_provider
@@ -300,17 +314,7 @@ class MemoryCommand(BaseCommand):
                 provider = llm_provider._instance
             if provider is not None:
                 provider.clear_history(keep_current_turn=in_tool_call)
-        if deleted and kind == "fact":
-            # 한 글자 이하로는 무관한 선호까지 걸리므로 맞춰 보지 않는다.
-            fact_value = str(fact.get("value", "")).strip()
-            if len(fact_value) > 1:
-                for category, values in context.get_preferences_snapshot().items():
-                    for value in values:
-                        if fact_value.casefold() == str(value).strip().casefold():
-                            if not context.delete_preference(
-                                category, value, delete_conversations=True
-                            ):
-                                preference_delete_failed = True
+
         if deleted and not preference_delete_failed:
             self.tts_wrapper(_("기억을 잊었어요: {key}", key=key))
         else:

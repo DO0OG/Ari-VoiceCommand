@@ -492,16 +492,7 @@ class UserContextManager:
         fact = facts[key]
         if expected_value is not None and fact.get("value", "") != expected_value:
             return False
-        facts.pop(key)
-        fact_history = self.context.get("fact_history", {})
-        old_history = fact_history.pop(key, None)
-        if not self.save_context():
-            facts[key] = fact
-            if old_history is not None:
-                fact_history[key] = old_history
-            return False
 
-        failed = False
         value = str(fact.get("value", ""))
         try:
             from memory.memory_index import get_memory_index
@@ -509,7 +500,7 @@ class UserContextManager:
             get_memory_index().delete_fact(key)
         except Exception as exc:
             logger.warning("사실 색인 삭제 실패: %s", exc)
-            failed = True
+            return False
         if delete_conversations and value:
             try:
                 from memory.conversation_history import get_conversation_history
@@ -517,15 +508,25 @@ class UserContextManager:
                 get_conversation_history().delete_containing(value)
             except Exception as exc:
                 logger.warning("대화 기록 삭제 실패: %s", exc)
-                failed = True
+                return False
             try:
                 from memory.memory_index import get_memory_index
 
                 get_memory_index().delete_conversations_containing(value)
             except Exception as exc:
                 logger.warning("대화 색인 삭제 실패: %s", exc)
-                failed = True
-        return not failed
+                return False
+
+        fact_history = self.context.get("fact_history", {})
+        old_history = fact_history.pop(key, None)
+        facts.pop(key)
+        if self.save_context():
+            return True
+
+        facts[key] = fact
+        if old_history is not None:
+            fact_history[key] = old_history
+        return False
 
     @_context_locked
     def request_bio_update(self, field: str, value: str, user_message: str = "") -> bool:
@@ -666,14 +667,7 @@ class UserContextManager:
         if value not in bucket:
             return False
         previous_bucket = dict(bucket)
-        bucket.pop(value)
-        if not bucket:
-            preferences.pop(category)
-        if not self.save_context():
-            preferences[category] = previous_bucket
-            return False
 
-        failed = False
         try:
             from memory.memory_index import get_memory_index
 
@@ -681,14 +675,14 @@ class UserContextManager:
             index.delete_fact(index.preference_key(category, value))
         except Exception as exc:
             logger.warning("선호 색인 삭제 실패: %s", exc)
-            failed = True
+            return False
         try:
             from memory.memory_index import get_memory_index
 
             get_memory_index().delete_fact(f"선호: {category}")
         except Exception as exc:
             logger.warning("이전 선호 색인 삭제 실패: %s", exc)
-            failed = True
+            return False
         if delete_conversations and len(value.strip()) > 1:
             try:
                 from memory.conversation_history import get_conversation_history
@@ -696,15 +690,21 @@ class UserContextManager:
                 get_conversation_history().delete_containing(value)
             except Exception as exc:
                 logger.warning("선호 대화 기록 삭제 실패: %s", exc)
-                failed = True
+                return False
             try:
                 from memory.memory_index import get_memory_index
 
                 get_memory_index().delete_conversations_containing(value)
             except Exception as exc:
                 logger.warning("선호 대화 색인 삭제 실패: %s", exc)
-                failed = True
-        for remaining_value in bucket:
+                return False
+
+        remaining_bucket = {
+            remaining_value: count
+            for remaining_value, count in previous_bucket.items()
+            if remaining_value != value
+        }
+        for remaining_value in remaining_bucket:
             try:
                 from memory.memory_index import get_memory_index
 
@@ -716,8 +716,16 @@ class UserContextManager:
                 )
             except Exception as exc:
                 logger.warning("남은 선호 색인 갱신 실패: %s", exc)
-                failed = True
-        return not failed
+                return False
+
+        bucket.pop(value)
+        if not bucket:
+            preferences.pop(category)
+        if self.save_context():
+            return True
+
+        preferences[category] = previous_bucket
+        return False
 
     def get_top_preferences(self, limit: int = 3) -> List[str]:
         """상위 선호도를 '카테고리:값' 형식으로 반환."""
