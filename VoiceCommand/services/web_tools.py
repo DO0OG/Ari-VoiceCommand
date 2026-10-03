@@ -7,6 +7,8 @@ import logging
 import os
 import json
 import re
+import shutil
+import tempfile
 import time
 import threading
 import urllib.parse
@@ -114,6 +116,8 @@ class SmartBrowser:
         self.driver = None
         self.headless = headless
         self.download_dir = download_dir or os.path.join(os.path.expanduser("~"), "Downloads")
+        self._browser_download_dir = self.download_dir
+        self._download_isolated = False
         self._selector_history: Dict[str, Dict[str, str]] = self._load_selector_history()
         self._action_plan_history: Dict[str, Dict[str, List[Dict[str, Any]]]] = self._load_action_plan_history()
         self._last_action_summary = ""
@@ -129,15 +133,28 @@ class SmartBrowser:
             from selenium.webdriver.chrome.service import Service
             from webdriver_manager.chrome import ChromeDriverManager
             
+            try:
+                os.makedirs(self.download_dir, exist_ok=True)
+                self._browser_download_dir = tempfile.mkdtemp(
+                    prefix=".ari-browser-", dir=self.download_dir
+                )
+                self._download_isolated = True
+            except OSError as exc:
+                logging.warning("[SmartBrowser] 전용 다운로드 폴더 생성 실패, 기본 폴더 사용: %s", exc)
+                self._browser_download_dir = self.download_dir
+                self._download_isolated = False
+
             opts = Options()
             if self.headless:
                 opts.add_argument("--headless=new")
-            opts.add_experimental_option("prefs", {"download.default_directory": self.download_dir})
+            opts.add_experimental_option("prefs", {"download.default_directory": self._browser_download_dir})
             
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
             self._download_baseline = self._snapshot_downloads()
         except Exception as e:
             logging.error("[SmartBrowser] 드라이버 초기화 실패: %s", e)
+            # 브라우저가 뜨지 않았으면 방금 만든 빈 전용 폴더를 남기지 않는다.
+            self._flush_browser_downloads()
             raise
 
     def _validate_current_page(self):
@@ -470,11 +487,12 @@ class SmartBrowser:
         """다운로드 폴더의 파일별 (크기, 수정 시각)을 기록한다."""
         snapshot: Dict[str, tuple[int, int]] = {}
         try:
-            names = os.listdir(self.download_dir)
+            download_dir = getattr(self, "_browser_download_dir", self.download_dir)
+            names = os.listdir(download_dir)
         except OSError:
             return snapshot
         for name in names:
-            path = os.path.join(self.download_dir, name)
+            path = os.path.join(download_dir, name)
             try:
                 if os.path.isfile(path):
                     stat = os.stat(path)
@@ -486,8 +504,10 @@ class SmartBrowser:
     def wait_for_download(self, timeout: float = 30.0, stable_seconds: float = 1.5) -> str:
         """다운로드 완료 파일을 감지해 경로를 반환한다."""
         end = time.time() + timeout
-        # 기준은 페이지를 열기 직전의 폴더 상태다. 동작마다 다시 찍으면 앞 동작이 받은 파일을 놓친다.
-        # 대기를 시작할 때 찍으면 그 전에 이미 끝난 빠른 다운로드를 기존 파일로 오인한다.
+        # 전용 폴더에는 이 브라우저가 받은 파일만 있어, 다른 앱이 받은 파일을 결과로 돌려주지 않는다.
+        download_dir = getattr(self, "_browser_download_dir", self.download_dir)
+        # 전용 폴더를 만들지 못했을 때만 기준을 쓴다. 기준은 페이지를 열기 직전의 폴더 상태다.
+        # 동작마다 다시 찍으면 앞 동작이 받은 파일을 놓치고, 대기를 시작할 때 찍으면 이미 끝난 빠른 다운로드를 놓친다.
         initial_files = getattr(self, "_download_baseline", None)
         if initial_files is None:
             initial_files = self._snapshot_downloads()
@@ -496,8 +516,8 @@ class SmartBrowser:
             self._validate_current_page()
             try:
                 entries = [
-                    os.path.join(self.download_dir, name)
-                    for name in os.listdir(self.download_dir)
+                    os.path.join(download_dir, name)
+                    for name in os.listdir(download_dir)
                 ]
             except FileNotFoundError:
                 entries = []
@@ -513,13 +533,14 @@ class SmartBrowser:
                 except OSError:
                     continue
                 state = (stat.st_size, stat.st_mtime_ns)
-                if initial_files.get(path) == state:
+                if not getattr(self, "_download_isolated", False) and initial_files.get(path) == state:
                     continue
                 prev = last_seen.get(path)
                 now = time.time()
                 if prev and prev[0] == state:
                     if now - prev[1] >= stable_seconds:
-                        # 돌려준 파일만 기준에 넣어, 같은 동작의 다른 파일은 다음 대기에서 반환된다.
+                        if getattr(self, "_download_isolated", False):
+                            return self._move_download_to_parent(path)
                         self._download_baseline = {**initial_files, path: state}
                         return path
                 else:
@@ -676,13 +697,60 @@ class SmartBrowser:
         head = path.split("/", 1)[0]
         return f"{domain}|{head}"
 
+    def _move_download_to_parent(self, path: str) -> str:
+        parent = self.download_dir
+        name = os.path.basename(path)
+        stem, extension = os.path.splitext(name)
+        index = 1
+        try:
+            while True:
+                candidate = name if index == 1 else f"{stem} ({index - 1}){extension}"
+                destination = os.path.join(parent, candidate)
+                try:
+                    target = open(destination, "xb")
+                except FileExistsError:
+                    index += 1
+                    continue
+                try:
+                    with open(path, "rb") as source, target:
+                        shutil.copyfileobj(source, target)
+                    shutil.copystat(path, destination)
+                    os.remove(path)
+                    return destination
+                except OSError:
+                    target.close()
+                    try:
+                        os.remove(destination)
+                    except OSError:
+                        pass
+                    raise
+        except OSError as exc:
+            logging.warning("[SmartBrowser] 다운로드 파일 이동 실패: %s", exc)
+            return path
+
+    def _flush_browser_downloads(self):
+        download_dir = getattr(self, "_browser_download_dir", self.download_dir)
+        if not getattr(self, "_download_isolated", False):
+            return
+        try:
+            for name in os.listdir(download_dir):
+                path = os.path.join(download_dir, name)
+                if not os.path.isfile(path) or name.lower().endswith((".crdownload", ".part", ".tmp")):
+                    continue
+                self._move_download_to_parent(path)
+            if not os.listdir(download_dir):
+                os.rmdir(download_dir)
+        except OSError as exc:
+            logging.debug("[SmartBrowser] 남은 다운로드 정리 생략: %s", exc)
+
     def close(self):
-        if self.driver:
-            try:
+        try:
+            if self.driver:
                 self.driver.quit()
-            finally:
-                self.driver = None
-                self._browser_start_url = ""
+        finally:
+            self.driver = None
+            self._browser_start_url = ""
+            self._flush_browser_downloads()
 
 # 싱글톤 브라우저 (필요 시 사용)
 _browser_instance: Optional[SmartBrowser] = None

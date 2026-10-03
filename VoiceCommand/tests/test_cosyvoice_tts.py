@@ -1,5 +1,6 @@
 import os
 import queue
+import subprocess
 import struct
 import threading
 import time
@@ -171,6 +172,69 @@ def _pcm(data):
 
 
 class CosyVoiceTTSSpeakTests(unittest.TestCase):
+    def _make_cleanup_tts(self, proc):
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
+        tts._proc = proc
+        tts._stopping = False
+        tts._ready = threading.Event()
+        tts._warmup_done = threading.Event()
+        tts._stream_lock = threading.Lock()
+        tts._stream = None
+        tts._stream_rate = None
+        tts._state_lock = threading.Lock()
+        tts._active_stop_event = None
+        tts._clear_pcm_state = Mock()
+        tts._close_stream_unlocked = Mock()
+        return tts
+
+    def test_cleanup_waits_after_kill(self):
+        class Proc:
+            def __init__(self):
+                self.stdin = _FakeStdin()
+                self.alive = True
+                self.wait_calls = []
+                self.kill_calls = 0
+
+            def poll(self):
+                return None if self.alive else 0
+
+            def wait(self, timeout):
+                self.wait_calls.append(timeout)
+                if len(self.wait_calls) == 1:
+                    raise subprocess.TimeoutExpired("worker", timeout)
+                if len(self.wait_calls) == 2:
+                    raise subprocess.TimeoutExpired("worker", timeout)
+                self.alive = False
+                return 0
+
+            def terminate(self):
+                pass
+
+            def kill(self):
+                self.kill_calls += 1
+
+        proc = Proc()
+        self._make_cleanup_tts(proc).cleanup()
+
+        self.assertEqual(proc.wait_calls, [2, 2, 2])
+        self.assertEqual(proc.kill_calls, 1)
+        self.assertIsNotNone(proc.poll())
+
+    def test_cleanup_still_terminates_process_after_audio_cleanup_error(self):
+        class Proc(_PipeProc):
+            def write(self, _data):
+                raise OSError("pipe closed")
+
+        proc = Proc()
+        tts = self._make_cleanup_tts(proc)
+        tts.stop = Mock(side_effect=RuntimeError("audio cleanup failed"))
+
+        tts.cleanup()
+
+        self.assertEqual(proc.kill_calls, 1)
+        self.assertIsNotNone(proc.poll())
+
     def test_speak_streams_worker_output_and_emits_completion(self):
         with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
             tts = CosyVoiceTTS()
