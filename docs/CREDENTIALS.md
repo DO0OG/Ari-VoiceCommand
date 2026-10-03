@@ -121,3 +121,7 @@ OAuth 동의 화면이 **테스트** 게시 상태이면 갱신 토큰은 7일 �
 이 경로는 `openai_api_key`를
 사용하며 키는 위 표와 같이 암호화 저장소 또는 `ARI_OPENAI_API_KEY` 환경변수에 둡니다.
 키가 없으면 원격 임베딩을 사용할 수 없습니다.
+
+## 손상된 설정 백업
+
+손상된 JSON 설정 파일의 원본 바이트는 `SecretStore.backup()`으로 암호화해 `ari_settings.pre-secrets.<hash>.dpapi`에 보관합니다. 복구할 때는 같은 Windows 사용자 계정에서 `unprotect_bytes()`로 복호화한 뒤 `ari_settings.json`에 기록합니다.

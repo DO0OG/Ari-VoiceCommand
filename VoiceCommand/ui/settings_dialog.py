@@ -830,10 +830,15 @@ class SettingsDialog(QDialog):
         new_settings.update(self._tts_page.get_values())
         new_settings.update(self._agent_page.get_values())
 
-        merged_settings = {**self.original_settings, **new_settings}
         self.changed_keys = {
-            key for key, value in merged_settings.items()
+            key for key, value in new_settings.items()
             if self.original_settings.get(key) != value
+        }
+        # 이 창에서 바꾼 값만 지금의 설정에 얹는다. 창을 연 뒤 다른 경로가 저장했거나
+        # 뒤늦게 읽힌 설정을, 창을 열 때의 값으로 덮어쓰지 않는다.
+        merged_settings = {
+            **ConfigManager.load_settings(),
+            **{key: new_settings[key] for key in self.changed_keys},
         }
         if not ConfigManager.save_settings(merged_settings):
             self.changed_keys = set()

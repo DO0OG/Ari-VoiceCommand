@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import threading
@@ -62,6 +63,38 @@ tool: search_coupang_products
             manager = self._make_manager(temp_dir)
 
             self.assertEqual(manager.load_all(), [])
+
+    def test_startup_recovery_restores_journaled_backup_and_keeps_untracked_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_name = ".ari-update-backup-known"
+            backup_dir = os.path.join(temp_dir, backup_name)
+            current_dir = os.path.join(temp_dir, "skill")
+            unknown_dir = os.path.join(temp_dir, ".ari-update-backup-unknown")
+            for directory, content in ((backup_dir, "original"), (current_dir, "updated"), (unknown_dir, "unknown")):
+                os.makedirs(directory)
+                with open(os.path.join(directory, "SKILL.md"), "w", encoding="utf-8") as handle:
+                    handle.write(content)
+            added_dir = os.path.join(temp_dir, "added")
+            os.makedirs(added_dir)
+            with open(os.path.join(added_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("half copied")
+            journal = os.path.join(temp_dir, ".ari-update-journal.json")
+            with open(journal, "w", encoding="utf-8") as handle:
+                json.dump({backup_name: "skill", "added": None}, handle)
+
+            # 실행 중 목록을 다시 불러오는 것만으로는 진행 중일 수 있는 업데이트를 되돌리지 않는다.
+            self._make_manager(temp_dir).load_all()
+            self.assertTrue(os.path.exists(journal))
+            with patch("agent.skill_manager._get_skills_dir", return_value=temp_dir):
+                loaded = SkillManager().list_skills()
+
+            self.assertEqual(len(loaded), 1)
+            # 업데이트가 새로 만든 폴더는 설치가 끝났는지 알 수 없어 지운다.
+            self.assertFalse(os.path.exists(added_dir))
+            with open(os.path.join(current_dir, "SKILL.md"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "original")
+            self.assertTrue(os.path.isdir(unknown_dir))
+            self.assertFalse(os.path.exists(journal))
 
     def test_build_match_context_includes_mcp_prompt_and_required_tool(self):
         with tempfile.TemporaryDirectory() as temp_dir:

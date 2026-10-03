@@ -16,11 +16,13 @@ import uuid
 import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
+from core.atomic_io import write_json_atomic
 from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
 _META_FILE_NAME = ".ari_skill_meta.json"
+_UPDATE_JOURNAL = ".ari-update-journal.json"
 _SKILL_FILE_NAME = "SKILL.md"
 _ALLOWED_HOSTS = {
     "github.com",
@@ -82,13 +84,32 @@ class SkillInstaller:
         if not source:
             return False
         was_enabled = bool(metadata.get("enabled", True))
+        journal_path = os.path.join(self.skills_dir, _UPDATE_JOURNAL)
+        if os.path.exists(journal_path):
+            # 이전 업데이트의 복구가 끝나지 않았다. 기록을 덮어쓰면 남은 백업을 되돌릴 수 없다.
+            raise RuntimeError(_("skills.update_restore_failed").format(path=journal_path))
         self._update_backups = {}
+        enabled_by_name = {}
+        for entry in os.listdir(self.skills_dir):
+            meta_path = os.path.join(self.skills_dir, entry, _META_FILE_NAME)
+            try:
+                with open(meta_path, "r", encoding="utf-8") as handle:
+                    enabled_by_name[entry] = bool(json.load(handle).get("enabled", True))
+            except (OSError, ValueError, AttributeError):
+                continue
         folder_name = os.path.basename(os.path.normpath(skill_dir))
+        keep_journal = False
         try:
             installed_names = self.install(source)
             if folder_name not in installed_names:
                 raise ValueError(_("skills.update_missing_existing"))
-            self._write_metadata(skill_dir, source, enabled=was_enabled)
+            for name in installed_names:
+                enabled = was_enabled if name == folder_name else enabled_by_name.get(name, True)
+                self._write_metadata(os.path.join(self.skills_dir, name), source, enabled=enabled)
+            # 기록을 먼저 지운다. 백업을 지우다 종료돼도 반쯤 지워진 백업으로 되돌리지 않는다.
+            # 기록을 지우지 못했으면 백업에 손대지 않고 업데이트를 되돌린다.
+            if not self._clear_update_journal():
+                raise OSError("스킬 업데이트 기록을 지우지 못했습니다")
             for backup in self._update_backups.values():
                 if backup:
                     shutil.rmtree(backup, ignore_errors=True)
@@ -97,22 +118,49 @@ class SkillInstaller:
             # 한 폴더의 복구가 실패해도 나머지는 계속 되돌리고, 실패한 경로는 모아서 알린다.
             unrestored = []
             for destination, backup in reversed(tuple(self._update_backups.items())):
-                shutil.rmtree(destination, ignore_errors=True)
                 try:
                     if backup:
-                        os.replace(backup, destination)
+                        if os.path.exists(backup):
+                            shutil.rmtree(destination, ignore_errors=True)
+                            os.replace(backup, destination)
                     elif os.path.exists(destination):
-                        raise OSError("새 스킬 폴더를 지우지 못했습니다")
+                        shutil.rmtree(destination, ignore_errors=True)
+                        if os.path.exists(destination):
+                            raise OSError("새 스킬 폴더를 지우지 못했습니다")
                 except OSError as exc:
                     logger.warning("스킬 복구에 실패했습니다: %s (%s)", backup or destination, exc)
                     unrestored.append(backup or destination)
             if unrestored:
+                # 되돌리지 못한 백업은 다음 시작 때 다시 복구를 시도하도록 기록을 남긴다.
+                keep_journal = True
                 raise RuntimeError(
                     _("skills.update_restore_failed").format(path=", ".join(unrestored))
                 )
             raise
         finally:
+            if not keep_journal:
+                self._clear_update_journal()
             self._update_backups = None
+
+    def _write_update_journal(self) -> None:
+        # 백업 폴더 이름 -> 원래 폴더 이름. 업데이트가 새로 만든 폴더는 이름 -> null로 적는다.
+        entries = {
+            os.path.basename(backup or destination): os.path.basename(destination) if backup else None
+            for destination, backup in (self._update_backups or {}).items()
+        }
+        write_json_atomic(
+            os.path.join(self.skills_dir, _UPDATE_JOURNAL), entries, ensure_ascii=False, indent=2
+        )
+
+    def _clear_update_journal(self) -> bool:
+        try:
+            os.unlink(os.path.join(self.skills_dir, _UPDATE_JOURNAL))
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            logger.warning("스킬 업데이트 기록을 지우지 못했습니다: %s", exc)
+            return False
+        return True
 
     def _install_from_url(self, url: str, source_label: str) -> List[str]:
         validated = _require_https_url(url)
@@ -180,8 +228,11 @@ class SkillInstaller:
                 backup = None
                 if os.path.isdir(destination):
                     backup = os.path.join(self.skills_dir, f".ari-update-backup-{uuid.uuid4().hex}")
-                    os.replace(destination, backup)
+                # 폴더를 건드리기 전에 기록한다. 새로 만드는 폴더도 적어야 도중에 끝났을 때 지울 수 있다.
                 self._update_backups[destination] = backup
+                self._write_update_journal()
+                if backup:
+                    os.replace(destination, backup)
             shutil.rmtree(destination, ignore_errors=True)
             shutil.copytree(
                 source_dir,

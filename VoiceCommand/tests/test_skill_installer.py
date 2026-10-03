@@ -108,6 +108,34 @@ class SkillInstallerTests(unittest.TestCase):
             with open(os.path.join(skill_dir, "SKILL.md"), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "updated skill")
 
+    def test_update_preserves_disabled_sibling_skill(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = os.path.join(temp_dir, "skills")
+            target_dir = os.path.join(skills_dir, "target")
+            sibling_dir = os.path.join(skills_dir, "sibling")
+            source_target = os.path.join(temp_dir, "target")
+            source_sibling = os.path.join(temp_dir, "sibling")
+            for directory in (target_dir, sibling_dir, source_target, source_sibling):
+                os.makedirs(directory)
+                with open(os.path.join(directory, "SKILL.md"), "w", encoding="utf-8") as handle:
+                    handle.write(directory)
+            with open(os.path.join(target_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"enabled": True, "source": "source"}, handle)
+            with open(os.path.join(sibling_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"enabled": False, "source": "source"}, handle)
+            installer = SkillInstaller(skills_dir)
+
+            def install(_source):
+                installer._install_from_local_dir(source_target, "source")
+                installer._install_from_local_dir(source_sibling, "source")
+                return ["target", "sibling"]
+
+            with mock.patch.object(installer, "install", side_effect=install):
+                self.assertTrue(installer.update(target_dir))
+
+            with open(os.path.join(sibling_dir, ".ari_skill_meta.json"), encoding="utf-8") as handle:
+                self.assertFalse(json.load(handle)["enabled"])
+
     def test_update_restores_existing_skill_when_install_result_omits_it(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             skills_dir = os.path.join(temp_dir, "skills")
@@ -203,6 +231,55 @@ class SkillInstallerTests(unittest.TestCase):
             self.assertIn(backup_path, str(raised.exception))
             self.assertTrue(os.path.isfile(os.path.join(backup_path, "SKILL.md")))
 
+    def test_update_refuses_to_start_while_earlier_recovery_is_pending(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = os.path.join(temp_dir, "skills")
+            skill_dir = os.path.join(skills_dir, "existing")
+            os.makedirs(skill_dir)
+            with open(os.path.join(skill_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"enabled": True, "source": "source"}, handle)
+            journal = os.path.join(skills_dir, ".ari-update-journal.json")
+            pending = {".ari-update-backup-old": "other"}
+            with open(journal, "w", encoding="utf-8") as handle:
+                json.dump(pending, handle)
+
+            installer = SkillInstaller(skills_dir)
+            with mock.patch.object(installer, "install") as install:
+                with self.assertRaises(RuntimeError):
+                    installer.update(skill_dir)
+
+            install.assert_not_called()
+            with open(journal, encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle), pending)
+
+    def test_update_rolls_back_when_journal_cannot_be_cleared(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            skills_dir = os.path.join(temp_dir, "skills")
+            skill_dir = os.path.join(skills_dir, "existing")
+            source_dir = os.path.join(temp_dir, "existing")
+            os.makedirs(skill_dir)
+            os.makedirs(source_dir)
+            with open(os.path.join(skill_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("original")
+            with open(os.path.join(skill_dir, ".ari_skill_meta.json"), "w", encoding="utf-8") as handle:
+                json.dump({"enabled": True, "source": "source"}, handle)
+            with open(os.path.join(source_dir, "SKILL.md"), "w", encoding="utf-8") as handle:
+                handle.write("new")
+
+            installer = SkillInstaller(skills_dir)
+
+            def install_new(_source):
+                return installer._install_from_local_dir(source_dir, "source")
+
+            with mock.patch.object(installer, "install", side_effect=install_new), \
+                 mock.patch.object(installer, "_clear_update_journal", return_value=False):
+                with self.assertRaises(OSError):
+                    installer.update(skill_dir)
+
+            # 기록이 남는데 백업을 지우면 다음 시작 때 불완전한 백업으로 되돌린다. 그래서 되돌린다.
+            with open(os.path.join(skill_dir, "SKILL.md"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "original")
+
     def test_update_dialog_runs_update_thread_with_skill_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = mock.Mock()
@@ -265,6 +342,23 @@ class SkillInstallerTests(unittest.TestCase):
             information.assert_not_called()
             warning.assert_not_called()
             dialog._refresh_list.assert_not_called()
+
+    def test_dialog_reject_and_close_are_deferred_until_install_finishes(self):
+        manager = mock.Mock()
+        manager.load_all.return_value = []
+        with mock.patch("agent.skill_manager.get_skill_manager", return_value=manager):
+            dialog = SkillsDialog()
+        dialog.show()
+        with mock.patch("ui.skills_dialog._install_running", return_value=True), \
+                mock.patch("ui.skills_dialog.QMessageBox.information") as information:
+            dialog.reject()
+            self.assertTrue(dialog.isVisible())
+            dialog.close()
+            self.assertTrue(dialog.isVisible())
+            information.assert_called_once()
+        with mock.patch("ui.skills_dialog._install_running", return_value=False):
+            dialog.reject()
+        self.assertFalse(dialog.isVisible())
 
 
 if __name__ == "__main__":

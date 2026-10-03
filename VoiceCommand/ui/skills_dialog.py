@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -76,6 +77,11 @@ class SkillsDialog(QDialog):
         super().__init__(parent)
         self._install_thread: _SkillInstallThread | None = None
         self._closed = False
+        self._close_notice_shown = False
+        self._app_quitting = False
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._mark_app_quitting)
         self.setWindowTitle(_("🧩 스킬 관리"))
         self.resize(860, 580)
         self._init_ui()
@@ -304,11 +310,31 @@ class SkillsDialog(QDialog):
         progress.close()
         QMessageBox.warning(self, _("업데이트 실패"), message)
 
+    def _mark_app_quitting(self) -> None:
+        self._app_quitting = True
+
+    def _defer_close_during_install(self) -> bool:
+        if self._app_quitting or not _install_running():
+            return False
+        if not self._close_notice_shown:
+            self._close_notice_shown = True
+            QMessageBox.information(
+                self,
+                _("설치 중"),
+                _("이전에 시작한 설치가 아직 진행 중입니다. 끝난 뒤 다시 시도해 주세요."),
+            )
+        return True
+
     def done(self, result: int) -> None:
+        if self._defer_close_during_install():
+            return
         self._closed = True
         super().done(result)
 
     def closeEvent(self, event) -> None:
+        if self._defer_close_during_install():
+            event.ignore()
+            return
         self._closed = True
         super().closeEvent(event)
 

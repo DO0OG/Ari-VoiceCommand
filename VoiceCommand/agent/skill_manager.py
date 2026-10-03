@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 _SKILLS_DIR_NAME = "skills"
 _SKILL_FILE_NAME = "SKILL.md"
+_UPDATE_JOURNAL = ".ari-update-journal.json"
 _META_FILE_NAME = ".ari_skill_meta.json"
 _FRONTMATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
 _MCP_ENDPOINT_RE = re.compile(r"(https://[^\s)>'\"`]+/mcp)\b", re.IGNORECASE)
@@ -275,6 +276,8 @@ class SkillManager:
         self._lock = threading.RLock()
         self.skills_dir = _get_skills_dir()
         os.makedirs(self.skills_dir, exist_ok=True)
+        # 시작할 때 한 번만 한다. 실행 중에는 진행 중인 업데이트의 백업을 건드리면 안 된다.
+        self._recover_interrupted_update()
         self.load_all()
 
     def load_all(self) -> List[SkillInfo]:
@@ -283,7 +286,7 @@ class SkillManager:
             self._skills.clear()
             os.makedirs(self.skills_dir, exist_ok=True)
             for entry in sorted(os.listdir(self.skills_dir)):
-                if entry.startswith(".ari-update-backup-"):
+                if entry == _UPDATE_JOURNAL or entry.startswith(".ari-update-backup-"):
                     continue
                 skill_dir = os.path.join(self.skills_dir, entry)
                 skill_md = os.path.join(skill_dir, _SKILL_FILE_NAME)
@@ -297,6 +300,50 @@ class SkillManager:
                 self._skills[skill.name] = skill
                 loaded.append(skill)
         return loaded
+
+    def _recover_interrupted_update(self) -> None:
+        journal_path = os.path.join(self.skills_dir, _UPDATE_JOURNAL)
+        if not os.path.isfile(journal_path):
+            return
+        try:
+            with open(journal_path, "r", encoding="utf-8") as handle:
+                entries = json.load(handle)
+            if not isinstance(entries, dict):
+                raise ValueError("Invalid update journal")
+            for backup_name, original_name in entries.items():
+                if original_name is None:
+                    # 업데이트가 새로 만든 폴더다. 설치가 끝났는지 알 수 없으므로 지운다.
+                    if (
+                        not isinstance(backup_name, str)
+                        or os.path.basename(backup_name) != backup_name
+                        or backup_name in {"", ".", ".."}
+                        or backup_name.startswith(".ari-")
+                    ):
+                        raise ValueError("Invalid update journal entry")
+                    created = os.path.join(self.skills_dir, backup_name)
+                    if os.path.isdir(created):
+                        shutil.rmtree(created)
+                    continue
+                if (
+                    not isinstance(backup_name, str)
+                    or not backup_name.startswith(".ari-update-backup-")
+                    or os.path.basename(backup_name) != backup_name
+                    or not isinstance(original_name, str)
+                    or os.path.basename(original_name) != original_name
+                    or original_name in {"", ".", ".."}
+                    or original_name.startswith(".ari-")
+                ):
+                    raise ValueError("Invalid update journal entry")
+                backup = os.path.join(self.skills_dir, backup_name)
+                original = os.path.join(self.skills_dir, original_name)
+                if not os.path.exists(backup):
+                    continue
+                if os.path.isdir(original):
+                    shutil.rmtree(original)
+                os.replace(backup, original)
+            os.unlink(journal_path)
+        except Exception as exc:
+            logger.warning("[SkillManager] 미완료 스킬 업데이트 복구 실패: %s", exc)
 
     def list_skills(self) -> List[SkillInfo]:
         with self._lock:
