@@ -226,8 +226,9 @@ class _SafeHTTPSHandler(urllib.request.HTTPSHandler):
             try:
                 return self.do_open(pinned, req, **kwargs)
             except urllib.error.URLError as exc:
-                # IP 목적지를 거절하는 프록시에서는 호스트 이름으로 한 번 더 보낸다.
-                if "Tunnel connection failed" not in str(exc.reason):
+                # IP 목적지를 정책으로 거절(403)하는 프록시에서만 호스트 이름으로 한 번 더 보낸다.
+                # 그 밖의 실패에서 이름으로 바꾸면 프록시가 이름을 다시 해석하는 길이 열린다.
+                if "Tunnel connection failed: 403" not in str(exc.reason):
                     raise
                 logging.info("프록시가 IP 목적지 연결을 거절해 호스트 이름으로 다시 시도합니다: %s", exc.reason)
         connection = type("RequestHTTPSConnection", (_SafeHTTPSConnection,), {"_safe_check": not proxied})

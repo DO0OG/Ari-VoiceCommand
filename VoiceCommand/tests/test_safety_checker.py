@@ -76,6 +76,11 @@ class SafetyCheckerTests(unittest.TestCase):
             "self._os.remove(p)",
             "from os import system\nsystem('del /q notes.txt')",
             "from subprocess import run as r\nr(['cmd', '/c', 'rmdir', '/s', 'out'])",
+            'from os import *\nsystem("del /q notes.txt")',
+            'from subprocess import *\nrun(["rm", "-rf", target])',
+            'import subprocess\nsubprocess.run(["powershell.exe", "-Command", "Remove-Item x"])',
+            'from pathlib import Path\ngetattr(Path("notes.txt"), "unlink")()',
+            'from importlib import import_module\nimport_module("os").remove("notes.txt")',
             'getattr(os, "remove")(p)',
             'getattr(shutil, "rmtree")(path)',
             '__import__("os").remove(p)',
@@ -103,6 +108,11 @@ class SafetyCheckerTests(unittest.TestCase):
                 self.assertEqual(self.checker.check_python(code).level, DangerLevel.SAFE)
         self.assertEqual(
             self.checker.check_python('import subprocess\nsubprocess.run(["git", "status"])').level,
+            DangerLevel.CAUTION,
+        )
+        # 실행 파일이 아닌 인수에 든 단어는 삭제 명령이 아니다.
+        self.assertEqual(
+            self.checker.check_python('import subprocess\nsubprocess.run(["git", "log", "--grep=del"])').level,
             DangerLevel.CAUTION,
         )
         self.assertEqual(

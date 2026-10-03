@@ -110,7 +110,10 @@ def _python_contains_delete_call(code: str) -> bool:
     os_functions = set()
     shutil_functions = set()
     shell_functions = set()
-    shell_calls = {"system", "popen", "run", "call", "check_call", "check_output", "Popen"}
+    import_module_functions = set()
+    os_shell_calls = {"system", "popen"}
+    subprocess_shell_calls = {"run", "call", "check_call", "check_output", "Popen"}
+    shell_calls = os_shell_calls | subprocess_shell_calls
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -127,9 +130,18 @@ def _python_contains_delete_call(code: str) -> bool:
                 os_functions.update(alias.asname or alias.name for alias in node.names if alias.name in {"remove", "unlink", "rmdir", "removedirs"})
                 if any(alias.name == "*" for alias in node.names):
                     os_functions.update({"remove", "unlink", "rmdir", "removedirs"})
-                shell_functions.update(alias.asname or alias.name for alias in node.names if alias.name in {"system", "popen"})
+                    shell_functions.update(os_shell_calls)
+                shell_functions.update(alias.asname or alias.name for alias in node.names if alias.name in os_shell_calls)
             elif node.module == "subprocess":
-                shell_functions.update(alias.asname or alias.name for alias in node.names if alias.name in shell_calls)
+                shell_functions.update(
+                    alias.asname or alias.name for alias in node.names if alias.name in subprocess_shell_calls
+                )
+                if any(alias.name == "*" for alias in node.names):
+                    shell_functions.update(subprocess_shell_calls)
+            elif node.module == "importlib":
+                import_module_functions.update(
+                    alias.asname or alias.name for alias in node.names if alias.name == "import_module"
+                )
             elif node.module == "shutil":
                 shutil_functions.update(alias.asname or alias.name for alias in node.names if alias.name == "rmtree")
                 if any(alias.name == "*" for alias in node.names):
@@ -144,7 +156,9 @@ def _python_contains_delete_call(code: str) -> bool:
             if node.id in subprocess_modules:
                 return "subprocess"
         if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant):
-            if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+            if isinstance(node.func, ast.Name) and (
+                node.func.id == "__import__" or node.func.id in import_module_functions
+            ):
                 return node.args[0].value
             if (isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
                     and isinstance(node.func.value, ast.Name) and node.func.value.id in importlib_modules):
@@ -154,10 +168,16 @@ def _python_contains_delete_call(code: str) -> bool:
     def shell_text(node):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             return node.value
-        if isinstance(node, (ast.List, ast.Tuple)) and all(
-            isinstance(item, ast.Constant) and isinstance(item.value, str) for item in node.elts
-        ):
-            return " ".join(item.value for item in node.elts)
+        if isinstance(node, (ast.List, ast.Tuple)) and node.elts:
+            words = [
+                item.value if isinstance(item, ast.Constant) and isinstance(item.value, str) else ""
+                for item in node.elts
+            ]
+            # 목록은 셸을 거치지 않아 첫 단어만 실행 파일이다. 인수에 든 단어로는 판정하지 않는다.
+            # 셸을 직접 부르는 목록은 그 뒤가 명령이다.
+            if Path(words[0]).stem.lower() in {"cmd", "powershell", "pwsh", "sh", "bash"}:
+                return " ".join(words[1:])
+            return words[0]
         if isinstance(node, ast.JoinedStr):
             return " ".join(item.value for item in node.values if isinstance(item, ast.Constant) and isinstance(item.value, str))
         return None
@@ -167,9 +187,10 @@ def _python_contains_delete_call(code: str) -> bool:
             return False
         if not isinstance(node.args[1], ast.Constant) or not isinstance(node.args[1].value, str):
             return False
-        target_module = module_name(node.args[0])
-        return ((target_module == "os" and node.args[1].value in {"remove", "unlink", "rmdir", "removedirs"})
-                or (target_module == "shutil" and node.args[1].value == "rmtree"))
+        # 직접 호출과 같은 기준이다. unlink·rmdir·rmtree는 대상이 무엇이든(Path 등) 삭제로 본다.
+        if node.args[1].value in {"unlink", "rmdir", "rmtree"}:
+            return True
+        return module_name(node.args[0]) == "os" and node.args[1].value in {"remove", "removedirs"}
 
     delete_names = os_functions | shutil_functions
     for node in ast.walk(tree):

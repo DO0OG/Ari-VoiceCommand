@@ -287,6 +287,8 @@ class GoogleAuthTests(unittest.TestCase):
             self.assertFalse(google_auth.is_connected())
 
     def test_sign_out_propagates_legacy_delete_failure(self):
+        # 보호된 토큰이 있어야 읽는 단계에서 옛 파일을 옮기지 않고, 삭제 단계까지 간다.
+        google_auth.save_token({"access_token": _SAMPLE_OLD})
         self.legacy_path.write_text(json.dumps({"access_token": _SAMPLE_OLD}), encoding="utf-8")
         with patch.object(google_auth.os, "remove", side_effect=PermissionError("denied")), patch.object(google_auth.requests, "post"):
             with self.assertRaises(PermissionError):
