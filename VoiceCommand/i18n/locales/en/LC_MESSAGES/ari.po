@@ -4129,5 +4129,5 @@ msgstr "Delete unused API keys ({count})"
 msgid "쓰지 않는 API 키 삭제"
 msgstr "Delete unused API keys"
 
-msgid "쓰지 않는 API 키 {count}개를 삭제할까요?"
-msgstr "Delete unused API keys ({count})?"
+msgid "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."
+msgstr "Delete unused API keys ({count})? This cannot be undone."

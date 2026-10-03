@@ -4126,5 +4126,5 @@ msgstr "쓰지 않는 API 키 {count}개 삭제"
 msgid "쓰지 않는 API 키 삭제"
 msgstr "쓰지 않는 API 키 삭제"
 
-msgid "쓰지 않는 API 키 {count}개를 삭제할까요?"
-msgstr "쓰지 않는 API 키 {count}개를 삭제할까요?"
+msgid "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."
+msgstr "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."

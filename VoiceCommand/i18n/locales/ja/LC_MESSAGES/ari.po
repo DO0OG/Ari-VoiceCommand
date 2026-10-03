@@ -4126,5 +4126,5 @@ msgstr "未使用の API キーを {count} 個削除"
 msgid "쓰지 않는 API 키 삭제"
 msgstr "未使用の API キーを削除"
 
-msgid "쓰지 않는 API 키 {count}개를 삭제할까요?"
-msgstr "未使用の API キーを {count} 個削除しますか？"
+msgid "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."
+msgstr "未使用の API キーを {count} 個削除しますか？削除したキーは元に戻せません。"

@@ -450,7 +450,7 @@ class _LLMSettingsPage(QWidget):
         if QMessageBox.question(
             self,
             _("쓰지 않는 API 키 삭제"),
-            _("쓰지 않는 API 키 {count}개를 삭제할까요?").format(count=count),
+            _("쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다.").format(count=count),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         ) == QMessageBox.StandardButton.Yes:
