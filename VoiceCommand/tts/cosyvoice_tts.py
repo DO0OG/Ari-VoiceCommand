@@ -782,6 +782,45 @@ class CosyVoiceTTS(QObject):
             self._ready.set() # 대기 중인 스레드 해제
             self._warmup_done.set()
             self.stop()
+        except Exception as exc:
+            logging.debug("CosyVoice 재생 중지 실패: %s", exc)
+
+        # 워커를 먼저 끝낸다. 오디오 장치 잠금을 기다리느라 워커 종료가 미뤄지면 안 된다.
+        logging.info("CosyVoice3 리소스 정리 중...")
+        if proc and proc.poll() is None:
+            killed = False
+            try:
+                proc.stdin.write(b"EXIT\n")
+                proc.stdin.flush()
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                except Exception as exc:
+                    logging.debug("CosyVoice terminate 실패, kill 시도: %s", exc)
+                    try:
+                        proc.kill()
+                        killed = True
+                    except Exception as kill_exc:
+                        logging.debug("CosyVoice kill 실패: %s", kill_exc)
+            except Exception as exc:
+                logging.debug("CosyVoice 종료 명령 실패, kill 시도: %s", exc)
+                try:
+                    proc.kill()
+                    killed = True
+                except Exception as kill_exc:
+                    logging.debug("CosyVoice kill 실패: %s", kill_exc)
+            if killed or proc.poll() is None:
+                try:
+                    proc.wait(timeout=2)
+                except Exception as exc:
+                    logging.warning("CosyVoice 워커 프로세스 종료 확인 실패: %s", exc)
+                else:
+                    if proc.poll() is None:
+                        logging.warning("CosyVoice 워커 프로세스가 종료되지 않았습니다")
+
+        try:
             if self._stream_lock.acquire(timeout=2):
                 try:
                     self._close_stream_unlocked()
@@ -792,40 +831,6 @@ class CosyVoiceTTS(QObject):
             self._clear_pcm_state()
         except Exception as exc:
             logging.debug("CosyVoice 오디오 정리 실패: %s", exc)
-        finally:
-            logging.info("CosyVoice3 리소스 정리 중...")
-            if proc and proc.poll() is None:
-                killed = False
-                try:
-                    proc.stdin.write(b"EXIT\n")
-                    proc.stdin.flush()
-                    proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    try:
-                        proc.terminate()
-                        proc.wait(timeout=2)
-                    except Exception as exc:
-                        logging.debug("CosyVoice terminate 실패, kill 시도: %s", exc)
-                        try:
-                            proc.kill()
-                            killed = True
-                        except Exception as kill_exc:
-                            logging.debug("CosyVoice kill 실패: %s", kill_exc)
-                except Exception as exc:
-                    logging.debug("CosyVoice 종료 명령 실패, kill 시도: %s", exc)
-                    try:
-                        proc.kill()
-                        killed = True
-                    except Exception as kill_exc:
-                        logging.debug("CosyVoice kill 실패: %s", kill_exc)
-                if killed or proc.poll() is None:
-                    try:
-                        proc.wait(timeout=2)
-                    except Exception as exc:
-                        logging.warning("CosyVoice 워커 프로세스 종료 확인 실패: %s", exc)
-                    else:
-                        if proc.poll() is None:
-                            logging.warning("CosyVoice 워커 프로세스가 종료되지 않았습니다")
 
         # PyAudio 정리는 AriCore.cleanup()에서 GlobalAudio.terminate() 호출로 통합 관리
     def __del__(self):

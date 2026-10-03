@@ -215,8 +215,15 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
                 self.kill_calls += 1
 
         proc = Proc()
-        self._make_cleanup_tts(proc).cleanup()
+        tts = self._make_cleanup_tts(proc)
+        worker_ended_before_audio_close = []
+        tts._close_stream_unlocked.side_effect = lambda: worker_ended_before_audio_close.append(
+            proc.poll() is not None
+        )
+        tts.cleanup()
 
+        # 오디오 닫기가 막혀도 워커가 살아 있지 않도록 워커를 먼저 끝낸다.
+        self.assertEqual(worker_ended_before_audio_close, [True])
         self.assertEqual(proc.wait_calls, [2, 2, 2])
         self.assertEqual(proc.kill_calls, 1)
         self.assertIsNotNone(proc.poll())

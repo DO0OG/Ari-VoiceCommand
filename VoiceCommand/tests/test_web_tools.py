@@ -3,6 +3,7 @@ import itertools
 import ipaddress
 import socket
 import tempfile
+import threading
 import types
 import unittest
 from unittest.mock import patch
@@ -39,7 +40,58 @@ class WebToolsTests(unittest.TestCase):
         os.mkdir(browser._browser_download_dir)
         browser._download_isolated = True
         browser._download_baseline = None
+        browser._download_lock = threading.Lock()
+        browser._pending_downloads = []
         return browser
+
+    def test_new_run_does_not_return_file_left_by_previous_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = self._isolated_download_browser(tmp)
+            with open(os.path.join(browser._browser_download_dir, "previous.bin"), "wb") as handle:
+                handle.write(b"x")
+
+            browser._begin_download_scope()
+
+            # 남은 파일은 다운로드 폴더로 옮기되, 새 실행의 결과로는 돌려주지 않는다.
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "previous.bin")))
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0, 2)), \
+                 patch.object(web_tools.time, "sleep"):
+                with self.assertRaises(TimeoutError):
+                    browser.wait_for_download(timeout=1, stable_seconds=1)
+
+    def test_collected_download_is_moved_without_waiting_and_returned_later(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = self._isolated_download_browser(tmp)
+            with open(os.path.join(browser._browser_download_dir, "report.pdf"), "wb") as handle:
+                handle.write(b"pdf")
+            with open(os.path.join(browser._browser_download_dir, "partial.crdownload"), "wb") as handle:
+                handle.write(b"...")
+
+            browser._collect_downloads()
+
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "report.pdf")))
+            self.assertTrue(os.path.isfile(os.path.join(browser._browser_download_dir, "partial.crdownload")))
+            with patch.object(browser, "_validate_current_page"), \
+                 patch.object(web_tools.time, "time", side_effect=(0, 0)), \
+                 patch.object(web_tools.time, "sleep"):
+                self.assertEqual(
+                    browser.wait_for_download(timeout=10), os.path.join(tmp, "report.pdf")
+                )
+
+    def test_stale_session_folder_is_recovered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = os.path.join(tmp, ".ari-browser-old")
+            os.mkdir(stale)
+            with open(os.path.join(stale, "late.zip"), "wb") as handle:
+                handle.write(b"zip")
+            browser = SmartBrowser.__new__(SmartBrowser)
+            browser.download_dir = tmp
+
+            browser._recover_stale_downloads()
+
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "late.zip")))
+            self.assertFalse(os.path.exists(stale))
 
     def test_is_safe_http_url_blocks_local_and_private_targets(self):
         blocked_urls = (
