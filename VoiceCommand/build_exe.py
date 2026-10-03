@@ -114,7 +114,6 @@ Nuitka import 제외 정책:
   commands/ai_command.py     — register_plugin_tool_handler() LLM 도구 동적 디스패치
   agent/llm_provider.py      — register_plugin_tool() 동적 스키마 확장
   ui/tray_icon.py            — add_plugin_menu_action() 트레이 메뉴 동적 삽입
-  plugins/sample_plugin.py   — 메뉴·명령·도구·샌드박스 등록 예시 업데이트
   Main.py                    — PluginContext 훅 주입 (menu/command/tool/sandbox)
 
 포함 모듈 (이전 2026-03-26):
@@ -149,7 +148,6 @@ Nuitka import 제외 정책:
   agent/episode_memory.py     — 목표 에피소드 기억 + 복구 지침 재주입
   core/plugin_loader.py      — 사용자 플러그인 로더 및 확장 진입점 (.py / .zip)
   ui/theme.py, ui/common.py — `%AppData%/Ari/theme/*.json` 기반 UI 테마 시스템
-  plugins/sample_plugin.py   — 사용자 플러그인 템플릿
   tts/cosyvoice_tts.py      — 로컬 TTS 워커 재사용 + 안정화된 스트리밍 출력
   ui/memory_panel.py        — 메모리 패널 통계 탭 레이아웃 보정
 """
