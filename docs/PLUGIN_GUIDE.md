@@ -30,7 +30,7 @@ Ari에서 직접 플러그인을 만들 때 참고하는 문서입니다. 런타
 VoiceCommand\.ari_runtime\plugins
 ```
 
-개발 환경에서는 기본 템플릿이 아래 경로에 있습니다.
+저장소에는 로컬 개발용 폴더가 아래 경로에 있으며, 기본 템플릿이나 샘플 플러그인은 들어 있지 않습니다.
 
 ```text
 VoiceCommand/plugins
@@ -271,7 +271,9 @@ def register(context):
     }
 ```
 
-## 8. 전체 예시 (sample_plugin.py)
+## 8. 전체 예시
+
+아래는 문서용 예시 코드이며 저장소에 같은 파일은 없습니다.
 
 ```python
 import logging

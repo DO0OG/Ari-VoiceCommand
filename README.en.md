@@ -152,7 +152,7 @@ The local decision engine has a separate held-out evaluation for its supported c
 - **367** parser-confirmed direct selections
 - **100.0% measured precision** for those selections
 - **0 false direct selections** in that evaluation
-- Warm inference: **p50 0.053 ms**, **p95 0.100 ms** over 1,000 iterations on an AMD64 Windows desktop
+- Warm inference: **p50 0.048 ms**, **p95 0.071 ms** over 1,000 iterations on an AMD64 Windows desktop
 
 These numbers evaluate the decision/parser path only. They do **not** measure microphone recognition accuracy, overall agent success rate, or every possible user request.
 

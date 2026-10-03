@@ -290,7 +290,7 @@ option = 32 byte tokens
 ```text
 텍스트
  ↓
-Unicode character 3~6 gram
+Unicode character 2~5 gram
  ↓
 stable hash bucket
  ↓
@@ -307,7 +307,7 @@ softmax + calibrated temperature
 
 ### 왜 Ari에 더 적합한가
 
-`char_ngrams()`는 Python Unicode 문자열 단위로 3~6글자 n-gram을 만든 뒤 UTF-8로 hash한다.
+`hash_features()`는 Python Unicode 문자열 단위로 2~5글자 n-gram을 만든 뒤 UTF-8 바이트를 hash한다.
 
 따라서 영어만을 전제로 하는 BERT vocabulary와 달리 구조적으로는 다음을 모두 입력으로 받을 수 있다.
 
