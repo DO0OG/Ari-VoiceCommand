@@ -3050,8 +3050,8 @@ msgstr "Local decision model: ready"
 msgid "로컬 판단 모델: 오류 ({code})"
 msgstr "Local decision model: error ({code})"
 
-msgid "로컬 판단 모델: 아직 불러오지 않음"
-msgstr "Local decision model: not loaded yet"
+msgid "로컬 판단 모델: 아직 불러오지 않음 (첫 명령 때 불러옵니다)"
+msgstr "Local decision model: not loaded yet (loads on the first command)"
 
 msgid "모델 다시 불러오기"
 msgstr "Reload model"

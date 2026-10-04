@@ -729,6 +729,23 @@ class DecisionEngineTests(unittest.TestCase):
                 self.assertIn(key, DEFAULT_SETTINGS)
                 self.assertEqual(template[key], DEFAULT_SETTINGS[key])
 
+    def test_load_and_reload_update_model_health(self):
+        engine = _engine_module()
+        model_dir = Path(__file__).resolve().parents[1] / "resources" / "decision"
+        local = engine.LocalDecisionEngine(model_dir)
+        with tempfile.TemporaryDirectory() as directory:
+            missing = engine.LocalDecisionEngine(Path(directory) / "missing")
+            with patch(
+                "core.config_manager.ConfigManager.get",
+                side_effect=lambda _key, default=None: default,
+            ):
+                self.assertTrue(local.load())
+                self.assertEqual(local.health()["state"], "ready")
+                local.reload()
+                self.assertEqual(local.health()["state"], "not_loaded")
+                self.assertFalse(missing.load())
+                self.assertEqual(missing.health()["state"], "error")
+
 
 if __name__ == "__main__":
     unittest.main()

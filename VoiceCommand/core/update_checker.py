@@ -178,6 +178,10 @@ def get_update_status() -> dict:
         status["pending_version"]
     ):
         status["pending_version"] = ""
+    elif compare_versions(status["pending_version"], get_version()) <= 0:
+        status["pending_version"] = ""
+        status["pending_notes_url"] = ""
+        status["pending_min_updatable_from"] = ""
     for key in ("pending_min_updatable_from",):
         value = status[key]
         if not isinstance(value, str) or not _VERSION_PATTERN.fullmatch(value):

@@ -512,6 +512,37 @@ class UpdateCheckerTests(unittest.TestCase):
         self.assertFalse(checker._check_timer.isActive())
         checker.stop()
 
+    def test_get_update_status_clears_pending_versions_not_newer_than_current(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            cases = (("1.0.0", ""), ("0.9.0", ""), ("1.1.0", "1.1.0"))
+            for pending_version, expected_version in cases:
+                with self.subTest(pending_version=pending_version):
+                    with open(path, "w", encoding="utf-8") as handle:
+                        json.dump(
+                            {
+                                "pending_version": pending_version,
+                                "pending_notes_url": "https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.0",
+                                "pending_min_updatable_from": "1.0.0",
+                            },
+                            handle,
+                        )
+                    with (
+                        patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                        patch("core.update_checker.get_version", return_value="1.0.0"),
+                    ):
+                        status = update_checker.get_update_status()
+                        self.assertEqual(status["pending_version"], expected_version)
+                        if expected_version:
+                            self.assertEqual(
+                                status["pending_notes_url"],
+                                "https://github.com/DO0OG/Ari-VoiceCommand/releases/tag/v1.1.0",
+                            )
+                            self.assertEqual(status["pending_min_updatable_from"], "1.0.0")
+                        else:
+                            self.assertEqual(status["pending_notes_url"], "")
+                            self.assertEqual(status["pending_min_updatable_from"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
