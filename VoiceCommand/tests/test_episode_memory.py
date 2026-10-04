@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import json
 import time
+from unittest.mock import patch
 
 
 from agent.episode_memory import EpisodeMemory, GoalEpisode
@@ -128,6 +129,21 @@ class EpisodeMemoryTests(unittest.TestCase):
             with open(path, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
             self.assertEqual(len(payload), 1)
+
+    def test_failed_atomic_replace_keeps_previous_episode_file_intact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "episode_memory.json")
+            memory = EpisodeMemory(filepath=path)
+            memory.record(GoalEpisode(goal="메모 저장", achieved=True, summary="저장 성공"))
+            memory.flush()
+            memory.record(GoalEpisode(goal="파일 열기", achieved=True, summary="열기 성공"))
+
+            with patch("core.atomic_io.os.replace", side_effect=OSError("교체 실패")):
+                memory.flush()
+
+            with open(path, "r", encoding="utf-8") as handle:
+                self.assertEqual(len(json.load(handle)), 1)
+            self.assertEqual(os.listdir(tmp), ["episode_memory.json"])
 
     def test_load_backfills_missing_embeddings_in_background(self):
         with tempfile.TemporaryDirectory() as tmp:

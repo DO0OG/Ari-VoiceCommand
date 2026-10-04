@@ -4,6 +4,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from memory.conversation_history import ConversationHistory, _INTERNAL_USER_PREFIXES
 from memory.fact_suggestions import FactSuggestionStore
 from memory.memory_index import MemoryIndex
 from memory.memory_manager import MemoryManager
@@ -14,9 +15,22 @@ class MemoryManagerTests(unittest.TestCase):
     def setUp(self):
         self.index_temp_dir = tempfile.TemporaryDirectory()
         self.test_index = MemoryIndex(f"{self.index_temp_dir.name}/memory.db")
+        self.history = ConversationHistory.__new__(ConversationHistory)
+        self.history.active = []
         patcher = patch("memory.memory_index.get_memory_index", return_value=self.test_index)
         patcher.start()
         self.addCleanup(patcher.stop)
+        manager_index_patcher = patch(
+            "memory.memory_manager.get_memory_index", return_value=self.test_index
+        )
+        manager_index_patcher.start()
+        self.addCleanup(manager_index_patcher.stop)
+        history_patcher = patch(
+            "memory.memory_manager.get_conversation_history",
+            return_value=self.history,
+        )
+        history_patcher.start()
+        self.addCleanup(history_patcher.stop)
         self.addCleanup(self.index_temp_dir.cleanup)
 
     def test_process_interaction_records_situation_after_conversation_save(self):
@@ -34,7 +48,10 @@ class MemoryManagerTests(unittest.TestCase):
             manager = MemoryManager()
         with patch(
             "memory.memory_manager.add_conversation",
-            side_effect=lambda user, response, **kwargs: events.append(("saved", user, response)),
+            side_effect=lambda user, response, **kwargs: (
+                events.append(("saved", user, response))
+                or {"timestamp": "2026-10-04T12:00:00"}
+            ),
         ), patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
             "memory.memory_manager.get_user_profile_engine", return_value=fake_profile
         ):
@@ -45,6 +62,81 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(sum(event[0] == "saved" for event in events), 1)
         fake_index.index_conversation.assert_called_once()
         fake_context.record_interaction.assert_called_once_with("Great job")
+
+    def test_process_interaction_indexes_only_saved_entries_with_recorded_timestamp(self):
+        fake_context = Mock()
+        fake_context.context = {"last_commands": []}
+        fake_context.extract_topics.return_value = []
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+
+        def add_to_history(user, response, **_kwargs):
+            if self.history._is_internal_entry(user, response):
+                return None
+            entry = {
+                "user": user,
+                "ai": response,
+                "timestamp": "2026-10-04T12:34:56",
+            }
+            self.history.active.append(entry)
+            return entry
+
+        with patch("memory.memory_manager.add_conversation", side_effect=add_to_history), patch(
+            "memory.memory_manager.get_user_profile_engine", return_value=Mock()
+        ), patch.object(manager, "start_fact_suggestion_extraction"), patch.object(
+            manager, "_extract_topics", return_value=[]
+        ):
+            manager.process_interaction("hello", "hi", extract_response_info=False)
+            manager.process_interaction(
+                _INTERNAL_USER_PREFIXES[0] + " extra",
+                "ignored",
+                extract_response_info=False,
+            )
+
+            with self.test_index._connect() as conn:
+                rows = conn.execute(
+                    "SELECT content, timestamp FROM memory_entries "
+                    "WHERE entry_type='conversation'"
+                ).fetchall()
+            self.assertEqual(
+                rows,
+                [("사용자: hello\n아리: hi", "2026-10-04T12:34:56")],
+            )
+
+    def test_process_interaction_does_not_index_when_history_add_raises(self):
+        fake_context = Mock()
+        fake_context.context = {"last_commands": []}
+        fake_context.extract_topics.return_value = []
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        fake_index = Mock()
+
+        with patch(
+            "memory.memory_manager.add_conversation",
+            side_effect=OSError("save failed"),
+        ), patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
+            "memory.memory_manager.get_user_profile_engine", return_value=Mock()
+        ), patch.object(manager, "start_fact_suggestion_extraction"):
+            manager.process_interaction("hello", "hi", extract_response_info=False)
+
+        fake_index.index_conversation.assert_not_called()
+
+    def test_process_interaction_does_not_index_when_history_add_returns_none(self):
+        fake_context = Mock()
+        fake_context.context = {"last_commands": []}
+        fake_context.extract_topics.return_value = []
+        with patch("memory.memory_manager.get_context_manager", return_value=fake_context):
+            manager = MemoryManager()
+        fake_index = Mock()
+
+        with patch(
+            "memory.memory_manager.add_conversation", return_value=None
+        ), patch("memory.memory_manager.get_memory_index", return_value=fake_index), patch(
+            "memory.memory_manager.get_user_profile_engine", return_value=Mock()
+        ), patch.object(manager, "start_fact_suggestion_extraction"):
+            manager.process_interaction("hello", "hi", extract_response_info=False)
+
+        fake_index.index_conversation.assert_not_called()
 
     def test_extract_response_tags_only_saves_fact_and_preference_tags(self):
         fake_context = Mock()

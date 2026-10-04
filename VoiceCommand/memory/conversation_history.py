@@ -55,7 +55,7 @@ class ConversationHistory:
         lang: str = "",
     ):
         if self._is_internal_entry(user_msg, ai_response):
-            return
+            return None
         with self._lock:
             entry = {
                 "timestamp": datetime.now().isoformat(),
@@ -69,6 +69,7 @@ class ConversationHistory:
             if len(self.active) > self.MAX_ACTIVE:
                 self._compress_oldest()
             self._schedule_save()
+            return entry
 
     def delete_containing(self, text: str) -> int:
         """특정 문구가 포함된 대화와 요약을 삭제한다."""
@@ -386,7 +387,7 @@ def add_conversation(
     data_source: str = "",
     lang: str = "",
 ):
-    _history.add(
+    return _history.add(
         user_msg,
         ai_response,
         skill_used=skill_used,

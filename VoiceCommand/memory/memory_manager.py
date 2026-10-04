@@ -16,7 +16,7 @@ from i18n.translator import _
 from memory.fact_suggestions import get_fact_suggestion_store
 from memory.sensitive_patterns import is_sensitive_memory_text
 from memory.user_context import get_context_manager
-from memory.conversation_history import add_conversation
+from memory.conversation_history import add_conversation, get_conversation_history
 from memory.memory_index import get_memory_index
 from memory.user_profile_engine import get_user_profile_engine
 from memory.sensitive_patterns import is_sensitive_memory_text
@@ -81,8 +81,16 @@ class MemoryManager:
     ) -> None:
         """대화 상호작용 기록 및 정보 추출"""
         timestamp = datetime.now().isoformat()
+        index_conversation = True
         try:
-            add_conversation(
+            index_conversation = not get_conversation_history()._is_internal_entry(
+                user_msg, ai_response
+            )
+        except Exception as e:
+            logging.warning("대화 기록 조회 실패: %s", e)
+        entry = None
+        try:
+            entry = add_conversation(
                 user_msg,
                 ai_response,
                 skill_used=skill_used,
@@ -92,7 +100,9 @@ class MemoryManager:
         except Exception as e:
             logging.warning("대화 저장 실패: %s", e)
         try:
-            get_memory_index().index_conversation(user_msg, ai_response, timestamp)
+            if index_conversation and entry is not None:
+                timestamp = str(entry.get("timestamp", timestamp) or timestamp)
+                get_memory_index().index_conversation(user_msg, ai_response, timestamp)
         except Exception as e:
             logging.warning("대화 인덱싱 실패: %s", e)
         if extract_response_info:

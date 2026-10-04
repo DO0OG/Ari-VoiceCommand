@@ -8,6 +8,7 @@ import re
 import threading
 from typing import List
 
+from core.atomic_io import write_json_atomic
 from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
 
 
@@ -32,8 +33,7 @@ class PlannerFeedbackLoop:
 
     def _save(self):
         try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(self.stats, f, ensure_ascii=False, indent=2)
+            write_json_atomic(self.file_path, self.stats, ensure_ascii=False, indent=2)
         except Exception as e:
             logging.warning(f"[PlannerFeedback] 저장 실패: {e}")
 

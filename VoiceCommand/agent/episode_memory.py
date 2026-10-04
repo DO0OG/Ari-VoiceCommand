@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 from agent.agent_math import cosine_similarity
+from core.atomic_io import write_json_atomic
 from i18n.translator import _
 
 _DEVELOPER_SCOPE_RE = re.compile(
@@ -238,9 +239,12 @@ class EpisodeMemory:
         with self._save_lock:
             self._save_timer = None
             try:
-                os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-                with open(self.filepath, "w", encoding="utf-8") as handle:
-                    json.dump([asdict(item) for item in self._episodes], handle, ensure_ascii=False, indent=2)
+                write_json_atomic(
+                    self.filepath,
+                    [asdict(item) for item in self._episodes],
+                    ensure_ascii=False,
+                    indent=2,
+                )
             except Exception as exc:
                 logging.warning(f"[EpisodeMemory] 저장 실패: {exc}")
 

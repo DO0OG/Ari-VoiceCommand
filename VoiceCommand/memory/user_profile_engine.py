@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Dict, List
 
-from core.atomic_io import backup_corrupt_file, write_json_atomic
+from core.atomic_io import backup_corrupt_file
 
 
 @dataclass
@@ -20,23 +21,47 @@ class UserProfile:
     last_profiled: str = ""
 
 
+_MAX_ACTIVE_HOURS = 48
+
+
+def _profile_from_dict(data) -> UserProfile:
+    return UserProfile(
+        expertise_areas=dict(data.get("expertise_areas", {})),
+        response_style=str(data.get("response_style", "친근")),
+        active_hours=list(data.get("active_hours", []))[-_MAX_ACTIVE_HOURS:],
+        frequent_goals=list(data.get("frequent_goals", []))[:10],
+        last_profiled=str(data.get("last_profiled", "")),
+    )
+
+
 class UserProfileEngine:
-    def __init__(self):
-        from core.resource_manager import ResourceManager
-        self.file_path = ResourceManager.get_writable_path("user_profile.json")
-        self.profile = self._load()
+    """프로필은 user_context.json의 "profile" 키에 저장한다."""
+
+    def __init__(self, context_manager=None):
+        if context_manager is None:
+            from memory.user_context import get_context_manager
+            context_manager = get_context_manager()
+        self._context = context_manager
+        # 옛 user_profile.json은 이전 버전으로 되돌릴 때를 위해 읽기만 한다.
+        self.file_path = os.path.join(
+            os.path.dirname(context_manager.context_file), "user_profile.json"
+        )
+        data = context_manager.get_profile_data()
+        if data is None:
+            self.profile = self._load()
+            return
+        try:
+            self.profile = _profile_from_dict(data)
+        except (TypeError, ValueError, AttributeError) as exc:
+            logging.warning("[UserProfile] 프로필 키 해석 실패: %s", exc)
+            self.profile = UserProfile()
 
     def _load(self) -> UserProfile:
+        """옛 user_profile.json에서 프로필을 가져온다. 원본 파일은 수정하지 않는다."""
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return UserProfile(
-                expertise_areas=dict(data.get("expertise_areas", {})),
-                response_style=str(data.get("response_style", "친근")),
-                active_hours=list(data.get("active_hours", []))[-24:],
-                frequent_goals=list(data.get("frequent_goals", []))[:10],
-                last_profiled=str(data.get("last_profiled", "")),
-            )
+            return _profile_from_dict(data)
         except FileNotFoundError:
             return UserProfile()
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -51,21 +76,14 @@ class UserProfileEngine:
             return UserProfile()
 
     def _save(self):
-        try:
-            write_json_atomic(
-                self.file_path,
-                asdict(self.profile),
-                ensure_ascii=False,
-                indent=2,
-            )
-        except (OSError, TypeError, ValueError) as exc:
-            logging.warning("[UserProfile] 저장 실패: %s", exc)
+        if not self._context.save_profile_data(asdict(self.profile)):
+            logging.warning("[UserProfile] 저장 실패")
 
     def update(self, user_msg: str, command_type: str = "", success: bool = True):
         text = (user_msg or "").lower()
         hour = datetime.now().hour
         self.profile.active_hours.append(hour)
-        self.profile.active_hours = self.profile.active_hours[-48:]
+        self.profile.active_hours = self.profile.active_hours[-_MAX_ACTIVE_HOURS:]
 
         if command_type:
             goals = [command_type] + [goal for goal in self.profile.frequent_goals if goal != command_type]

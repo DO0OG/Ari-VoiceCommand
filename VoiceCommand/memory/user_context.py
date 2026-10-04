@@ -474,10 +474,22 @@ class UserContextManager:
         }
 
     @_context_locked
+    def get_profile_data(self) -> Optional[Dict[str, Any]]:
+        data = self.context.get("profile")
+        return deepcopy(data) if isinstance(data, dict) else None
+
+    @_context_locked
+    def save_profile_data(self, data: Dict[str, Any]) -> bool:
+        self.context["profile"] = deepcopy(data)
+        return self.save_context()
+
+    @_context_locked
     def sync_fact_index(self) -> None:
         from memory.memory_index import get_memory_index
 
-        get_memory_index().sync_facts(self.context.get("facts", {}))
+        get_memory_index().sync_facts(
+            self.context.get("facts", {}), self.context.get("preferences", {})
+        )
 
     @_context_locked
     def delete_fact(

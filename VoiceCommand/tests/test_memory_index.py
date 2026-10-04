@@ -142,9 +142,10 @@ class MemoryIndexTests(unittest.TestCase):
         self.index.index_fact("favorite_drink", "coffee", 0.8)
         self.index.index_conversation("I like COFFEE", "", "2026-09-29T10:00:00")
         self.index.index_conversation("I like tea", "", "2026-09-29T10:01:00")
+        self.index.index_digest(datetime(2026, 9, 29).date(), "Coffee was discussed")
 
         self.assertEqual(self.index.delete_fact("favorite_drink"), 1)
-        self.assertEqual(self.index.delete_conversations_containing("coffee"), 1)
+        self.assertEqual(self.index.delete_conversations_containing("coffee"), 2)
         with self.index._connect() as conn:
             rows = conn.execute(
                 "SELECT entry_type, content FROM memory_entries"
@@ -154,7 +155,7 @@ class MemoryIndexTests(unittest.TestCase):
     def test_sync_facts_preserves_conversations_and_preferences(self):
         self.index.index_fact("stale", "remove me", 0.5)
         self.index.index_fact("changed", "old value", 0.5)
-        self.index.index_fact("선호: 음료", "커피", 1.0)
+        self.index.index_fact("선호: 음료=커피", "커피", 1.0)
         self.index.index_conversation(
             "keep this conversation", "", "2026-09-29T10:00:00"
         )
@@ -163,7 +164,7 @@ class MemoryIndexTests(unittest.TestCase):
             "new": {"value": "new fact", "confidence": 0.7},
         }
 
-        self.index.sync_facts(facts)
+        self.index.sync_facts(facts, {"음료": {"커피": 1}})
 
         self.assertFalse(self.index.search("remove me", kind="fact"))
         self.assertTrue(self.index.search("new value", kind="fact"))
@@ -185,6 +186,35 @@ class MemoryIndexTests(unittest.TestCase):
         index_fact.assert_not_called()
         delete_fact.assert_not_called()
 
+    def test_fact_wins_when_fact_and_preference_share_reference_key(self):
+        key = self.index.preference_key("음료", "커피")
+        facts = {key: {"value": "선호와 겹치는 사실", "confidence": 0.6}}
+        preferences = {"음료": {"커피": 1}}
+        ref_key = self.index._fact_ref_key(key)
+
+        self.index.sync_facts(facts, preferences)
+        with self.index._connect() as conn:
+            rows = conn.execute(
+                "SELECT content FROM memory_entries WHERE entry_type='fact' AND ref_key=?",
+                (ref_key,),
+            ).fetchall()
+        self.assertEqual(rows, [(f"{key}: 선호와 겹치는 사실 (confidence=0.60)",)])
+
+        context_manager = types.SimpleNamespace(
+            context={"facts": facts, "preferences": preferences}
+        )
+        context_module = types.ModuleType("memory.user_context")
+        context_module.get_context_manager = lambda: context_manager
+        with patch.dict("sys.modules", {"memory.user_context": context_module}):
+            self.index.rebuild_index()
+
+        with self.index._connect() as conn:
+            rows = conn.execute(
+                "SELECT content FROM memory_entries WHERE entry_type='fact' AND ref_key=?",
+                (ref_key,),
+            ).fetchall()
+        self.assertEqual(rows, [(f"{key}: 선호와 겹치는 사실 (confidence=0.60)",)])
+
     def test_prune_removes_only_old_conversations(self):
         old = (datetime.now() - timedelta(days=181)).isoformat()
         recent = datetime.now().isoformat()
@@ -205,15 +235,7 @@ class MemoryIndexTests(unittest.TestCase):
             ],
         )
 
-    def test_rebuild_restores_conversations_and_facts(self):
-        history = types.SimpleNamespace(
-            active=[{
-                "user": "내 프로젝트는 Ari야",
-                "ai": "확인했어요",
-                "timestamp": "2026-09-29T10:00:00",
-            }],
-            summaries=["이전 프로젝트 요약"],
-        )
+    def test_rebuild_replaces_facts_and_preserves_original_entries(self):
         context_manager = types.SimpleNamespace(
             context={
                 "facts": {
@@ -222,13 +244,15 @@ class MemoryIndexTests(unittest.TestCase):
                         "confidence": 0.8,
                         "updated_at": "2026-09-29T10:01:00",
                     }
-                }
+                },
+                "preferences": {"음료": {"커피": 1}},
             }
         )
-        history_module = types.ModuleType("memory.conversation_history")
-        history_module.get_conversation_history = lambda: history
         context_module = types.ModuleType("memory.user_context")
         context_module.get_context_manager = lambda: context_manager
+        self.index.index_conversation(
+            "old conversation", "original", "2026-09-28T10:00:00"
+        )
         self.index.index_fact("stale", "remove me", 0.5)
         self.index.index_digest(
             datetime(2026, 9, 29).date(), "daily digest entry"
@@ -237,17 +261,37 @@ class MemoryIndexTests(unittest.TestCase):
         with patch.dict(
             "sys.modules",
             {
-                "memory.conversation_history": history_module,
                 "memory.user_context": context_module,
             },
         ):
             self.index.rebuild_index()
 
-        self.assertTrue(self.index.search("프로젝트"))
-        self.assertTrue(self.index.search("요약"))
-        self.assertTrue(self.index.search("coffee"))
+        self.assertTrue(self.index.search("old conversation", kind="conversation"))
         self.assertTrue(self.index.search("daily digest", kind="digest"))
+        self.assertTrue(self.index.search("coffee"))
         self.assertEqual(self.index.delete_fact("stale"), 0)
+        with self.index._connect() as conn:
+            rows = conn.execute(
+                "SELECT entry_type, content, timestamp, ref_key FROM memory_entries "
+                "WHERE entry_type IN ('conversation', 'digest') ORDER BY entry_type"
+            ).fetchall()
+        self.assertEqual(
+            rows,
+            [
+                (
+                    "conversation",
+                    "사용자: old conversation\n아리: original",
+                    "2026-09-28T10:00:00",
+                    "",
+                ),
+                (
+                    "digest",
+                    "daily digest entry",
+                    "2026-09-29T00:00:00",
+                    "digest:2026-09-29",
+                ),
+            ],
+        )
 
     def test_sqlite_version_gates_trigram_and_unsupported_uses_like(self):
         connection = Mock()

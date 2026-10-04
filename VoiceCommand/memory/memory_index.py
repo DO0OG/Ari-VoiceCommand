@@ -249,7 +249,7 @@ class MemoryIndex:
             )
             return max(0, cursor.rowcount)
 
-    def sync_facts(self, facts: dict) -> None:
+    def sync_facts(self, facts: dict, preferences: dict | None = None) -> None:
         expected = {}
         for key, raw in (facts or {}).items():
             if isinstance(raw, dict):
@@ -264,6 +264,20 @@ class MemoryIndex:
                     confidence,
                     f"{key}: {value} (confidence={confidence:.2f})",
                 )
+        for category, values in (preferences or {}).items():
+            if not isinstance(values, dict):
+                continue
+            for value in values:
+                if category and value:
+                    key = self.preference_key(str(category), str(value))
+                    ref_key = self._fact_ref_key(key)
+                    if ref_key in expected:
+                        continue
+                    expected[ref_key] = (
+                        str(value),
+                        1.0,
+                        f"{key}: {value} (confidence=1.00)",
+                    )
 
         with self._lock, self._connect() as conn:
             rows = conn.execute(
@@ -274,8 +288,7 @@ class MemoryIndex:
         stale_rowids = []
         for rowid, raw_ref_key, content in rows:
             ref_key = str(raw_ref_key or "")
-            fact_key = ref_key.removeprefix("fact:")
-            if ref_key not in expected and not fact_key.startswith("선호: "):
+            if ref_key not in expected:
                 stale_rowids.append((rowid,))
             else:
                 indexed.setdefault(ref_key, []).append((rowid, str(content)))
@@ -298,7 +311,7 @@ class MemoryIndex:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 "SELECT rowid, content FROM memory_entries "
-                "WHERE entry_type='conversation'"
+                "WHERE entry_type IN ('conversation', 'digest')"
             ).fetchall()
             rowids = [
                 (rowid,)
@@ -468,33 +481,13 @@ class MemoryIndex:
             return []
 
     def rebuild_index(self) -> None:
-        from memory.conversation_history import get_conversation_history
         from memory.user_context import get_context_manager
 
-        history = get_conversation_history()
         context = get_context_manager().context
-        conversations = list(getattr(history, "active", []))
-        summaries = list(getattr(history, "summaries", []))
         facts = context.get("facts", {})
+        preferences = context.get("preferences", {})
         now = datetime.now().isoformat()
-        with self._lock, self._connect() as conn:
-            digests = conn.execute(
-                "SELECT entry_type, content, timestamp, ref_key "
-                "FROM memory_entries WHERE entry_type='digest'"
-            ).fetchall()
         rows = []
-        for entry in conversations:
-            user_msg = str(entry.get("user", "") or "")
-            assistant_response = str(entry.get("ai", "") or "")
-            if not user_msg and not assistant_response:
-                continue
-            content = f"사용자: {user_msg}\n아리: {assistant_response}"
-            timestamp = str(entry.get("timestamp", now) or now)
-            rows.append(("conversation", content, timestamp, ""))
-        for summary in summaries:
-            content = str(summary or "").strip()
-            if content:
-                rows.append(("conversation", content, now, ""))
         if isinstance(facts, dict):
             for key, raw_fact in facts.items():
                 if isinstance(raw_fact, dict):
@@ -509,12 +502,25 @@ class MemoryIndex:
                     continue
                 content = f"{key}: {value} (confidence={confidence:.2f})"
                 rows.append(("fact", content, timestamp, self._fact_ref_key(str(key))))
+        if isinstance(preferences, dict):
+            for category, values in preferences.items():
+                if not isinstance(values, dict):
+                    continue
+                for value in values:
+                    if not category or not value:
+                        continue
+                    key = self.preference_key(str(category), str(value))
+                    ref_key = self._fact_ref_key(key)
+                    if any(row[3] == ref_key for row in rows):
+                        continue
+                    content = f"{key}: {value} (confidence=1.00)"
+                    rows.append(("fact", content, now, ref_key))
         with self._lock, self._connect() as conn:
-            conn.execute("DELETE FROM memory_entries")
+            conn.execute("DELETE FROM memory_entries WHERE entry_type='fact'")
             conn.executemany(
                 "INSERT INTO memory_entries"
                 "(entry_type, content, timestamp, ref_key) VALUES (?, ?, ?, ?)",
-                rows + digests,
+                rows,
             )
 
 
