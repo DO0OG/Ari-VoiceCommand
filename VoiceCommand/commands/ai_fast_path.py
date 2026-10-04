@@ -40,6 +40,17 @@ class FastPathMixin:
     }
     _RUNNING_APPS_SHOWN = 10
 
+    def decision_engine(self):
+        """실행 중인 로컬 판단 엔진을 반환하거나 처음 생성한다."""
+        if not hasattr(self, "_decision_engine"):
+            from agent.decision.engine import LocalDecisionEngine
+            from core.resource_manager import ResourceManager
+
+            self._decision_engine = LocalDecisionEngine(
+                ResourceManager.get_bundle_path("resources/decision")
+            )
+        return self._decision_engine
+
     def try_fast_path(self, text: str) -> Optional["FastPathResult"]:
         """선택적 로컬 분류 실패는 기존 대화 경로에 영향을 주지 않는다."""
         try:
@@ -50,14 +61,7 @@ class FastPathMixin:
                 return None
             if ConfigManager.get("local_decision_engine_enabled", True) is not True:
                 return None
-            from agent.decision.engine import LocalDecisionEngine
-            from core.resource_manager import ResourceManager
-
-            if not hasattr(self, "_decision_engine"):
-                self._decision_engine = LocalDecisionEngine(
-                    ResourceManager.get_bundle_path("resources/decision")
-                )
-            return self._decision_engine.try_fast_path(text)
+            return self.decision_engine().try_fast_path(text)
         except Exception:
             return None
 

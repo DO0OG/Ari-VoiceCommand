@@ -2,11 +2,11 @@ import os
 import threading
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from ui.settings_agent_page import _AgentSettingsPage
 
@@ -66,6 +66,24 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
 
         self.assertIn("EpisodeMemory: 판정 보류(표본 부족)", page.learning_metrics_status.text())
         self.assertIn("GoalPredictor: 활성화", page.learning_metrics_status.text())
+
+    def test_reload_button_reloads_and_loads_local_decision_model(self):
+        engine = Mock()
+        engine.health.return_value = {"state": "ready", "error_code": ""}
+        with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(
+            "ui.settings_agent_page._live_decision_engine", return_value=engine
+        ):
+            page = _AgentSettingsPage({})
+            button = next(
+                item
+                for item in page.findChildren(QPushButton)
+                if item.text() == "모델 다시 불러오기"
+            )
+            button.click()
+
+            engine.reload.assert_called_once_with()
+            engine.load.assert_called_once_with()
+            self.assertEqual(page.local_decision_status.text(), "로컬 판단 모델: 준비됨")
 
     def test_plugin_hot_reload_is_disabled_by_default_and_can_be_enabled(self):
         page = _AgentSettingsPage({})

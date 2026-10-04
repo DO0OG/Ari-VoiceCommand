@@ -229,6 +229,19 @@ class LocalDecisionEngine:
             self._scorer = None
             self._error_code = ""
 
+    def load(self) -> bool:
+        """아직 시도하지 않은 모델을 적재한다."""
+        with self._lock:
+            if self._load_attempted:
+                return self._scorer is not None
+            self._load_attempted = True
+            try:
+                self._scorer = LinearScorer(self.model_dir)
+            except Exception:
+                self._error_code = "model_load_failed"
+                return False
+            return True
+
     def reset_diagnostics(self) -> None:
         with self._lock:
             self._counters = dict.fromkeys(_COUNTERS, 0)
@@ -266,18 +279,16 @@ class LocalDecisionEngine:
             if is_multi_intent(state):
                 self.record("multi_intent_rejected")
                 return None
-            if not self._load_attempted:
-                self._load_attempted = True
-                try:
-                    self._scorer = LinearScorer(self.model_dir)
-                except Exception:
-                    self._error_code = "model_load_failed"
-                    return None
-            if self._scorer is None:
+            if not self.load():
                 return None
-            return self._scorer.predict(state)
+            with self._lock:
+                scorer = self._scorer
+            if scorer is None:
+                return None
+            return scorer.predict(state)
         except Exception:
-            self._error_code = "prediction_failed"
+            with self._lock:
+                self._error_code = "prediction_failed"
             return None
 
     def try_fast_path(self, text: str) -> FastPathResult | None:

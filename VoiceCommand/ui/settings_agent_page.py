@@ -64,9 +64,9 @@ def _live_decision_engine():
     state = getattr(sys.modules.get("core.VoiceCommand"), "_state", None)
     registry = getattr(state, "command_registry", None)
     for command in getattr(registry, "commands", ()) or ():
-        engine = getattr(command, "_decision_engine", None)
-        if engine is not None:
-            return engine
+        get_engine = getattr(command, "decision_engine", None)
+        if get_engine is not None:
+            return get_engine()
     return None
 
 
@@ -341,13 +341,14 @@ class _AgentSettingsPage(QWidget):
         elif health.get("state") == "error":
             text = _("로컬 판단 모델: 오류 ({code})").format(code=health.get("error_code") or "-")
         else:
-            text = _("로컬 판단 모델: 아직 불러오지 않음")
+            text = _("로컬 판단 모델: 아직 불러오지 않음 (첫 명령 때 불러옵니다)")
         self.local_decision_status.setText(text)
 
     def _reload_local_decision(self) -> None:
         engine = _live_decision_engine()
         if engine is not None:
             engine.reload()
+            engine.load()
         self._refresh_local_decision_status()
 
     def _update_timeout_label(self, value: int) -> None:
