@@ -60,6 +60,19 @@ class UserContextManagerTests(unittest.TestCase):
 
             self.assertEqual(manager.context["facts"]["favorite"]["base_confidence"], 0.55)
 
+    def test_sync_fact_index_reconciles_preferences_from_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = UserContextManager(
+                context_file=os.path.join(tmp, "user_context.json")
+            )
+            manager.context["preferences"] = {"음료": {"차": 2}}
+            self.test_index.index_fact("선호: 음료=커피", "커피", 1.0)
+
+            manager.sync_fact_index()
+
+            self.assertFalse(self.test_index.search("커피", kind="fact"))
+            self.assertTrue(self.test_index.search("차", kind="fact"))
+
     def test_corrupt_context_is_backed_up_before_defaults_are_used(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "user_context.json")

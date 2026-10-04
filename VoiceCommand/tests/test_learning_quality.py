@@ -277,6 +277,34 @@ class LearningQualityTests(unittest.TestCase):
         with patch("agent.strategy_memory.get_strategy_memory", return_value=low_sample_memory):
             self.assertIsNone(guard.check())
 
+    def test_learning_metrics_and_planner_feedback_keep_old_file_when_atomic_replace_fails(self):
+        from agent.planner_feedback import PlannerFeedbackLoop
+
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics_path = os.path.join(tmp, "learning_metrics.json")
+            stats_path = os.path.join(tmp, "planner_stats.json")
+            metrics = LearningMetrics(filepath=metrics_path)
+            metrics._save_locked()
+            with patch("core.resource_manager.ResourceManager.get_writable_path", return_value=stats_path):
+                feedback = PlannerFeedbackLoop()
+            feedback.stats = {"click": {"success": 1, "fail": 0, "durations": []}}
+            feedback._save()
+            with open(metrics_path, encoding="utf-8") as handle:
+                metrics_before = handle.read()
+            with open(stats_path, encoding="utf-8") as handle:
+                stats_before = handle.read()
+
+            feedback.stats = {"changed": {"success": 0, "fail": 1, "durations": []}}
+            with patch("core.atomic_io.os.replace", side_effect=OSError("교체 실패")):
+                metrics.record_counter("changed")
+                feedback._save()
+
+            with open(metrics_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), metrics_before)
+            with open(stats_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), stats_before)
+            self.assertEqual(sorted(os.listdir(tmp)), ["learning_metrics.json", "planner_stats.json"])
+
 
 if __name__ == "__main__":
     unittest.main()

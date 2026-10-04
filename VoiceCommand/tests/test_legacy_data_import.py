@@ -53,6 +53,18 @@ class LegacyDataImportTests(unittest.TestCase):
         self.assertEqual(ResourceManager.import_legacy_runtime_data(self.runtime), 2)
         self.assertEqual(ResourceManager.import_legacy_runtime_data(self.runtime), 0)
 
+    def test_dev_runtime_migration_includes_fact_mood_and_strategy_embedding_files(self):
+        names = ("fact_suggestions.json", "mood_state.json", "strategy_embeddings.npy")
+        for name in names:
+            _write(os.path.join(self.runtime, name), name)
+
+        with patch.object(ResourceManager, "_legacy_project_runtime_dir", return_value=self.runtime):
+            migrated = ResourceManager._migrate_dev_runtime_state(self.app_data)
+
+        for name in names:
+            self.assertIn(name, migrated)
+            self.assertEqual(_read(os.path.join(self.app_data, name)), name)
+
     def test_rejects_folder_without_ari_data(self):
         unrelated = os.path.join(self.root, "Documents")
         _write(os.path.join(unrelated, "notes.txt"), "x")

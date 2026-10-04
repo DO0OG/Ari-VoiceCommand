@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Callable
 
+from core.atomic_io import write_json_atomic
+
 logger = logging.getLogger(__name__)
 
 
@@ -391,20 +393,16 @@ class LearningMetrics:
 
     def _save_locked(self) -> None:
         try:
-            parent = os.path.dirname(self.filepath)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(self.filepath, "w", encoding="utf-8") as handle:
-                json.dump(
-                    {
-                        "components": {name: asdict(metrics) for name, metrics in self._metrics.items()},
-                        "daily_components": self._daily_components,
-                        "daily_counters": self._daily_counters,
-                    },
-                    handle,
-                    ensure_ascii=False,
-                    indent=2,
-                )
+            write_json_atomic(
+                self.filepath,
+                {
+                    "components": {name: asdict(metrics) for name, metrics in self._metrics.items()},
+                    "daily_components": self._daily_components,
+                    "daily_counters": self._daily_counters,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         except Exception as exc:
             logging.warning("[LearningMetrics] 저장 실패: %s", exc)
 
