@@ -21,9 +21,9 @@ Ari의 UI 테마를 바꾸는 방법을 정리한 문서입니다.
 
 ### 폰트 출처
 
-- 예시 테마에서 쓰는 `DNFBitBitv2` 폰트의 공식 출처:
-  <https://df.nexon.com/data/font/dnfbitbitv2>
-- 테마를 배포하거나 공유할 때는 이 폰트의 이용 조건도 같이 확인해 주세요.
+- 말풍선에 쓰는 `Galmuri14` 폰트는 Lee Minseo(quiple)의 Galmuri이며 SIL Open Font License 1.1로 배포됩니다. 출처:
+  <https://github.com/quiple/galmuri>
+- 라이선스 전문은 `VoiceCommand/Galmuri-OFL.txt`에 있습니다. 테마와 함께 폰트 파일을 배포할 때는 해당 폰트의 라이선스도 같이 확인해 주세요.
 
 ### 테마 파일 위치
 
@@ -55,7 +55,7 @@ VoiceCommand/theme
 ```json
 {
   "name": "My Theme",
-  "font_family": "DNFBitBitv2",
+  "font_family": "Galmuri14",
   "font_scale": 1.0,
   "colors": {
     "primary":        "#4a90e2",

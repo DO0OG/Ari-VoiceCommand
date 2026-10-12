@@ -328,7 +328,7 @@ class ResourceManager:
             ('theme', 'theme'),
             ('plugins', 'plugins'),
             ('skills', 'skills'),
-            ('DNFBitBitv2.ttf', 'DNFBitBitv2.ttf'),
+            ('Galmuri14.ttf', 'Galmuri14.ttf'),
             ('icon.png', 'icon.png'),
             ('reference.wav', 'reference.wav'),
         ]

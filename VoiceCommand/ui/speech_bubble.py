@@ -35,9 +35,9 @@ def register_fonts():
 
         try:
             from core.resource_manager import ResourceManager
-            font_path = ResourceManager.get_bundle_path("DNFBitBitv2.ttf")
+            font_path = ResourceManager.get_bundle_path("Galmuri14.ttf")
         except Exception:
-            font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "DNFBitBitv2.ttf")
+            font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Galmuri14.ttf")
 
         if os.path.exists(font_path):
             font_id = QFontDatabase.addApplicationFont(font_path)

@@ -38,7 +38,7 @@ gh attestation verify .\Ari-Setup-<version>.exe --repo DO0OG/Ari-VoiceCommand
 
 ## 코드 서명
 
-설치 파일과 `Ari.exe`에는 아직 Authenticode 서명이 없습니다. 그래서 Windows SmartScreen이나 백신이 경고를 띄울 수 있습니다. 서명을 추진할 계획이며 진행 상황은 [이슈 #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389)에서 볼 수 있습니다.
+설치 파일과 `Ari.exe`에는 아직 Authenticode 서명이 없습니다. 그래서 Windows SmartScreen이나 백신이 경고를 띄울 수 있습니다. 서명을 추진할 계획이며 진행 상황은 [이슈 #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389)에서 볼 수 있습니다. 서명 정책은 [Code signing policy](./CODE_SIGNING.md)를 참고하세요.
 
 ## 백신 검출
 
@@ -99,7 +99,7 @@ The checksum and attestation only show that a file matches the official release 
 
 ## Code signing
 
-The installer and `Ari.exe` do not have an Authenticode signature yet, so Windows SmartScreen or antivirus software may show a warning. Code signing is planned; progress is tracked in [issue #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389).
+The installer and `Ari.exe` do not have an Authenticode signature yet, so Windows SmartScreen or antivirus software may show a warning. Code signing is planned; progress is tracked in [issue #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389). See the [Code signing policy](./CODE_SIGNING.md).
 
 ## Antivirus detections
 
@@ -162,7 +162,7 @@ gh attestation verify .\Ari-Setup-<version>.exe --repo DO0OG/Ari-VoiceCommand
 
 ## コード署名
 
-インストーラーと `Ari.exe` にはまだ Authenticode 署名がありません。そのため Windows SmartScreen やウイルス対策ソフトが警告を表示することがあります。署名の導入を計画しており、状況は [issue #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389) で確認できます。
+インストーラーと `Ari.exe` にはまだ Authenticode 署名がありません。そのため Windows SmartScreen やウイルス対策ソフトが警告を表示することがあります。署名の導入を計画しており、状況は [issue #389](https://github.com/DO0OG/Ari-VoiceCommand/issues/389) で確認できます。署名のポリシーは [Code signing policy](./CODE_SIGNING.md) をご覧ください。
 
 ## ウイルス対策ソフトの検出
 

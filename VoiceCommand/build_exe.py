@@ -262,7 +262,8 @@ nuitka_args = [
         if os.path.isfile(os.path.join(HERE, "resources", "build_info.json"))
         else []
     ),
-    "--include-data-files=DNFBitBitv2.ttf=DNFBitBitv2.ttf",
+    "--include-data-files=Galmuri14.ttf=Galmuri14.ttf",
+    "--include-data-files=Galmuri-OFL.txt=Galmuri-OFL.txt",
     "--include-data-files=icon.png=icon.png",
     "--include-data-files=icon.ico=icon.ico",
     *(["--include-data-files=reference.wav=reference.wav"] if os.path.exists(os.path.join(HERE, "reference.wav")) else []),
@@ -272,6 +273,7 @@ nuitka_args = [
 
     # 아이콘 설정
     *( ["--windows-icon-from-ico=icon.ico"] if os.path.exists("icon.ico") else [] ),
+    "--product-name=Ari VoiceCommand",
 
     # 필수 모듈 명시 (--include-package 로 자동 포함되지 않는 경우 대비)
     "--include-module=agent.confirmation_manager",

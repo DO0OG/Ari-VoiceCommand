@@ -68,7 +68,7 @@ Ari は Windows で声をかけて使う**オープンソースの AI 音声ア�
 
 ### インストーラー
 
-**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** から `Ari-Setup-<version>.exe` をダウンロードして実行してください。既定のインストール先は `Program Files\Ari` で、設定と履歴は `%AppData%\Ari` に保存されます。ダウンロードしたファイルの確認方法は[リリースファイルの確認とウイルス対策ソフトの検出について](./docs/SECURITY.md)をご覧ください。
+**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** から `Ari-Setup-<version>.exe` をダウンロードして実行してください。既定のインストール先は `Program Files\Ari` で、設定と履歴は `%AppData%\Ari` に保存されます。ダウンロードしたファイルの確認方法は[リリースファイルの確認とウイルス対策ソフトの検出について](./docs/SECURITY.md)をご覧ください。署名の状況は [Code signing policy](./docs/CODE_SIGNING.md) にあります。
 
 ### ソースから実行
 
@@ -102,9 +102,9 @@ LLM を Ollama、音声認識を Whisper、音声合成を CosyVoice3、記憶�
 ## アセットとクレジット
 
 - デフォルトキャラクター画像 — **JAraTang**: <https://www.pixiv.net/users/78194943>
-- `DNFBitBitv2` フォント — 公式配布元: <https://df.nexon.com/data/font/dnfbitbitv2>
+- 吹き出しフォント `Galmuri14` — Lee Minseo(quiple)、SIL Open Font License 1.1: <https://github.com/quiple/galmuri>
 
-プロジェクト外で再配布・再利用する場合は、フォントの利用条件も確認してください。
+ライセンス全文は `VoiceCommand/Galmuri-OFL.txt` にあります。フォントファイルを再配布する場合は、あわせて同梱してください。
 
 ## ライセンス
 

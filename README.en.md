@@ -68,7 +68,7 @@ For more complex requests, the agent makes a plan and works through it step by s
 
 ### Installer
 
-Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** and run it. Ari installs to `Program Files\Ari` by default and keeps settings and history in `%AppData%\Ari`. To verify the downloaded file, see [Release verification and antivirus notes](./docs/SECURITY.md).
+Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** and run it. Ari installs to `Program Files\Ari` by default and keeps settings and history in `%AppData%\Ari`. To verify the downloaded file, see [Release verification and antivirus notes](./docs/SECURITY.md). Signing status: [Code signing policy](./docs/CODE_SIGNING.md).
 
 ### Run from source
 
@@ -102,9 +102,9 @@ Contributions are always welcome.
 ## Assets & credits
 
 - Default character illustrations by **JAraTang**: <https://www.pixiv.net/users/78194943>
-- `DNFBitBitv2` font, official source: <https://df.nexon.com/data/font/dnfbitbitv2>
+- Speech bubble font `Galmuri14` by Lee Minseo (quiple), licensed under the SIL Open Font License 1.1: <https://github.com/quiple/galmuri>
 
-Check the font's usage terms before redistributing or reusing it outside this project.
+The license text is in VoiceCommand/Galmuri-OFL.txt; include it when you redistribute the font file.
 
 ## License
 
