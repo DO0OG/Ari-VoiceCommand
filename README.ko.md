@@ -68,7 +68,7 @@ Ari는 Windows에서 말로 부르고 시키는 **오픈소스 AI 음성 비서*
 
 ### 설치본
 
-**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)**에서 `Ari-Setup-<version>.exe`를 내려받아 실행하세요. 기본 설치 위치는 `Program Files\Ari`이고, 설정과 기록은 `%AppData%\Ari`에 저장됩니다. 내려받은 파일을 확인하는 방법은 [릴리스 파일 확인과 백신 검출 안내](./docs/SECURITY.md)를 참고하세요.
+**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)**에서 `Ari-Setup-<version>.exe`를 내려받아 실행하세요. 기본 설치 위치는 `Program Files\Ari`이고, 설정과 기록은 `%AppData%\Ari`에 저장됩니다. 내려받은 파일을 확인하는 방법은 [릴리스 파일 확인과 백신 검출 안내](./docs/SECURITY.md)를 참고하세요. 서명 현황은 [Code signing policy](./docs/CODE_SIGNING.md)에 있습니다.
 
 ### 소스에서 실행
 
@@ -100,9 +100,9 @@ LLM은 Ollama, 음성 인식은 Whisper, 음성 합성은 CosyVoice3, 기억 검
 ## 에셋 및 크레딧
 
 - 기본 캐릭터 이미지 — **JAraTang**: <https://www.pixiv.net/users/78194943>
-- `DNFBitBitv2` 폰트 — 공식 출처: <https://df.nexon.com/data/font/dnfbitbitv2>
+- 말풍선 폰트 `Galmuri14` — Lee Minseo(quiple), SIL Open Font License 1.1: <https://github.com/quiple/galmuri>
 
-프로젝트 밖으로 재배포하거나 다시 사용할 때는 해당 폰트의 이용 조건을 확인해 주세요.
+라이선스 전문은 `VoiceCommand/Galmuri-OFL.txt`에 있으며, 폰트 파일을 재배포할 때는 함께 넣어 주세요.
 
 ## 라이선스
 

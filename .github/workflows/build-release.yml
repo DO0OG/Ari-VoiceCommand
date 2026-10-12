@@ -234,11 +234,26 @@ jobs:
             choco install innosetup -y --no-progress
             if ($LASTEXITCODE -ne 0) { throw "Inno Setup 설치에 실패했습니다." }
           }
-          & $iscc "/DAppVersion=$version" "/DBuildDir=$(Resolve-Path $sourceDir)" installer\Ari.iss
+          # Ari.exe와 같은 출처(core.app_version.get_windows_version)에서 숫자 버전을 구한다.
+          $numericVersion = (.venv\Scripts\python.exe -c "import sys; from core.app_version import get_windows_version; print(get_windows_version(sys.argv[1]) or '')" $version).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $numericVersion) { throw "숫자 버전을 구하지 못했습니다: $version" }
+          & $iscc "/DAppVersion=$version" "/DNumericVersion=$numericVersion" "/DBuildDir=$(Resolve-Path $sourceDir)" installer\Ari.iss
           if ($LASTEXITCODE -ne 0) { throw "설치 파일 빌드에 실패했습니다 (exit $LASTEXITCODE)." }
 
           $setup = "dist\installer\Ari-Setup-$version.exe"
           if (-not (Test-Path $setup)) { throw "설치 파일이 만들어지지 않았습니다: $setup" }
+
+          # 서명 대상 파일의 제품 이름은 프로젝트 이름, 제품 버전은 모두 같아야 한다.
+          $exeInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path "$sourceDir\Ari.exe").Path)
+          $setupInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $setup).Path)
+          foreach ($info in @($exeInfo, $setupInfo)) {
+            if ($info.ProductName.Trim() -ne "Ari VoiceCommand") {
+              throw "$($info.FileName)의 제품 이름이 Ari VoiceCommand가 아닙니다: '$($info.ProductName)'"
+            }
+          }
+          if ($exeInfo.ProductVersion.Trim() -ne $setupInfo.ProductVersion.Trim()) {
+            throw "제품 버전이 서로 다릅니다: Ari.exe '$($exeInfo.ProductVersion)', 설치 파일 '$($setupInfo.ProductVersion)'"
+          }
           Copy-Item $setup (Split-Path $PWD -Parent) -Force
 
       - name: Create and validate release manifest
@@ -498,6 +513,7 @@ jobs:
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
           files: ${{ steps.select-release-assets.outputs.files }}
+          body: "[Code signing policy](https://github.com/DO0OG/Ari-VoiceCommand/blob/main/docs/CODE_SIGNING.md) · [Verifying release files](https://github.com/DO0OG/Ari-VoiceCommand/blob/main/docs/SECURITY.md)"
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}

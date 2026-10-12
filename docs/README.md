@@ -85,7 +85,7 @@ v1.3.3에서는 지난 업데이트 안내 정리, 로컬 판단 모델 다시 �
 - [Telegram 원격 명령](./USAGE.md#telegram-원격-명령) — 허용된 채팅에서 Ari 명령을 원격 실행하는 브리지 설정
 - [플러그인 가이드](./PLUGIN_GUIDE.md) — 훅(메뉴·명령·도구·샌드박스) 등록, API 버전, ZIP 패키지 구조, 코드 예시
 - [자율 에이전트 고급 기능](./AGENT_ADVANCED.md) — 대화 문맥, 기억 검색·제안, 활동 반응, 임베딩 선택과 학습 진단
-- [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — 팔레트 에디터와 JSON 테마 파일 편집 방법, `DNFBitBitv2` 폰트 출처
+- [테마 커스터마이징 가이드](./THEME_CUSTOMIZATION.md) — 팔레트 에디터와 JSON 테마 파일 편집 방법, `Galmuri14` 폰트 출처
 - [캐릭터 이미지 가이드](./CHARACTER_IMAGES.md) — 애니메이션 이미지 파일명 규칙, 감정 표현 시스템
 
 ## 동작 구조
@@ -144,6 +144,8 @@ graph TD
 - [로컬 판정 자원 배포 기록](./LOCAL_DECISION_DEPLOYMENT.md) — 직접 처리 표현 보강 결과와 이전 배포 판정
 - [API 키 보관](./CREDENTIALS.md) — 환경변수, 암호화 저장소, 자동 이전 및 복구 기준
 - [릴리스 파일 확인과 백신 검출 안내](./SECURITY.md) — SHA-256 확인, 빌드 출처 증명, 코드 서명 현황, 백신 검출 조사 요약과 신고 방법
+- [코드 서명 정책](./CODE_SIGNING.md) — SignPath Foundation 신청 현황, 팀 역할, 서명 대상
+- [개인정보 처리 방침](./PRIVACY.md) — Ari가 외부로 보내는 통신, 기본값과 끄는 방법, PC에 저장되는 데이터
 
 ### 운영 메모
 
