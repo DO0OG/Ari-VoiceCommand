@@ -113,6 +113,24 @@ class TTSStreamWrapperTests(unittest.TestCase):
                 lambda: provider.speak("hello")
             )
 
+    def test_edge_endpoint_replaces_only_the_legacy_synthesis_host(self):
+        from tts.edge_endpoint import use_current_edge_endpoint
+
+        communicate = SimpleNamespace(WSS_URL="wss://speech.platform.bing.com/legacy")
+        modules = {
+            "edge_tts": SimpleNamespace(communicate=communicate),
+            "edge_tts.communicate": communicate,
+            "edge_tts.constants": SimpleNamespace(TRUSTED_CLIENT_TOKEN="T"),
+        }
+        with patch.dict(sys.modules, modules):
+            use_current_edge_endpoint()
+            self.assertIn("api.msedgeservices.com", communicate.WSS_URL)
+            self.assertTrue(communicate.WSS_URL.endswith("=T"))
+
+            communicate.WSS_URL = "wss://example.test/fixed"
+            use_current_edge_endpoint()
+            self.assertEqual(communicate.WSS_URL, "wss://example.test/fixed")
+
 
 if __name__ == "__main__":
     unittest.main()
