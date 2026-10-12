@@ -24,7 +24,7 @@ if ((Get-FileHash .\$f -Algorithm SHA256).Hash -eq $expected) { '일치' } else 
 
 ## 빌드 출처 증명
 
-v1.3.3 다음 릴리스부터 릴리스 자산(설치 파일, 업데이트 manifest, `SHA256SUMS.txt`)에 GitHub 빌드 출처 증명이 붙습니다. v1.3.3까지의 릴리스에는 없습니다. [GitHub CLI](https://cli.github.com/)로 확인합니다.
+v1.4.0부터 릴리스 자산(설치 파일, 업데이트 manifest, `SHA256SUMS.txt`)에 GitHub 빌드 출처 증명이 붙습니다. v1.3.3까지의 릴리스에는 없습니다. [GitHub CLI](https://cli.github.com/)로 확인합니다.
 
 ```powershell
 gh attestation verify .\Ari-Setup-<version>.exe --repo DO0OG/Ari-VoiceCommand
@@ -85,7 +85,7 @@ If it prints `mismatch`, do not install the file; download it again.
 
 ## Build provenance attestation
 
-Starting with the release after v1.3.3, the release assets (installer, update manifest, and `SHA256SUMS.txt`) carry a GitHub build provenance attestation. Releases up to v1.3.3 do not have one. Verify with the [GitHub CLI](https://cli.github.com/):
+Starting with v1.4.0, the release assets (installer, update manifest, and `SHA256SUMS.txt`) carry a GitHub build provenance attestation. Releases up to v1.3.3 do not have one. Verify with the [GitHub CLI](https://cli.github.com/):
 
 ```powershell
 gh attestation verify .\Ari-Setup-<version>.exe --repo DO0OG/Ari-VoiceCommand
@@ -148,7 +148,7 @@ if ((Get-FileHash .\$f -Algorithm SHA256).Hash -eq $expected) { '一致' } else 
 
 ## ビルド由来の証明
 
-v1.3.3 の次のリリースから、リリースアセット(インストーラー、更新マニフェスト、`SHA256SUMS.txt`)に GitHub のビルド由来の証明(attestation)が付きます。v1.3.3 までのリリースにはありません。[GitHub CLI](https://cli.github.com/) で確認します。
+v1.4.0 から、リリースアセット(インストーラー、更新マニフェスト、`SHA256SUMS.txt`)に GitHub のビルド由来の証明(attestation)が付きます。v1.3.3 までのリリースにはありません。[GitHub CLI](https://cli.github.com/) で確認します。
 
 ```powershell
 gh attestation verify .\Ari-Setup-<version>.exe --repo DO0OG/Ari-VoiceCommand
