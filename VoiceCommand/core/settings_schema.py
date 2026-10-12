@@ -114,7 +114,7 @@ DEFAULT_SETTINGS = {
     "post_tts_listen_delay_ms": 100,
     "tts_speed": 1.0,
     "tts_volume": 1.0,
-    "tts_fallback_provider": "edge",
+    "tts_fallback_provider": "edge",  # edge | 다른 tts_mode 값 | none(대체하지 않고 소리 없이 말풍선만 표시)
     "character_scale": 1.0,          # 캐릭터 표시 배율 (0.3 ~ 3.0)
     "character_ground_offset": 4,    # 캐릭터 바닥 정렬 보정값(px). 양수면 아래로 내려간다.
     "ui_theme_preset": "default",
@@ -124,6 +124,8 @@ DEFAULT_SETTINGS = {
     "language": "ko",               # 인터페이스 언어 (ko | en | ja)
     "update_check_enabled": True,
     "update_channel": "stable",
+    "install_options_stamp": "",    # 마지막으로 반영한 설치 선택 파일의 설치 식별 토큰
+    "install_options_off": "",      # 설치 프로그램이 직전에 끈 항목(쉼표로 구분)
     # ── 캐릭터 위젯 확장 기능 ────────────────────────────────────────────────
     "affinity_points": 0,
     "affinity_level": 0,

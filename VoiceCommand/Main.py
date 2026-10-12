@@ -498,6 +498,7 @@ def main():
             if smoke_seconds < 1 or not smoke_report_path:
                 raise ValueError("스모크 실행 시간과 보고서 경로를 확인하세요.")
         record_last_run_version()
+        ConfigManager.apply_install_options()
         icon_path = _resolve_icon_path(log_missing=True)
         logging.info("프로그램 시작")
 

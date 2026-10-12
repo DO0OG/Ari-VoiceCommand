@@ -93,6 +93,25 @@ class TTSFactoryTests(unittest.TestCase):
             tts_volume=0.5,
         )
 
+    def test_edge_is_never_created_when_fallback_is_none(self):
+        from core import VoiceCommand
+
+        with patch("tts.tts_edge.EdgeTTS") as edge_tts:
+            for settings in (
+                {"tts_mode": "fish", "tts_fallback_provider": "none"},
+                {"tts_mode": "none", "tts_fallback_provider": "none"},
+            ):
+                self.assertEqual(create_tts_provider(settings), (None, "none"))
+            self.assertIsNone(
+                VoiceCommand._create_fallback_tts({"tts_mode": "local", "tts_fallback_provider": "none"})
+            )
+            edge_tts.assert_not_called()
+
+            provider, mode = create_tts_provider({"tts_mode": "edge", "tts_fallback_provider": "none"})
+
+        self.assertEqual(mode, "edge")
+        self.assertIs(provider, edge_tts.return_value)
+
     def test_openai_client_initialization_failure_falls_back_to_edge(self):
         edge_provider = object()
 

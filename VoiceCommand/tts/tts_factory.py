@@ -189,13 +189,20 @@ _TTS_PROVIDER_CREATORS = {
 }
 
 
+def edge_tts_blocked(settings) -> bool:
+    """tts_fallback_provider가 none이면 사용자가 Edge를 직접 고르지 않는 한 Edge TTS를 쓰지 않는다."""
+    return settings.get("tts_fallback_provider") == "none" and settings.get("tts_mode") != "edge"
+
+
 def create_tts_provider(settings=None, wait_ready=True):
     """tts_mode 설정에 따라 적절한 TTS 제공자 인스턴스를 생성.
 
     wait_ready=False이면 로컬 엔진의 READY 대기를 호출자에게 맡긴다.
+    Edge TTS가 막혀 있으면(edge_tts_blocked) 대체하지 않고 (None, "none")을 반환한다.
     """
     settings = settings or ConfigManager.load_settings()
     tts_mode = settings.get("tts_mode", "edge")
+    blocked = edge_tts_blocked(settings)
     for provider_mode, creator in _TTS_PROVIDER_CREATORS.items():
         if tts_mode == provider_mode:
             if creator is _create_local:
@@ -204,5 +211,7 @@ def create_tts_provider(settings=None, wait_ready=True):
                 provider = creator(settings)
             if provider is not None:
                 return provider
+            if blocked:
+                return None, "none"
             tts_mode = "edge"
-    return _create_edge(settings)
+    return (None, "none") if blocked else _create_edge(settings)

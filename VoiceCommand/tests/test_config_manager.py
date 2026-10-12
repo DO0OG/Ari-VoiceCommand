@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -451,6 +452,105 @@ class ConfigManagerTests(unittest.TestCase):
         migrate_local_decision_settings(settings)
         self.assertEqual(settings["local_decision_mode"], "fast")
         self.assertTrue(settings["local_decision_direct_execution"])
+
+    @contextmanager
+    def _install_options(self, settings, options_text):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings_path = os.path.join(tmp, "ari_settings.json")
+            options_path = os.path.join(tmp, "install_options.ini")
+            with open(settings_path, "w", encoding="utf-8") as handle:
+                json.dump(settings, handle)
+            if options_text is not None:
+                with open(options_path, "w", encoding="utf-8") as handle:
+                    handle.write(options_text)
+            previous = ConfigManager._cached_settings
+            try:
+                with patch("core.config_manager._settings_path", return_value=settings_path), \
+                        patch("core.config_manager.SecretStore.read", return_value={}), \
+                        patch("core.config_manager.SecretStore.write"):
+                    ConfigManager._cached_settings = None
+                    yield options_path
+            finally:
+                ConfigManager._cached_settings = previous
+
+    def test_install_options_turned_off_are_applied(self):
+        options = "[Options]\ntoken=t1\nupdate_check=0\nonline_speech=0\n"
+        with self._install_options({"tts_mode": "edge", "stt_provider": "google"}, options) as path:
+            self.assertTrue(ConfigManager.apply_install_options(path))
+            settings = ConfigManager.load_settings()
+
+        self.assertFalse(settings["update_check_enabled"])
+        self.assertEqual(settings["stt_provider"], "whisper")
+        self.assertEqual(settings["tts_fallback_provider"], "none")
+        self.assertEqual(settings["tts_mode"], "fish")
+        self.assertEqual(settings["install_options_stamp"], "t1")
+        self.assertEqual(settings["install_options_off"], "online_speech,update_check")
+
+    def test_install_options_turned_on_keep_user_values(self):
+        options = "[Options]\ntoken=t1\nupdate_check=1\nonline_speech=1\n"
+        saved = {"update_check_enabled": False, "stt_provider": "whisper", "tts_mode": "edge"}
+        with self._install_options(saved, options) as path:
+            ConfigManager.apply_install_options(path)
+            settings = ConfigManager.load_settings()
+
+        self.assertFalse(settings["update_check_enabled"])
+        self.assertEqual(settings["stt_provider"], "whisper")
+        self.assertEqual(settings["tts_mode"], "edge")
+        self.assertEqual(settings["tts_fallback_provider"], "edge")
+        self.assertEqual(settings["install_options_stamp"], "t1")
+
+    def test_install_options_reenabled_at_reinstall_restore_only_installer_changes(self):
+        off = "[Options]\ntoken=A\nupdate_check=0\nonline_speech=0\n"
+        on = "[Options]\ntoken=B\nupdate_check=1\nonline_speech=1\n"
+        with self._install_options({"tts_mode": "edge", "stt_provider": "google"}, off) as path:
+            ConfigManager.apply_install_options(path)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(on)
+            self.assertTrue(ConfigManager.apply_install_options(path))
+            settings = ConfigManager.load_settings()
+
+            self.assertTrue(settings["update_check_enabled"])
+            self.assertEqual(settings["stt_provider"], "google")
+            self.assertEqual(settings["tts_fallback_provider"], "edge")
+            self.assertEqual(settings["tts_mode"], "fish")
+            self.assertEqual(settings["install_options_off"], "")
+            self.assertEqual(settings["install_options_stamp"], "B")
+
+        off = "[Options]\ntoken=A\nupdate_check=1\nonline_speech=0\n"
+        on = "[Options]\ntoken=B\nupdate_check=1\nonline_speech=1\n"
+        with self._install_options({"stt_provider": "google"}, off) as path:
+            ConfigManager.apply_install_options(path)
+            ConfigManager.set_value("tts_fallback_provider", "openai_tts")
+            ConfigManager.set_value("stt_provider", "custom")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(on)
+            ConfigManager.apply_install_options(path)
+            settings = ConfigManager.load_settings()
+
+            self.assertEqual(settings["stt_provider"], "custom")
+            self.assertEqual(settings["tts_fallback_provider"], "openai_tts")
+
+    def test_install_options_are_applied_once_per_token(self):
+        options = "[Options]\ntoken=t1\nupdate_check=0\nonline_speech=0\n"
+        with self._install_options({}, options) as path:
+            self.assertTrue(ConfigManager.apply_install_options(path))
+            ConfigManager.set_value("update_check_enabled", True)
+            ConfigManager.set_value("stt_provider", "google")
+
+            self.assertFalse(ConfigManager.apply_install_options(path))
+            settings = ConfigManager.load_settings()
+
+        self.assertTrue(settings["update_check_enabled"])
+        self.assertEqual(settings["stt_provider"], "google")
+
+    def test_missing_install_options_file_changes_nothing(self):
+        with self._install_options({"update_check_enabled": True}, None) as path:
+            self.assertFalse(ConfigManager.apply_install_options(path))
+            settings = ConfigManager.load_settings()
+
+        self.assertEqual(settings["install_options_stamp"], "")
+        self.assertTrue(settings["update_check_enabled"])
+        self.assertEqual(settings["stt_provider"], "google")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """설정 관리 통합 모듈."""
+import configparser
 import copy
 import json
 import logging
@@ -33,6 +34,7 @@ def _settings_path() -> str:
 
 
 _MISSING = object()
+INSTALL_OPTIONS_FILE = "install_options.ini"
 
 
 class ConfigManager:
@@ -321,6 +323,57 @@ class ConfigManager:
                 normalized[key] = copy.deepcopy(expected)
         normalize_custom_provider_settings(normalized)
         return normalized
+
+    @classmethod
+    def apply_install_options(cls, path: Optional[str] = None) -> bool:
+        """설치 프로그램이 기록한 선택을 설치마다 한 번 반영한다.
+
+        끈 항목은 끄고, 이전 설치에서 끈 항목을 다시 켰으면 되돌린다. 처음부터 켠 항목은
+        설정을 바꾸지 않는다. 파일이 없으면(소스 실행) 아무것도 하지 않는다.
+        """
+        if path is None:
+            from core.resource_manager import ResourceManager
+            path = ResourceManager.get_bundle_path(INSTALL_OPTIONS_FILE)
+        options = configparser.ConfigParser()
+        try:
+            if not options.read(path, encoding="utf-8"):
+                return False
+            token = options.get("Options", "token", fallback="").strip()
+            update_check = options.get("Options", "update_check", fallback="1").strip()
+            online_speech = options.get("Options", "online_speech", fallback="1").strip()
+        except (configparser.Error, OSError, UnicodeError):
+            logging.warning("설치 선택 파일을 읽지 못해 건너뜁니다.")
+            return False
+        if not token or cls.get("install_options_stamp") == token:
+            return False
+
+        def apply(settings: dict) -> None:
+            was_off = str(settings.get("install_options_off") or "").split(",")
+            if update_check == "0":
+                settings["update_check_enabled"] = False
+            elif "update_check" in was_off:
+                settings["update_check_enabled"] = True
+            if online_speech == "0":
+                settings["stt_provider"] = "whisper"
+                settings["tts_fallback_provider"] = "none"
+                if settings.get("tts_mode") == "edge":
+                    settings["tts_mode"] = "fish"
+            elif "online_speech" in was_off:
+                # 사용자가 그사이 바꾼 값은 건드리지 않는다.
+                if settings.get("stt_provider") == "whisper":
+                    settings["stt_provider"] = "google"
+                if settings.get("tts_fallback_provider") == "none":
+                    settings["tts_fallback_provider"] = "edge"
+            settings["install_options_off"] = ",".join(
+                name for name, value in (("online_speech", online_speech), ("update_check", update_check))
+                if value == "0"
+            )
+            settings["install_options_stamp"] = token
+
+        applied = cls.update_settings(apply)
+        if applied:
+            logging.info("설치 선택을 반영했습니다.")
+        return applied
 
     @classmethod
     def get_value(cls, key: str, default: object = None) -> object:

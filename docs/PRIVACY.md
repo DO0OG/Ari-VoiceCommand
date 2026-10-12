@@ -20,7 +20,7 @@ Features marked "on by default" are active in a new installation. Features that 
 - Sends: an HTTPS request to `github.com` for the update manifest (`update.json`, or `update-beta.json` on the beta channel). The request carries a `User-Agent` of `Ari/<version> (Windows)`. GitHub also sees your IP address. Ari does not download or run installers by itself; release notes open in your browser when you choose.
 - When: in installed release builds, about once a day. Builds run from source do not check.
 - Default: on.
-- Turn off: Settings, "Automatically check for updates" (`update_check_enabled`).
+- Turn off: Settings, "Automatically check for updates" (`update_check_enabled`), or clear "Check for updates automatically" on the installer's privacy options page.
 
 ### Plugin marketplace
 
@@ -39,14 +39,14 @@ Features marked "on by default" are active in a new installation. Features that 
 
 - Default provider: Google (`stt_provider`). Ari sends recorded speech audio to Google's speech recognition web service through the SpeechRecognition library.
 - When: when Ari is listening for a command. While wake-word detection is on (`wake_word_enabled`, on by default), audio segments that pass a length and loudness check are also transcribed, so with Google they are sent to Google.
-- Turn off: choose Whisper as the recognizer. Whisper runs on your PC. Wake-word detection can be turned off in the speech settings.
+- Turn off: choose Whisper as the recognizer. Whisper runs on your PC. Wake-word detection can be turned off in the speech settings. Clearing "Use online speech services" on the installer's privacy options page also switches the recognizer to Whisper.
 - Whisper models are downloaded from Hugging Face by the faster-whisper library the first time they are needed, for example with the "Download model" button in the speech settings.
 
 ### Speech synthesis
 
 - Default: `tts_mode` is Fish Audio, which needs an API key. Without a key, Ari uses Edge TTS instead. Edge TTS sends the text to be spoken to Microsoft's online speech service through the edge-tts library. Fixed short messages are also synthesized in advance in the background and cached on your PC.
 - With a key: Fish Audio (`api.fish.audio`), OpenAI, ElevenLabs, or an OpenAI-compatible server you configure receive the text to be spoken. Voice cloning features upload the reference audio file you choose to ElevenLabs or to the server you configure.
-- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face.
+- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face. Clearing "Use online speech services" on the installer's privacy options page stops Edge TTS, including the background pre-synthesis; Ari then shows replies as text bubbles without sound until you choose another engine. Selecting it again in the installer and reinstalling turns it back on.
 
 ### Text embeddings (memory and skill search)
 
@@ -109,7 +109,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 - 보내는 것: `github.com`으로 업데이트 manifest(`update.json`, 베타 채널은 `update-beta.json`)를 받는 HTTPS 요청입니다. 요청의 `User-Agent`는 `Ari/<버전> (Windows)`이며, GitHub는 IP 주소도 볼 수 있습니다. Ari가 설치 파일을 직접 내려받거나 실행하지는 않으며, 릴리스 노트는 사용자가 선택할 때 브라우저로 열립니다.
 - 시점: 설치된 릴리스 빌드에서 하루에 한 번 정도입니다. 소스에서 실행하면 확인하지 않습니다.
 - 기본값: 켜짐.
-- 끄는 방법: 설정의 "새 버전을 자동으로 확인합니다"(`update_check_enabled`).
+- 끄는 방법: 설정의 "새 버전을 자동으로 확인합니다"(`update_check_enabled`) 또는 설치 프로그램의 개인정보 관련 선택에서 "자동 업데이트 확인"을 해제하세요.
 
 ### 플러그인 마켓플레이스
 
@@ -128,14 +128,14 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 
 - 기본 제공자: Google(`stt_provider`). Ari는 SpeechRecognition 라이브러리를 통해 녹음한 음성 오디오를 Google 음성 인식 웹 서비스로 보냅니다.
 - 시점: 명령을 듣고 있을 때입니다. 웨이크워드 감지가 켜져 있으면(`wake_word_enabled`, 기본 켜짐) 길이와 소리 크기 검사를 통과한 오디오 구간도 인식하므로, Google을 쓰면 그 오디오도 Google로 갑니다.
-- 끄는 방법: 인식기로 Whisper를 고르세요. Whisper는 내 PC에서 실행됩니다. 웨이크워드 감지는 음성 설정에서 끌 수 있습니다.
+- 끄는 방법: 인식기로 Whisper를 고르세요. Whisper는 내 PC에서 실행됩니다. 웨이크워드 감지는 음성 설정에서 끌 수 있습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제해도 인식기가 Whisper로 바뀝니다.
 - Whisper 모델은 처음 필요할 때 faster-whisper 라이브러리가 Hugging Face에서 내려받습니다(예: 음성 설정의 "모델 다운로드" 버튼).
 
 ### 음성 합성
 
 - 기본값: `tts_mode`는 Fish Audio이며 API 키가 필요합니다. 키가 없으면 Ari는 Edge TTS를 씁니다. Edge TTS는 edge-tts 라이브러리를 통해 읽을 텍스트를 Microsoft 온라인 음성 서비스로 보냅니다. 고정된 짧은 메시지는 백그라운드에서 미리 합성해 PC에 캐시합니다.
 - 키가 있을 때: Fish Audio(`api.fish.audio`), OpenAI, ElevenLabs, 직접 설정한 OpenAI 호환 서버가 읽을 텍스트를 받습니다. 음성 복제 기능은 선택한 참조 오디오 파일을 ElevenLabs나 설정한 서버로 올립니다.
-- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다.
+- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제하면 Edge TTS(백그라운드 사전 합성 포함)를 쓰지 않으며, 다른 엔진을 고르기 전까지 응답은 소리 없이 말풍선 글자로만 나옵니다. 설치 프로그램에서 다시 선택하고 설치하면 다시 켜집니다.
 
 ### 텍스트 임베딩(기억·스킬 검색)
 
@@ -200,7 +200,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 - 送るもの: `github.com` に更新マニフェスト(`update.json`、ベータチャンネルは `update-beta.json`)を取得する HTTPS リクエストです。リクエストの `User-Agent` は `Ari/<バージョン> (Windows)` で、GitHub には IP アドレスも見えます。Ari がインストーラーを自動でダウンロードしたり実行したりすることはなく、リリースノートは選択したときにブラウザーで開きます。
 - 時期: インストールされたリリースビルドで、1日に1回程度です。ソースから実行した場合は確認しません。
 - 初期設定: オン。
-- オフにする方法: 設定の「新しいバージョンを自動で確認する」(`update_check_enabled`)。
+- オフにする方法: 設定の「新しいバージョンを自動で確認する」(`update_check_enabled`)、またはインストーラーの「プライバシーに関する選択」で「更新を自動的に確認する」をオフにします。
 
 ### プラグインマーケットプレイス
 
@@ -219,14 +219,14 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 
 - 既定のプロバイダー: Google(`stt_provider`)。Ari は SpeechRecognition ライブラリを通じて、録音した音声を Google の音声認識ウェブサービスに送ります。
 - 時期: コマンドを聞き取っているときです。ウェイクワード検出がオンの間(`wake_word_enabled`、初期状態でオン)は、長さと音量の検査を通過した音声区間も認識するため、Google を使う場合はその音声も Google に送られます。
-- オフにする方法: 認識エンジンとして Whisper を選んでください。Whisper はお使いの PC で動作します。ウェイクワード検出は音声設定でオフにできます。
+- オフにする方法: 認識エンジンとして Whisper を選んでください。Whisper はお使いの PC で動作します。ウェイクワード検出は音声設定でオフにできます。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにしても、認識エンジンが Whisper に切り替わります。
 - Whisper のモデルは、初めて必要になったときに faster-whisper ライブラリが Hugging Face からダウンロードします(例: 音声設定の「モデルをダウンロード」ボタン)。
 
 ### 音声合成
 
 - 初期設定: `tts_mode` は Fish Audio で、API キーが必要です。キーがない場合、Ari は Edge TTS を使います。Edge TTS は edge-tts ライブラリを通じて、読み上げるテキストを Microsoft のオンライン音声サービスに送ります。定型の短いメッセージは、バックグラウンドで事前に合成して PC にキャッシュします。
 - キーがある場合: Fish Audio(`api.fish.audio`)、OpenAI、ElevenLabs、自分で設定した OpenAI 互換サーバーが読み上げるテキストを受け取ります。音声クローン機能は、選択した参照音声ファイルを ElevenLabs または設定したサーバーにアップロードします。
-- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。
+- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにすると、Edge TTS(バックグラウンドの事前合成を含む)を使わず、別のエンジンを選ぶまで応答は音声なしで吹き出しの文字だけになります。インストーラーで再び選択してインストールすると、再びオンになります。
 
 ### テキスト埋め込み(記憶とスキルの検索)
 

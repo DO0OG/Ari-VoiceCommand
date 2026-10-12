@@ -1,0 +1,11 @@
+﻿Privacy notice
+
+With its default settings, Ari sends the following to outside services.
+
+- Voice: sent to Google speech recognition when Ari listens for a command, and while it waits for the wake word whenever sound is detected.
+- Text to be spoken: sent to Microsoft Edge TTS unless you set a Fish Audio API key.
+- Update check: a request to GitHub about once a day.
+
+On the next page you can turn off "Check for updates automatically" and "Use online speech services". With online speech services off, speech recognition runs on your PC with Whisper (the model is downloaded the first time it is needed), and replies appear as text in the speech bubble without sound. You can change these in Ari's settings after installing.
+
+Full policy: https://github.com/DO0OG/Ari-VoiceCommand/blob/main/docs/PRIVACY.md
