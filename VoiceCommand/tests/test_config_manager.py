@@ -483,7 +483,7 @@ class ConfigManagerTests(unittest.TestCase):
         self.assertEqual(settings["stt_provider"], "whisper")
         self.assertEqual(settings["tts_fallback_provider"], "none")
         self.assertEqual(settings["tts_mode"], "fish")
-        self.assertEqual(settings["install_options_token"], "t1")
+        self.assertEqual(settings["install_options_stamp"], "t1")
 
     def test_install_options_turned_on_keep_user_values(self):
         options = "[Options]\ntoken=t1\nupdate_check=1\nonline_speech=1\n"
@@ -496,7 +496,7 @@ class ConfigManagerTests(unittest.TestCase):
         self.assertEqual(settings["stt_provider"], "whisper")
         self.assertEqual(settings["tts_mode"], "edge")
         self.assertEqual(settings["tts_fallback_provider"], "edge")
-        self.assertEqual(settings["install_options_token"], "t1")
+        self.assertEqual(settings["install_options_stamp"], "t1")
 
     def test_install_options_are_applied_once_per_token(self):
         options = "[Options]\ntoken=t1\nupdate_check=0\nonline_speech=0\n"
@@ -516,7 +516,7 @@ class ConfigManagerTests(unittest.TestCase):
             self.assertFalse(ConfigManager.apply_install_options(path))
             settings = ConfigManager.load_settings()
 
-        self.assertEqual(settings["install_options_token"], "")
+        self.assertEqual(settings["install_options_stamp"], "")
         self.assertTrue(settings["update_check_enabled"])
         self.assertEqual(settings["stt_provider"], "google")
 

@@ -124,7 +124,7 @@ DEFAULT_SETTINGS = {
     "language": "ko",               # 인터페이스 언어 (ko | en | ja)
     "update_check_enabled": True,
     "update_channel": "stable",
-    "install_options_token": "",    # 마지막으로 반영한 설치 선택 파일의 설치 식별 토큰
+    "install_options_stamp": "",    # 마지막으로 반영한 설치 선택 파일의 설치 식별 토큰
     # ── 캐릭터 위젯 확장 기능 ────────────────────────────────────────────────
     "affinity_points": 0,
     "affinity_level": 0,

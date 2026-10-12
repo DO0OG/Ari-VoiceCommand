@@ -343,7 +343,7 @@ class ConfigManager:
         except (configparser.Error, OSError, UnicodeError):
             logging.warning("설치 선택 파일을 읽지 못해 건너뜁니다.")
             return False
-        if not token or cls.get("install_options_token") == token:
+        if not token or cls.get("install_options_stamp") == token:
             return False
 
         def apply(settings: dict) -> None:
@@ -354,7 +354,7 @@ class ConfigManager:
                 settings["tts_fallback_provider"] = "none"
                 if settings.get("tts_mode") == "edge":
                     settings["tts_mode"] = "fish"
-            settings["install_options_token"] = token
+            settings["install_options_stamp"] = token
 
         applied = cls.update_settings(apply)
         if applied:
