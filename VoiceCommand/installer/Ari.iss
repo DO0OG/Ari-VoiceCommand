@@ -5,7 +5,7 @@
 ; NumericVersion은 Ari.exe의 파일 버전과 같은 숫자 네 자리 값이다(core.app_version.get_windows_version).
 ;
 ; 사용자 설정과 기록은 %AppData%\Ari에 저장되므로 제거해도 남는다.
-; 개인정보 선택 항목은 {app}\install_options.ini에 기록되고, 앱이 시작할 때 한 번 읽어 끄는 방향으로만 반영한다.
+; 개인정보 선택 항목은 {app}\install_options.ini에 기록되고, 앱이 시작할 때 설치마다 한 번 읽어 반영한다(끈 항목은 끄고, 이전에 끈 항목을 다시 켜고 설치하면 되돌린다).
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"

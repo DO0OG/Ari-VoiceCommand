@@ -484,6 +484,7 @@ class ConfigManagerTests(unittest.TestCase):
         self.assertEqual(settings["tts_fallback_provider"], "none")
         self.assertEqual(settings["tts_mode"], "fish")
         self.assertEqual(settings["install_options_stamp"], "t1")
+        self.assertEqual(settings["install_options_off"], "online_speech,update_check")
 
     def test_install_options_turned_on_keep_user_values(self):
         options = "[Options]\ntoken=t1\nupdate_check=1\nonline_speech=1\n"
@@ -497,6 +498,37 @@ class ConfigManagerTests(unittest.TestCase):
         self.assertEqual(settings["tts_mode"], "edge")
         self.assertEqual(settings["tts_fallback_provider"], "edge")
         self.assertEqual(settings["install_options_stamp"], "t1")
+
+    def test_install_options_reenabled_at_reinstall_restore_only_installer_changes(self):
+        off = "[Options]\ntoken=A\nupdate_check=0\nonline_speech=0\n"
+        on = "[Options]\ntoken=B\nupdate_check=1\nonline_speech=1\n"
+        with self._install_options({"tts_mode": "edge", "stt_provider": "google"}, off) as path:
+            ConfigManager.apply_install_options(path)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(on)
+            self.assertTrue(ConfigManager.apply_install_options(path))
+            settings = ConfigManager.load_settings()
+
+            self.assertTrue(settings["update_check_enabled"])
+            self.assertEqual(settings["stt_provider"], "google")
+            self.assertEqual(settings["tts_fallback_provider"], "edge")
+            self.assertEqual(settings["tts_mode"], "fish")
+            self.assertEqual(settings["install_options_off"], "")
+            self.assertEqual(settings["install_options_stamp"], "B")
+
+        off = "[Options]\ntoken=A\nupdate_check=1\nonline_speech=0\n"
+        on = "[Options]\ntoken=B\nupdate_check=1\nonline_speech=1\n"
+        with self._install_options({"stt_provider": "google"}, off) as path:
+            ConfigManager.apply_install_options(path)
+            ConfigManager.set_value("tts_fallback_provider", "openai_tts")
+            ConfigManager.set_value("stt_provider", "custom")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(on)
+            ConfigManager.apply_install_options(path)
+            settings = ConfigManager.load_settings()
+
+            self.assertEqual(settings["stt_provider"], "custom")
+            self.assertEqual(settings["tts_fallback_provider"], "openai_tts")
 
     def test_install_options_are_applied_once_per_token(self):
         options = "[Options]\ntoken=t1\nupdate_check=0\nonline_speech=0\n"
