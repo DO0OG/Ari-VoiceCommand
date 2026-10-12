@@ -259,13 +259,16 @@ def _cleanup_tts_provider_async(provider, done=None) -> None:
 def _effective_tts_settings(settings: dict) -> dict:
     effective = dict(settings)
     if _state.game_mode:
-        effective["tts_mode"] = "edge"
+        from tts.tts_factory import edge_tts_blocked
+        effective["tts_mode"] = "none" if edge_tts_blocked(settings) else "edge"
     return effective
 
 
 def _create_fallback_tts(settings: dict):
     from tts.tts_factory import create_tts_provider
     fallback = settings.get("tts_fallback_provider", "edge")
+    if fallback == "none":
+        return None
     if fallback == settings.get("tts_mode"):
         fallback = "edge"
     fallback_settings = dict(settings)
@@ -631,6 +634,11 @@ def text_to_speech(
             initialize_tts()
 
     if _state.fish_tts is None:
+        from core.config_manager import ConfigManager
+        from tts.tts_factory import edge_tts_blocked
+        if edge_tts_blocked(_effective_tts_settings(ConfigManager.load_settings())):
+            # 온라인 음성 서비스를 쓰지 않는 설정이다. 말풍선만 남기고 조용히 끝낸다.
+            return True
         logging.error("TTS 프로바이더가 없습니다.")
         if show_bubble and _state.character_widget:
             _handle_tts_playback_finished()

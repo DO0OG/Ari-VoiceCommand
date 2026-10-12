@@ -120,6 +120,7 @@
   "agent_dashboard_enabled": true,
   "update_check_enabled": true,
   "update_channel": "stable",
+  "install_options_token": "",
   "max_subagents": 3,
   "google_calendar_enabled": false,
   "google_client_id": "",
