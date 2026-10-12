@@ -70,8 +70,8 @@ class SpeechBubble(QWidget):
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # 폰트 설정 (이미 등록된 폰트 사용)
-        font_family = register_fonts()
+        # 폰트 설정: 설정값이 있으면 그 글꼴, 없으면 등록된 포함 폰트 (말풍선을 만들 때마다 읽음)
+        font_family = str(theme_module._load_settings().get("speech_bubble_font_family", "")).strip() or register_fonts()
         self.font = QFont(font_family, theme_module.FONT_SIZE_LARGE + 1)
         self.fm = QFontMetrics(self.font)
         self.padding = 12

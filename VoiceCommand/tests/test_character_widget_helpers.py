@@ -215,6 +215,15 @@ class CharacterWidgetHelperTests(unittest.TestCase):
         self.assertNotIn("**", long.display_text)
         self.assertEqual(short.display_text, "짧은 말")
 
+    def test_speech_bubble_uses_configured_font_or_bundled_font(self):
+        widget = self._make_widget()
+        with patch("ui.speech_bubble.register_fonts", return_value="Bundled Font"):
+            for configured, expected in (("Custom Font", "Custom Font"), ("  ", "Bundled Font")):
+                with patch("ui.theme._load_settings", return_value={"speech_bubble_font_family": configured}):
+                    bubble = SpeechBubble("hello", widget)
+                self.addCleanup(bubble.close)
+                self.assertEqual(bubble.font.family(), expected)
+
     def test_first_stream_token_survives_without_existing_bubble(self):
         widget = self._make_widget()
         widget._on_stream_token_slot("안")

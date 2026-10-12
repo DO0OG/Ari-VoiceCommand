@@ -816,6 +816,12 @@ msgstr "Leave empty to use the same as the default model"
 msgid "비워두면 테마 기본 글꼴 사용"
 msgstr "Leave empty to use the theme default font"
 
+msgid "말풍선 글꼴 패밀리 (선택):"
+msgstr "Speech bubble font family (optional):"
+
+msgid "비워두면 포함된 말풍선 글꼴 사용"
+msgstr "Leave empty to use the bundled speech bubble font"
+
 msgid "비활성화"
 msgstr "Disabled"
 
