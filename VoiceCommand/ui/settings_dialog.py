@@ -418,6 +418,11 @@ class SettingsDialog(QDialog):
         self.theme_font_input.setPlaceholderText(_("비워두면 테마 기본 글꼴 사용"))
         tvbox.addWidget(self.theme_font_input)
 
+        tvbox.addWidget(QLabel(_("말풍선 글꼴 패밀리 (선택):")))
+        self.bubble_font_input = QLineEdit(self.settings.get("speech_bubble_font_family", ""))
+        self.bubble_font_input.setPlaceholderText(_("비워두면 포함된 말풍선 글꼴 사용"))
+        tvbox.addWidget(self.bubble_font_input)
+
         self.theme_preview_frame = QFrame()
         self.theme_preview_frame.setFrameShape(QFrame.Shape.StyledPanel)
         preview_layout = QVBoxLayout(self.theme_preview_frame)
@@ -811,6 +816,7 @@ class SettingsDialog(QDialog):
             "ui_theme_preset": self.theme_preset_combo.currentData(),
             "ui_theme_scale": max(0.9, min(1.35, self._float(self.theme_scale_input.text(), 1.0))),
             "ui_font_family": self.theme_font_input.text().strip(),
+            "speech_bubble_font_family": self.bubble_font_input.text().strip(),
             "language": self.lang_combo.currentData(),
             "update_check_enabled": self.update_check_enabled.isChecked(),
 

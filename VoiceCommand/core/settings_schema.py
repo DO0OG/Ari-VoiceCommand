@@ -120,6 +120,7 @@ DEFAULT_SETTINGS = {
     "ui_theme_preset": "default",
     "ui_theme_scale": 1.0,
     "ui_font_family": "",
+    "speech_bubble_font_family": "",
     "language": "ko",               # 인터페이스 언어 (ko | en | ja)
     "update_check_enabled": True,
     "update_channel": "stable",
