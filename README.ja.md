@@ -68,7 +68,7 @@ Ari は Windows で声をかけて使う**オープンソースの AI 音声ア�
 
 ### インストーラー
 
-**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** から `Ari-Setup-<version>.exe` をダウンロードして実行してください。既定のインストール先は `Program Files\Ari` で、設定と履歴は `%AppData%\Ari` に保存されます。
+**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** から `Ari-Setup-<version>.exe` をダウンロードして実行してください。既定のインストール先は `Program Files\Ari` で、設定と履歴は `%AppData%\Ari` に保存されます。ダウンロードしたファイルの確認方法は[リリースファイルの確認とウイルス対策ソフトの検出について](./docs/SECURITY.md)をご覧ください。
 
 ### ソースから実行
 

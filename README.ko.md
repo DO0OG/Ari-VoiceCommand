@@ -68,7 +68,7 @@ Ari는 Windows에서 말로 부르고 시키는 **오픈소스 AI 음성 비서*
 
 ### 설치본
 
-**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)**에서 `Ari-Setup-<version>.exe`를 내려받아 실행하세요. 기본 설치 위치는 `Program Files\Ari`이고, 설정과 기록은 `%AppData%\Ari`에 저장됩니다.
+**[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)**에서 `Ari-Setup-<version>.exe`를 내려받아 실행하세요. 기본 설치 위치는 `Program Files\Ari`이고, 설정과 기록은 `%AppData%\Ari`에 저장됩니다. 내려받은 파일을 확인하는 방법은 [릴리스 파일 확인과 백신 검출 안내](./docs/SECURITY.md)를 참고하세요.
 
 ### 소스에서 실행
 

@@ -68,7 +68,7 @@ For more complex requests, the agent makes a plan and works through it step by s
 
 ### Installer
 
-Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** and run it. Ari installs to `Program Files\Ari` by default and keeps settings and history in `%AppData%\Ari`.
+Download `Ari-Setup-<version>.exe` from **[GitHub Releases](https://github.com/DO0OG/Ari-VoiceCommand/releases/latest)** and run it. Ari installs to `Program Files\Ari` by default and keeps settings and history in `%AppData%\Ari`. To verify the downloaded file, see [Release verification and antivirus notes](./docs/SECURITY.md).
 
 ### Run from source
 
