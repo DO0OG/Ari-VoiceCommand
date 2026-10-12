@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, Signal
 
 from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
+from tts.edge_endpoint import use_current_edge_endpoint
 from tts.pcm_playback import write_pcm_chunks
 from tts.tts_cache import DEFAULT_MAX_BYTES, DiskTTSAudioCache, build_tts_cache_key
 
@@ -205,6 +206,7 @@ class EdgeTTS(QObject):
     async def _synthesize(self, text: str, emotion: str = DEFAULT_EMOTION) -> bytes:
         import edge_tts
 
+        use_current_edge_endpoint()
         rate, pitch = self._prosody(emotion)
         communicate = edge_tts.Communicate(
             text, self.voice, rate=rate, volume=self.volume, pitch=pitch

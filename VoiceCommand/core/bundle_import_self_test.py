@@ -48,6 +48,9 @@ def _check_edge_tts_and_mp3_decoder():
 
     av.Codec("mp3", "r")
     from audio.mp3_decoder import decode_mp3_to_pcm
+    from tts.edge_endpoint import use_current_edge_endpoint
+
+    use_current_edge_endpoint()
 
     last_error = None
     audio_data = b""
