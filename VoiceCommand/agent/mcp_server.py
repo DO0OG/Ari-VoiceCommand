@@ -55,6 +55,9 @@ class AriMCPServer:
 
         @app.post("/mcp")
         async def mcp(payload: dict[str, Any]):
+            if "id" not in payload:
+                from fastapi.responses import Response
+                return Response(status_code=202)
             response = self.handle_jsonrpc(payload)
             return JSONResponse(response)
 
@@ -65,9 +68,14 @@ class AriMCPServer:
         method = str(payload.get("method", "") or "")
         params = payload.get("params") or {}
         try:
+            if method == "ping":
+                return self._ok(request_id, {})
             if method == "initialize":
+                supported_versions = ("2025-06-18", "2025-03-26", "2024-11-05")
+                requested_version = params.get("protocolVersion")
+                protocol_version = requested_version if requested_version in supported_versions else supported_versions[0]
                 return self._ok(request_id, {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": protocol_version,
                     "serverInfo": {"name": "ari-local-tools", "version": "1.0.0"},
                     "capabilities": {"tools": {}},
                 })
@@ -170,13 +178,13 @@ class AriMCPServer:
 
     def _tool_schemas(self) -> list[dict[str, Any]]:
         return [
-            {"name": "ari_tts", "description": "Read text with Ari voice.", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}},
-            {"name": "ari_notify", "description": "Show a local notification.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "message": {"type": "string"}}, "required": ["message"]}},
-            {"name": "ari_open_app", "description": "Open a local application.", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
-            {"name": "ari_take_screenshot", "description": "Take screenshot and return base64.", "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "ari_get_system_info", "description": "Return CPU, memory and app list.", "inputSchema": {"type": "object", "properties": {}}},
-            {"name": "ari_read_file", "description": "Read file contents from the local filesystem.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}}, "required": ["path"]}},
-            {"name": "ari_write_file", "description": "Write content to a local file (overwrite or append).", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}, "mode": {"type": "string", "enum": ["overwrite", "append"]}}, "required": ["path", "content"]}},
+            {"name": "ari_tts", "description": "Read text with Ari voice.", "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False}},
+            {"name": "ari_notify", "description": "Show a local notification.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "message": {"type": "string"}}, "required": ["message"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False}},
+            {"name": "ari_open_app", "description": "Open a local application.", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False}},
+            {"name": "ari_take_screenshot", "description": "Take screenshot and return base64.", "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+            {"name": "ari_get_system_info", "description": "Return CPU, memory and app list.", "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+            {"name": "ari_read_file", "description": "Read file contents from the local filesystem.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "start_line": {"type": "integer"}, "end_line": {"type": "integer"}}, "required": ["path"]}, "annotations": {"readOnlyHint": True, "destructiveHint": False}},
+            {"name": "ari_write_file", "description": "Write content to a local file (overwrite or append).", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}, "mode": {"type": "string", "enum": ["overwrite", "append"]}}, "required": ["path", "content"]}, "annotations": {"readOnlyHint": False, "destructiveHint": True}},
         ]
 
     def _ok(self, request_id: Any, result: Any) -> dict[str, Any]:
