@@ -19,6 +19,7 @@ from audio.audio_manager import GlobalAudio, get_audio_output_lock
 from core.emotions import DEFAULT_EMOTION, get_emotion_details
 from tts.edge_endpoint import use_current_edge_endpoint
 from tts.pcm_playback import write_pcm_chunks
+from tts.secret_utils import redact_secret
 from tts.tts_cache import DEFAULT_MAX_BYTES, DiskTTSAudioCache, build_tts_cache_key
 
 KO_VOICES = [
@@ -143,6 +144,7 @@ class EdgeTTS(QObject):
             timeout = _SENTENCE_TIMEOUT_SECONDS
         self.synthesis_timeout_seconds = max(0.1, timeout)
         self.is_playing = False
+        self._last_error = None
         try:
             cache_limit = int(cache_max_bytes)
         except (OverflowError, TypeError, ValueError):
@@ -285,6 +287,16 @@ class EdgeTTS(QObject):
                 continue
         return False
 
+    @staticmethod
+    def _format_synthesis_failure(exc: Exception) -> str:
+        detail = " ".join(str(exc).split())
+        try:
+            from edge_tts.constants import TRUSTED_CLIENT_TOKEN
+            detail = redact_secret(detail, TRUSTED_CLIENT_TOKEN)
+        except (AttributeError, ImportError):
+            pass
+        return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+
     def _synthesize_sentences(
         self,
         sentences: list[str],
@@ -317,12 +329,13 @@ class EdgeTTS(QObject):
                     )
                     continue
                 except Exception as exc:
-                    synthesis_failures.append((index, type(exc).__name__))
+                    failure = self._format_synthesis_failure(exc)
+                    synthesis_failures.append((index, failure))
                     logging.warning(
                         "Edge TTS 문장 합성 실패 (%d/%d): %s",
                         index,
                         len(sentences),
-                        type(exc).__name__,
+                        failure,
                     )
                     continue
 
@@ -369,6 +382,7 @@ class EdgeTTS(QObject):
         emotion: str = "평온",
         stop_event: threading.Event | None = None,
     ) -> bool:
+        self._last_error = None
         sentences = split_sentences(text)
         if not sentences:
             return False
@@ -460,6 +474,7 @@ class EdgeTTS(QObject):
                 f"{index}/{len(sentences)}:{reason}"
                 for index, reason in synthesis_failures
             )
+            self._last_error = synthesis_failures[-1][1]
             logging.warning(
                 "Edge TTS 문장 합성 결과: %d/%d 실패 (%s)",
                 len(synthesis_failures),

@@ -3263,6 +3263,9 @@ msgstr "Found unsupported Python version(s): {versions}. CosyVoice requires 64-b
 msgid "TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요."
 msgstr "TTS test playback failed. Please check the settings and output device."
 
+msgid "참조 WAV 파일을 찾을 수 없습니다. 설정의 음성 복제에서 참조 WAV를 지정해 주세요."
+msgstr "The reference WAV file could not be found. Please select a reference WAV in the Voice Cloning section of Settings."
+
 msgid "TTS 시험 재생에 실패했습니다: {error}"
 msgstr "TTS test playback failed: {error}"
 

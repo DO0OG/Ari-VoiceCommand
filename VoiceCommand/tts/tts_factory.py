@@ -4,6 +4,11 @@ import logging
 import os
 from core.config_manager import ConfigManager
 
+
+class _MissingReferenceWavError(RuntimeError):
+    pass
+
+
 _TTS_SIGNATURE_KEYS = (
     "tts_mode",
     "fish_api_key",
@@ -48,9 +53,16 @@ def _create_local(settings, wait_ready=True):
         from tts.cosyvoice_tts import CosyVoiceTTS
         from tts.voice_reference import get_reference_text, get_reference_wav
         # 설정 화면에서 아직 저장하지 않은 경로로 시험 재생할 때도 그 경로를 쓴다.
+        reference_wav = get_reference_wav(settings)
+        if not os.path.isfile(reference_wav):
+            from i18n.translator import _
+
+            raise _MissingReferenceWavError(
+                _("참조 WAV 파일을 찾을 수 없습니다. 설정의 음성 복제에서 참조 WAV를 지정해 주세요.")
+            )
         configured_dir = settings.get("cosyvoice_dir", "")
         provider = CosyVoiceTTS(
-            reference_wav=get_reference_wav(settings),
+            reference_wav=reference_wav,
             reference_text=get_reference_text(settings),
             speed=float(settings.get("cosyvoice_speed", 0.9)),
             cosyvoice_dir=configured_dir if configured_dir and os.path.isdir(configured_dir) else None,
@@ -75,6 +87,8 @@ def _create_local(settings, wait_ready=True):
             ) as cleanup_error:
                 logging.debug("실패한 CosyVoice3 워커 정리 실패: %s", cleanup_error)
         logging.error("CosyVoice3 워커 초기화 실패: %s", e)
+        if isinstance(e, _MissingReferenceWavError):
+            raise
         raise RuntimeError("CosyVoice3 worker initialization failed") from e
 
 
