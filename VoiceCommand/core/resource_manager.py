@@ -341,7 +341,12 @@ class ResourceManager:
                 ResourceManager.refresh_app_managed_file(source, destination)
                 continue
             if os.path.exists(destination):
-                continue  # 이미 추출됨
+                if dest_name == "images" and os.path.isdir(destination):
+                    try:
+                        ResourceManager._merge_path_if_missing(source, destination)
+                    except Exception as e:
+                        logging.error("리소스 추출 실패 %s: %s", src_name, e)
+                continue
 
             try:
                 if os.path.isdir(source):
