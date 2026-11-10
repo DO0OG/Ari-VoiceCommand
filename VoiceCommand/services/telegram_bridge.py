@@ -201,11 +201,18 @@ class TelegramBridge:
             return None
         task_id = self.queue.submit(
             incoming.text,
-            lambda cancel_event: self._run_message(incoming, cancel_event),
+            lambda cancel_event: self._run_queued_message(incoming, cancel_event),
             priority=10,
         )
         logger.info("[TelegramBridge] queued task=%s chat_id=%s", task_id, incoming.chat_id)
         return task_id
+
+    def _run_queued_message(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
+        try:
+            return self._run_message(incoming, cancel_event)
+        except Exception as exc:
+            # 작업 큐가 예외를 traceback과 함께 기록하므로 토큰이 든 원본 예외를 그대로 넘기지 않는다.
+            raise RuntimeError(_redact_token(str(exc))) from None
 
     def _run_message(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
         if cancel_event.is_set():

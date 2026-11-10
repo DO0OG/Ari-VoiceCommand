@@ -1,5 +1,6 @@
 import json
 import threading
+import traceback
 import unittest
 from unittest.mock import patch
 
@@ -221,6 +222,24 @@ class TelegramBridgeTests(unittest.TestCase):
 
         self.assertTrue(any("polling failed" in line for line in logs.output))
         self.assertFalse(any("SECRET-TOKEN" in line for line in logs.output))
+
+    def test_queued_task_error_does_not_carry_bot_token(self):
+        class _FailingSession:
+            def post(self, url, **kwargs):
+                raise RuntimeError(f"Max retries exceeded with url: {url}")
+
+        client = TelegramApiClient("123456:SECRET-TOKEN", session=_FailingSession())
+        bridge = TelegramBridge(
+            client,
+            lambda text, stream_callback=None: "unused",
+            allowed_chat_ids=["123"],
+            queue=ImmediateQueue(),
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            bridge.handle_message(IncomingMessage(chat_id="123", text="hi", message_id=3))
+
+        self.assertNotIn("SECRET-TOKEN", "".join(traceback.format_exception(raised.exception)))
 
 
 if __name__ == "__main__":
