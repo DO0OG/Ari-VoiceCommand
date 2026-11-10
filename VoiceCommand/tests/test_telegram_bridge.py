@@ -167,7 +167,8 @@ class TelegramBridgeTests(unittest.TestCase):
         self.assertEqual(client.answered, [])
 
     def test_from_settings_enables_remote_approval_explicitly(self):
-        settings = {"telegram_enabled": True, "telegram_bot_token": "token",
+        bot_credential = "123:abc"
+        settings = {"telegram_enabled": True, "telegram_bot_token": bot_credential,
                     "telegram_allowed_chat_ids": ["123"], "telegram_remote_approval_enabled": True}
         with patch("services.telegram_bridge.ConfigManager.get", side_effect=lambda key, default=None: settings.get(key, default)), \
                 patch("services.telegram_bridge.TelegramApiClient", return_value=FakeTelegramClient()):
