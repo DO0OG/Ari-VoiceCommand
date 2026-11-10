@@ -15,6 +15,16 @@ _HALF_LIFE_SECONDS = 2 * 60 * 60
 _RETURN_THRESHOLD_SECONDS = 30 * 60
 _BIG_CHANGE_THRESHOLD = 0.2
 _BIG_MOTION_COOLDOWN_SECONDS = 60
+# 응답 감정 한 번의 변화는 칭찬(+0.22)보다 훨씬 작게 둔다. 목록에 없는 감정(평온·진지)은 움직이지 않는다.
+_RESPONSE_EMOTION_DELTAS = {
+    "기쁨": (0.03, 0.02),
+    "기대": (0.02, 0.02),
+    "수줍": (0.01, 0.0),
+    "슬픔": (-0.03, 0.0),
+    "걱정": (-0.02, 0.0),
+    "화남": (-0.03, 0.02),
+    "놀람": (0.0, 0.03),
+}
 
 
 class MoodState:
@@ -157,6 +167,17 @@ class MoodState:
             arousal_delta,
             self._clock() if now is None else now,
         )
+
+    def record_response_emotion(
+        self,
+        emotion: str,
+        now: float | None = None,
+    ) -> None:
+        """대화 응답에 붙은 감정 태그를 기분에 약하게 반영한다."""
+        deltas = _RESPONSE_EMOTION_DELTAS.get(emotion)
+        if deltas is None:
+            return
+        self._apply(*deltas, self._clock() if now is None else now)
 
     def record_ignored_suggestion(self, now: float | None = None) -> None:
         """무시된 선제 발화를 약하게 반영한다."""

@@ -87,6 +87,10 @@ class RPGenerator:
         parts.append(_(
             "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
         ))
+        parts.append(_(
+            "지금 기분에 맞게 말투를 조절하고, 자기 의견이나 취향을 자연스럽게 드러내도 됩니다. "
+            "기분을 수치나 상태 이름으로 직접 말하지 마세요. 요청받은 일은 기분과 관계없이 수행하세요."
+        ))
         return "\n\n".join(part for part in parts if part)
 
     def generate(self, text: str) -> str:

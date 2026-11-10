@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.speech_scheduler import EventSpeechScheduler, choose_phrase
+from agent.speech_scheduler import (
+    EventSpeechScheduler,
+    choose_phrase,
+    note_user_activity,
+)
 from core.mood_state import MoodState
 from core.settings_schema import DEFAULT_SETTINGS
 
@@ -160,7 +164,90 @@ class SpeechSchedulerTests(unittest.TestCase):
 
         self.now += timedelta(minutes=40)
         scheduler.request("return")
-        self.assertFalse(scheduler.tick())
+        # 길어진 무대화 시간이 혼잣말을 부르지 않게 꺼 둔다.
+        with patch("core.config_manager.ConfigManager.get", return_value=False):
+            self.assertFalse(scheduler.tick())
+
+    def test_chitchat_waits_for_idle_and_yields_to_other_events(self):
+        idle = [10 * 60]
+        scheduler = self.create_scheduler(
+            context_provider=lambda: {"seconds_since_last_interaction": idle[0]},
+        )
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            self.assertFalse(scheduler.tick())
+            self.assertEqual(self.messages, [])
+
+            idle[0] = 25 * 60
+            self.guards["away"] = True
+            self.assertFalse(scheduler.tick())
+            self.guards["away"] = False
+            scheduler.request("return")
+            self.assertTrue(scheduler.tick())
+            self.assertTrue(scheduler.tick())
+
+            self.now += timedelta(hours=2)
+            self.assertFalse(scheduler.tick())
+            self.now += timedelta(hours=1, minutes=1)
+            self.assertTrue(scheduler.tick())
+
+        self.assertFalse(self.messages[0].startswith("("))
+        self.assertTrue(self.messages[1].startswith("("))
+        self.assertEqual(len(self.messages), 3)
+
+    def test_chitchat_waits_while_user_input_is_being_answered(self):
+        scheduler = self.create_scheduler(
+            context_provider=lambda: {"seconds_since_last_interaction": 3600},
+        )
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            scheduler.note_user_activity()
+            self.assertFalse(scheduler.tick())
+            self.assertEqual(self.messages, [])
+
+            self.now += timedelta(minutes=21)
+            self.assertTrue(scheduler.tick())
+
+    def test_note_user_activity_reaches_the_shared_scheduler(self):
+        scheduler = self.create_scheduler()
+        with patch("agent.speech_scheduler.get_speech_scheduler", return_value=scheduler):
+            note_user_activity()
+        self.assertEqual(scheduler._last_user_input_at, self.now)
+
+        with patch("agent.speech_scheduler.get_speech_scheduler", return_value=None):
+            note_user_activity()
+
+    def test_pending_chitchat_is_dropped_when_user_talks_again(self):
+        idle = [25 * 60]
+        self.guards["away"] = True
+        scheduler = self.create_scheduler(
+            context_provider=lambda: {"seconds_since_last_interaction": idle[0]},
+        )
+        with patch("core.config_manager.ConfigManager.get", return_value=True):
+            self.assertFalse(scheduler.tick())
+            idle[0] = 30
+            self.guards["away"] = False
+            self.assertFalse(scheduler.tick())
+
+        self.assertEqual(self.messages, [])
+
+    def test_chitchat_is_skipped_when_setting_is_off(self):
+        scheduler = self.create_scheduler(
+            context_provider=lambda: {"seconds_since_last_interaction": 3600},
+        )
+        with patch("core.config_manager.ConfigManager.get", return_value=False):
+            self.assertFalse(scheduler.tick())
+
+        self.assertEqual(self.messages, [])
+
+    def test_spontaneous_talk_default_matches_settings_template(self):
+        template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
+        with template_path.open("r", encoding="utf-8") as stream:
+            template = json.load(stream)
+
+        self.assertTrue(DEFAULT_SETTINGS["spontaneous_talk_enabled"])
+        self.assertEqual(
+            template["spontaneous_talk_enabled"],
+            DEFAULT_SETTINGS["spontaneous_talk_enabled"],
+        )
 
     def test_phrase_pool_selects_language_and_mood(self):
         source = {

@@ -45,6 +45,13 @@ class EmotionCatalogTests(unittest.TestCase):
         self.assertNotIn("모든 답변 첫머리에 감정 태그를 붙이세요:", prompt)
         self.assertIn(get_emotion_instruction("ko"), prompt)
 
+    def test_prompt_lets_mood_shape_tone_without_changing_task_handling(self):
+        with patch("i18n.translator.get_language", return_value="ko"):
+            prompt = RPGenerator().build_system_prompt("안내")
+
+        self.assertIn("자기 의견이나 취향을 자연스럽게 드러내도", prompt)
+        self.assertIn("기분과 관계없이 수행하세요", prompt)
+
 
 class EdgeEmotionProsodyTests(unittest.TestCase):
     def test_rate_offsets_clamp_to_edge_supported_range(self):

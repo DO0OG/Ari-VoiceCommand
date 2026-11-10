@@ -2000,7 +2000,7 @@ class LLMProvider:
         mood_state = get_mood_state()
         if mood_state is not None:
             try:
-                mood_valence, _mood_arousal = mood_state.values()
+                mood_valence, mood_arousal = mood_state.values()
             except (ArithmeticError, RuntimeError, TypeError, ValueError) as exc:
                 logging.debug("[LLMProvider] 기분 상태 조회 실패: %s", exc)
             else:
@@ -2008,6 +2008,10 @@ class LLMProvider:
                     mood_label = _("좋음")
                 elif mood_valence <= -0.2:
                     mood_label = _("가라앉음")
+                if mood_arousal >= 0.35:
+                    mood_label += ", " + _("들뜸")
+                elif mood_arousal < 0.1:
+                    mood_label += ", " + _("차분함")
         prompt += _(" · 기분 {mood}").format(mood=mood_label)
         return prompt
 

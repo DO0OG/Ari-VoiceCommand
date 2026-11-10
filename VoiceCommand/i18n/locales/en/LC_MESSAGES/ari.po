@@ -3459,6 +3459,9 @@ msgstr "{hours}h"
 msgid "상황 블록을 참고해 말투를 조절하되, 내용을 그대로 언급하지 마세요."
 msgstr "Use the situation block to guide your tone, but do not repeat its contents verbatim."
 
+msgid "지금 기분에 맞게 말투를 조절하고, 자기 의견이나 취향을 자연스럽게 드러내도 됩니다. 기분을 수치나 상태 이름으로 직접 말하지 마세요. 요청받은 일은 기분과 관계없이 수행하세요."
+msgstr "Adjust your tone to your current mood, and feel free to express your own opinions and tastes naturally. Never state your mood as a number or a status name. Carry out requested tasks regardless of mood."
+
 msgid "없음"
 msgstr "None"
 
@@ -3605,6 +3608,9 @@ msgstr "Automatically enable game mode for games and videos"
 msgid "IDE 3시간 연속 사용 알림"
 msgstr "Remind me after three continuous hours in an IDE"
 
+msgid "한동안 대화가 없으면 먼저 말 걸기"
+msgstr "Speak up first after a quiet while"
+
 msgid "잠금이 풀렸어요."
 msgstr "The screen is unlocked."
 
@@ -3730,6 +3736,12 @@ msgstr "calm"
 
 msgid "가라앉음"
 msgstr "low"
+
+msgid "들뜸"
+msgstr "excited"
+
+msgid "차분함"
+msgstr "relaxed"
 
 msgid " · 기분 {mood}"
 msgstr " · Mood {mood}"
@@ -4002,6 +4014,15 @@ msgid ""
 msgstr ""
 "The cleanup result is ready. {summary}||Here's the memory "
 "cleanup result. {summary}"
+
+msgid "(기쁨) 오늘은 기분이 좋아요. 필요한 게 있으면 편하게 불러 주세요.||(기대) 뭔가 재미있는 일이 없을까요? 저는 이런 날이 좋아요.||(기쁨) 조용한 시간도 좋지만, 말을 걸어 주시면 더 좋아요."
+msgstr "(기쁨) I'm in a good mood today. Call me whenever you need anything.||(기대) I wonder if something fun is coming up. I like days like this.||(기쁨) Quiet time is nice, but it's even better when you talk to me."
+
+msgid "(평온) 조용하네요. 저는 이런 차분한 시간이 꽤 마음에 들어요.||(평온) 필요한 일이 생기면 언제든 불러 주세요. 옆에 있을게요.||(진지) 요즘 하시는 일은 잘 되고 있나요? 조금 궁금해요."
+msgstr "(평온) It's quiet. I rather like calm moments like this.||(평온) Call me anytime something comes up. I'll be right here.||(진지) Is your work going well lately? I'm a little curious."
+
+msgid "(걱정) 오늘은 조금 기운이 없어요. 그래도 곁에 있을게요.||(걱정) 한동안 조용했네요. 편할 때 불러 주세요.||(슬픔) 너무 조용하니 조금 쓸쓸해요. 시간 나면 말을 걸어 주세요."
+msgstr "(걱정) I'm a little low today. I'll stay by your side anyway.||(걱정) It's been quiet for a while. Call me whenever it suits you.||(슬픔) It's so quiet that I feel a bit lonely. Talk to me when you have time."
 
 msgid "⏰ {command}"
 msgstr "⏰ {command}"

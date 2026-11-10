@@ -331,6 +331,14 @@ class SettingsDialog(QDialog):
         )
         group_layout.addWidget(self.activity_ide_long_use_checkbox)
 
+        self.spontaneous_talk_checkbox = QCheckBox(
+            _("한동안 대화가 없으면 먼저 말 걸기")
+        )
+        self.spontaneous_talk_checkbox.setChecked(
+            bool(self.settings.get("spontaneous_talk_enabled", True))
+        )
+        group_layout.addWidget(self.spontaneous_talk_checkbox)
+
         privacy_note = QLabel(_(
             "활동 정보는 앱 카테고리와 경과 시간만 포함하며, 창 제목·프로세스명은 전송하지 않습니다."
         ))
@@ -829,6 +837,7 @@ class SettingsDialog(QDialog):
             "activity_quiet_bubble_only_enabled": self.activity_quiet_bubble_checkbox.isChecked(),
             "activity_auto_game_mode_enabled": self.activity_auto_game_mode_checkbox.isChecked(),
             "activity_ide_long_use_reaction_enabled": self.activity_ide_long_use_checkbox.isChecked(),
+            "spontaneous_talk_enabled": self.spontaneous_talk_checkbox.isChecked(),
         }
 
         # LLM / TTS 값을 각 페이지에서 수집

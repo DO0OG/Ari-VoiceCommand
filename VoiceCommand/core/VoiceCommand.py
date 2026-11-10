@@ -431,6 +431,10 @@ def set_listening_indicator(active: bool, text: str | None = None) -> None:
     if text:
         _state.listening_indicator_text = text
     _state.listening_indicator_active = active
+    if active:
+        from agent.speech_scheduler import note_user_activity
+
+        note_user_activity()
 
     if not _state.character_widget:
         return
