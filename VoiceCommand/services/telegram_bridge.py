@@ -12,6 +12,8 @@ import inspect
 import json
 import os
 import re
+import secrets
+from contextlib import nullcontext
 import threading
 import time
 import traceback
@@ -24,9 +26,12 @@ except Exception:  # pragma: no cover - exercised only in minimal test envs
 
 from agent.task_queue import AgentTaskQueue
 from core.config_manager import ConfigManager
+from i18n.translator import _
 from services.messaging_bridge_base import ChatAuthorizer, IncomingMessage, StreamingTextBuffer
 
 logger = logging.getLogger(__name__)
+
+REMOTE_APPROVAL_TIMEOUT_SECONDS = 60
 
 CommandRunner = Callable[..., str]
 
@@ -60,7 +65,7 @@ class TelegramApiClient:
         self.session = session or requests.Session()
 
     def get_updates(self, *, offset: int | None = None, timeout: int = 25) -> list[dict]:
-        payload: dict[str, object] = {"timeout": int(timeout), "allowed_updates": ["message"]}
+        payload: dict[str, object] = {"timeout": int(timeout), "allowed_updates": json.dumps(["message", "callback_query"])}
         if offset is not None:
             payload["offset"] = offset
         response = self.session.get(f"{self.base_url}/getUpdates", params=payload, timeout=self.timeout + timeout)
@@ -70,7 +75,7 @@ class TelegramApiClient:
             raise RuntimeError(f"Telegram getUpdates failed: {data!r}")
         return list(data.get("result") or [])
 
-    def send_message(self, chat_id: str, text: str, *, reply_to_message_id: int | None = None) -> int | None:
+    def send_message(self, chat_id: str, text: str, *, reply_to_message_id: int | None = None, reply_markup: dict | None = None) -> int | None:
         if len(text) > 4096:
             first_id = None
             for offset in range(0, len(text), 4096):
@@ -81,6 +86,8 @@ class TelegramApiClient:
         payload: dict[str, object] = {"chat_id": chat_id, "text": text}
         if reply_to_message_id is not None:
             payload["reply_to_message_id"] = reply_to_message_id
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
         response = self.session.post(f"{self.base_url}/sendMessage", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
@@ -89,13 +96,25 @@ class TelegramApiClient:
         message = data.get("result") or {}
         return message.get("message_id")
 
-    def edit_message(self, chat_id: str, message_id: int, text: str) -> None:
+    def edit_message(self, chat_id: str, message_id: int, text: str, *, reply_markup: dict | None = None) -> None:
         payload = {"chat_id": chat_id, "message_id": message_id, "text": text[:4096]}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
         response = self.session.post(f"{self.base_url}/editMessageText", json=payload, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         if not data.get("ok"):
             raise RuntimeError(f"Telegram editMessageText failed: {data!r}")
+
+    def answer_callback_query(self, callback_query_id: str) -> None:
+        response = self.session.post(
+            f"{self.base_url}/answerCallbackQuery",
+            json={"callback_query_id": callback_query_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        if not response.json().get("ok"):
+            raise RuntimeError("Telegram answerCallbackQuery failed")
 
     def send_photo(self, chat_id: str, image_path: str, *, caption: str = "") -> int | None:
         with open(image_path, "rb") as image_file:
@@ -124,6 +143,7 @@ class TelegramBridge:
         allowed_chat_ids: Iterable[object],
         queue: AgentTaskQueue | None = None,
         poll_timeout: int = 25,
+        remote_approval_enabled: bool = False,
     ):
         self.client = client
         self.command_runner = command_runner
@@ -133,6 +153,9 @@ class TelegramBridge:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._offset: int | None = None
+        self.remote_approval_enabled = remote_approval_enabled is True
+        self._approval_lock = threading.Lock()
+        self._pending_approval: dict | None = None
 
     @classmethod
     def from_settings(cls, command_runner: CommandRunner) -> "TelegramBridge | None":
@@ -152,6 +175,7 @@ class TelegramBridge:
             command_runner,
             allowed_chat_ids=allowed,
             poll_timeout=timeout,
+            remote_approval_enabled=ConfigManager.get("telegram_remote_approval_enabled", False) is True,
         )
 
     def start(self) -> None:
@@ -164,6 +188,7 @@ class TelegramBridge:
 
     def stop(self) -> None:
         self._stop_event.set()
+        self._deny_pending_approval()
         if self._thread:
             self._thread.join(timeout=2.0)
         self.queue.shutdown(cancel_pending=True)
@@ -173,12 +198,98 @@ class TelegramBridge:
             try:
                 for update in self.client.get_updates(offset=self._offset, timeout=self.poll_timeout):
                     self._offset = int(update.get("update_id", 0)) + 1
+                    if "callback_query" in update:
+                        self._handle_callback_query(update["callback_query"])
+                        continue
                     incoming = self._parse_update(update)
                     if incoming is not None:
                         self.handle_message(incoming)
             except Exception as exc:
+                self._deny_pending_approval()
                 logger.warning("[TelegramBridge] polling failed: %s", _redact_token(str(exc)))
                 time.sleep(3.0)
+
+    def _deny_pending_approval(self) -> None:
+        with self._approval_lock:
+            pending = self._pending_approval
+            if pending is not None:
+                pending["approved"] = False
+                pending["event"].set()
+
+    def _request_remote_approval(self, incoming: IncomingMessage, action_desc: str, report) -> bool:
+        if not self.remote_approval_enabled or not self.authorizer.is_allowed(incoming.chat_id):
+            return False
+        nonce = secrets.token_hex(16)
+        pending = {
+            "chat_id": incoming.chat_id, "nonce": nonce, "event": threading.Event(),
+            "approved": False, "claimed": False,
+            "deadline": time.monotonic() + REMOTE_APPROVAL_TIMEOUT_SECONDS,
+        }
+        with self._approval_lock:
+            if self._pending_approval is not None or self._stop_event.is_set():
+                return False
+            self._pending_approval = pending
+        try:
+            text = _("위험 작업 확인\n작업: {action_desc}\n위험 요약: {summary}\n{seconds}초 안에 승인하거나 거부해 주세요.",
+                     action_desc=action_desc[:1500], summary=report.summary[:1500],
+                     seconds=REMOTE_APPROVAL_TIMEOUT_SECONDS)
+            message_id = self.client.send_message(
+                incoming.chat_id, text, reply_to_message_id=incoming.message_id,
+                reply_markup={"inline_keyboard": [[
+                    {"text": _("승인"), "callback_data": f"{nonce}:approve"},
+                    {"text": _("거부"), "callback_data": f"{nonce}:deny"},
+                ]]},
+            )
+            if message_id is None:
+                return False
+            signaled = pending["event"].wait(max(0.0, pending["deadline"] - time.monotonic()))
+            with self._approval_lock:
+                self._pending_approval = None
+                expired = not signaled or time.monotonic() >= pending["deadline"]
+                approved = not expired and pending["approved"] and not self._stop_event.is_set()
+            if expired:
+                status = _("시간 초과: 작업이 거부되었습니다.")
+            elif approved:
+                status = _("승인됨")
+            else:
+                status = _("거부됨")
+            self.client.edit_message(incoming.chat_id, message_id, status,
+                                     reply_markup={"inline_keyboard": []})
+            # 결과 메시지를 고치는 동안 중지됐으면 승인을 받았더라도 실행하지 않는다.
+            return bool(approved) and not self._stop_event.is_set()
+        except Exception as exc:
+            logger.warning("[TelegramBridge] remote approval failed: %s", _redact_token(str(exc)))
+            return False
+        finally:
+            with self._approval_lock:
+                if self._pending_approval is pending:
+                    self._pending_approval = None
+
+    def _handle_callback_query(self, query: dict) -> None:
+        if not self.remote_approval_enabled:
+            return
+        chat_id = str(((query.get("message") or {}).get("chat") or {}).get("id") or "")
+        if not self.authorizer.is_allowed(chat_id):
+            return
+        with self._approval_lock:
+            pending = self._pending_approval
+            if (pending is None or chat_id != pending["chat_id"] or pending["claimed"]
+                    or pending["event"].is_set() or time.monotonic() >= pending["deadline"]):
+                return
+            data = query.get("data")
+            if data not in (f"{pending['nonce']}:approve", f"{pending['nonce']}:deny"):
+                return
+            pending["claimed"] = True
+        approved = False
+        try:
+            self.client.answer_callback_query(query["id"])
+            approved = data == f"{pending['nonce']}:approve"
+        except Exception as exc:
+            logger.warning("[TelegramBridge] callback response failed: %s", _redact_token(str(exc)))
+        with self._approval_lock:
+            if self._pending_approval is pending and not pending["event"].is_set():
+                pending["approved"] = approved and time.monotonic() < pending["deadline"]
+                pending["event"].set()
 
     def _parse_update(self, update: dict) -> IncomingMessage | None:
         message = update.get("message") or {}
@@ -258,10 +369,16 @@ class TelegramBridge:
                 parameters = inspect.signature(self.command_runner).parameters
             except (TypeError, ValueError):
                 parameters = {}
-            if "tool_result_callback" in parameters:
-                result = self.command_runner(incoming.text, stream.append, tool_result_callback=collect_image)
-            else:
-                result = self.command_runner(incoming.text, stream.append)
+            scope = nullcontext()
+            if self.remote_approval_enabled:
+                from agent.confirmation_manager import remote_approval_scope
+                scope = remote_approval_scope(
+                    lambda action, report: self._request_remote_approval(incoming, action, report))
+            with scope:
+                if "tool_result_callback" in parameters:
+                    result = self.command_runner(incoming.text, stream.append, tool_result_callback=collect_image)
+                else:
+                    result = self.command_runner(incoming.text, stream.append)
         except Exception as exc:
             logger.error("[TelegramBridge] command failed chat_id=%s\n%s", incoming.chat_id, _redact_token(traceback.format_exc()))
             try:

@@ -4,6 +4,10 @@ import traceback
 import unittest
 from unittest.mock import patch
 
+from agent.confirmation_manager import ConfirmationManager
+from agent.safety_checker import DangerLevel, SafetyReport
+from agent.task_queue import AgentTaskQueue
+
 from services.messaging_bridge_base import ChatAuthorizer, IncomingMessage, StreamingTextBuffer
 from services.telegram_bridge import TelegramApiClient, TelegramBridge
 
@@ -13,13 +17,22 @@ class FakeTelegramClient:
         self.sent = []
         self.edited = []
         self.photos = []
+        self.markups = []
+        self.answered = []
+        self.approval_sent = threading.Event()
 
-    def send_message(self, chat_id, text, reply_to_message_id=None):
+    def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None):
         self.sent.append((chat_id, text, reply_to_message_id))
+        if reply_markup is not None:
+            self.markups.append(reply_markup)
+            self.approval_sent.set()
         return len(self.sent)
 
-    def edit_message(self, chat_id, message_id, text):
+    def edit_message(self, chat_id, message_id, text, reply_markup=None):
         self.edited.append((chat_id, message_id, text[:4096]))
+
+    def answer_callback_query(self, callback_query_id):
+        self.answered.append(callback_query_id)
 
     def send_photo(self, chat_id, image_path, caption=""):
         self.photos.append((chat_id, image_path, caption))
@@ -40,6 +53,245 @@ class ImmediateQueue:
 
 
 class TelegramBridgeTests(unittest.TestCase):
+    def _start_approval(self, client=None, **options):
+        client = client or FakeTelegramClient()
+        manager = object.__new__(ConfirmationManager)
+        results = []
+
+        def runner(text, stream_callback=None):
+            results.append(manager.request_confirmation("delete example.txt", SafetyReport(
+                level=DangerLevel.DANGEROUS, summary="file deletion")))
+            return "done"
+
+        bridge = TelegramBridge(client, runner, allowed_chat_ids=["123", "456"],
+                                queue=ImmediateQueue(), **options)
+        worker = threading.Thread(target=bridge._run_message, args=(
+            IncomingMessage(chat_id="123", text="delete", message_id=7), threading.Event()))
+        worker.start()
+        self.addCleanup(worker.join, 2)
+        self.addCleanup(bridge.stop)
+        return bridge, client, worker, results
+
+    def _callback(self, client, choice=0, chat_id="123", data=None):
+        return {"id": "callback-1", "message": {"chat": {"id": chat_id}, "message_id": 2},
+                "data": data or client.markups[-1]["inline_keyboard"][0][choice]["callback_data"]}
+
+    def test_remote_approval_buttons_return_decision(self):
+        for choice, expected, status in ((0, True, "승인됨"), (1, False, "거부됨")):
+            with self.subTest(choice=choice):
+                bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+                self.assertTrue(client.approval_sent.wait(2))
+                bridge._handle_callback_query(self._callback(client, choice))
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results, [expected])
+                self.assertEqual(client.answered, ["callback-1"])
+                self.assertIn(status, client.edited[0][2])
+                self.assertIn("delete example.txt", client.sent[1][1])
+                self.assertIn("file deletion", client.sent[1][1])
+
+    def test_stop_during_result_update_denies_approval(self):
+        bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+        client.edit_message = lambda *args, **kwargs: bridge._stop_event.set()
+        self.assertTrue(client.approval_sent.wait(2))
+        bridge._handle_callback_query(self._callback(client, 0))
+        worker.join(2)
+        self.assertEqual(results, [False])
+
+    def test_remote_approval_ignores_other_chats_and_wrong_nonce(self):
+        bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+        self.assertTrue(client.approval_sent.wait(2))
+        for chat_id, data in (("456", None), ("999", None), ("123", "wrong:approve")):
+            bridge._handle_callback_query(self._callback(client, chat_id=chat_id, data=data))
+            self.assertEqual(results, [])
+            self.assertEqual(client.answered, [])
+        bridge._handle_callback_query(self._callback(client))
+        worker.join(2)
+        self.assertEqual(results, [True])
+        bridge._handle_callback_query(self._callback(client))
+        self.assertEqual(client.answered, ["callback-1"])
+
+    def test_remote_approval_timeout_denies_and_expires_nonce(self):
+        with patch("services.telegram_bridge.REMOTE_APPROVAL_TIMEOUT_SECONDS", 0.02):
+            bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+            worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [False])
+        self.assertIn("시간 초과", client.edited[0][2])
+        bridge._handle_callback_query(self._callback(client))
+        self.assertEqual(client.answered, [])
+
+    def test_remote_approval_errors_deny(self):
+        for method in ("send_message", "answer_callback_query", "edit_message"):
+            with self.subTest(method=method):
+                client = FakeTelegramClient()
+                original_send = client.send_message
+
+                def send(*args, **kwargs):
+                    if kwargs.get("reply_markup") is not None:
+                        raise RuntimeError("send failed")
+                    return original_send(*args, **kwargs)
+
+                failure = send if method == "send_message" else RuntimeError("request failed")
+                patch_args = {"side_effect": failure}
+                with patch.object(client, method, **patch_args):
+                    bridge, client, worker, results = self._start_approval(
+                        client, remote_approval_enabled=True)
+                    if method != "send_message":
+                        self.assertTrue(client.approval_sent.wait(2))
+                        bridge._handle_callback_query(self._callback(client))
+                    worker.join(2)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results, [False])
+
+    def test_disabled_remote_approval_uses_local_confirmation(self):
+        results = []
+        client = FakeTelegramClient()
+        manager = ConfirmationManager()
+
+        def show(action, report, holder):
+            holder["result"] = True
+            holder["event"].set()
+
+        def runner(text, stream_callback=None):
+            results.append(manager.request_confirmation("delete", SafetyReport(DangerLevel.CAUTION)))
+            return "done"
+
+        bridge = TelegramBridge(client, runner, allowed_chat_ids=["123"], queue=ImmediateQueue())
+        with patch.object(manager._bridge, "request_dialog") as signal:
+            signal.emit.side_effect = show
+            bridge.handle_message(IncomingMessage(chat_id="123", text="delete"))
+        self.assertEqual(results, [True])
+        self.assertEqual(client.markups, [])
+        bridge._handle_callback_query({"id": "ignored", "data": "anything"})
+        self.assertEqual(client.answered, [])
+
+    def test_from_settings_enables_remote_approval_explicitly(self):
+        bot_credential = "123:abc"
+        settings = {"telegram_enabled": True, "telegram_bot_token": bot_credential,
+                    "telegram_allowed_chat_ids": ["123"], "telegram_remote_approval_enabled": True}
+        with patch("services.telegram_bridge.ConfigManager.get", side_effect=lambda key, default=None: settings.get(key, default)), \
+                patch("services.telegram_bridge.TelegramApiClient", return_value=FakeTelegramClient()):
+            bridge = TelegramBridge.from_settings(lambda text, stream=None: "done")
+        self.addCleanup(bridge.stop)
+        self.assertTrue(bridge.remote_approval_enabled)
+
+    def test_polling_receives_messages_while_approval_waits(self):
+        client = FakeTelegramClient()
+        manager = object.__new__(ConfirmationManager)
+        results = []
+        executed = []
+        next_done = threading.Event()
+
+        def runner(text, stream_callback=None):
+            executed.append(text)
+            if text == "delete":
+                results.append(manager.request_confirmation("delete", SafetyReport(DangerLevel.CAUTION)))
+            else:
+                next_done.set()
+            return "done"
+
+        bridge = TelegramBridge(client, runner, allowed_chat_ids=["123"],
+                                queue=AgentTaskQueue(max_workers=1), remote_approval_enabled=True)
+        self.addCleanup(bridge.stop)
+        polls = []
+
+        def poll(**kwargs):
+            polls.append(kwargs)
+            if len(polls) == 1:
+                return [{"update_id": 1, "message": {"chat": {"id": "123"}, "text": "delete"}}]
+            if len(polls) == 2:
+                self.assertTrue(client.approval_sent.wait(2))
+                return [
+                    {"update_id": 2, "message": {"chat": {"id": "123"}, "text": "next"}},
+                    {"update_id": 3, "callback_query": self._callback(client)},
+                ]
+            finished = next_done.wait(2)
+            bridge._stop_event.set()
+            self.assertTrue(finished)
+            return []
+
+        with patch.object(client, "get_updates", side_effect=poll, create=True):
+            bridge.run_forever()
+        self.assertEqual(results, [True])
+        self.assertEqual(executed, ["delete", "next"])
+        self.assertEqual(polls[-1]["offset"], 4)
+
+    def test_polling_failure_denies_waiting_approval(self):
+        bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+        self.assertTrue(client.approval_sent.wait(2))
+        with patch.object(client, "get_updates", side_effect=RuntimeError("offline"), create=True), \
+                patch("services.telegram_bridge.time.sleep", side_effect=lambda seconds: bridge._stop_event.set()):
+            bridge.run_forever()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [False])
+
+    def test_stop_denies_waiting_approval(self):
+        bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+        self.assertTrue(client.approval_sent.wait(2))
+        bridge.stop()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(results, [False])
+
+    def test_new_confirmation_uses_fresh_nonce(self):
+        bridge, client, worker, results = self._start_approval(remote_approval_enabled=True)
+        self.assertTrue(client.approval_sent.wait(2))
+        previous = self._callback(client)
+        bridge._handle_callback_query(previous)
+        worker.join(2)
+        client.approval_sent.clear()
+        worker = threading.Thread(target=bridge._run_message, args=(
+            IncomingMessage(chat_id="123", text="delete again"), threading.Event()))
+        worker.start()
+        self.addCleanup(worker.join, 2)
+        self.assertTrue(client.approval_sent.wait(2))
+        current = self._callback(client)
+        self.assertNotEqual(previous["data"], current["data"])
+        self.assertLessEqual(len(current["data"].encode("utf-8")), 64)
+        bridge._handle_callback_query(previous)
+        self.assertEqual(results, [True])
+        bridge._handle_callback_query(current)
+        worker.join(2)
+        self.assertEqual(results, [True, True])
+
+    def test_api_client_sends_approval_and_callback_payloads(self):
+        posts = []
+        gets = []
+
+        class Response:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"ok": True, "result": {"message_id": 8}}
+
+        class Session:
+            def post(self, url, json=None, timeout=None):
+                posts.append((url.rsplit("/", 1)[-1], json))
+                return Response()
+
+            def get(self, url, params=None, timeout=None):
+                gets.append(params)
+                response = Response()
+                response.json = lambda: {"ok": True, "result": []}
+                return response
+
+        client = TelegramApiClient("token", session=Session())
+        markup = {"inline_keyboard": [[{"text": "approve", "callback_data": "nonce:approve"}]]}
+        self.assertEqual(client.send_message("123", "confirm", reply_markup=markup), 8)
+        client.answer_callback_query("callback-1")
+        client.edit_message("123", 8, "approved", reply_markup={"inline_keyboard": []})
+        client.get_updates()
+        self.assertEqual(posts, [
+            ("sendMessage", {"chat_id": "123", "text": "confirm", "reply_markup": markup}),
+            ("answerCallbackQuery", {"callback_query_id": "callback-1"}),
+            ("editMessageText", {"chat_id": "123", "message_id": 8, "text": "approved",
+                                 "reply_markup": {"inline_keyboard": []}}),
+        ])
+        self.assertEqual(json.loads(gets[0]["allowed_updates"]), ["message", "callback_query"])
+
     def test_authorizer_rejects_unknown_chat(self):
         client = FakeTelegramClient()
         bridge = TelegramBridge(

@@ -1935,6 +1935,21 @@ msgstr "'{name}'タイマーが終了しました。"
 msgid "타이머 {index}"
 msgstr "タイマー {index}"
 
+msgid "위험 작업 확인\n작업: {action_desc}\n위험 요약: {summary}\n{seconds}초 안에 승인하거나 거부해 주세요."
+msgstr "危険な操作の確認\n操作: {action_desc}\nリスクの概要: {summary}\n{seconds}秒以内に承認または拒否してください。"
+
+msgid "거부"
+msgstr "拒否"
+
+msgid "승인됨"
+msgstr "承認済み"
+
+msgid "거부됨"
+msgstr "拒否済み"
+
+msgid "시간 초과: 작업이 거부되었습니다."
+msgstr "時間切れ: 操作は拒否されました。"
+
 msgid "⚠️ 위험한 작업 확인"
 msgstr "⚠️ 危険な操作の確認"
 

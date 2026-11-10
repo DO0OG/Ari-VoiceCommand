@@ -1935,6 +1935,21 @@ msgstr "The '{name}' timer is complete."
 msgid "타이머 {index}"
 msgstr "Timer {index}"
 
+msgid "위험 작업 확인\n작업: {action_desc}\n위험 요약: {summary}\n{seconds}초 안에 승인하거나 거부해 주세요."
+msgstr "Confirm risky action\nAction: {action_desc}\nRisk summary: {summary}\nApprove or deny within {seconds} seconds."
+
+msgid "거부"
+msgstr "Deny"
+
+msgid "승인됨"
+msgstr "Approved"
+
+msgid "거부됨"
+msgstr "Denied"
+
+msgid "시간 초과: 작업이 거부되었습니다."
+msgstr "Timed out: the action was denied."
+
 msgid "⚠️ 위험한 작업 확인"
 msgstr "⚠️ Confirm Risky Action"
 

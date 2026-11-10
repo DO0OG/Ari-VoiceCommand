@@ -5,6 +5,7 @@
 """
 import threading
 import logging
+from contextlib import contextmanager
 from typing import Callable, Optional
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
@@ -13,6 +14,19 @@ from PySide6.QtGui import QFont
 
 from agent.safety_checker import SafetyReport
 from i18n.translator import _
+
+
+_remote_approval = threading.local()
+
+
+@contextmanager
+def remote_approval_scope(approver: Callable):
+    previous = getattr(_remote_approval, "approver", None)
+    _remote_approval.approver = approver
+    try:
+        yield
+    finally:
+        _remote_approval.approver = previous
 
 
 class ConfirmationDialog(QDialog):
@@ -162,6 +176,14 @@ class ConfirmationManager:
         timeout=20초 후 자동 취소.
         holder 딕셔너리를 호출별로 생성하여 self._result 공유 변수 경쟁 조건을 방지한다.
         """
+        approver = getattr(_remote_approval, "approver", None)
+        if approver is not None:
+            try:
+                return approver(action_desc, report) is True
+            except Exception:
+                logging.warning("Remote confirmation failed; denied")
+                return False
+
         if tts_func:
             try:
                 tts_func(_("위험한 작업이 감지됐어요. {summary}. 실행할까요?", summary=report.summary))
