@@ -15,6 +15,13 @@ class ConfigManagerTests(unittest.TestCase):
         ConfigManager._settings_read_failure_logged = False
         ConfigManager._settings_last_read_attempt = 0.0
 
+    def test_remote_approval_defaults_off_and_requires_bool(self):
+        self.assertIs(ConfigManager.DEFAULT_SETTINGS["telegram_remote_approval_enabled"], False)
+        for value, expected in ((True, True), (False, False), ("true", False), (1, False)):
+            with self.subTest(value=value):
+                settings = ConfigManager._normalize_settings({"telegram_remote_approval_enabled": value})
+                self.assertIs(settings["telegram_remote_approval_enabled"], expected)
+
     def test_normalize_settings_rejects_bool_for_int_field(self):
         with patch.object(
             ConfigManager,

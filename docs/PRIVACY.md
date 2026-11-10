@@ -57,6 +57,7 @@ Features marked "on by default" are active in a new installation. Features that 
 ### Telegram
 
 - Sends: Ari polls the Telegram Bot API (`api.telegram.org`) for new messages and sends back replies, edited messages, and images that tools created.
+- Remote approval: off by default (`telegram_remote_approval_enabled`). When enabled, risky actions from Telegram requests can be approved in the same chat; no response within 60 seconds or a communication error means denial. A compromised chat account could approve risky actions.
 - Default: off (`telegram_enabled`). It also needs a bot token and an allow-list of chat IDs; without both, nothing runs.
 - Turn off: set `telegram_enabled` to `false` in `ari_settings.json`. The bot token is entered in the settings window or through an environment variable.
 
@@ -146,6 +147,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 ### Telegram
 
 - 보내는 것: Ari가 Telegram Bot API(`api.telegram.org`)에서 새 메시지를 가져오고, 답장·수정된 메시지·도구가 만든 이미지를 보냅니다.
+- 원격 승인: 기본 꺼짐(`telegram_remote_approval_enabled`). 켜면 Telegram 요청의 위험 작업을 같은 대화방에서 승인하며, 60초 동안 응답이 없거나 통신 오류가 나면 거부합니다. 대화방 계정이 탈취되면 위험 작업까지 승인될 수 있습니다.
 - 기본값: 꺼짐(`telegram_enabled`). 봇 토큰과 허용 채팅 ID 목록이 모두 있어야 하며, 없으면 동작하지 않습니다.
 - 끄는 방법: `ari_settings.json`에서 `telegram_enabled`를 `false`로 두세요. 봇 토큰은 설정 창이나 환경변수로 입력합니다.
 
@@ -237,6 +239,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 ### Telegram
 
 - 送るもの: Ari は Telegram Bot API(`api.telegram.org`)から新着メッセージを取得し、返信、編集したメッセージ、ツールが作成した画像を送ります。
+- リモート承認: 初期設定はオフ(`telegram_remote_approval_enabled`)。有効にすると Telegram リクエストの危険な操作を同じチャットで承認できます。60秒以内に応答がない場合や通信エラー時は拒否します。チャットのアカウントが乗っ取られると危険な操作も承認されるおそれがあります。
 - 初期設定: オフ(`telegram_enabled`)。ボットトークンと許可するチャット ID のリストの両方が必要で、どちらかがなければ動作しません。
 - オフにする方法: `ari_settings.json` で `telegram_enabled` を `false` にしてください。ボットトークンは設定ウィンドウまたは環境変数で入力します。
 

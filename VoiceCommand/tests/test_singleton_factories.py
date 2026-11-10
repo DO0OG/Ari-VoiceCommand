@@ -1,6 +1,10 @@
 import importlib
 import threading
 import unittest
+from unittest.mock import Mock
+
+from agent.confirmation_manager import ConfirmationManager, remote_approval_scope
+from agent.safety_checker import DangerLevel, SafetyReport
 
 
 _MODULE_LOADERS = {
@@ -18,6 +22,48 @@ _MODULE_LOADERS = {
     "memory.memory_index": lambda: importlib.import_module("memory.memory_index"),
     "memory.user_profile_engine": lambda: importlib.import_module("memory.user_profile_engine"),
 }
+
+
+class ConfirmationManagerTests(unittest.TestCase):
+    def setUp(self):
+        self.manager = object.__new__(ConfirmationManager)
+        self.manager._bridge = Mock()
+        self.report = SafetyReport(DangerLevel.CAUTION, summary="danger")
+
+        def show(action, report, holder):
+            holder["result"] = True
+            holder["event"].set()
+
+        self.manager._bridge.request_dialog.emit.side_effect = show
+
+    def test_local_confirmation_uses_existing_dialog(self):
+        self.assertTrue(self.manager.request_confirmation("local", self.report))
+        self.manager._bridge.request_dialog.emit.assert_called_once()
+
+    def test_remote_scope_is_cleared_and_not_inherited_by_threads(self):
+        remote = Mock(return_value=False)
+        results = []
+        with remote_approval_scope(remote):
+            self.assertFalse(self.manager.request_confirmation("remote", self.report))
+            worker = threading.Thread(target=lambda: results.append(
+                self.manager.request_confirmation("local thread", self.report)))
+            worker.start()
+            worker.join(2)
+        self.assertEqual(results, [True])
+        self.assertTrue(self.manager.request_confirmation("local", self.report))
+        remote.assert_called_once_with("remote", self.report)
+        self.assertEqual(self.manager._bridge.request_dialog.emit.call_count, 2)
+
+    def test_remote_error_denies_without_local_fallback(self):
+        with remote_approval_scope(Mock(side_effect=RuntimeError("failed"))):
+            self.assertFalse(self.manager.request_confirmation("remote", self.report))
+        self.manager._bridge.request_dialog.emit.assert_not_called()
+
+    def test_remote_scope_is_cleared_after_error(self):
+        with self.assertRaises(RuntimeError):
+            with remote_approval_scope(Mock(return_value=False)):
+                raise RuntimeError("command failed")
+        self.assertTrue(self.manager.request_confirmation("local", self.report))
 
 
 class SingletonFactoryTests(unittest.TestCase):

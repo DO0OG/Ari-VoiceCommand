@@ -117,6 +117,7 @@
   "telegram_bot_token": "",
   "telegram_allowed_chat_ids": [],
   "telegram_poll_timeout_seconds": 25,
+  "telegram_remote_approval_enabled": false,
   "agent_dashboard_enabled": true,
   "update_check_enabled": true,
   "update_channel": "stable",
