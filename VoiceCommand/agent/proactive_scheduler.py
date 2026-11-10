@@ -96,6 +96,7 @@ class ProactiveScheduler:
         self._schedule_file = _init_schedule_file()
         self._schedule_run_log_file = _init_schedule_log_file()
         self._tasks: Dict[str, ScheduledTask] = {}
+        self._deferred_task_ids: set[str] = set()
         self._lock = threading.Lock()
         self._activity_state_lock = threading.Lock()
         self._activity_locked = False
@@ -232,6 +233,7 @@ class ProactiveScheduler:
             enabled=enabled,
         )
         with self._lock:
+            previous_tasks = self._tasks.copy()
             if task_type not in _INTERNAL_TASK_TYPES:
                 user_task_count = sum(
                     current.task_type not in _INTERNAL_TASK_TYPES
@@ -252,7 +254,9 @@ class ProactiveScheduler:
                 if user_task_count >= _MAX_TASKS:
                     raise ValueError(_("예약 작업이 가득 찼습니다. 사용하지 않는 예약을 정리한 뒤 다시 시도해주세요."))
             self._tasks[task_id] = task
-            self._save()
+            if not self._save():
+                self._tasks = previous_tasks
+                raise OSError(_("예약 작업을 저장하지 못했습니다. 다시 시도해주세요."))
         logging.info("[Scheduler] 새 작업 등록: %s (%s)", task_id, desc)
         return task_id
 
@@ -326,8 +330,12 @@ class ProactiveScheduler:
     def cancel(self, task_id: str) -> bool:
         with self._lock:
             if task_id in self._tasks:
+                previous_tasks = self._tasks.copy()
                 del self._tasks[task_id]
-                self._save()
+                if not self._save():
+                    self._tasks = previous_tasks
+                    raise OSError(_("예약 작업을 저장하지 못했습니다. 다시 시도해주세요."))
+                getattr(self, "_deferred_task_ids", set()).discard(task_id)
                 return True
         return False
 
@@ -343,9 +351,13 @@ class ProactiveScheduler:
         with self._lock:
             if task_id not in self._tasks:
                 return False
-            self._tasks[task_id].enabled = not self._tasks[task_id].enabled
-            self._tasks[task_id].completed = False
-            self._save()
+            task = self._tasks[task_id]
+            previous_enabled, previous_completed = task.enabled, task.completed
+            task.enabled = not task.enabled
+            task.completed = False
+            if not self._save():
+                task.enabled, task.completed = previous_enabled, previous_completed
+                raise OSError(_("예약 작업을 저장하지 못했습니다. 다시 시도해주세요."))
         return True
 
     def run_task_now(self, task_id: str) -> bool:
@@ -495,7 +507,7 @@ class ProactiveScheduler:
         if speech_scheduler is not None:
             speech_scheduler.request(event, **values)
 
-    def _execute_task(self, task: ScheduledTask, run_meta: Optional[Dict[str, str]] = None):
+    def _execute_task(self, task: ScheduledTask, run_meta: Optional[Dict[str, Any]] = None):
         started_at = (run_meta or {}).get("started_at") or datetime.now().isoformat()
         next_run_before = (run_meta or {}).get("next_run_before", "")
         next_run_after = (run_meta or {}).get("next_run_after", "")
@@ -552,9 +564,13 @@ class ProactiveScheduler:
             self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
             return
 
-        logging.info("[Scheduler] 작업 실행: %s", task.task_id)
-        if self.tts:
-            self.tts(_("(진지) 예약된 작업을 시작할게요: {goal}", goal=task.goal))
+        deferred_task_ids = getattr(self, "_deferred_task_ids", None)
+        if deferred_task_ids is None:
+            deferred_task_ids = self._deferred_task_ids = set()
+        if task.task_id not in deferred_task_ids:
+            logging.info("[Scheduler] 작업 실행: %s", task.task_id)
+            if self.tts:
+                self.tts(_("(진지) 예약된 작업을 시작할게요: {goal}", goal=task.goal))
         
         if not self._orchestrator_func:
             error = _("오케스트레이터가 연결되지 않았습니다.")
@@ -564,12 +580,25 @@ class ProactiveScheduler:
 
         try:
             res = self._orchestrator_func(task.goal)
+            # 반복 예약은 다음 회차가 있으므로 되돌리지 않고 건너뛴 회차를 실행 기록에 남긴다.
+            if getattr(res, "busy", False) is True and run_meta and not task.repeat:
+                with self._lock:
+                    current = self._tasks.get(task.task_id)
+                    # 실행 대기 중 사용자가 바꾼 예약은 덮어쓰지 않는다.
+                    if current == task:
+                        current.last_run = run_meta["last_run_before"]
+                        current.enabled = True
+                        current.completed = run_meta["completed_before"]
+                        self._save()
+                        deferred_task_ids.add(task.task_id)
+                return
             summary = getattr(res, "summary", _("작업 완료"))
             success = bool(getattr(res, "achieved", True))
         except Exception as e:
             logging.error("[Scheduler] 실행 실패: %s", e)
             error = str(e)
             summary = _("예약 작업 실행 실패")
+        deferred_task_ids.discard(task.task_id)
         self._finalize_task_run(task, started_at, success, error, summary, next_run_before, next_run_after)
 
     def check_missed_tasks_on_startup(self):
@@ -618,13 +647,15 @@ class ProactiveScheduler:
         else:
             logging.error("[Scheduler] 예약 파일 손상, 백업 저장: %s (%s)", backup_path, error)
 
-    def _save(self):
+    def _save(self) -> bool:
         try:
             schedule_file = self._get_schedule_file()
             data = [asdict(t) for t in self._tasks.values()]
             write_json_atomic(schedule_file, data, ensure_ascii=False, indent=2)
+            return True
         except Exception as e:
             logging.error("[Scheduler] 저장 실패: %s", e)
+            return False
 
     def _calc_next_run(self, expr: str) -> datetime:
         """자연어 스케줄 표현 → 다음 실행 datetime 계산 (AriScheduler 호환)."""
@@ -721,8 +752,8 @@ class ProactiveScheduler:
             else:
                 next_run += timedelta(days=1)
 
-    def _claim_due_tasks(self, now: datetime) -> List[tuple[ScheduledTask, Dict[str, str]]]:
-        claimed: List[tuple[ScheduledTask, Dict[str, str]]] = []
+    def _claim_due_tasks(self, now: datetime) -> List[tuple[ScheduledTask, Dict[str, Any]]]:
+        claimed: List[tuple[ScheduledTask, Dict[str, Any]]] = []
         with self._lock:
             dirty = False
             for tid, task in list(self._tasks.items()):
@@ -744,6 +775,8 @@ class ProactiveScheduler:
                     continue
                 started_at = now.isoformat()
                 next_run_before = task.next_run
+                last_run_before = task.last_run
+                completed_before = task.completed
                 task.last_run = started_at
                 if task.repeat:
                     task.next_run = self._compute_next_run(task, due_at, now).isoformat()
@@ -758,6 +791,8 @@ class ProactiveScheduler:
                         "started_at": started_at,
                         "next_run_before": next_run_before,
                         "next_run_after": next_run_after,
+                        "last_run_before": last_run_before,
+                        "completed_before": completed_before,
                     },
                 ))
                 dirty = True

@@ -84,6 +84,90 @@ class ProactiveSchedulerTests(unittest.TestCase):
         scheduler.toggle_task("once")
         self.assertFalse(scheduler._tasks["once"].completed)
 
+    def test_busy_scheduled_run_preserves_pending_one_shot_without_run_history(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._save = Mock()
+        scheduler.tts = Mock()
+        scheduler._orchestrator_func = Mock(return_value=SimpleNamespace(
+            busy=True, achieved=False, summary="다른 작업이 진행 중입니다.",
+        ))
+        scheduler._append_task_run = Mock()
+        scheduler._record_learning_artifacts = Mock()
+        now = datetime(2026, 3, 25, 9, 5)
+        task = ScheduledTask(
+            task_id="once", goal="보고서", schedule_expr="9시",
+            next_run="2026-03-25T09:00:00", last_run="2026-03-24T09:00:00",
+            last_result="이전 결과",
+        )
+        scheduler._tasks = {"once": task}
+
+        for minute in range(3):
+            claimed = scheduler._claim_due_tasks(now + timedelta(minutes=minute))
+            self.assertEqual(len(claimed), 1)
+            scheduler._execute_task(*claimed[0])
+            self.assertTrue(task.enabled)
+            self.assertFalse(task.completed)
+            self.assertEqual(task.last_run, "2026-03-24T09:00:00")
+            self.assertEqual(task.last_result, "이전 결과")
+            self.assertEqual(task.next_run, "2026-03-25T09:00:00")
+
+        scheduler._append_task_run.assert_not_called()
+        scheduler._record_learning_artifacts.assert_not_called()
+        self.assertEqual(scheduler.tts.call_count, 1)
+        scheduler._orchestrator_func.return_value = SimpleNamespace(achieved=True, summary="완료")
+        scheduler._execute_task(*scheduler._claim_due_tasks(now + timedelta(minutes=3))[0])
+        self.assertTrue(task.completed)
+        scheduler._append_task_run.assert_called_once()
+
+    def test_busy_repeating_run_keeps_next_occurrence_and_records_skipped_run(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._save = Mock()
+        scheduler.tts = None
+        scheduler._orchestrator_func = Mock(return_value=SimpleNamespace(
+            busy=True, achieved=False, summary="다른 작업이 진행 중입니다.",
+        ))
+        scheduler._append_task_run = Mock()
+        scheduler._record_learning_artifacts = Mock()
+        task = ScheduledTask(
+            task_id="daily", goal="보고서", schedule_expr="매일 9시",
+            next_run="2026-03-25T09:00:00", repeat=True, repeat_rule="daily",
+            last_run="2026-03-24T09:00:00",
+        )
+        scheduler._tasks = {"daily": task}
+
+        scheduler._execute_task(*scheduler._claim_due_tasks(datetime(2026, 3, 25, 9, 5))[0])
+
+        self.assertTrue(task.enabled)
+        self.assertEqual(task.next_run, "2026-03-26T09:00:00")
+        scheduler._append_task_run.assert_called_once()
+        self.assertFalse(scheduler._append_task_run.call_args.args[0].success)
+
+    def test_executed_failure_remains_completed_and_is_not_retried(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._save = Mock()
+        scheduler.tts = None
+        scheduler._orchestrator_func = Mock(return_value=SimpleNamespace(
+            achieved=False, summary="실행 실패",
+        ))
+        scheduler._append_task_run = Mock()
+        scheduler._record_learning_artifacts = Mock()
+        task = ScheduledTask(
+            task_id="once", goal="보고서", schedule_expr="9시",
+            next_run="2026-03-25T09:00:00",
+        )
+        scheduler._tasks = {"once": task}
+        now = datetime(2026, 3, 25, 9, 5)
+
+        scheduler._execute_task(*scheduler._claim_due_tasks(now)[0])
+
+        self.assertTrue(task.completed)
+        self.assertFalse(task.enabled)
+        self.assertEqual(scheduler._claim_due_tasks(now + timedelta(minutes=1)), [])
+        self.assertFalse(scheduler._append_task_run.call_args.args[0].success)
+
     def test_legacy_finished_one_shot_is_loaded_as_completed(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         legacy = {
@@ -261,6 +345,39 @@ class ProactiveSchedulerTests(unittest.TestCase):
 
         self.assertEqual(len(scheduler._tasks), 50)
         scheduler._save.assert_not_called()
+
+    def test_user_changes_roll_back_when_schedule_file_cannot_be_saved(self):
+        from dataclasses import asdict
+
+        for action in ("schedule", "cancel", "toggle_task"):
+            with self.subTest(action=action):
+                scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+                scheduler._lock = threading.Lock()
+                scheduler._schedule_file = "scheduled_tasks.json"
+                scheduler._tasks = {
+                    str(number): ScheduledTask(
+                        task_id=str(number), goal="기존 작업", schedule_expr="9시",
+                        next_run="2026-03-25T09:00:00",
+                        enabled=number != 0, completed=number == 0,
+                    ) for number in range(50)
+                }
+                before = {key: asdict(task) for key, task in scheduler._tasks.items()}
+                original = scheduler._tasks["0"]
+                with patch("agent.proactive_scheduler.write_json_atomic", side_effect=OSError("disk full")):
+                    with self.assertRaises(OSError):
+                        if action == "schedule":
+                            scheduler.schedule("새 작업", datetime(2026, 3, 25, 10), "10시")
+                        else:
+                            getattr(scheduler, action)("0")
+                self.assertEqual({key: asdict(task) for key, task in scheduler._tasks.items()}, before)
+                self.assertIs(scheduler._tasks["0"], original)
+
+    def test_save_returns_failure_to_callers(self):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._schedule_file = "scheduled_tasks.json"
+        scheduler._tasks = {}
+        with patch("agent.proactive_scheduler.write_json_atomic", side_effect=OSError("disk full")):
+            self.assertIs(scheduler._save(), False)
 
     def test_save_keeps_all_legacy_tasks_above_limit(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)

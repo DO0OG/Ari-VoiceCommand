@@ -844,7 +844,7 @@ class AICommand(FastPathMixin, BaseCommand):
                 repeat=repeat,
                 repeat_sec=repeat_seconds,
             )
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             return str(exc)
         repeat_str = _(" (반복)") if repeat else ""
         formatted = self._format_datetime_kr(next_run)
@@ -861,7 +861,10 @@ class AICommand(FastPathMixin, BaseCommand):
             return _("취소할 작업 ID를 알려주세요.")
         if self.scheduler is None:
             return _("스케줄러를 사용할 수 없습니다.")
-        success = self.scheduler.cancel(task_id)
+        try:
+            success = self.scheduler.cancel(task_id)
+        except OSError as exc:
+            return str(exc)
         if success:
             return _("작업 {task_id}가 취소되었습니다.").format(task_id=task_id)
         return _("ID '{task_id}'에 해당하는 작업을 찾을 수 없어요.").format(task_id=task_id)

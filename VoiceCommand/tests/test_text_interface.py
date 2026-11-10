@@ -370,6 +370,57 @@ class TextInterfaceStreamingTests(unittest.TestCase):
         self.assertGreaterEqual(len(labels), 4)
         self.assertTrue(all(label.wordWrap() for label in labels))
 
+    def test_scheduler_panel_reports_failed_changes_and_preserves_task(self):
+        import threading
+        from agent.proactive_scheduler import ProactiveScheduler
+
+        for action in ("toggle", "delete"):
+            with self.subTest(action=action):
+                scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+                scheduler._lock = threading.Lock()
+                scheduler._schedule_file = "scheduled_tasks.json"
+                scheduler._tasks = {"existing": ScheduledTask(
+                    task_id="existing", goal="보고서", schedule_expr="9시",
+                    next_run="2026-03-25T09:00:00",
+                )}
+                panel = SchedulerPanel(scheduler=scheduler)
+                self.addCleanup(panel.close)
+                self.addCleanup(panel._refresh_timer.stop)
+                row = panel.findChild(TaskRow)
+                with (
+                    patch("agent.proactive_scheduler.write_json_atomic", side_effect=OSError("disk full")),
+                    patch("ui.scheduler_panel.show_temp_status") as status,
+                ):
+                    getattr(row, action + "_requested").emit("existing")
+                self.assertTrue(status.called)
+                self.assertIn("existing", scheduler._tasks)
+                self.assertTrue(scheduler._tasks["existing"].enabled)
+
+    def test_scheduled_tasks_dialog_reports_failed_cancel_and_preserves_task(self):
+        import threading
+        from agent.proactive_scheduler import ProactiveScheduler
+        from ui.scheduled_tasks_dialog import ScheduledTasksDialog, QMessageBox
+
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._schedule_file = "scheduled_tasks.json"
+        scheduler._tasks = {"existing": ScheduledTask(
+            task_id="existing", goal="보고서", schedule_expr="9시",
+            next_run="2026-03-25T09:00:00",
+        )}
+        dialog = ScheduledTasksDialog(scheduler)
+        self.addCleanup(dialog.close)
+        dialog._table.selectRow(0)
+        with (
+            patch("agent.proactive_scheduler.write_json_atomic", side_effect=OSError("disk full")),
+            patch("ui.scheduled_tasks_dialog.QMessageBox.question", return_value=QMessageBox.Yes),
+            patch("ui.scheduled_tasks_dialog.QMessageBox.warning") as warning,
+        ):
+            dialog._cancel_selected()
+        warning.assert_called_once()
+        self.assertIn("existing", scheduler._tasks)
+        self.assertEqual(dialog._table.rowCount(), 1)
+
     def test_scheduler_panel_disables_horizontal_scrollbar(self):
         panel = SchedulerPanel(scheduler=None)
 
