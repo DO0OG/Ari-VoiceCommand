@@ -412,6 +412,37 @@ class UpdateCheckerTests(unittest.TestCase):
             )
             log_debug.assert_called_once()
 
+    def test_unexpected_check_exception_still_reports_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            checker = update_checker.UpdateChecker()
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                patch("core.update_checker._check_for_updates", side_effect=RuntimeError("boom")),
+                patch("core.update_checker.logging.exception") as log_exception,
+                patch.object(checker, "_result_ready") as result_ready,
+            ):
+                checker._run_check()
+            checker.stop()
+            result_ready.emit.assert_called_once_with((0, 1))
+            log_exception.assert_called_once()
+
+    def test_blank_minimum_version_notice_does_not_raise(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "runtime_state.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"pending_version": "1.1.0", "pending_min_updatable_from": ""}, handle)
+            tray = Mock()
+            checker = update_checker.UpdateChecker(tray, Mock())
+            with (
+                patch.object(ResourceManager, "get_runtime_path", return_value=path),
+                patch("core.update_checker.get_version", return_value="0.9.0"),
+            ):
+                checker._notify_pending()
+            checker.stop()
+            tray.showMessage.assert_called_once()
+            self.assertEqual(tray.showMessage.call_args.args[1], "Ari 1.1.0을 사용할 수 있어요.")
+
     def test_skipped_version_is_not_kept_as_pending(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "runtime_state.json")
