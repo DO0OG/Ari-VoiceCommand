@@ -1,5 +1,7 @@
+import contextlib
+import io
 import os
-import subprocess
+import runpy
 import sys
 import tempfile
 import unittest
@@ -291,12 +293,11 @@ class AutonomousExecutorTests(unittest.TestCase):
             )
             self.addCleanup(os.remove, runner)
 
-            completed = subprocess.run(
-                [sys.executable, runner], capture_output=True, text=True, timeout=120
-            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                runpy.run_path(runner, run_name="__main__")
 
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertEqual(completed.stdout.strip(), "report.txt")
+            self.assertEqual(output.getvalue().strip(), "report.txt")
             with open(target, "r", encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "before")
 
