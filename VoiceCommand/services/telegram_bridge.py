@@ -11,8 +11,10 @@ import logging
 import inspect
 import json
 import os
+import re
 import threading
 import time
+import traceback
 from typing import Any, Callable, Iterable
 
 try:
@@ -38,6 +40,11 @@ def _as_list(value: object) -> list[object]:
     if not text:
         return []
     return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _redact_token(text: str) -> str:
+    # Telegram puts the bot token in the URL path ("/bot<token>/method") of request errors.
+    return re.sub(r"/bot[^/\s'\"?]+", "/bot***", text)
 
 
 class TelegramApiClient:
@@ -170,7 +177,7 @@ class TelegramBridge:
                     if incoming is not None:
                         self.handle_message(incoming)
             except Exception as exc:
-                logger.warning("[TelegramBridge] polling failed: %s", exc)
+                logger.warning("[TelegramBridge] polling failed: %s", _redact_token(str(exc)))
                 time.sleep(3.0)
 
     def _parse_update(self, update: dict) -> IncomingMessage | None:
@@ -235,7 +242,7 @@ class TelegramBridge:
                     self.client.edit_message(incoming.chat_id, status_id, text)
                     return
                 except Exception as exc:
-                    logger.debug("[TelegramBridge] edit failed, sending new message: %s", exc)
+                    logger.debug("[TelegramBridge] edit failed, sending new message: %s", _redact_token(str(exc)))
             self.client.send_message(incoming.chat_id, text[:4096])
 
         stream = StreamingTextBuffer(emit_update)
@@ -249,11 +256,11 @@ class TelegramBridge:
             else:
                 result = self.command_runner(incoming.text, stream.append)
         except Exception as exc:
-            logger.exception("[TelegramBridge] command failed chat_id=%s", incoming.chat_id)
+            logger.error("[TelegramBridge] command failed chat_id=%s\n%s", incoming.chat_id, _redact_token(traceback.format_exc()))
             try:
-                emit_update(f"Error: {exc}")
+                emit_update(f"Error: {_redact_token(str(exc))}")
             except Exception:
-                logger.debug("[TelegramBridge] error notification failed", exc_info=True)
+                logger.debug("[TelegramBridge] error notification failed\n%s", _redact_token(traceback.format_exc()))
             raise
         stream.flush()
         final = (result or stream.text or last_text["value"] or "Done.").strip()
@@ -261,7 +268,7 @@ class TelegramBridge:
             try:
                 self.client.send_photo(incoming.chat_id, image_path, caption="screenshot")
             except Exception as exc:
-                logger.warning("[TelegramBridge] image send failed: %s", exc)
+                logger.warning("[TelegramBridge] image send failed: %s", _redact_token(str(exc)))
         if final != last_text["value"] or len(final) > 4096:
             emit_update(final[:4096])
             if not cancel_event.is_set():

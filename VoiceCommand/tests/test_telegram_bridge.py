@@ -202,6 +202,26 @@ class TelegramBridgeTests(unittest.TestCase):
         self.assertEqual(client.sent[0], ("123", "Processing...", 3))
         self.assertIn(("123", 1, "Error: boom"), client.edited)
 
+    def test_polling_error_log_does_not_contain_bot_token(self):
+        class _FailingSession:
+            def get(self, url, params=None, timeout=None):
+                raise RuntimeError(f"Max retries exceeded with url: {url}")
+
+        client = TelegramApiClient("123456:SECRET-TOKEN", session=_FailingSession())
+        bridge = TelegramBridge(
+            client,
+            lambda text, stream_callback=None: "unused",
+            allowed_chat_ids=["123"],
+            queue=ImmediateQueue(),
+        )
+
+        with patch("services.telegram_bridge.time.sleep", side_effect=lambda _seconds: bridge._stop_event.set()):
+            with self.assertLogs("services.telegram_bridge", level="WARNING") as logs:
+                bridge.run_forever()
+
+        self.assertTrue(any("polling failed" in line for line in logs.output))
+        self.assertFalse(any("SECRET-TOKEN" in line for line in logs.output))
+
 
 if __name__ == "__main__":
     unittest.main()
