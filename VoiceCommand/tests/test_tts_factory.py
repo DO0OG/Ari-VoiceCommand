@@ -54,17 +54,46 @@ class TTSFactoryTests(unittest.TestCase):
             CosyVoiceTTS=Mock(return_value=provider)
         )
 
-        with patch.dict(
-            sys.modules,
-            {
-                "tts.cosyvoice_tts": cosyvoice_module,
-                "tts.voice_reference": reference_module,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "tts.cosyvoice_tts": cosyvoice_module,
+                    "tts.voice_reference": reference_module,
+                },
+            ),
+            patch("tts.tts_factory.os.path.isfile", return_value=True),
         ):
             with self.assertRaisesRegex(RuntimeError, "worker initialization failed"):
                 create_tts_provider({"tts_mode": "local"})
 
         provider.cleanup.assert_called_once_with()
+
+    def test_local_provider_reports_missing_reference_wav_before_starting_worker(self):
+        message = "참조 WAV 파일을 찾을 수 없습니다. 설정의 음성 복제에서 참조 WAV를 지정해 주세요."
+        reference_module = SimpleNamespace(
+            get_reference_text=Mock(return_value=""),
+            get_reference_wav=Mock(return_value="missing.wav"),
+        )
+        cosyvoice_constructor = Mock()
+        cosyvoice_module = SimpleNamespace(CosyVoiceTTS=cosyvoice_constructor)
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "tts.cosyvoice_tts": cosyvoice_module,
+                    "tts.voice_reference": reference_module,
+                },
+            ),
+            patch("tts.tts_factory.os.path.isfile", return_value=False),
+            patch("i18n.translator._", side_effect=lambda text: text),
+        ):
+            with self.assertRaises(RuntimeError) as raised:
+                create_tts_provider({"tts_mode": "local"})
+
+        self.assertEqual(str(raised.exception), message)
+        cosyvoice_constructor.assert_not_called()
 
     def test_emotion_setting_is_part_of_the_tts_signature(self):
         enabled = {"tts_mode": "edge", "tts_emotion_enabled": True}

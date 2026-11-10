@@ -32,7 +32,11 @@ def run_tts_diagnostic(
                     "선택한 TTS 엔진을 초기화하지 못해 다른 엔진으로 전환되었습니다. 설정을 확인해 주세요."
                 )
             if not provider.speak(sentence):
-                return False, _("TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요.")
+                message = _("TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요.")
+                reason = str(getattr(provider, "last_error", "") or "").strip()
+                if reason:
+                    message = f"{message}\n{reason}"
+                return False, message
         return True, _("현재 선택한 TTS 엔진의 시험 재생이 완료되었습니다.")
     except Exception as exc:
         return False, _("TTS 시험 재생에 실패했습니다: {error}").format(error=exc)

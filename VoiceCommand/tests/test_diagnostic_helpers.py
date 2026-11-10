@@ -3,6 +3,8 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 
 from audio.audio_manager import get_configured_output_device_name, output_device_override
+from i18n.translator import _
+from ui.tts_diagnostics import _DiagnosticProvider
 from ui.diagnostic_helpers import (
     pcm_level_percent,
     resolve_input_device_index,
@@ -96,10 +98,31 @@ class DiagnosticHelperTests(unittest.TestCase):
         self.assertTrue(fallback.cleaned)
 
         failing = _Provider(result=False)
-        ok, _message = run_tts_diagnostic(
+        ok, message = run_tts_diagnostic(
             {}, "edge", "", "hello", provider_factory=lambda _s: (failing, "edge")
         )
         self.assertFalse(ok)
+        self.assertEqual(
+            message,
+            _("TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요."),
+        )
+
+        engine = _Provider(result=False)
+        engine._last_error = "Synthesis unavailable"
+        diagnostic_provider = _DiagnosticProvider(engine)
+        ok, message = run_tts_diagnostic(
+            {},
+            "edge",
+            "",
+            "hello",
+            provider_factory=lambda _s: (diagnostic_provider, "edge"),
+        )
+        self.assertFalse(ok)
+        self.assertEqual(
+            message,
+            _("TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요.")
+            + "\nSynthesis unavailable",
+        )
 
     def test_transcribe_diagnostic_sample_reports_text_or_empty_result(self):
         class _STT:

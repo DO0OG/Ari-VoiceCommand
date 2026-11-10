@@ -57,6 +57,36 @@ class TTSStreamWrapperTests(unittest.TestCase):
                 lambda: provider.speak("hello")
             )
 
+    def test_edge_tts_reports_sanitized_synthesis_failure(self):
+        secret = "trusted-edge-token"  # nosec B105
+        provider = EdgeTTS(audio_cache=Mock())
+
+        async def synthesize(_text, _emotion=None):
+            raise RuntimeError(f"synthesis failed with {secret}")
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "edge_tts": SimpleNamespace(),
+                    "edge_tts.constants": SimpleNamespace(TRUSTED_CLIENT_TOKEN=secret),
+                },
+            ),
+            patch.object(provider, "_synthesize", new=synthesize),
+            patch.object(provider, "_fixed_message_texts", return_value=frozenset()),
+            patch("i18n.translator.get_language", return_value="ko"),
+            patch.object(provider, "_restart_cache_warmup"),
+            self.assertLogs(level="WARNING") as captured,
+        ):
+            self.assertFalse(provider.speak("hello"))
+
+        output = "\n".join(captured.output)
+        self.assertIn("RuntimeError", provider._last_error)
+        self.assertIn("[redacted]", provider._last_error)
+        self.assertNotIn(secret, provider._last_error)
+        self.assertIn("synthesis failed with [redacted]", output)
+        self.assertNotIn(secret, output)
+
     def test_openai_tts_uses_shared_stream_wrappers(self):
         client = SimpleNamespace(
             audio=SimpleNamespace(

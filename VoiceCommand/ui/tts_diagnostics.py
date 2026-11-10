@@ -65,6 +65,10 @@ class _DiagnosticProvider:
         result = self._provider.speak(sentence)
         return result and getattr(self._provider, "_last_playback_success", True) is not False
 
+    @property
+    def last_error(self):
+        return getattr(self._provider, "_last_error", None)
+
     def cleanup(self):
         cleanup = getattr(self._provider, "cleanup", None)
         if callable(cleanup):
