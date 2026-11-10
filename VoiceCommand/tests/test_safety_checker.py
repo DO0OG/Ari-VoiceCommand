@@ -32,6 +32,40 @@ class SafetyCheckerTests(unittest.TestCase):
                 self.assertEqual(self.checker.check_shell(command).level, DangerLevel.DANGEROUS)
         self.assertEqual(self.checker.check_shell("Get-ChildItem C:/Users/x").level, DangerLevel.SAFE)
 
+    def test_static_delete_and_property_removal_are_dangerous(self):
+        for command in (
+            "[System.IO.File]::Delete('x')",
+            "[System.IO.Directory]::Delete('x', $true)",
+            "[System.IO.File] :: delete ('x')",
+            "Remove-ItemProperty -Path HKCU:/Software/example -Name value",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.checker.check_shell(command).level, DangerLevel.DANGEROUS)
+
+    def test_powershell_web_requests_and_file_writes_are_caution(self):
+        for command in (
+            "Invoke-WebRequest https://example.com",
+            "Invoke-RestMethod https://example.com",
+            "iwr https://example.com",
+            "IRM https://example.com",
+            "Set-Content sample.txt value",
+            "Out-File sample.txt",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.checker.check_shell(command).level, DangerLevel.CAUTION)
+
+    def test_common_read_only_commands_remain_safe(self):
+        for command in (
+            "Get-ChildItem C:/Users/x",
+            "dir C:/Users/x",
+            "echo hello",
+            "Get-Content sample.txt",
+            "Get-Content firmware.txt",
+            "echo iwrapping firmware",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.checker.check_shell(command).level, DangerLevel.SAFE)
+
     def test_url_checks_are_cached_without_changing_result(self):
         first = self.checker.check_url("https://example.com/delete-account")
         second = self.checker.check_url("https://example.com/delete-account")

@@ -1872,8 +1872,10 @@ class AICommand(FastPathMixin, BaseCommand):
                     )
                     mark_first_response()
 
+                recovered_tool_calls = False
                 if not tool_calls:
                     tool_calls = self._recover_tool_calls_from_response(text, response)
+                    recovered_tool_calls = bool(tool_calls)
                     if tool_calls:
                         logging.warning(
                             "[AICommand] 텍스트 기반 도구 호출 복구: %s",
@@ -1898,7 +1900,10 @@ class AICommand(FastPathMixin, BaseCommand):
                     if has_preface:
                         self._emit_user_message(response)
 
-                    results = self._execute_tool_calls(tool_calls, tool_result_callback=tool_result_callback)
+                    results = self._execute_tool_calls(
+                        tool_calls, tool_result_callback=tool_result_callback,
+                        require_confirmation=recovered_tool_calls,
+                    )
                     history_results = [
                         result if result is not None else (
                             _("작업은 완료됐지만 확인 가능한 결과를 받지 못했습니다.")
@@ -2092,7 +2097,7 @@ class AICommand(FastPathMixin, BaseCommand):
         normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
         return normalized in {"이어서 해줘", "계속해", "계속", "resume", "continue"}
 
-    def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None) -> List[Optional[str]]:
+    def _execute_tool_calls(self, tool_calls: list, *, tool_result_callback: Optional[Callable[[str, Optional[str]], None]] = None, require_confirmation: bool = False) -> List[Optional[str]]:
         """디스패치 테이블 기반으로 tool calls 실행, 결과 리스트 반환"""
         results: List[Optional[str]] = []
         for tc in tool_calls:
@@ -2103,7 +2108,20 @@ class AICommand(FastPathMixin, BaseCommand):
             handler = self._dispatch.get(name)
             if handler:
                 try:
-                    result = handler(args)
+                    confirmed = True
+                    if require_confirmation and name in {"execute_shell_command", "execute_python_code"}:
+                        from agent.confirmation_manager import get_confirmation_manager
+                        from agent.safety_checker import get_safety_checker
+
+                        content = args.get("command" if name == "execute_shell_command" else "code", "").strip()
+                        checker = get_safety_checker()
+                        report = checker.check_shell(content) if name == "execute_shell_command" else checker.check_python(content)
+                        confirmed = get_confirmation_manager().request_confirmation(
+                            _("응답 본문에서 복구한 명령 실행\n\n{content}").format(content=content), report,
+                        ) is True
+                    result = handler(args) if confirmed else self._result_to_korean(
+                        ExecutionResult(success=False, error="사용자 취소")
+                    )
                 except Exception as e:
                     logging.error("tool 핸들러 오류 (%s): %s", name, e, exc_info=True)
                     result = f"오류: 도구 실행 실패: {e}. 성공한 실행 결과가 확인되지 않았습니다. 실행했거나 대체 동작을 했다고 말하지 마세요."

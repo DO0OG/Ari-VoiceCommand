@@ -1213,6 +1213,50 @@ class AICommandTests(unittest.TestCase):
         self.assertEqual(recovered[0]["name"], "web_search")
         self.assertEqual(recovered[0]["arguments"]["query"], "LCK 2026-04-10 경기 결과")
 
+    def test_recovered_execution_requires_approval(self):
+        cases = (
+            ('execute_shell_command: echo hello', 'execute_shell_command'),
+            ('execute_python_code: print(1)', 'execute_python_code'),
+            ('execute_shell_command: Set-Content sample.txt value', 'execute_shell_command'),
+            ('execute_shell_command: rm sample.txt', 'execute_shell_command'),
+            ("execute_python_code: open('sample.txt', 'w')", 'execute_python_code'),
+            ("execute_python_code: import os; os.remove('sample.txt')", 'execute_python_code'),
+            ('{"id":"original-id","name":"execute_shell_command","arguments":{"command":"echo hello"}}', 'execute_shell_command'),
+            ('{"name":"execute_python_code","arguments":{"code":"print(1)"}}', 'execute_python_code'),
+        )
+        for response, name in cases:
+            for approved in (False, None, True):
+                with self.subTest(response=response, approved=approved):
+                    assistant = _ToolCallAssistant([], response=response)
+                    command = AICommand(assistant, lambda msg: None, {"enabled": False})
+                    handler = Mock(return_value="완료")
+                    command._dispatch[name] = handler
+                    with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                        get_manager.return_value.request_confirmation.return_value = approved
+                        command.run_interaction("예시를 설명해줘")
+                    get_manager.return_value.request_confirmation.assert_called_once()
+                    if approved is True:
+                        handler.assert_called_once()
+                        self.assertEqual(assistant.recorded_results[0][1], ["완료"])
+                    else:
+                        handler.assert_not_called()
+                        self.assertEqual(assistant.recorded_results[0][1], [_("사용자가 실행을 취소했습니다.")])
+
+    def test_normal_execution_and_read_only_recovery_keep_confirmation_policy(self):
+        for name, response, calls in (
+            ("execute_shell_command", "", [{"name": "execute_shell_command", "arguments": {"command": "echo hello"}}]),
+            ("execute_python_code", "", [{"name": "execute_python_code", "arguments": {"code": "print(1)"}}]),
+            ("list_scheduled_tasks", "list_scheduled_tasks 호출", []),
+        ):
+            with self.subTest(name=name):
+                assistant = _ToolCallAssistant(calls, response=response)
+                command = AICommand(assistant, lambda msg: None, {"enabled": False})
+                command._dispatch[name] = Mock(return_value="완료")
+                with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                    command.run_interaction("예시를 설명해줘")
+                get_manager.assert_not_called()
+                self.assertEqual(assistant.recorded_results[0][1], ["완료"])
+
     def test_recover_tool_calls_from_json_response(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
 

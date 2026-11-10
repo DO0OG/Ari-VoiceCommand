@@ -2148,6 +2148,9 @@ msgstr "복잡한 목표를 단계별로 처리할게요."
 msgid "{folder} 폴더의 {file}"
 msgstr "{folder} 폴더의 {file}"
 
+msgid "응답 본문에서 복구한 명령 실행\n\n{content}"
+msgstr "응답 본문에서 복구한 명령 실행\n\n{content}"
+
 msgid "사용자가 실행을 취소했습니다."
 msgstr "사용자가 실행을 취소했습니다."
 
@@ -2821,6 +2824,12 @@ msgstr "old_string은 파일 내 정확히 1회 등장해야 합니다. 현재 {
 
 msgid "원본 경로가 존재하지 않습니다."
 msgstr "원본 경로가 존재하지 않습니다."
+
+msgid "파일 덮어쓰기: {path}"
+msgstr "파일 덮어쓰기: {path}"
+
+msgid "사용자가 파일 덮어쓰기를 승인하지 않았습니다."
+msgstr "사용자가 파일 덮어쓰기를 승인하지 않았습니다."
 
 msgid "대상 경로가 존재하지 않습니다."
 msgstr "대상 경로가 존재하지 않습니다."

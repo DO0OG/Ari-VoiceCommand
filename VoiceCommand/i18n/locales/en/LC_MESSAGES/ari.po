@@ -2148,6 +2148,9 @@ msgstr "I'll handle the complex goal step by step."
 msgid "{folder} 폴더의 {file}"
 msgstr "{file} in the {folder} folder"
 
+msgid "응답 본문에서 복구한 명령 실행\n\n{content}"
+msgstr "Run command recovered from response text\n\n{content}"
+
 msgid "사용자가 실행을 취소했습니다."
 msgstr "Execution was cancelled by the user."
 
@@ -2821,6 +2824,12 @@ msgstr "old_string must appear exactly once in the file. It currently appears {c
 
 msgid "원본 경로가 존재하지 않습니다."
 msgstr "The source path does not exist."
+
+msgid "파일 덮어쓰기: {path}"
+msgstr "Overwrite file: {path}"
+
+msgid "사용자가 파일 덮어쓰기를 승인하지 않았습니다."
+msgstr "File overwrite was not approved by the user."
 
 msgid "대상 경로가 존재하지 않습니다."
 msgstr "The target path does not exist."
