@@ -540,6 +540,7 @@ class PluginManager:
         approved_digest = self._approve_plugin_load(plugin, context)
         if approved_digest is None:
             raise RuntimeError(_("플러그인 로드가 거부되었습니다."))
+        stub_name = plugin.name
         module_name = f"ari_user_plugin_{plugin.name}"
         module_path, sys_path_entry = self._resolve_load_target(plugin)
         if plugin.runtime_path:
@@ -583,7 +584,18 @@ class PluginManager:
         if not isinstance(register, FunctionType):
             raise TypeError("register는 callable이어야 합니다.")
         tracked_context = self._wrap_context(context, plugin)
-        exports = self._invoke_register(register, tracked_context) or {}
+        try:
+            exports = self._invoke_register(register, tracked_context) or {}
+        except Exception:
+            # 언로드 정리 코드를 재사용하려고 실패한 플러그인만 잠시 관리 목록으로 둔다 (_modules 는 로드 전 이름이 키)
+            managed = self._plugins
+            self._plugins = [plugin]
+            try:
+                self.unload_plugin(plugin.name)
+            finally:
+                self._plugins = managed
+            self._modules.pop(stub_name, None)
+            raise
         if isinstance(exports, dict):
             plugin.exports = exports
         plugin.loaded = True
