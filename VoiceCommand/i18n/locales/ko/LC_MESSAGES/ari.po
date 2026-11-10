@@ -1239,6 +1239,15 @@ msgstr "테마 폴더 안내"
 msgid "테마 프리셋:"
 msgstr "테마 프리셋:"
 
+msgid "기본 블루"
+msgstr "기본 블루"
+
+msgid "포레스트 민트"
+msgstr "포레스트 민트"
+
+msgid "선셋 코랄"
+msgstr "선셋 코랄"
+
 msgid "통계"
 msgstr "통계"
 

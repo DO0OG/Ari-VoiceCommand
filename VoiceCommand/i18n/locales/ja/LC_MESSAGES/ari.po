@@ -1239,6 +1239,15 @@ msgstr "テーマフォルダガイド"
 msgid "테마 프리셋:"
 msgstr "テーマプリセット:"
 
+msgid "기본 블루"
+msgstr "デフォルトブルー"
+
+msgid "포레스트 민트"
+msgstr "フォレストミント"
+
+msgid "선셋 코랄"
+msgstr "サンセットコーラル"
+
 msgid "통계"
 msgstr "統計"
 

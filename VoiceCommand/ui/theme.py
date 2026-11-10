@@ -11,6 +11,8 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from i18n.translator import _
+
 
 _DEFAULT_THEME_KEY = "default"
 _DEFAULT_SCALE = 1.0
@@ -144,10 +146,10 @@ def available_theme_presets() -> List[tuple[str, str]]:
                 continue
             key = os.path.splitext(name)[0]
             payload = _safe_read_json(os.path.join(folder, name))
-            label = str(payload.get("name", key)) if payload else key
+            label = _(str(payload.get("name", key))) if payload else key
             presets.append((key, label))
     if not presets:
-        presets.append((_DEFAULT_THEME_KEY, str(_DEFAULT_THEME_DATA["name"])))
+        presets.append((_DEFAULT_THEME_KEY, _(str(_DEFAULT_THEME_DATA["name"]))))
     return presets
 
 
