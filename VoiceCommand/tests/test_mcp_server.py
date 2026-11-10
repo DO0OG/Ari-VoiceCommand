@@ -98,6 +98,59 @@ class MCPServerTests(unittest.TestCase):
         text = response["result"]["content"][0]["text"]
         self.assertIsInstance(json.loads(text), dict)
 
+    def test_notification_returns_accepted_without_body(self):
+        server = AriMCPServer(token="secret")
+        app = server.create_app()
+        route = next(route for route in app.routes if getattr(route, "path", None) == "/mcp")
+        response = asyncio.run(route.endpoint({"jsonrpc": "2.0", "method": "unknown"}))
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.body, b"")
+
+    def test_ping_returns_empty_result(self):
+        response = AriMCPServer().handle_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+
+        self.assertEqual(response, {"jsonrpc": "2.0", "id": 1, "result": {}})
+
+    def test_initialize_negotiates_protocol_version(self):
+        cases = [
+            ({"protocolVersion": "2025-03-26"}, "2025-03-26"),
+            ({"protocolVersion": "unsupported"}, "2025-06-18"),
+            ({"protocolVersion": ""}, "2025-06-18"),
+            ({}, "2025-06-18"),
+        ]
+        server = AriMCPServer()
+        for params, expected_version in cases:
+            with self.subTest(params=params):
+                response = server.handle_jsonrpc({
+                    "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params,
+                })
+                self.assertEqual(response["result"]["protocolVersion"], expected_version)
+
+    def test_tool_schemas_include_annotations(self):
+        server = AriMCPServer()
+        tools = server.handle_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]
+
+        self.assertEqual(
+            [tool["name"] for tool in tools],
+            [
+                "ari_tts", "ari_notify", "ari_open_app", "ari_take_screenshot",
+                "ari_get_system_info", "ari_read_file", "ari_write_file",
+            ],
+        )
+        self.assertEqual(
+            {tool["name"]: tool["annotations"] for tool in tools},
+            {
+                "ari_tts": {"readOnlyHint": False, "destructiveHint": False},
+                "ari_notify": {"readOnlyHint": False, "destructiveHint": False},
+                "ari_open_app": {"readOnlyHint": False, "destructiveHint": False},
+                "ari_take_screenshot": {"readOnlyHint": True, "destructiveHint": False},
+                "ari_get_system_info": {"readOnlyHint": True, "destructiveHint": False},
+                "ari_read_file": {"readOnlyHint": True, "destructiveHint": False},
+                "ari_write_file": {"readOnlyHint": False, "destructiveHint": True},
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,12 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8765/mcp" `
 }
 ```
 
+## 지원 메서드와 프로토콜
+
+`initialize`는 지원 버전을 그대로 응답하고, 미지원·누락·빈 값에는 `2025-06-18`을 사용합니다. 지원 버전은 `2025-06-18`, `2025-03-26`, `2024-11-05`입니다. `ping`, `tools/list`, `tools/call`을 지원하며, `id`가 없는 알림은 빈 본문의 **202**를 반환합니다.
+
+`ari_take_screenshot`, `ari_get_system_info`, `ari_read_file`는 `readOnlyHint: true`로 표시합니다. 나머지 도구는 `readOnlyHint: false`이며, `ari_write_file`만 `destructiveHint: true`로 표시하고, 나머지 도구는 `destructiveHint: false`로 표시합니다.
+
 ## 접근 제어
 
 서버는 로컬 전용입니다. 다음 조건을 모두 만족해야 요청이 처리됩니다.
