@@ -2,13 +2,13 @@
 import json
 import logging
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from core.atomic_io import backup_corrupt_file, write_json_atomic
 
 
-def load_backup_history(index_path: str) -> List[Dict[str, str]]:
-    """색인을 읽어 백업 파일이 남아 있는 항목만 돌려준다. 손상됐으면 빈 이력이다."""
+def _read_backup_history(index_path: str) -> Optional[List[Dict[str, str]]]:
+    """색인을 읽는다. 일시적으로 읽지 못하면 None, 손상됐으면 빈 이력이다."""
     if not os.path.isfile(index_path):
         return []
     try:
@@ -16,7 +16,10 @@ def load_backup_history(index_path: str) -> List[Dict[str, str]]:
             payload = json.load(handle)
         if not isinstance(payload, list):
             raise ValueError("백업 이력 형식이 올바르지 않습니다.")
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
+        logging.warning("백업 이력을 읽지 못했습니다: %s", exc)
+        return None
+    except ValueError as exc:
         logging.warning("손상된 백업 이력을 비우고 시작합니다: %s", exc)
         try:
             backup_corrupt_file(index_path)
@@ -33,8 +36,17 @@ def load_backup_history(index_path: str) -> List[Dict[str, str]]:
     ]
 
 
+def load_backup_history(index_path: str) -> List[Dict[str, str]]:
+    """색인을 읽어 백업 파일이 남아 있는 항목만 돌려준다."""
+    return _read_backup_history(index_path) or []
+
+
 def append_backup_history(index_path: str, entry: Dict[str, str], limit: int) -> List[Dict[str, str]]:
     """항목을 더해 상한만큼만 남기고 색인을 원자적으로 저장한 뒤 이력을 돌려준다."""
-    history = (load_backup_history(index_path) + [entry])[-limit:]
+    history = _read_backup_history(index_path)
+    if history is None:
+        # 읽지 못한 색인을 덮어쓰면 기존 이력이 사라진다.
+        return [entry]
+    history = (history + [entry])[-limit:]
     write_json_atomic(index_path, history, ensure_ascii=False, indent=2)
     return history

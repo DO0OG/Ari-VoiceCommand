@@ -264,6 +264,22 @@ class AutonomousExecutorTests(unittest.TestCase):
             later._save_document(tmp, "report", "again", preferred_format="txt")
             self.assertEqual(len(later.get_backup_history()), 1)
 
+    def test_unreadable_backup_index_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            executor = AutonomousExecutor()
+            executor._save_document(tmp, "report", "after", preferred_format="txt")
+            saved = executor.get_backup_history()
+            index_path = ResourceManager.get_writable_path("backup_history.json")
+            entry = {"target_path": target, "backup_path": target}
+
+            with patch("agent.backup_history.open", side_effect=PermissionError("locked"), create=True):
+                self.assertEqual(append_backup_history(index_path, entry, 20), [entry])
+
+            self.assertEqual(executor.get_backup_history(), saved)
+
     def test_python_runner_reads_backup_history_saved_by_another_executor(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = os.path.join(tmp, "report.txt")
