@@ -334,11 +334,12 @@ class UserContextManager:
     @_context_locked
     def save_context(self) -> bool:
         if self._load_failed:
-            # 읽기에 실패한 채 저장하면 기존 기억을 빈 컨텍스트로 덮어쓴다. 다시 읽어 성공해야 저장한다.
+            # 읽기에 실패한 채 저장하면 기존 기억을 빈 컨텍스트로 덮어쓴다.
+            # 복구되면 디스크 데이터를 채택만 하고, 이번 변경은 저장되지 않았으므로 False 를 돌려준다.
             loaded = self.load_context()
-            if self._load_failed:
-                return False
-            self.context = loaded
+            if not self._load_failed:
+                self.context = loaded
+            return False
         try:
             payload = json.dumps(self.context, ensure_ascii=False, indent=2)
             write_text_atomic(self.context_file, payload)
@@ -449,8 +450,9 @@ class UserContextManager:
         for removed_key in removed_fact_keys:
             fact_history.pop(removed_key, None)
         if not self.save_context():
-            self.context["facts"] = previous_facts
-            self.context["fact_history"] = previous_fact_history
+            if self.context["facts"] is facts:  # 읽기 복구로 디스크 데이터가 채택됐으면 되돌리지 않는다
+                self.context["facts"] = previous_facts
+                self.context["fact_history"] = previous_fact_history
             return False
         from memory.memory_index import get_memory_index
 

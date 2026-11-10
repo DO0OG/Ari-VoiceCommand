@@ -313,12 +313,12 @@ class ConversationHistory:
         with self._lock:
             self._save_timer = None
             if self._load_failed:
-                # 읽기에 실패한 채 저장하면 기존 파일을 빈 기록으로 덮어쓴다. 다시 읽어 성공해야 저장한다.
+                # 읽기에 실패한 채 저장하면 기존 파일을 빈 기록으로 덮어쓴다.
+                # 복구되면 디스크 데이터를 채택만 하고, 이번 변경은 저장되지 않았으므로 False 를 돌려준다.
                 if raise_on_error:
                     raise OSError("대화 기록 읽기 실패 상태에서는 저장하지 않음")
                 self.load()
-                if self._load_failed:
-                    return False
+                return False
             payload = {"active": self.active, "summaries": self.summaries}
             try:
                 write_json_atomic(self.file_path, payload, ensure_ascii=False, indent=2)

@@ -238,9 +238,10 @@ class ConversationHistoryTests(unittest.TestCase):
             with open(history.file_path, "r", encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["active"], [entry])
 
-            self.assertTrue(history.save())
+            self.assertFalse(history.save())
             self.assertEqual(history.active, [entry])
             self.assertEqual(history.summaries, ["기존 요약"])
+            self.assertTrue(history.save())
 
     def test_compaction_and_compression_do_not_duplicate_or_drop_entries(self):
         with tempfile.TemporaryDirectory() as tmp:

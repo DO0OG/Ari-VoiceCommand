@@ -101,8 +101,26 @@ class UserContextManagerTests(unittest.TestCase):
             with open(path, "r", encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["conversation_topics"], {"자동화": 3})
 
-            self.assertTrue(manager.save_context())
+            self.assertFalse(manager.save_context())
             self.assertEqual(manager.context["conversation_topics"], {"자동화": 3})
+            self.assertTrue(manager.save_context())
+
+    def test_record_fact_reports_failure_when_read_recovers_and_drops_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            old_fact = {"value": "커피", "confidence": 0.8}
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"facts": {"좋아함": old_fact}}, handle, ensure_ascii=False)
+
+            with patch("memory.user_context.open", side_effect=PermissionError, create=True):
+                manager = UserContextManager(context_file=path)
+
+            self.assertFalse(manager.record_fact("새 사실", "값"))
+            self.assertFalse(self.test_index.search("값", kind="fact"))
+            self.assertEqual(list(manager.context["facts"]), ["좋아함"])
+            self.assertTrue(manager.record_fact("새 사실", "값"))
+            with open(path, "r", encoding="utf-8") as handle:
+                self.assertEqual(set(json.load(handle)["facts"]), {"좋아함", "새 사실"})
 
     def test_concurrent_fact_mutations_keep_saved_json_valid(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -152,9 +152,15 @@ class SkillLibraryTests(unittest.TestCase):
             with open(library.file_path, "r", encoding="utf-8") as handle:
                 self.assertEqual([item["skill_id"] for item in json.load(handle)], ["web"])
 
-            library._save()
+            with patch("agent.skill_library.write_json_atomic") as writer:
+                library._save()
 
+            writer.assert_not_called()
             self.assertEqual([skill.skill_id for skill in library.skills], ["web"])
+            library.skills.append(Skill(skill_id="new", name="새 스킬", trigger_patterns=[], steps=[]))
+            library._save()
+            with open(library.file_path, "r", encoding="utf-8") as handle:
+                self.assertEqual([item["skill_id"] for item in json.load(handle)], ["web", "new"])
 
     def test_corrupt_skill_file_is_backed_up_on_load(self):
         with tempfile.TemporaryDirectory() as tmp:

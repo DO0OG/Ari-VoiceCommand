@@ -100,10 +100,10 @@ class SkillLibrary:
         with self._save_lock:
             self._save_timer = None
             if self._load_failed:
-                # 읽기에 실패한 채 저장하면 기존 스킬을 빈 목록으로 덮어쓴다. 다시 읽어 성공해야 저장한다.
+                # 읽기에 실패한 채 저장하면 기존 스킬을 빈 목록으로 덮어쓴다.
+                # 복구되면 디스크 데이터를 채택만 하고 이번 호출은 쓰지 않는다.
                 self._load()
-                if self._load_failed:
-                    return
+                return
             try:
                 os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
                 write_json_atomic(
