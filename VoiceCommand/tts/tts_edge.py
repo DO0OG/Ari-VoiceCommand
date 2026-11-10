@@ -292,9 +292,9 @@ class EdgeTTS(QObject):
         detail = " ".join(str(exc).split())
         try:
             from edge_tts.constants import TRUSTED_CLIENT_TOKEN
+            detail = redact_secret(detail, TRUSTED_CLIENT_TOKEN)
         except (AttributeError, ImportError):
-            TRUSTED_CLIENT_TOKEN = ""
-        detail = redact_secret(detail, TRUSTED_CLIENT_TOKEN)
+            pass
         return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
 
     def _synthesize_sentences(
