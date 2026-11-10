@@ -2157,6 +2157,9 @@ msgstr "複雑な目標を段階的に処理します。"
 msgid "{folder} 폴더의 {file}"
 msgstr "{folder}フォルダの{file}"
 
+msgid "응답 본문에서 복구한 명령 실행\n\n{content}"
+msgstr "応答本文から復元したコマンドの実行\n\n{content}"
+
 msgid "사용자가 실행을 취소했습니다."
 msgstr "ユーザーによって実行がキャンセルされました。"
 
@@ -2830,6 +2833,12 @@ msgstr "old_string はファイル内に 1 回だけ出現する必要があり�
 
 msgid "원본 경로가 존재하지 않습니다."
 msgstr "元のパスが存在しません。"
+
+msgid "파일 덮어쓰기: {path}"
+msgstr "ファイルの上書き: {path}"
+
+msgid "사용자가 파일 덮어쓰기를 승인하지 않았습니다."
+msgstr "ユーザーがファイルの上書きを承認しませんでした。"
 
 msgid "대상 경로가 존재하지 않습니다."
 msgstr "対象パスが存在しません。"

@@ -72,6 +72,41 @@ class FileToolsTests(unittest.TestCase):
                 delete_result = file_tools.delete_file(str(moved))
             self.assertTrue(delete_result["deleted"])
 
+    def test_move_over_existing_file_requires_approval(self):
+        for approved in (False, None, True):
+            with self.subTest(approved=approved), tempfile.TemporaryDirectory() as tmp:
+                src = Path(tmp) / "source.txt"
+                dst = Path(tmp) / "target.txt"
+                src.write_text("source", encoding="utf-8")
+                dst.write_text("target", encoding="utf-8")
+                fake_module = types.ModuleType("agent.confirmation_manager")
+                fake_manager = MagicMock()
+                fake_manager.request_confirmation.return_value = approved
+                fake_module.get_confirmation_manager = MagicMock(return_value=fake_manager)
+                with patch.dict(sys.modules, {"agent.confirmation_manager": fake_module}):
+                    result = file_tools.move_file(str(src), str(dst))
+                fake_manager.request_confirmation.assert_called_once()
+                if approved is True:
+                    self.assertTrue(result["moved"])
+                    self.assertFalse(src.exists())
+                    self.assertEqual(dst.read_text(encoding="utf-8"), "source")
+                else:
+                    self.assertIn("error", result)
+                    self.assertEqual(src.read_text(encoding="utf-8"), "source")
+                    self.assertEqual(dst.read_text(encoding="utf-8"), "target")
+
+    def test_move_to_directory_does_not_require_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "source.txt"
+            dst = Path(tmp) / "target"
+            src.write_text("source", encoding="utf-8")
+            dst.mkdir()
+            with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                result = file_tools.move_file(str(src), str(dst))
+            get_manager.assert_not_called()
+            self.assertTrue(result["moved"])
+            self.assertEqual((dst / src.name).read_text(encoding="utf-8"), "source")
+
     def test_edit_requires_unique_old_string(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "dup.txt"

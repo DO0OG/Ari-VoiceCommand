@@ -500,6 +500,19 @@ def move_file(src: str, dst: str) -> Dict[str, Any]:
         dst_path = _normalize_path(dst)
         if not os.path.exists(src_path):
             return {"error": _("원본 경로가 존재하지 않습니다."), "src": src_path}
+        if os.path.isfile(dst_path):
+            from agent.confirmation_manager import get_confirmation_manager
+            from agent.safety_checker import DangerLevel, SafetyReport
+
+            action_desc = _("파일 덮어쓰기: {path}").format(path=dst_path)
+            report = SafetyReport(
+                level=DangerLevel.CAUTION,
+                matched_patterns=[dst_path],
+                summary=action_desc,
+                category="file_move",
+            )
+            if get_confirmation_manager().request_confirmation(action_desc, report) is not True:
+                return {"error": _("사용자가 파일 덮어쓰기를 승인하지 않았습니다."), "path": dst_path}
         os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
         shutil.move(src_path, dst_path)
         return {"src": src_path, "dst": dst_path, "moved": True}
