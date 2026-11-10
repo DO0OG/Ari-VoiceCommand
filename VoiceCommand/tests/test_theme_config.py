@@ -1,9 +1,13 @@
+import gettext
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 from core.config_manager import ConfigManager
+from i18n import translator
+from scripts.compile_po import compile_po
 from ui import theme
 
 
@@ -24,6 +28,23 @@ class ThemeConfigTests(unittest.TestCase):
         self.assertIn("preset_key", meta)
         self.assertIn("theme_dir", meta)
         self.assertGreaterEqual(theme.FONT_SIZE_NORMAL, 7)
+
+    def test_preset_names_follow_language_but_custom_names_are_kept(self):
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with tempfile.TemporaryDirectory() as tmp:
+            mo_path = os.path.join(tmp, "en.mo")
+            compile_po(os.path.join(project_dir, "i18n", "locales", "en", "LC_MESSAGES", "ari.po"), mo_path)
+            with open(mo_path, "rb") as handle:
+                english = gettext.GNUTranslations(handle)
+            with open(os.path.join(tmp, "custom.json"), "w", encoding="utf-8") as handle:
+                handle.write('{"id":"custom","name":"커스텀"}')
+            with patch.object(translator, "_translation", english):
+                builtin = dict(theme.available_theme_presets())
+                with patch.object(theme, "theme_dir", lambda: tmp):
+                    custom = dict(theme.available_theme_presets())
+
+        self.assertEqual(builtin["default"], "Default Blue")
+        self.assertEqual(custom["custom"], "커스텀")
 
     def test_theme_loader_reads_external_json(self):
         with tempfile.TemporaryDirectory() as tmp:
