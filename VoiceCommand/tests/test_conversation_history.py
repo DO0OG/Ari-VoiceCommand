@@ -223,6 +223,25 @@ class ConversationHistoryTests(unittest.TestCase):
             with open(os.path.join(tmp, backups[0]), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "{broken")
 
+    def test_read_failure_does_not_overwrite_existing_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history = self._make_history(tmp)
+            entry = {"timestamp": datetime.now().isoformat(), "user": "기존 질문", "ai": "기존 답변"}
+            with open(history.file_path, "w", encoding="utf-8") as handle:
+                json.dump({"active": [entry], "summaries": ["기존 요약"]}, handle, ensure_ascii=False)
+
+            with patch("memory.conversation_history.open", side_effect=PermissionError, create=True):
+                history.load()
+                history.active.append({"timestamp": entry["timestamp"], "user": "새 질문", "ai": "새 답변"})
+                self.assertFalse(history.save())
+
+            with open(history.file_path, "r", encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["active"], [entry])
+
+            self.assertTrue(history.save())
+            self.assertEqual(history.active, [entry])
+            self.assertEqual(history.summaries, ["기존 요약"])
+
     def test_compaction_and_compression_do_not_duplicate_or_drop_entries(self):
         with tempfile.TemporaryDirectory() as tmp:
             history = self._make_history(tmp)

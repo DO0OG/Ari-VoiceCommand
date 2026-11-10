@@ -137,6 +137,51 @@ class SkillLibraryTests(unittest.TestCase):
                 payload = json.load(handle)
             self.assertEqual(len(payload), 1)
 
+    def test_read_failure_does_not_overwrite_existing_skills(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = self._make_library(tmp)
+            saved = [Skill(skill_id="web", name="웹 열기", trigger_patterns=["열어"], steps=[])]
+            with open(library.file_path, "w", encoding="utf-8") as handle:
+                json.dump([skill.__dict__ for skill in saved], handle, ensure_ascii=False)
+
+            with patch("agent.skill_library.open", side_effect=PermissionError, create=True):
+                library._load()
+                library.skills.append(Skill(skill_id="new", name="새 스킬", trigger_patterns=[], steps=[]))
+                library._save()
+
+            with open(library.file_path, "r", encoding="utf-8") as handle:
+                self.assertEqual([item["skill_id"] for item in json.load(handle)], ["web"])
+
+            library._save()
+
+            self.assertEqual([skill.skill_id for skill in library.skills], ["web"])
+
+    def test_corrupt_skill_file_is_backed_up_on_load(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = self._make_library(tmp)
+            with open(library.file_path, "w", encoding="utf-8") as handle:
+                handle.write("[broken")
+
+            library._load()
+
+            self.assertEqual(library.skills, [])
+            backups = [name for name in os.listdir(tmp) if ".corrupt-" in name]
+            self.assertEqual(len(backups), 1)
+            with open(os.path.join(tmp, backups[0]), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "[broken")
+
+    def test_failed_save_keeps_previous_skill_file_intact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = self._make_library(tmp)
+            library.skills = [Skill(skill_id="web", name="웹 열기", trigger_patterns=["열어"], steps=[])]
+            library._save()
+            library.skills[0].steps = [object()]
+
+            library._save()
+
+            with open(library.file_path, "r", encoding="utf-8") as handle:
+                self.assertEqual([item["skill_id"] for item in json.load(handle)], ["web"])
+
 
 if __name__ == "__main__":
     unittest.main()

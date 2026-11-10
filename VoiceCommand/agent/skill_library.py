@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from agent.agent_math import cosine_similarity
 from agent.tag_keywords import TAG_KEYWORDS as _TAG_KEYWORDS
+from core.atomic_io import backup_corrupt_file, write_json_atomic
 
 _DEVELOPER_SCOPE_RE = re.compile(
     r"(voicecommand(?:/(?:agent|core|ui|plugins|tests)\b|\s*(?:저장소|repository|codebase|repo)\b)?|저장소|repository|codebase|\brepo\b|\bdocs\b)",
@@ -47,6 +48,8 @@ class Skill:
 
 
 class SkillLibrary:
+    _load_failed = False
+
     def __init__(self):
         try:
             from core.resource_manager import ResourceManager
@@ -61,6 +64,7 @@ class SkillLibrary:
         self._load()
 
     def _load(self):
+        self._load_failed = False
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -77,6 +81,17 @@ class SkillLibrary:
             self.skills = loaded
         except FileNotFoundError:
             self.skills = []
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            try:
+                backup_corrupt_file(self.file_path)
+            except OSError as backup_error:
+                logging.error("[SkillLibrary] 손상된 파일 백업 실패: %s", backup_error)
+            logging.warning("[SkillLibrary] 로드 실패: %s", e)
+            self.skills = []
+        except OSError as e:
+            self._load_failed = True
+            logging.warning("[SkillLibrary] 로드 실패: %s", e)
+            self.skills = []
         except Exception as e:
             logging.warning("[SkillLibrary] 로드 실패: %s", e)
             self.skills = []
@@ -84,10 +99,19 @@ class SkillLibrary:
     def _save(self):
         with self._save_lock:
             self._save_timer = None
+            if self._load_failed:
+                # 읽기에 실패한 채 저장하면 기존 스킬을 빈 목록으로 덮어쓴다. 다시 읽어 성공해야 저장한다.
+                self._load()
+                if self._load_failed:
+                    return
             try:
                 os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-                with open(self.file_path, "w", encoding="utf-8") as f:
-                    json.dump([asdict(skill) for skill in self.skills], f, ensure_ascii=False, indent=2)
+                write_json_atomic(
+                    self.file_path,
+                    [asdict(skill) for skill in self.skills],
+                    ensure_ascii=False,
+                    indent=2,
+                )
             except FileNotFoundError as e:
                 logging.debug("[SkillLibrary] 저장 생략: %s", e)
             except Exception as e:

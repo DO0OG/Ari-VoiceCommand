@@ -72,6 +72,8 @@ _KOREAN_STOPWORDS = {
 class UserContextManager:
     """사용자 행동 패턴 및 컨텍스트 관리"""
 
+    _load_failed = False
+
     def __init__(self, context_file="user_context.json"):
         self._lock = threading.RLock()
         try:
@@ -83,6 +85,7 @@ class UserContextManager:
 
     def load_context(self):
         """컨텍스트 로드"""
+        self._load_failed = False
         if os.path.exists(self.context_file):
             try:
                 with open(self.context_file, 'r', encoding='utf-8') as f:
@@ -94,7 +97,10 @@ class UserContextManager:
                 except OSError as backup_error:
                     logger.error("손상된 컨텍스트 백업 실패: %s", backup_error)
                 logger.warning("컨텍스트 JSON 로드 실패: %s", exc)
-            except (OSError, TypeError, ValueError, AttributeError) as exc:
+            except OSError as exc:
+                self._load_failed = True
+                logger.warning("컨텍스트 로드 실패: %s", exc)
+            except (TypeError, ValueError, AttributeError) as exc:
                 logger.warning("컨텍스트 로드 실패: %s", exc)
 
         return self._default_context()
@@ -327,6 +333,12 @@ class UserContextManager:
 
     @_context_locked
     def save_context(self) -> bool:
+        if self._load_failed:
+            # 읽기에 실패한 채 저장하면 기존 기억을 빈 컨텍스트로 덮어쓴다. 다시 읽어 성공해야 저장한다.
+            loaded = self.load_context()
+            if self._load_failed:
+                return False
+            self.context = loaded
         try:
             payload = json.dumps(self.context, ensure_ascii=False, indent=2)
             write_text_atomic(self.context_file, payload)

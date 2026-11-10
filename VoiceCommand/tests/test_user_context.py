@@ -87,6 +87,23 @@ class UserContextManagerTests(unittest.TestCase):
             with open(os.path.join(tmp, backups[0]), encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "{broken")
 
+    def test_read_failure_does_not_overwrite_existing_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "user_context.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"conversation_topics": {"자동화": 3}}, handle, ensure_ascii=False)
+
+            with patch("memory.user_context.open", side_effect=PermissionError, create=True):
+                manager = UserContextManager(context_file=path)
+                manager.record_topics(["메모리"])
+                self.assertFalse(manager.save_context())
+
+            with open(path, "r", encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["conversation_topics"], {"자동화": 3})
+
+            self.assertTrue(manager.save_context())
+            self.assertEqual(manager.context["conversation_topics"], {"자동화": 3})
+
     def test_concurrent_fact_mutations_keep_saved_json_valid(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "user_context.json")
