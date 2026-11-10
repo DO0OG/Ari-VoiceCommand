@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -8,9 +9,21 @@ from unittest.mock import MagicMock, patch
 
 import agent.autonomous_executor as autonomous_executor_module
 from agent.autonomous_executor import AutonomousExecutor
+from agent.backup_history import append_backup_history
+from core.resource_manager import ResourceManager
 
 
 class AutonomousExecutorTests(unittest.TestCase):
+    def setUp(self):
+        # 백업 이력 색인이 실제 사용자 데이터 폴더에 쌓이지 않게 격리한다.
+        data_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(data_dir.cleanup)
+        env_patch = patch.dict(os.environ, {"ARI_APP_DATA_DIR": data_dir.name})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        ResourceManager.reset_cache()
+        self.addCleanup(ResourceManager.reset_cache)
+
     def test_build_child_env_filters_expanded_sensitive_prefixes(self):
         filtered_value = "blocked"
         fake_env = {
@@ -167,11 +180,18 @@ class AutonomousExecutorTests(unittest.TestCase):
     def test_recovery_guidance_combines_episode_and_backup_context(self):
         executor = AutonomousExecutor()
         executor.get_recent_goal_episodes = lambda goal="", limit=3: "최근 유사 목표 에피소드:\n[실패] report overwrite"
-        executor._backup_history = [
-            {"target_path": r"C:\temp\report.txt", "backup_path": r"C:\temp\.ari_backups\report.txt"}
-        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            backup_path = os.path.join(tmp, "backup_report.txt")
+            with open(backup_path, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            append_backup_history(
+                ResourceManager.get_writable_path("backup_history.json"),
+                {"target_path": target, "backup_path": backup_path},
+                20,
+            )
 
-        guidance = executor.get_recovery_guidance(goal="report overwrite", target_paths=[r"C:\temp\report.txt"])
+            guidance = executor.get_recovery_guidance(goal="report overwrite", target_paths=[target])
 
         self.assertIn("최근 유사 목표 에피소드", guidance)
         self.assertIn("restore_last_backup", guidance)
@@ -192,6 +212,75 @@ class AutonomousExecutorTests(unittest.TestCase):
 
             restored = executor.restore_last_backup(target)
             self.assertEqual(os.path.abspath(restored), os.path.abspath(target))
+            with open(target, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "before")
+
+    def test_backup_history_is_restored_by_a_new_executor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            AutonomousExecutor()._save_document(tmp, "report", "after", preferred_format="txt")
+
+            later = AutonomousExecutor()
+            self.assertEqual(len(later.get_backup_history()), 1)
+            restored = later.restore_last_backup(target)
+
+            self.assertEqual(os.path.abspath(restored), os.path.abspath(target))
+            with open(target, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "before")
+
+    def test_backup_history_drops_entries_whose_backup_file_is_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            executor = AutonomousExecutor()
+            executor._save_document(tmp, "report", "after", preferred_format="txt")
+            os.remove(executor.get_backup_history()[0]["backup_path"])
+
+            later = AutonomousExecutor()
+
+            self.assertEqual(later.get_recovery_candidates([target]), [])
+            with self.assertRaises(FileNotFoundError):
+                later.restore_last_backup(target)
+
+    def test_corrupt_backup_index_starts_empty_and_keeps_backup_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            executor = AutonomousExecutor()
+            executor._save_document(tmp, "report", "after", preferred_format="txt")
+            backup_path = executor.get_backup_history()[0]["backup_path"]
+            index_path = ResourceManager.get_writable_path("backup_history.json")
+            with open(index_path, "w", encoding="utf-8") as handle:
+                handle.write("{broken")
+
+            later = AutonomousExecutor()
+
+            self.assertEqual(later.get_backup_history(), [])
+            self.assertTrue(os.path.exists(backup_path))
+            later._save_document(tmp, "report", "again", preferred_format="txt")
+            self.assertEqual(len(later.get_backup_history()), 1)
+
+    def test_python_runner_reads_backup_history_saved_by_another_executor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("before")
+            AutonomousExecutor()._save_document(tmp, "report", "after", preferred_format="txt")
+            runner = AutonomousExecutor()._write_python_runner(
+                "restored = restore_last_backup(%r)\nprint(os.path.basename(restored))" % target
+            )
+            self.addCleanup(os.remove, runner)
+
+            completed = subprocess.run(
+                [sys.executable, runner], capture_output=True, text=True, timeout=120
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout.strip(), "report.txt")
             with open(target, "r", encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), "before")
 
