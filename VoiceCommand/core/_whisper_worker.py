@@ -252,8 +252,9 @@ def main(argv: list[str] | None = None) -> int:
             text = " ".join(s.text.strip() for s in segments).strip()
             sys.stdout.write((text if text else "__NONE__") + "\n")
             sys.stdout.flush()
-        except Exception:
-            sys.stdout.write("__NONE__\n")
+        except Exception as exc:
+            # 무음(__NONE__)과 구별되도록 한 줄 오류로 알린다.
+            sys.stdout.write("__ERROR__ " + " ".join(f"{type(exc).__name__}: {exc}".split()) + "\n")
             sys.stdout.flush()
     return 0
 

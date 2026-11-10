@@ -127,6 +127,17 @@ class TTSStreamWrapperTests(unittest.TestCase):
 
         self.assertNotIn(secret, "\n".join(captured.output))
         self.assertIn("[redacted]", "\n".join(captured.output))
+        self.assertIn("RuntimeError: failed with [redacted]", provider._last_error)
+
+        client.audio.speech.create = Mock(return_value=SimpleNamespace(content=b"pcm"))
+        with (
+            patch.object(GlobalAudio, "open_stream", return_value=Mock()),
+            patch.object(GlobalAudio, "close_stream"),
+            patch("tts.tts_openai.write_pcm_chunks", return_value=True),
+            patch("audio.audio_manager.get_output_device_index", return_value=None),
+        ):
+            self.assertTrue(provider.speak("hello"))
+        self.assertIsNone(provider._last_error)
 
     def test_elevenlabs_tts_uses_shared_stream_wrappers(self):
         provider = ElevenLabsTTS(api_key="test-key")

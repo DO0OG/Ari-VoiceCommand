@@ -116,6 +116,28 @@ class FishTTSWebSocketTests(unittest.TestCase):
         self.assertNotIn(provider.api_key, "\n".join(captured.output))
         self.assertIn("[redacted]", "\n".join(captured.output))
 
+    def test_speak_failure_is_kept_in_last_error_and_cleared_on_success(self):
+        provider = self._provider()
+
+        def fail_request(_text):
+            raise RuntimeError(f"401 failed with {provider.api_key}")
+
+        provider._stream_tts = fail_request
+        with self.assertLogs(level="ERROR"):
+            self.assertFalse(provider.speak("hello"))
+
+        self.assertIn("RuntimeError: 401 failed with [redacted]", provider._last_error)
+        self.assertNotIn(provider.api_key, provider._last_error)
+
+        provider._stream_tts = lambda _text: _FakeResponse([b"\x01\x02"])
+        with (
+            patch.object(GlobalAudio, "open_stream", return_value=_FakeAudioStream()),
+            patch.object(GlobalAudio, "close_stream"),
+            patch("audio.audio_manager.get_output_device_index", return_value=3),
+        ):
+            self.assertTrue(provider.speak("hello"))
+        self.assertIsNone(provider._last_error)
+
     def test_stop_cancels_worker_speak_and_emits_once(self):
         read_started = threading.Event()
         response_closed = threading.Event()

@@ -164,6 +164,7 @@ class ElevenLabsTTS(QObject):
         self.tts_volume = tts_volume
         self.is_playing = False
         self._session = None
+        self._last_error = None
         self._state_lock = threading.Lock()
         self._active_stop_event = None
         self._active_response = None
@@ -299,6 +300,7 @@ class ElevenLabsTTS(QObject):
         emotion: str = DEFAULT_EMOTION,
         stop_event: threading.Event | None = None,
     ) -> bool:
+        self._last_error = None
         if not text:
             return False
         session = self._get_session()
@@ -332,6 +334,7 @@ class ElevenLabsTTS(QObject):
             return self._play_response(response, stop_event, started_at)
         except Exception as exc:
             detail = _redact_secret(str(exc), self.api_key)
+            self._last_error = f"{type(exc).__name__}: {detail}"
             logging.error("ElevenLabs TTS speak 오류: %s", detail)
             return False
         finally:

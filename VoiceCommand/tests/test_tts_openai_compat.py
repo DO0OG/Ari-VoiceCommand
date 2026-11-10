@@ -144,6 +144,22 @@ class OpenAICompatTTSTests(unittest.TestCase):
 
         log_error.assert_not_called()
 
+    def test_request_failure_is_kept_in_last_error_and_cleared_on_success(self):
+        provider, _factory, create = self._make_provider(api_key="compat-test-key")
+        success_response = create.return_value
+        create.side_effect = RuntimeError("401 unauthorized compat-test-key")
+
+        with self.assertLogs(level="ERROR"):
+            self.assertFalse(provider.speak("hello"))
+
+        self.assertIn("RuntimeError: 401 unauthorized [redacted]", provider._last_error)
+        self.assertNotIn("compat-test-key", provider._last_error)
+
+        create.side_effect = None
+        create.return_value = success_response
+        self.assertTrue(self._speak_with_mock_audio(provider))
+        self.assertIsNone(provider._last_error)
+
     def test_reference_over_five_mib_fails_before_request(self):
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as reference:
             reference.seek(_MAX_REFERENCE_BYTES)

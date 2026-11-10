@@ -33,6 +33,7 @@ class FishTTSWebSocket(QObject):
         self.pa = GlobalAudio.get_instance()
         self.is_playing = False
         self._last_playback_success = None
+        self._last_error = None
         self._state_lock = threading.Lock()
         self._speak_lock = threading.RLock()
         self._active_stop_event = None
@@ -143,6 +144,7 @@ class FishTTSWebSocket(QObject):
         stop_event: threading.Event | None = None,
     ) -> bool:
         """텍스트를 PCM 스트리밍 음성으로 변환하여 재생한다."""
+        self._last_error = None
         if not text:
             return False
 
@@ -167,10 +169,9 @@ class FishTTSWebSocket(QObject):
                         success = self._play_response(response, stop_event)
             except Exception as exc:
                 if not stop_event.is_set():
-                    logging.error(
-                        "Fish Audio TTS failed: %s",
-                        redact_secret(str(exc), self.api_key),
-                    )
+                    detail = redact_secret(str(exc), self.api_key)
+                    self._last_error = f"{type(exc).__name__}: {detail}"
+                    logging.error("Fish Audio TTS failed: %s", detail)
             finally:
                 self._close_response(response)
                 with self._state_lock:

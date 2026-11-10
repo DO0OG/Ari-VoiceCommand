@@ -101,6 +101,9 @@ class WhisperSTTProvider(STTProvider):
                 line = line.strip()
                 if not line or line == "__NONE__":
                     return None
+                if line.startswith("__ERROR__"):
+                    logging.warning("[WhisperSTT] worker transcription error: %s", line[len("__ERROR__"):].strip())
+                    return None
                 return line
             except Exception as exc:
                 logging.error("[WhisperSTT] transcription failed: %s", exc)
