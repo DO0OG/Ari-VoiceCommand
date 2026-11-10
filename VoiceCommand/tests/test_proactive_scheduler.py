@@ -367,8 +367,10 @@ class ProactiveSchedulerTests(unittest.TestCase):
                     with self.assertRaises(OSError):
                         if action == "schedule":
                             scheduler.schedule("새 작업", datetime(2026, 3, 25, 10), "10시")
+                        elif action == "cancel":
+                            scheduler.cancel("0")
                         else:
-                            getattr(scheduler, action)("0")
+                            scheduler.toggle_task("0")
                 self.assertEqual({key: asdict(task) for key, task in scheduler._tasks.items()}, before)
                 self.assertIs(scheduler._tasks["0"], original)
 
