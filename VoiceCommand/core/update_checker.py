@@ -534,7 +534,11 @@ class UpdateChecker(QObject):
         worker.start()
 
     def _run_check(self) -> None:
-        status, failures = _check_for_updates()
+        try:
+            status, failures = _check_for_updates()
+        except Exception as error:
+            logging.exception("업데이트 확인 중 예상하지 못한 오류가 발생했습니다: %s", error)
+            status, failures = 0, _record_failure()
         self._result_ready.emit((status, failures))
 
     def _on_check_complete(self, value: object) -> None:
@@ -573,6 +577,7 @@ class UpdateChecker(QObject):
         if (
             has_update
             and isinstance(minimum, str)
+            and minimum
             and compare_versions(current_version, minimum) < 0
         ):
             update_message = _("Ari {version}은 직접 설치해야 합니다.").format(
