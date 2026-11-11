@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -295,6 +296,93 @@ class PluginLoaderTests(unittest.TestCase):
             self.assertEqual(len(added_actions), 2)
             self.assertEqual(len(removed_actions), 1)
             self.assertEqual(removed_actions[0]["label"], "메뉴")
+
+    def test_failed_register_cleans_up_partial_registrations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_path = os.path.join(tmp, "partial_plugin.py")
+            with open(plugin_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "PLUGIN_INFO = {'name': 'partial', 'api_version': '1.0'}\n"
+                    "def register(context):\n"
+                    "    context.register_menu_action('메뉴', lambda: None)\n"
+                    "    context.register_command('cmd')\n"
+                    "    raise RuntimeError('register 실패')\n"
+                )
+
+            added_actions = []
+            removed_actions = []
+            commands = []
+
+            class _Tray:
+                def remove_plugin_menu_action(self, action):
+                    removed_actions.append(action)
+
+            class _Registry:
+                def register_command(self, command):
+                    commands.append(command)
+
+                def unregister_command(self, command):
+                    commands.remove(command)
+
+            def _register_menu_action(label, callback):
+                action = {"label": label}
+                added_actions.append(action)
+                return action
+
+            manager = _TempPluginManager(tmp)
+            context = PluginContext(
+                tray_icon=_Tray(),
+                register_menu_action=_register_menu_action,
+                register_command=_Registry().register_command,
+            )
+
+            with self.assertRaises(RuntimeError):
+                manager.load_plugin(plugin_path, context)
+
+            self.assertEqual(removed_actions, added_actions)
+            self.assertEqual(commands, [])
+            self.assertEqual(manager.list_plugins(), [])
+            self.assertNotIn("partial_plugin", manager._modules)
+            self.assertNotIn(tmp, sys.path)
+
+    def test_failed_register_keeps_same_named_loaded_plugin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for file_name, tail in (("same_ok.py", ""), ("same_bad.py", "    raise RuntimeError('register 실패')\n")):
+                with open(os.path.join(tmp, file_name), "w", encoding="utf-8") as handle:
+                    handle.write(
+                        "PLUGIN_INFO = {'name': 'same', 'api_version': '1.0'}\n"
+                        "def register(context):\n"
+                        f"    context.register_menu_action('{file_name}', lambda: None)\n"
+                        f"{tail}"
+                        "    return {}\n"
+                    )
+
+            added_actions = []
+            removed_actions = []
+
+            class _Tray:
+                def remove_plugin_menu_action(self, action):
+                    removed_actions.append(action)
+
+            def _register_menu_action(label, callback):
+                action = {"label": label}
+                added_actions.append(action)
+                return action
+
+            manager = _TempPluginManager(tmp)
+            context = PluginContext(
+                tray_icon=_Tray(),
+                register_menu_action=_register_menu_action,
+            )
+            good = manager.load_plugin(os.path.join(tmp, "same_ok.py"), context)
+
+            with self.assertRaises(RuntimeError):
+                manager.load_plugin(os.path.join(tmp, "same_bad.py"), context)
+
+            self.assertEqual(removed_actions, [added_actions[1]])
+            self.assertEqual(manager.list_plugins(), [good])
+            self.assertEqual(good.registered_menu_actions, [added_actions[0]])
+            self.assertIn("same_ok", manager._modules)
 
     def test_unload_plugin_unregisters_character_pack(self):
         with tempfile.TemporaryDirectory() as tmp:
