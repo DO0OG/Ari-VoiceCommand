@@ -86,6 +86,24 @@ class BundledResourceRefreshTests(unittest.TestCase):
                 self.assertEqual(self._read(user_image), b"user-image")
                 self.assertFalse(manager.refresh_app_managed_file(bundle_icon, user_icon))
 
+    def test_new_bundled_images_are_added_without_replacing_existing_files(self):
+        with tempfile.TemporaryDirectory() as bundle, tempfile.TemporaryDirectory() as app_data:
+            self._write(os.path.join(bundle, "images", "idle1.png"), b"bundled-image")
+            self._write(os.path.join(bundle, "images", "idle2.png"), b"new-image")
+            self._write(os.path.join(app_data, "images", "idle1.png"), b"user-image")
+
+            manager = resource_manager.ResourceManager
+            user_image = os.path.join(app_data, "images", "idle1.png")
+            added_image = os.path.join(app_data, "images", "idle2.png")
+            with _nuitka(), \
+                    patch.object(manager, "get_bundle_path",
+                                 side_effect=lambda name: os.path.join(bundle, name)), \
+                    patch.object(manager, "get_writable_path",
+                                 side_effect=lambda name: os.path.join(app_data, name)):
+                manager.extract_resources()
+                self.assertEqual(self._read(user_image), b"user-image")
+                self.assertEqual(self._read(added_image), b"new-image")
+
 
 if __name__ == "__main__":
     unittest.main()
