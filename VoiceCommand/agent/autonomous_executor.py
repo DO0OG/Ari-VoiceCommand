@@ -22,7 +22,8 @@ from typing import Any, Dict, List, Optional, Callable
 
 from agent.safety_checker import get_safety_checker, DangerLevel
 from agent.automation_helpers import AutomationHelpers
-from core.resource_manager import is_bundled
+from agent.backup_history import append_backup_history, load_backup_history
+from core.resource_manager import ResourceManager, is_bundled
 from core.script_worker import python_script_command
 from i18n.translator import _
 
@@ -84,7 +85,6 @@ class AutonomousExecutor:
         self._history_lock = threading.Lock()
         self._history: List[ExecutionResult] = []
         self._state_transitions: List[Dict[str, Any]] = []
-        self._backup_history: List[Dict[str, str]] = []
         self._process_lock = threading.Lock()
         self._active_processes: set[subprocess.Popen] = set()
         self._safety = get_safety_checker()
@@ -297,8 +297,12 @@ class AutonomousExecutor:
     def get_state_transition_history(self) -> List[Dict[str, Any]]:
         return [dict(item) for item in self._state_transitions]
 
+    @staticmethod
+    def _backup_index_path() -> str:
+        return ResourceManager.get_writable_path("backup_history.json")
+
     def get_backup_history(self) -> List[Dict[str, str]]:
-        return [dict(item) for item in self._backup_history]
+        return load_backup_history(self._backup_index_path())
 
     def get_recovery_candidates(self, target_paths: Optional[List[str]] = None) -> List[Dict[str, str]]:
         normalized_targets = {
@@ -307,7 +311,7 @@ class AutonomousExecutor:
             if path
         }
         candidates: List[Dict[str, str]] = []
-        for item in reversed(self._backup_history):
+        for item in reversed(self.get_backup_history()):
             target = os.path.abspath(item.get("target_path", "") or "")
             if normalized_targets and target not in normalized_targets:
                 continue
@@ -341,7 +345,7 @@ class AutonomousExecutor:
         return "\n".join(lines[:4])
 
     def restore_last_backup(self, target_path: Optional[str] = None) -> str:
-        candidates = reversed(self._backup_history)
+        candidates = reversed(self.get_backup_history())
         match = None
         normalized_target = os.path.abspath(target_path) if target_path else ""
         for item in candidates:
@@ -748,12 +752,11 @@ class AutonomousExecutor:
             timestamp = str(int(time.time() * 1000))
             backup_path = os.path.join(backup_dir, f"{timestamp}_{stem}")
             shutil.copy2(normalized, backup_path)
-            self._backup_history.append({
-                "target_path": normalized,
-                "backup_path": backup_path,
-            })
-            if len(self._backup_history) > self._MAX_BACKUP_HISTORY:
-                self._backup_history = self._backup_history[-self._MAX_BACKUP_HISTORY:]
+            append_backup_history(
+                self._backup_index_path(),
+                {"target_path": normalized, "backup_path": backup_path},
+                self._MAX_BACKUP_HISTORY,
+            )
         except Exception as exc:
             raise RuntimeError(_("백업 생성 실패: {error}", error=exc)) from exc
 
@@ -827,6 +830,7 @@ class AutonomousExecutor:
             "desktop_path": desktop_path,
             "repo_root": repo_root,
             "module_dir": module_dir,
+            "backup_index_path": self._backup_index_path(),
         }
         payload.update(self._sanitize_runner_payload(extra_globals))
         payload_json = json.dumps(payload, ensure_ascii=False)
@@ -858,8 +862,10 @@ if repo_root:
 if module_dir and module_dir not in sys.path:
     sys.path.insert(0, module_dir)
 from agent.automation_helpers import AutomationHelpers
+from agent.backup_history import append_backup_history, load_backup_history
 _automation = AutomationHelpers()
-_backup_history = []
+_backup_index_path = PAYLOAD["backup_index_path"]
+_backup_history = load_backup_history(_backup_index_path)
 
 def _backup_file_if_exists(path: str) -> str:
     normalized = os.path.abspath(path)
@@ -871,12 +877,8 @@ def _backup_file_if_exists(path: str) -> str:
     timestamp = str(int(time.time() * 1000))
     backup_path = os.path.join(backup_dir, f"{{timestamp}}_{{stem}}")
     shutil.copy2(normalized, backup_path)
-    _backup_history.append({{
-        "target_path": normalized,
-        "backup_path": backup_path,
-    }})
-    if len(_backup_history) > 20:
-        del _backup_history[:-20]
+    entry = {{"target_path": normalized, "backup_path": backup_path}}
+    _backup_history[:] = append_backup_history(_backup_index_path, entry, 20)
     return backup_path
 
 def _restore_last_backup(target_path=None):
