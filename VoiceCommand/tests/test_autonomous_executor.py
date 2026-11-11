@@ -4,6 +4,8 @@ import os
 import runpy
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import agent.autonomous_executor as autonomous_executor_module
 from agent.autonomous_executor import AutonomousExecutor
-from agent.backup_history import append_backup_history
+from agent.backup_history import append_backup_history, load_backup_history
 from core.resource_manager import ResourceManager
 
 
@@ -265,6 +267,64 @@ class AutonomousExecutorTests(unittest.TestCase):
             self.assertTrue(os.path.exists(backup_path))
             later._save_document(tmp, "report", "again", preferred_format="txt")
             self.assertEqual(len(later.get_backup_history()), 1)
+
+    def test_backup_history_waits_for_recent_lock_without_losing_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_path = os.path.join(tmp, "backup_history.json")
+            lock_path = index_path + ".lock"
+            entries = []
+            for name in ("first.txt", "second.txt"):
+                target = os.path.join(tmp, name)
+                with open(target, "w", encoding="utf-8") as handle:
+                    handle.write(name)
+                entries.append({"target_path": target, "backup_path": target})
+            with open(lock_path, "w", encoding="utf-8"):
+                pass
+
+            start_writes = threading.Barrier(3)
+            errors = []
+
+            def append_entry(entry):
+                start_writes.wait(timeout=5)
+                try:
+                    append_backup_history(index_path, entry, 20)
+                except Exception as exc:
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=append_entry, args=(entry,)) for entry in entries]
+            for thread in threads:
+                thread.start()
+            release_lock = threading.Timer(0.1, os.remove, args=(lock_path,))
+            release_lock.start()
+            start_writes.wait(timeout=5)
+            for thread in threads:
+                thread.join(timeout=5)
+            release_lock.join(timeout=5)
+
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertEqual(errors, [])
+            saved = load_backup_history(index_path)
+            self.assertEqual(len(saved), len(entries))
+            self.assertEqual(
+                {item["target_path"] for item in saved},
+                {item["target_path"] for item in entries},
+            )
+
+    def test_backup_history_removes_stale_lock_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_path = os.path.join(tmp, "backup_history.json")
+            lock_path = index_path + ".lock"
+            target = os.path.join(tmp, "report.txt")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("backup")
+            with open(lock_path, "w", encoding="utf-8"):
+                pass
+            stale_time = time.time() - 11
+            os.utime(lock_path, (stale_time, stale_time))
+            entry = {"target_path": target, "backup_path": target}
+
+            self.assertEqual(append_backup_history(index_path, entry, 20), [entry])
+            self.assertFalse(os.path.exists(lock_path))
 
     def test_unreadable_backup_index_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
