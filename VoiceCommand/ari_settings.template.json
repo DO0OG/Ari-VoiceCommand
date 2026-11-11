@@ -109,6 +109,7 @@
   "reflection_engine_enabled": true,
   "memory_consolidation_days": 14,
   "weekly_report_enabled": true,
+  "scheduler_missed_grace_minutes": 0,
   "agent_timeout_seconds": 120,
   "plugin_hot_reload_enabled": false,
   "audit_log_enabled": true,

@@ -108,6 +108,12 @@ class _AgentSettingsPage(QWidget):
         box.addWidget(QLabel(_("settings.agent.max_subagents")))
         box.addWidget(self.subagent_spin)
 
+        self.missed_grace_spin = QSpinBox()
+        self.missed_grace_spin.setRange(0, 10080)
+        self.missed_grace_spin.setValue(int(settings.get("scheduler_missed_grace_minutes", 0)))
+        box.addWidget(QLabel(_("이 시간(분)보다 오래 지난 예약은 실행하지 않기 (0 = 항상 실행)")))
+        box.addWidget(self.missed_grace_spin)
+
         self.google_checkbox = QCheckBox(_("settings.agent.google_tools"))
         self.google_checkbox.setChecked(bool(settings.get("google_calendar_enabled", False)))
         box.addWidget(self.google_checkbox)
@@ -366,6 +372,7 @@ class _AgentSettingsPage(QWidget):
             "audit_log_enabled": self.audit_checkbox.isChecked(),
             "mcp_server_enabled": self.mcp_checkbox.isChecked(),
             "max_subagents": int(self.subagent_spin.value()),
+            "scheduler_missed_grace_minutes": int(self.missed_grace_spin.value()),
             "google_calendar_enabled": self.google_checkbox.isChecked(),
             "google_client_id": self.google_client_id.text().strip(),
             "google_client_secret": self.google_client_secret.text().strip(),

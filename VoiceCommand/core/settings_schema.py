@@ -155,6 +155,7 @@ DEFAULT_SETTINGS = {
     "reflection_engine_enabled": True,   # ReflectionEngine 실패 자동 반성
     "memory_consolidation_days": 14,     # MemoryConsolidator 압축 기준 (일)
     "weekly_report_enabled": True,       # 주간 자기개선 리포트 (ProactiveScheduler 등록)
+    "scheduler_missed_grace_minutes": 0, # 예정 시각을 이 분보다 넘긴 예약은 실행하지 않음 (0 = 제한 없음)
     "agent_timeout_seconds": 120,
     "plugin_hot_reload_enabled": False,
     "audit_log_enabled": True,

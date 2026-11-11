@@ -93,6 +93,14 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
 
         self.assertIs(page.get_values()["plugin_hot_reload_enabled"], True)
 
+    def test_missed_grace_minutes_defaults_to_zero_and_round_trips(self):
+        self.assertEqual(_AgentSettingsPage({}).get_values()["scheduler_missed_grace_minutes"], 0)
+
+        page = _AgentSettingsPage({"scheduler_missed_grace_minutes": 90})
+
+        self.assertEqual(page.missed_grace_spin.value(), 90)
+        self.assertEqual(page.get_values()["scheduler_missed_grace_minutes"], 90)
+
     def test_google_connect_requires_credentials_without_starting_thread(self):
         page = _AgentSettingsPage({})
         with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(

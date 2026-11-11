@@ -2666,6 +2666,9 @@ msgstr "Task complete"
 msgid "예약 작업 실행 실패"
 msgstr "Scheduled task execution failed"
 
+msgid "예정 시각을 {minutes}분 넘겨 실행하지 않았어요."
+msgstr "Skipped because it was more than {minutes} minutes past the scheduled time."
+
 msgid "실행 결과 없음"
 msgstr "No execution result"
 
@@ -3418,6 +3421,9 @@ msgstr "Enable plugin hot reload"
 
 msgid "다음 앱 시작 때 적용됩니다."
 msgstr "Applied the next time the app starts."
+
+msgid "이 시간(분)보다 오래 지난 예약은 실행하지 않기 (0 = 항상 실행)"
+msgstr "Do not run schedules more than this many minutes overdue (0 = always run)"
 
 msgid "설치된 플러그인을 찾지 못했습니다."
 msgstr "The installed plugin could not be found."
