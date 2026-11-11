@@ -14,6 +14,7 @@ class IncomingMessage:
     text: str
     user_id: str = ""
     message_id: int | None = None
+    media: dict | None = None  # voice/photo metadata; text then holds the caption
 
 
 class ChatAuthorizer:

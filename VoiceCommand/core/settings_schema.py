@@ -166,6 +166,8 @@ DEFAULT_SETTINGS = {
     "telegram_allowed_chat_ids": [],
     "telegram_poll_timeout_seconds": 25,
     "telegram_remote_approval_enabled": False,
+    "telegram_voice_enabled": False,
+    "telegram_photo_enabled": False,
     "agent_dashboard_enabled": True,
     "tts_wake_guard_seconds": 1.2,
     "max_subagents": 3,

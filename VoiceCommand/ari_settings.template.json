@@ -120,6 +120,8 @@
   "telegram_allowed_chat_ids": [],
   "telegram_poll_timeout_seconds": 25,
   "telegram_remote_approval_enabled": false,
+  "telegram_voice_enabled": false,
+  "telegram_photo_enabled": false,
   "agent_dashboard_enabled": true,
   "update_check_enabled": true,
   "update_channel": "stable",

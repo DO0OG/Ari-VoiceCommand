@@ -813,7 +813,11 @@ def main():
             if ai_command is not None:
                 from services.telegram_bridge import start_telegram_bridge
 
-                telegram_bridge = start_telegram_bridge(ai_command.run_interaction)
+                telegram_bridge = start_telegram_bridge(
+                    ai_command.run_interaction,
+                    lambda path, question: ai_command._handle_analyze_image_file(
+                        {"image_path": path, "prompt": question}),
+                )
         except Exception as exc:
             logging.debug("Telegram bridge startup skipped: %s", exc)
 

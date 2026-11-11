@@ -580,8 +580,12 @@ LLM 요청 기본 제한 시간은 `llm_timeout_chat_seconds=30`, `llm_timeout_p
 | `telegram_allowed_chat_ids` | `[]` | 명령을 허용할 chat_id 목록. 문자열과 숫자 모두 가능 |
 | `telegram_poll_timeout_seconds` | `25` | getUpdates long-polling timeout |
 | `telegram_remote_approval_enabled` | `false` | Telegram 요청의 위험 작업을 같은 대화방에서 승인·거부 |
+| `telegram_voice_enabled` | `false` | 허용한 대화방의 음성 메모를 글로 바꿔 명령으로 처리 (로컬 Whisper일 때만) |
+| `telegram_photo_enabled` | `false` | 허용한 대화방의 사진을 이미지 분석 도구로 분석 |
 
 원격 승인은 기본적으로 꺼져 있습니다. `telegram_remote_approval_enabled`를 `true`로 켜면 Telegram 요청을 실행하는 작업 스레드에서 발생한 위험 작업 확인을 같은 대화방의 승인·거부 버튼으로 처리합니다. 60초 동안 응답이 없거나 통신에 실패하면 거부합니다. 별도 스레드에서 실행되는 병렬 단계·하위 작업과 생성된 Python 자식 프로세스 안의 확인, PC에서 시작한 요청은 기존 로컬 확인 경로를 사용합니다. 대화방 계정이 탈취되면 위험 작업까지 승인될 수 있으니 주의하세요.
+
+음성 메모와 사진도 기본적으로 꺼져 있어 지금까지처럼 무시합니다. `telegram_voice_enabled`를 `true`로 켜면 허용한 대화방에서 보낸 음성 메모를 PC 안에서 글로 바꿔 글 메시지와 같은 경로로 처리합니다. 음성 인식(`stt_provider`)이 로컬 Whisper일 때만 동작하며, Google 같은 온라인 음성 인식으로는 대신 처리하지 않고 안내만 보냅니다. 인식한 글은 처리 전에 `들은 내용: ...`으로 대화방에 먼저 보여 주고, 위험 작업 확인과 원격 승인도 글 메시지와 똑같이 적용됩니다. `telegram_photo_enabled`를 `true`로 켜면 사진을 이미지 분석 도구로 분석하며, 사진에 설명 글을 달면 그 글을 질문으로 쓰고 없으면 "이 이미지를 설명해줘."를 씁니다. 두 기능 모두 파일은 10MB까지, 음성은 120초까지만 처리하고 넘으면 내려받지 않고 안내합니다.
 
 받은 명령은 로컬 텍스트 UI와 똑같은 흐름을 탑니다. 그래서 기존의 도구 실행, 안전 확인, 메모리 기록, 스트리밍 콜백이 그대로 쓰입니다.
 

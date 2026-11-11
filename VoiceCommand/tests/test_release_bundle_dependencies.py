@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from audio.mp3_decoder import decode_mp3_to_pcm
+from audio.mp3_decoder import AudioTooLongError, decode_mp3_to_pcm, decode_ogg_to_pcm
 from core import bundle_import_self_test
 
 
@@ -69,6 +69,66 @@ class ReleaseBundleDependencyTests(unittest.TestCase):
         self.assertEqual(opened[0][1], {"format": "mp3"})
         self.assertEqual(resampler_options, [{"format": "s16", "layout": "mono", "rate": 22050}])
         self.assertTrue(container.closed)
+
+    def test_ogg_decoder_opens_ogg_container_and_closes_it(self):
+        container = _Container()
+        opened = []
+        fake_av = SimpleNamespace(
+            open=lambda source, **kwargs: opened.append(kwargs) or container,
+            AudioResampler=_Resampler,
+        )
+        with patch.dict(sys.modules, {"av": fake_av}):
+            pcm = decode_ogg_to_pcm(b"ogg-data", 16000)
+
+        self.assertEqual(pcm, b"frame-1frame-2flush")
+        self.assertEqual(opened, [{"format": "ogg"}])
+        self.assertTrue(container.closed)
+        with self.assertRaisesRegex(ValueError, "OGG data is empty"):
+            decode_ogg_to_pcm(b"", 16000)
+
+    def test_ogg_decoder_stops_as_soon_as_sample_limit_is_exceeded(self):
+        decoded = []
+
+        class CountingContainer(_Container):
+            def decode(self, audio):
+                for index in range(1000):
+                    decoded.append(index)
+                    yield _Frame(b"\x00\x00" * 10)
+
+        fake_av = SimpleNamespace(open=lambda source, **kwargs: CountingContainer(), AudioResampler=_Resampler)
+        with patch.dict(sys.modules, {"av": fake_av}):
+            with self.assertRaises(AudioTooLongError):
+                decode_ogg_to_pcm(b"ogg-data", 16000, max_samples=25)
+            self.assertEqual(len(decoded), 3)
+            self.assertEqual(len(decode_ogg_to_pcm(b"ogg-data", 16000, max_samples=100000)), 1000 * 20 + len(b"flush"))
+
+    def test_pyav_opus_ogg_decodes_to_16k_mono_in_memory(self):
+        import av
+        import numpy as np
+
+        try:
+            av.Codec("libopus", "w")
+        except Exception as exc:
+            self.skipTest(f"PyAV Opus encoder unavailable: {exc}")
+
+        output = io.BytesIO()
+        container = av.open(output, mode="w", format="ogg")
+        stream = container.add_stream("libopus", rate=48000)
+        stream.layout = "mono"
+        frame = av.AudioFrame.from_ndarray(np.zeros((1, 960), dtype=np.int16), format="s16", layout="mono")
+        frame.sample_rate = 48000
+        for index in range(25):
+            frame.pts = index * 960
+            for packet in stream.encode(frame):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+        container.close()
+
+        pcm = decode_ogg_to_pcm(output.getvalue(), 16000)
+        self.assertGreater(len(pcm), 0)
+        self.assertEqual(len(pcm) % 2, 0)
+        self.assertAlmostEqual(len(pcm) / 2 / 16000, 0.5, delta=0.1)
 
     def test_mp3_decoder_rejects_empty_data_without_opening_av(self):
         with self.assertRaisesRegex(ValueError, "empty"):

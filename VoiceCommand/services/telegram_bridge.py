@@ -13,7 +13,10 @@ import json
 import os
 import re
 import secrets
+import shutil
+import tempfile
 from contextlib import nullcontext
+from dataclasses import replace
 import threading
 import time
 import traceback
@@ -32,8 +35,17 @@ from services.messaging_bridge_base import ChatAuthorizer, IncomingMessage, Stre
 logger = logging.getLogger(__name__)
 
 REMOTE_APPROVAL_TIMEOUT_SECONDS = 60
+MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
+MAX_VOICE_SECONDS = 120
+VOICE_SAMPLE_RATE = 16000
+_FILE_PATH_PATTERN = re.compile(r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)*")
 
 CommandRunner = Callable[..., str]
+ImageAnalyzer = Callable[[str, str], str]
+
+
+class TelegramFileTooLarge(Exception):
+    """Raised when a Telegram file exceeds the download limit."""
 
 
 def _as_list(value: object) -> list[object]:
@@ -61,6 +73,7 @@ class TelegramApiClient:
         if requests is None and session is None:
             raise RuntimeError("requests is required for TelegramApiClient")
         self.base_url = f"https://api.telegram.org/bot{bot_token}"
+        self._file_base_url = f"https://api.telegram.org/file/bot{bot_token}"
         self.timeout = float(timeout or 20.0)
         self.session = session or requests.Session()
 
@@ -131,6 +144,43 @@ class TelegramApiClient:
         message = data.get("result") or {}
         return message.get("message_id")
 
+    def download_file(self, file_id: str, *, max_bytes: int = MAX_DOWNLOAD_BYTES) -> bytes:
+        response = self.session.get(f"{self.base_url}/getFile", params={"file_id": file_id}, timeout=self.timeout)
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"Telegram getFile failed: {data!r}")
+        info = data.get("result") or {}
+        file_path = str(info.get("file_path") or "")
+        # 상대 경로만 허용해 내려받기 주소가 Telegram API 호스트를 벗어나지 못하게 한다.
+        if not _FILE_PATH_PATTERN.fullmatch(file_path) or ".." in file_path.split("/"):
+            raise RuntimeError("Telegram getFile returned an invalid file_path")
+        size = info.get("file_size")
+        if isinstance(size, int) and size > max_bytes:
+            raise TelegramFileTooLarge(size)
+        response = self.session.get(
+            f"{self._file_base_url}/{file_path}", timeout=self.timeout, stream=True, allow_redirects=False)
+        try:
+            response.raise_for_status()
+            if response.status_code != 200:
+                raise RuntimeError(f"Telegram file download failed: HTTP {response.status_code}")
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise TelegramFileTooLarge(total)
+                chunks.append(chunk)
+        finally:
+            response.close()
+        return b"".join(chunks)
+
+
+def _create_stt_provider():
+    from core.stt_provider import create_stt_provider
+
+    return create_stt_provider(ConfigManager.load_settings())
+
 
 class TelegramBridge:
     """Background Telegram long-polling runner."""
@@ -144,6 +194,10 @@ class TelegramBridge:
         queue: AgentTaskQueue | None = None,
         poll_timeout: int = 25,
         remote_approval_enabled: bool = False,
+        voice_enabled: bool = False,
+        photo_enabled: bool = False,
+        image_analyzer: ImageAnalyzer | None = None,
+        stt_factory: Callable[[], Any] | None = None,
     ):
         self.client = client
         self.command_runner = command_runner
@@ -156,9 +210,14 @@ class TelegramBridge:
         self.remote_approval_enabled = remote_approval_enabled is True
         self._approval_lock = threading.Lock()
         self._pending_approval: dict | None = None
+        self.voice_enabled = voice_enabled is True
+        self.photo_enabled = photo_enabled is True
+        self.image_analyzer = image_analyzer
+        self._stt_factory = stt_factory or _create_stt_provider
+        self._stt: Any = None
 
     @classmethod
-    def from_settings(cls, command_runner: CommandRunner) -> "TelegramBridge | None":
+    def from_settings(cls, command_runner: CommandRunner, image_analyzer: ImageAnalyzer | None = None) -> "TelegramBridge | None":
         if not bool(ConfigManager.get("telegram_enabled", False)):
             return None
         token = str(ConfigManager.get("telegram_bot_token", "") or "").strip()
@@ -176,6 +235,9 @@ class TelegramBridge:
             allowed_chat_ids=allowed,
             poll_timeout=timeout,
             remote_approval_enabled=ConfigManager.get("telegram_remote_approval_enabled", False) is True,
+            voice_enabled=ConfigManager.get("telegram_voice_enabled", False) is True,
+            photo_enabled=ConfigManager.get("telegram_photo_enabled", False) is True,
+            image_analyzer=image_analyzer,
         )
 
     def start(self) -> None:
@@ -192,6 +254,8 @@ class TelegramBridge:
         if self._thread:
             self._thread.join(timeout=2.0)
         self.queue.shutdown(cancel_pending=True)
+        # WhisperSTTProvider에는 공개 종료 메서드가 없고 __del__이 워커를 종료하므로 참조를 놓는다.
+        self._stt = None
 
     def run_forever(self) -> None:
         while not self._stop_event.is_set():
@@ -296,22 +360,37 @@ class TelegramBridge:
         text = str(message.get("text") or "").strip()
         chat = message.get("chat") or {}
         chat_id = str(chat.get("id") or "").strip()
-        if not text or not chat_id:
+        media = None if text else self._parse_media(message)
+        if (not text and media is None) or not chat_id:
             return None
+        if media is not None:
+            text = str(message.get("caption") or "").strip()
         sender = message.get("from") or {}
         return IncomingMessage(
             chat_id=chat_id,
             text=text,
             user_id=str(sender.get("id") or ""),
             message_id=message.get("message_id"),
+            media=media,
         )
+
+    def _parse_media(self, message: dict) -> dict | None:
+        voice = message.get("voice")
+        if self.voice_enabled and isinstance(voice, dict) and voice.get("file_id"):
+            return {"kind": "voice", "file_id": voice["file_id"],
+                    "file_size": voice.get("file_size"), "duration": voice.get("duration")}
+        photos = [item for item in message.get("photo") or [] if isinstance(item, dict) and item.get("file_id")]
+        if self.photo_enabled and photos:
+            best = max(photos, key=lambda item: (item.get("width") or 0) * (item.get("height") or 0))
+            return {"kind": "photo", "file_id": best["file_id"], "file_size": best.get("file_size")}
+        return None
 
     def handle_message(self, incoming: IncomingMessage) -> str | None:
         if not self.authorizer.configured or not self.authorizer.is_allowed(incoming.chat_id):
             logger.warning("[TelegramBridge] rejected unauthorized chat_id=%s user_id=%s", incoming.chat_id, incoming.user_id)
             return None
         task_id = self.queue.submit(
-            incoming.text,
+            incoming.text or (incoming.media or {}).get("kind", ""),
             lambda cancel_event: self._run_queued_message(incoming, cancel_event),
             priority=10,
         )
@@ -320,7 +399,8 @@ class TelegramBridge:
 
     def _run_queued_message(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
         try:
-            return self._run_message(incoming, cancel_event)
+            run = self._run_media if incoming.media else self._run_message
+            return run(incoming, cancel_event)
         except Exception as exc:
             # 작업 큐가 예외를 traceback과 함께 기록하므로 토큰이 든 원본 예외를 그대로 넘기지 않는다.
             raise RuntimeError(_redact_token(str(exc))) from None
@@ -400,9 +480,93 @@ class TelegramBridge:
                     self.client.send_message(incoming.chat_id, final[offset:offset + 4096])
         return final
 
+    def _reply(self, incoming: IncomingMessage, text: str) -> str:
+        self.client.send_message(incoming.chat_id, text, reply_to_message_id=incoming.message_id)
+        return text
 
-def start_telegram_bridge(command_runner: CommandRunner) -> TelegramBridge | None:
-    bridge = TelegramBridge.from_settings(command_runner)
+    def _reply_too_large(self, incoming: IncomingMessage) -> str:
+        return self._reply(incoming, _("파일 크기나 길이가 한도를 넘어 처리하지 않았어요. (최대 {mb}MB, 음성은 최대 {seconds}초)",
+                                       mb=MAX_DOWNLOAD_BYTES // (1024 * 1024), seconds=MAX_VOICE_SECONDS))
+
+    def _run_media(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
+        if cancel_event.is_set():
+            return "cancelled"
+        try:
+            if incoming.media["kind"] == "voice":
+                return self._run_voice(incoming, cancel_event)
+            return self._run_photo(incoming, cancel_event)
+        except Exception as exc:
+            logger.error("[TelegramBridge] media failed chat_id=%s\n%s", incoming.chat_id, _redact_token(traceback.format_exc()))
+            try:
+                self._reply(incoming, f"Error: {_redact_token(str(exc))}")
+            except Exception:
+                logger.debug("[TelegramBridge] error notification failed\n%s", _redact_token(traceback.format_exc()))
+            raise
+
+    def _run_voice(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
+        media = incoming.media
+        if ConfigManager.get("stt_provider", "google") != "whisper":
+            return self._reply(incoming, _("음성 메모는 음성 인식을 로컬 Whisper로 설정했을 때만 처리할 수 있어요."))
+        size, duration = media.get("file_size"), media.get("duration")
+        if (isinstance(size, int) and size > MAX_DOWNLOAD_BYTES) or (isinstance(duration, (int, float)) and duration > MAX_VOICE_SECONDS):
+            return self._reply_too_large(incoming)
+        try:
+            data = self.client.download_file(media["file_id"], max_bytes=MAX_DOWNLOAD_BYTES)
+        except TelegramFileTooLarge:
+            return self._reply_too_large(incoming)
+        from audio.mp3_decoder import AudioTooLongError, decode_ogg_to_pcm
+
+        try:
+            pcm = decode_ogg_to_pcm(data, VOICE_SAMPLE_RATE, MAX_VOICE_SECONDS * VOICE_SAMPLE_RATE)
+        except AudioTooLongError:
+            return self._reply_too_large(incoming)
+        import speech_recognition as sr
+
+        if self._stt is None:
+            self._stt = self._stt_factory()
+        text = str(self._stt.transcribe(sr.AudioData(pcm, VOICE_SAMPLE_RATE, 2), mode="command") or "").strip()
+        if cancel_event.is_set():
+            return "cancelled"
+        if not text:
+            return self._reply(incoming, _("음성을 알아듣지 못했어요."))
+        self._reply(incoming, _("들은 내용: {text}", text=text))
+        # 글 메시지와 같은 경로를 타야 위험 작업 확인·원격 승인이 그대로 적용된다.
+        return self._run_message(replace(incoming, text=text, media=None), cancel_event)
+
+    def _run_photo(self, incoming: IncomingMessage, cancel_event: threading.Event) -> str:
+        media = incoming.media
+        size = media.get("file_size")
+        if isinstance(size, int) and size > MAX_DOWNLOAD_BYTES:
+            return self._reply_too_large(incoming)
+        failure = _("사진을 분석하지 못했어요.")
+        if self.image_analyzer is None:
+            return self._reply(incoming, failure)
+        question = incoming.text or _("이 이미지를 설명해줘.")
+        work_dir = tempfile.mkdtemp(prefix="ari_telegram_")
+        try:
+            try:
+                data = self.client.download_file(media["file_id"], max_bytes=MAX_DOWNLOAD_BYTES)
+            except TelegramFileTooLarge:
+                return self._reply_too_large(incoming)
+            image_path = os.path.join(work_dir, "photo.jpg")
+            with open(image_path, "wb") as image_file:
+                image_file.write(data)
+            if cancel_event.is_set():
+                return "cancelled"
+            result = self.image_analyzer(image_path, question)
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        if cancel_event.is_set():
+            return "cancelled"
+        text = str(result or "").strip() or failure
+        for offset in range(0, len(text), 4096):
+            self.client.send_message(incoming.chat_id, text[offset:offset + 4096],
+                                     reply_to_message_id=incoming.message_id if offset == 0 else None)
+        return text
+
+
+def start_telegram_bridge(command_runner: CommandRunner, image_analyzer: ImageAnalyzer | None = None) -> TelegramBridge | None:
+    bridge = TelegramBridge.from_settings(command_runner, image_analyzer)
     if bridge is not None:
         bridge.start()
     return bridge

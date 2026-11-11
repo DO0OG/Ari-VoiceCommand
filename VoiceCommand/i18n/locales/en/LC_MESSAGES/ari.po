@@ -1950,6 +1950,24 @@ msgstr "Denied"
 msgid "시간 초과: 작업이 거부되었습니다."
 msgstr "Timed out: the action was denied."
 
+msgid "음성 메모는 음성 인식을 로컬 Whisper로 설정했을 때만 처리할 수 있어요."
+msgstr "Voice notes can only be handled when speech recognition is set to local Whisper."
+
+msgid "파일 크기나 길이가 한도를 넘어 처리하지 않았어요. (최대 {mb}MB, 음성은 최대 {seconds}초)"
+msgstr "The file is too large or too long, so it was not processed. (Up to {mb}MB, voice up to {seconds} seconds)"
+
+msgid "음성을 알아듣지 못했어요."
+msgstr "I couldn't make out the voice note."
+
+msgid "들은 내용: {text}"
+msgstr "Heard: {text}"
+
+msgid "이 이미지를 설명해줘."
+msgstr "Describe this image."
+
+msgid "사진을 분석하지 못했어요."
+msgstr "I couldn't analyze the photo."
+
 msgid "⚠️ 위험한 작업 확인"
 msgstr "⚠️ Confirm Risky Action"
 
