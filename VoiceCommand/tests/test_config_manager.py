@@ -22,6 +22,13 @@ class ConfigManagerTests(unittest.TestCase):
                 settings = ConfigManager._normalize_settings({"telegram_remote_approval_enabled": value})
                 self.assertIs(settings["telegram_remote_approval_enabled"], expected)
 
+    def test_telegram_voice_and_photo_default_off_and_require_bool(self):
+        for key in ("telegram_voice_enabled", "telegram_photo_enabled"):
+            self.assertIs(ConfigManager.DEFAULT_SETTINGS[key], False)
+            for value, expected in ((True, True), ("true", False), (1, False)):
+                with self.subTest(key=key, value=value):
+                    self.assertIs(ConfigManager._normalize_settings({key: value})[key], expected)
+
     def test_normalize_settings_rejects_bool_for_int_field(self):
         with patch.object(
             ConfigManager,

@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import traceback
 import unittest
@@ -8,8 +9,9 @@ from agent.confirmation_manager import ConfirmationManager
 from agent.safety_checker import DangerLevel, SafetyReport
 from agent.task_queue import AgentTaskQueue
 
+from audio.mp3_decoder import AudioTooLongError
 from services.messaging_bridge_base import ChatAuthorizer, IncomingMessage, StreamingTextBuffer
-from services.telegram_bridge import TelegramApiClient, TelegramBridge
+from services.telegram_bridge import TelegramApiClient, TelegramBridge, TelegramFileTooLarge
 
 
 class FakeTelegramClient:
@@ -20,6 +22,12 @@ class FakeTelegramClient:
         self.markups = []
         self.answered = []
         self.approval_sent = threading.Event()
+        self.downloads = []
+        self.download_data = b"media-bytes"
+
+    def download_file(self, file_id, max_bytes=0):
+        self.downloads.append(file_id)
+        return self.download_data
 
     def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None):
         self.sent.append((chat_id, text, reply_to_message_id))
@@ -492,6 +500,294 @@ class TelegramBridgeTests(unittest.TestCase):
             bridge.handle_message(IncomingMessage(chat_id="123", text="hi", message_id=3))
 
         self.assertNotIn("SECRET-TOKEN", "".join(traceback.format_exception(raised.exception)))
+
+    def _media_bridge(self, runner=None, **options):
+        client = FakeTelegramClient()
+        options = {"voice_enabled": True, "photo_enabled": True, **options}
+        bridge = TelegramBridge(client, runner or (lambda text, stream_callback=None: "done"),
+                                allowed_chat_ids=["123"], queue=ImmediateQueue(), **options)
+        return bridge, client
+
+    def _voice(self, chat_id="123", **media):
+        media = {"kind": "voice", "file_id": "voice-1", "file_size": 1000, "duration": 3, **media}
+        return IncomingMessage(chat_id=chat_id, text="", message_id=5, media=media)
+
+    def _photo(self, chat_id="123", text="", **media):
+        media = {"kind": "photo", "file_id": "photo-1", "file_size": 1000, **media}
+        return IncomingMessage(chat_id=chat_id, text=text, message_id=6, media=media)
+
+    def _settings(self, **values):
+        return patch("services.telegram_bridge.ConfigManager.get",
+                     side_effect=lambda key, default=None: values.get(key, default))
+
+    def test_voice_and_photo_are_ignored_when_settings_are_off(self):
+        client = FakeTelegramClient()
+        bridge = TelegramBridge(client, lambda text, stream_callback=None: "unused",
+                                allowed_chat_ids=["123"], queue=ImmediateQueue())
+        chat = {"id": "123"}
+        voice = {"update_id": 1, "message": {"chat": chat, "voice": {"file_id": "v", "duration": 2}}}
+        photo = {"update_id": 2, "message": {"chat": chat, "photo": [{"file_id": "p", "width": 1, "height": 1}]}}
+
+        self.assertIsNone(bridge._parse_update(voice))
+        self.assertIsNone(bridge._parse_update(photo))
+        self.assertEqual(client.downloads, [])
+        self.assertEqual(client.sent, [])
+
+    def test_parse_update_picks_largest_photo_and_caption(self):
+        bridge, _client = self._media_bridge()
+        photos = [{"file_id": "small", "width": 90, "height": 90}, {"file_id": "big", "width": 800, "height": 600}]
+
+        incoming = bridge._parse_update({"message": {"chat": {"id": "123"}, "photo": photos, "caption": "무엇인가요?"}})
+
+        self.assertEqual(incoming.media["file_id"], "big")
+        self.assertEqual(incoming.text, "무엇인가요?")
+
+    def test_media_from_unauthorized_chat_is_not_downloaded(self):
+        bridge, client = self._media_bridge()
+
+        self.assertIsNone(bridge.handle_message(self._voice(chat_id="999")))
+        self.assertIsNone(bridge.handle_message(self._photo(chat_id="999")))
+        self.assertEqual(client.downloads, [])
+        self.assertEqual(client.sent, [])
+
+    def test_voice_requires_local_whisper(self):
+        bridge, client = self._media_bridge()
+
+        with self._settings(stt_provider="google"):
+            bridge.handle_message(self._voice())
+
+        self.assertEqual(client.downloads, [])
+        self.assertIn("로컬 Whisper", client.sent[0][1])
+
+    def test_voice_over_limit_is_not_downloaded(self):
+        for media in ({"duration": 121}, {"file_size": 10 * 1024 * 1024 + 1}):
+            with self.subTest(media=media):
+                bridge, client = self._media_bridge()
+                with self._settings(stt_provider="whisper"):
+                    bridge.handle_message(self._voice(**media))
+                self.assertEqual(client.downloads, [])
+                self.assertEqual(len(client.sent), 1)
+
+    def test_voice_text_goes_through_the_normal_command_path(self):
+        ran = []
+        heard = []
+
+        class FakeStt:
+            def transcribe(self, audio, mode=None):
+                heard.append((audio.get_wav_data()[:4], mode))
+                return " 볼륨 올려줘 "
+
+        bridge, client = self._media_bridge(lambda text, stream_callback=None: ran.append(text) or "done",
+                                            stt_factory=FakeStt)
+        with self._settings(stt_provider="whisper"), \
+                patch("audio.mp3_decoder.decode_ogg_to_pcm", return_value=b"\x00\x01" * 800) as decode:
+            bridge.handle_message(self._voice())
+
+        decode.assert_called_once_with(client.download_data, 16000, 120 * 16000)
+        self.assertEqual(heard, [(b"RIFF", "command")])
+        self.assertEqual(ran, ["볼륨 올려줘"])
+        self.assertEqual(client.downloads, ["voice-1"])
+        self.assertEqual(client.sent[0][1], "들은 내용: 볼륨 올려줘")
+        self.assertEqual(client.sent[1][1], "Processing...")
+
+    def test_voice_with_empty_recognition_does_not_run_a_command(self):
+        ran = []
+
+        class FakeStt:
+            def transcribe(self, audio, mode=None):
+                return None
+
+        bridge, client = self._media_bridge(lambda text, stream_callback=None: ran.append(text) or "done",
+                                            stt_factory=FakeStt)
+        with self._settings(stt_provider="whisper"), \
+                patch("audio.mp3_decoder.decode_ogg_to_pcm", return_value=b"\x00\x01" * 800):
+            bridge.handle_message(self._voice())
+
+        self.assertEqual(ran, [])
+        self.assertEqual(client.sent[-1][1], "음성을 알아듣지 못했어요.")
+
+    def test_voice_decoded_longer_than_limit_is_dropped(self):
+        ran = []
+        bridge, client = self._media_bridge(lambda text, stream_callback=None: ran.append(text) or "done",
+                                            stt_factory=lambda: self.fail("stt must not run"))
+        with self._settings(stt_provider="whisper"), \
+                patch("audio.mp3_decoder.decode_ogg_to_pcm", side_effect=AudioTooLongError("long")) as decode:
+            bridge.handle_message(self._voice(duration=None))
+
+        self.assertEqual(decode.call_args.args, (client.download_data, 16000, 120 * 16000))
+        self.assertEqual(ran, [])
+        self.assertEqual(len(client.sent), 1)
+
+    def test_photo_cancelled_skips_analysis_and_reply(self):
+        for cancel_at in ("before_analysis", "after_analysis"):
+            with self.subTest(cancel_at=cancel_at):
+                cancel = threading.Event()
+                calls = []
+
+                def analyze(path, question):
+                    calls.append(path)
+                    if cancel_at == "after_analysis":
+                        cancel.set()
+                    return "result"
+
+                bridge, client = self._media_bridge(image_analyzer=analyze)
+                if cancel_at == "before_analysis":
+                    client.download_file = lambda file_id, max_bytes=0: cancel.set() or b"data"
+
+                self.assertEqual(bridge._run_media(self._photo(), cancel), "cancelled")
+                self.assertEqual(len(calls), 0 if cancel_at == "before_analysis" else 1)
+                self.assertEqual(client.sent, [])
+                self.assertFalse(os.path.exists(os.path.dirname(calls[0])) if calls else False)
+
+    def test_stop_releases_stt_provider(self):
+        released = []
+
+        class FakeStt:
+            def __del__(self):
+                released.append(True)
+
+        bridge, _client = self._media_bridge()
+        bridge._stt = FakeStt()
+        bridge.stop()
+
+        self.assertEqual(released, [True])
+        self.assertIsNone(bridge._stt)
+
+    def test_long_photo_analysis_is_split_into_telegram_sized_messages(self):
+        long_text = "나" * 9000
+        bridge, client = self._media_bridge(image_analyzer=lambda path, question: long_text)
+
+        bridge.handle_message(self._photo())
+
+        self.assertEqual("".join(body for _chat, body, _reply in client.sent), long_text)
+        self.assertTrue(all(len(body) <= 4096 for _chat, body, _reply in client.sent))
+        self.assertEqual([reply for _chat, _body, reply in client.sent], [6, None, None])
+
+    def test_photo_is_analyzed_and_temp_file_removed(self):
+        calls = []
+
+        def analyze(path, question):
+            with open(path, "rb") as image_file:
+                calls.append((path, question, image_file.read()))
+            return "고양이 사진입니다."
+
+        bridge, client = self._media_bridge(image_analyzer=analyze)
+        bridge.handle_message(self._photo(text="이게 뭐야?"))
+
+        path, question, data = calls[0]
+        self.assertEqual((question, data), ("이게 뭐야?", client.download_data))
+        self.assertFalse(os.path.exists(path))
+        self.assertFalse(os.path.exists(os.path.dirname(path)))
+        self.assertEqual(client.sent[-1][1], "고양이 사진입니다.")
+
+    def test_photo_temp_file_removed_when_analysis_fails(self):
+        paths = []
+
+        def analyze(path, question):
+            paths.append(path)
+            raise RuntimeError("analysis failed")
+
+        bridge, client = self._media_bridge(image_analyzer=analyze)
+        with self.assertRaises(RuntimeError):
+            bridge.handle_message(self._photo())
+
+        self.assertFalse(os.path.exists(os.path.dirname(paths[0])))
+        self.assertIn("analysis failed", client.sent[-1][1])
+
+    def test_photo_empty_result_and_oversize_are_reported_without_download(self):
+        bridge, client = self._media_bridge(image_analyzer=lambda path, question: "  ")
+        bridge.handle_message(self._photo())
+        self.assertEqual(client.sent[-1][1], "사진을 분석하지 못했어요.")
+
+        bridge, client = self._media_bridge(image_analyzer=lambda path, question: self.fail("too large"))
+        bridge.handle_message(self._photo(file_size=10 * 1024 * 1024 + 1))
+        self.assertEqual(client.downloads, [])
+
+    def test_download_file_uses_fixed_host_without_redirects_and_limits_size(self):
+        requests_made = []
+
+        class Response:
+            status_code = 200
+
+            def __init__(self, payload=None, chunks=()):
+                self.payload, self.chunks, self.closed = payload, chunks, False
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return self.payload
+
+            def iter_content(self, chunk_size=0):
+                return iter(self.chunks)
+
+            def close(self):
+                self.closed = True
+
+        file_response = Response(chunks=[b"ab", b"cd"])
+
+        class Session:
+            file_path = "voice/file_1.oga"
+
+            def get(self, url, params=None, timeout=None, **kwargs):
+                requests_made.append((url, kwargs))
+                if url.endswith("/getFile"):
+                    return Response({"ok": True, "result": {"file_path": self.file_path}})
+                return file_response
+
+        session = Session()
+        client = TelegramApiClient("123456:SECRET-TOKEN", session=session)
+
+        self.assertEqual(client.download_file("f1", max_bytes=10), b"abcd")
+        self.assertEqual(requests_made[1][0], "https://api.telegram.org/file/bot123456:SECRET-TOKEN/voice/file_1.oga")
+        self.assertIs(requests_made[1][1]["allow_redirects"], False)
+        self.assertTrue(file_response.closed)
+        with self.assertRaises(TelegramFileTooLarge):
+            client.download_file("f1", max_bytes=3)
+        for bad_path in ("../etc/passwd", "https://evil.example/x", "/abs/path", ""):
+            session.file_path = bad_path
+            with self.assertRaises(RuntimeError):
+                client.download_file("f1")
+
+    def test_download_error_does_not_leak_bot_token(self):
+        class _FailingSession:
+            def get(self, url, **kwargs):
+                if url.endswith("/getFile"):
+                    class Info:
+                        def raise_for_status(self):
+                            pass
+
+                        def json(self):
+                            return {"ok": True, "result": {"file_path": "photos/file_1.jpg"}}
+                    return Info()
+                raise RuntimeError(f"Max retries exceeded with url: {url}")
+
+        client = TelegramApiClient("123456:SECRET-TOKEN", session=_FailingSession())
+        bridge = TelegramBridge(client, lambda text, stream_callback=None: "unused", allowed_chat_ids=["123"],
+                                queue=ImmediateQueue(), photo_enabled=True, image_analyzer=lambda path, question: "x")
+        sent = []
+        client.send_message = lambda chat_id, text, **kwargs: sent.append(text)
+
+        with self.assertLogs("services.telegram_bridge", level="ERROR") as logs, \
+                self.assertRaises(RuntimeError) as raised:
+            bridge.handle_message(self._photo())
+
+        everything = "".join(sent) + "".join(logs.output) + "".join(traceback.format_exception(raised.exception))
+        self.assertNotIn("SECRET-TOKEN", everything)
+        self.assertIn("/file/bot***/photos/file_1.jpg", everything)
+
+    def test_from_settings_reads_voice_and_photo_flags(self):
+        for flags, expected in (({}, (False, False)),
+                                ({"telegram_voice_enabled": True, "telegram_photo_enabled": "yes"}, (True, False))):
+            with self.subTest(flags=flags):
+                bot_credential = "123:abc"
+                values = {"telegram_enabled": True, "telegram_bot_token": bot_credential,
+                          "telegram_allowed_chat_ids": ["123"], **flags}
+                with self._settings(**values), \
+                        patch("services.telegram_bridge.TelegramApiClient", return_value=FakeTelegramClient()):
+                    bridge = TelegramBridge.from_settings(lambda text, stream=None: "done")
+                self.addCleanup(bridge.stop)
+                self.assertEqual((bridge.voice_enabled, bridge.photo_enabled), expected)
 
 
 if __name__ == "__main__":
