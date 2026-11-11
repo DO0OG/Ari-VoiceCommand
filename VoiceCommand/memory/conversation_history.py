@@ -32,6 +32,7 @@ class ConversationHistory:
     MAX_ACTIVE = 20
     COMPRESS_UNIT = 5
     MAX_SUMMARIES = 5
+    _load_failed = False
 
     def __init__(self):
         from core.resource_manager import ResourceManager
@@ -311,6 +312,13 @@ class ConversationHistory:
     def save(self, raise_on_error=False):
         with self._lock:
             self._save_timer = None
+            if self._load_failed:
+                # 읽기에 실패한 채 저장하면 기존 파일을 빈 기록으로 덮어쓴다.
+                # 복구되면 디스크 데이터를 채택만 하고, 이번 변경은 저장되지 않았으므로 False 를 돌려준다.
+                if raise_on_error:
+                    raise OSError("대화 기록 읽기 실패 상태에서는 저장하지 않음")
+                self.load()
+                return False
             payload = {"active": self.active, "summaries": self.summaries}
             try:
                 write_json_atomic(self.file_path, payload, ensure_ascii=False, indent=2)
@@ -323,6 +331,7 @@ class ConversationHistory:
 
     def load(self):
         with self._lock:
+            self._load_failed = False
             try:
                 with open(self.file_path, "r", encoding="utf-8") as f:
                     payload = json.load(f)
@@ -353,7 +362,10 @@ class ConversationHistory:
                 self.active = []
                 self.summaries = []
                 logging.warning("대화 기록 JSON 로드 실패: %s", exc)
-            except (OSError, TypeError, ValueError, AttributeError) as exc:
+            except OSError as exc:
+                self._load_failed = True
+                logging.error("대화 기록 로드 실패: %s", exc)
+            except (TypeError, ValueError, AttributeError) as exc:
                 logging.error("대화 기록 로드 실패: %s", exc)
 
     def _schedule_save(self) -> None:
