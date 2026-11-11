@@ -157,6 +157,47 @@ class STTProviderTests(unittest.TestCase):
         self.assertEqual(request, {"audio": "d2F2LWJ5dGVz", "mode": "wake"})
         provider._terminate_worker_locked()
 
+    def test_transcribe_logs_worker_error_line_and_returns_none(self):
+        fake_proc = _FakeProcess()
+        with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc):
+            with patch.object(
+                WhisperSTTProvider,
+                "_read_process_line",
+                side_effect=["PREPARING", "READY", "__ERROR__ RuntimeError: CUDA failed"],
+            ):
+                provider = WhisperSTTProvider(device="cpu")
+                with self.assertLogs(level="WARNING") as captured:
+                    result = provider.transcribe(_FakeAudioData())
+
+        self.assertIsNone(result)
+        self.assertIn("RuntimeError: CUDA failed", "\n".join(captured.output))
+        self.assertTrue(fake_proc._alive)
+        provider._terminate_worker_locked()
+
+    def test_worker_reports_transcription_error_distinct_from_silence(self):
+        import core._whisper_worker as worker
+
+        encoded_audio = base64.b64encode(b"test-audio-payload").decode("ascii")
+
+        def fail_transcribe(_audio, **_kwargs):
+            raise RuntimeError("model failed\nbadly")
+
+        fake_model = SimpleNamespace(transcribe=fail_transcribe)
+        fake_module = SimpleNamespace(WhisperModel=lambda *args, **kwargs: fake_model)
+        stdout = io.StringIO()
+
+        with patch.dict(sys.modules, {"faster_whisper": fake_module}):
+            with patch("core._whisper_worker._wav_bytes_to_numpy", return_value=object()):
+                with patch("core._whisper_worker.sys.stdin", io.StringIO(f"{encoded_audio}\nQUIT\n")):
+                    with patch("core._whisper_worker.sys.stdout", stdout):
+                        result = worker.main(["small", "cpu", "int8"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            ["PREPARING", "READY", "__ERROR__ RuntimeError: model failed badly"],
+        )
+
     def test_whisper_separates_worker_startup_and_model_preparation_timeouts(self):
         fake_proc = _FakeProcess()
         with patch("core.stt_provider.subprocess.Popen", return_value=fake_proc):

@@ -147,6 +147,21 @@ class ElevenLabsProviderTests(unittest.TestCase):
         open_stream.assert_not_called()
         self.assertFalse(provider.is_playing)
 
+    def test_speak_failure_is_kept_in_last_error_without_api_key(self):
+        fake_key = "eleven-test-key"
+        provider = ElevenLabsTTS(api_key=fake_key)
+        session = Mock()
+        session.post.side_effect = requests.ConnectionError(f"401 for {fake_key}")
+        provider._get_session = lambda: session
+
+        with self.assertLogs(level="ERROR"):
+            self.assertFalse(provider.speak("hello"))
+
+        self.assertIn("ConnectionError: 401 for [redacted]", provider._last_error)
+        self.assertNotIn(fake_key, provider._last_error)
+        self.assertFalse(provider.speak(""))
+        self.assertIsNone(provider._last_error)
+
     def test_cleanup_cancels_active_response_and_playback(self):
         provider = ElevenLabsTTS(api_key="test-key")
         response_closed = threading.Event()

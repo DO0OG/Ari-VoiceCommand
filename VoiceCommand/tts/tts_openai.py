@@ -37,6 +37,7 @@ class OpenAITTS(QObject):
         self.is_playing = False
         self._client = None
         self._api_key = api_key
+        self._last_error = None
         self._state_lock = threading.Lock()
         self._active_stop_event = None
 
@@ -59,6 +60,7 @@ class OpenAITTS(QObject):
         emotion: str = DEFAULT_EMOTION,
         stop_event: threading.Event | None = None,
     ) -> bool:
+        self._last_error = None
         if not text or self._client is None:
             return False
 
@@ -118,9 +120,9 @@ class OpenAITTS(QObject):
             return True
 
         except Exception as exc:
-            logging.error(
-                "OpenAI TTS speak 오류: %s", redact_secret(str(exc), self._api_key)
-            )
+            detail = redact_secret(str(exc), self._api_key)
+            self._last_error = f"{type(exc).__name__}: {detail}"
+            logging.error("OpenAI TTS speak 오류: %s", detail)
             return False
         finally:
             with self._state_lock:

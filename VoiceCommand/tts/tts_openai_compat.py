@@ -95,6 +95,7 @@ class OpenAICompatTTS(QObject):
         self.clone_mode = clone_mode
         self.emotion_mode = emotion_mode
         self._api_key = str(api_key or "")
+        self._last_error = None
         self.reference_wav = reference_wav
         self.reference_text = reference_text
         self.emotion_enabled = bool(emotion_enabled)
@@ -155,6 +156,7 @@ class OpenAICompatTTS(QObject):
         emotion: str = DEFAULT_EMOTION,
         stop_event: threading.Event | None = None,
     ) -> bool:
+        self._last_error = None
         if not text:
             return False
 
@@ -201,6 +203,7 @@ class OpenAICompatTTS(QObject):
                 detail = str(exc)
                 if self._api_key:
                     detail = detail.replace(self._api_key, "[redacted]")
+                self._last_error = f"{type(exc).__name__}: {detail}"
                 logging.error("OpenAI-compatible TTS request failed: %s", detail)
             return False
         finally:
