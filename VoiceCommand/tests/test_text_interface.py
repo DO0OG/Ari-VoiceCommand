@@ -1,5 +1,6 @@
 import importlib
 import os
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -308,19 +309,31 @@ class TextInterfaceStreamingTests(unittest.TestCase):
 
     def test_chat_widget_debounces_rerender_during_resize(self):
         widget = ChatWidget()
+        self.addCleanup(widget.close)
         widget.add_message("resize test", is_user=True)
         widget.show()
-        self._app.processEvents()
+
+        def wait_for_resize_idle():
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                self._app.processEvents()
+                if widget._resize_timer.isActive():
+                    QTest.qWait(10)
+                    continue
+                self._app.processEvents()
+                if not widget._resize_timer.isActive():
+                    return
+            self.fail("chat resize timer did not become idle")
+
+        wait_for_resize_idle()
 
         with patch.object(widget, "render_history", wraps=widget.render_history) as render:
             widget._resize_timer.timeout.disconnect()
             widget._resize_timer.timeout.connect(widget.render_history)
             for width in (361, 362, 363, 364):
                 widget.resize(width, 300)
-            QTest.qWait(120)
+            wait_for_resize_idle()
             self.assertEqual(render.call_count, 1)
-
-        widget.close()
 
     def test_status_summary_keeps_long_text_in_tooltip(self):
         with patch("ui.text_interface.get_context_manager", return_value=None):
