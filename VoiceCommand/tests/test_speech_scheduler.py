@@ -238,12 +238,29 @@ class SpeechSchedulerTests(unittest.TestCase):
 
         self.assertEqual(self.messages, [])
 
+    def test_chitchat_is_off_when_setting_is_missing(self):
+        scheduler = self.create_scheduler(
+            context_provider=lambda: {"seconds_since_last_interaction": 3600},
+        )
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=lambda key, default=None: default,
+        ):
+            self.assertFalse(scheduler.tick())
+        with patch(
+            "core.config_manager.ConfigManager.get",
+            side_effect=RuntimeError("settings unavailable"),
+        ):
+            self.assertFalse(scheduler.tick())
+
+        self.assertEqual(self.messages, [])
+
     def test_spontaneous_talk_default_matches_settings_template(self):
         template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
         with template_path.open("r", encoding="utf-8") as stream:
             template = json.load(stream)
 
-        self.assertTrue(DEFAULT_SETTINGS["spontaneous_talk_enabled"])
+        self.assertFalse(DEFAULT_SETTINGS["spontaneous_talk_enabled"])
         self.assertEqual(
             template["spontaneous_talk_enabled"],
             DEFAULT_SETTINGS["spontaneous_talk_enabled"],

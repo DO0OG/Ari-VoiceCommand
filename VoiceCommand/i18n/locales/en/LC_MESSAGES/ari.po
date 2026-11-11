@@ -3608,8 +3608,8 @@ msgstr "Automatically enable game mode for games and videos"
 msgid "IDE 3시간 연속 사용 알림"
 msgstr "Remind me after three continuous hours in an IDE"
 
-msgid "한동안 대화가 없으면 먼저 말 걸기"
-msgstr "Speak up first after a quiet while"
+msgid "한동안 대화가 없으면 먼저 말 걸기 (기본 꺼짐)"
+msgstr "Speak up first after a quiet while (off by default)"
 
 msgid "잠금이 풀렸어요."
 msgstr "The screen is unlocked."

@@ -286,9 +286,9 @@ class EventSpeechScheduler:
             from core.config_manager import ConfigManager
 
             try:
-                enabled = ConfigManager.get("spontaneous_talk_enabled", True) is not False
+                enabled = bool(ConfigManager.get("spontaneous_talk_enabled", False))
             except (OSError, RuntimeError, TypeError, ValueError):
-                enabled = True
+                enabled = False
         if enabled:
             self.request("chitchat")
             return
