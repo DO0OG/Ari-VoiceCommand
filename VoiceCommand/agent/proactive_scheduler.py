@@ -752,8 +752,18 @@ class ProactiveScheduler:
             else:
                 next_run += timedelta(days=1)
 
+    @staticmethod
+    def _missed_grace_minutes() -> int:
+        """0 이하이거나 읽지 못하면 0(제한 없음)."""
+        try:
+            from core.config_manager import ConfigManager
+            return max(0, int(ConfigManager.get("scheduler_missed_grace_minutes", 0) or 0))
+        except Exception:
+            return 0
+
     def _claim_due_tasks(self, now: datetime) -> List[tuple[ScheduledTask, Dict[str, Any]]]:
         claimed: List[tuple[ScheduledTask, Dict[str, Any]]] = []
+        grace_minutes = self._missed_grace_minutes()
         with self._lock:
             dirty = False
             for tid, task in list(self._tasks.items()):
@@ -772,6 +782,33 @@ class ProactiveScheduler:
                     dirty = True
                     continue
                 if due_at > now:
+                    continue
+                if grace_minutes > 0 and now - due_at > timedelta(minutes=grace_minutes):
+                    logging.info("[Scheduler] 예정 시각을 %d분 넘겨 실행하지 않음: %s", grace_minutes, tid)
+                    next_run_before = task.next_run
+                    if task.repeat:
+                        task.next_run = self._compute_next_run(task, due_at, now).isoformat()
+                        next_run_after = task.next_run
+                    else:
+                        task.enabled = False
+                        # 끝난 예약으로 표시해야 예약이 가득 찼을 때 정리 대상이 된다.
+                        task.completed = True
+                        next_run_after = ""
+                    # 실행된 것이 아니므로 last_run 은 두고 기록만 남긴다.
+                    self._append_task_run(
+                        ScheduledTaskRun(
+                            task_id=task.task_id,
+                            goal=task.goal,
+                            task_type=task.task_type,
+                            started_at=now.isoformat(),
+                            finished_at=now.isoformat(),
+                            success=False,
+                            summary=_("예정 시각을 {minutes}분 넘겨 실행하지 않았어요.", minutes=grace_minutes),
+                            next_run_before=next_run_before,
+                            next_run_after=next_run_after,
+                        )
+                    )
+                    dirty = True
                     continue
                 started_at = now.isoformat()
                 next_run_before = task.next_run

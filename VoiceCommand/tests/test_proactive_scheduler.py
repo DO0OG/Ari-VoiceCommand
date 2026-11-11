@@ -168,6 +168,65 @@ class ProactiveSchedulerTests(unittest.TestCase):
         self.assertEqual(scheduler._claim_due_tasks(now + timedelta(minutes=1)), [])
         self.assertFalse(scheduler._append_task_run.call_args.args[0].success)
 
+    def _claim_with_grace(self, grace, task, now):
+        scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        scheduler._lock = threading.Lock()
+        scheduler._save = Mock()
+        scheduler._append_task_run = Mock()
+        scheduler._tasks = {task.task_id: task}
+        with patch("core.config_manager.ConfigManager.get", return_value=grace):
+            claimed = scheduler._claim_due_tasks(now)
+        return scheduler, claimed
+
+    def test_missed_grace_skips_overdue_one_shot_and_marks_it_finished(self):
+        now = datetime(2026, 3, 25, 12, 0)
+        task = ScheduledTask(
+            task_id="once", goal="알람", schedule_expr="9시", next_run="2026-03-25T09:00:00",
+        )
+
+        scheduler, claimed = self._claim_with_grace(60, task, now)
+
+        self.assertEqual(claimed, [])
+        self.assertFalse(task.enabled)
+        # 가득 찼을 때 정리 대상이 되도록 끝난 예약으로 남는다.
+        self.assertTrue(task.completed)
+        self.assertEqual(task.last_run, "")
+        record = scheduler._append_task_run.call_args.args[0]
+        self.assertFalse(record.success)
+        self.assertEqual(record.next_run_before, "2026-03-25T09:00:00")
+        self.assertIn("60", record.summary)
+
+    def test_missed_grace_moves_overdue_repeating_task_to_next_occurrence(self):
+        now = datetime(2026, 3, 25, 12, 0)
+        task = ScheduledTask(
+            task_id="daily", goal="보고서", schedule_expr="매일 9시", next_run="2026-03-25T09:00:00",
+            repeat=True, repeat_rule="daily", last_run="2026-03-24T09:00:00",
+        )
+
+        scheduler, claimed = self._claim_with_grace(60, task, now)
+
+        self.assertEqual(claimed, [])
+        self.assertTrue(task.enabled)
+        self.assertEqual(task.next_run, "2026-03-26T09:00:00")
+        self.assertEqual(task.last_run, "2026-03-24T09:00:00")
+        self.assertEqual(scheduler._append_task_run.call_args.args[0].next_run_after, task.next_run)
+
+    def test_missed_grace_still_runs_task_within_window_or_when_disabled(self):
+        now = datetime(2026, 3, 25, 9, 10)
+        recent = ScheduledTask(
+            task_id="once", goal="알람", schedule_expr="9시", next_run="2026-03-25T09:00:00",
+        )
+        scheduler, claimed = self._claim_with_grace(60, recent, now)
+        self.assertEqual(len(claimed), 1)
+        scheduler._append_task_run.assert_not_called()
+
+        old = ScheduledTask(
+            task_id="old", goal="알람", schedule_expr="작년", next_run="2025-03-25T09:00:00",
+        )
+        _, claimed = self._claim_with_grace(0, old, now)
+        self.assertEqual(len(claimed), 1)
+        self.assertTrue(old.completed)
+
     def test_legacy_finished_one_shot_is_loaded_as_completed(self):
         scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
         legacy = {
