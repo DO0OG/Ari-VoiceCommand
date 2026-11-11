@@ -27,7 +27,9 @@ _EVENT_COOLDOWNS = {
     "weekly_report": timedelta(days=6),
     "praise_streak": timedelta(days=1),
     "maintenance_result": timedelta(hours=20),
+    "chitchat": timedelta(hours=3),
 }
+_CHITCHAT_IDLE_SECONDS = 20 * 60
 _ONCE_DAILY = {"long_use", "late_night", "praise_streak"}
 _MOOD_BUCKETS = ("good", "calm", "down")
 
@@ -66,6 +68,11 @@ EVENT_PHRASES = {
         "good": ("새벽 정리 결과가 나왔어요. {summary}||메모리 정리 결과예요. {summary}",),
         "calm": ("정리 작업 결과예요. {summary}||새벽 정리 결과가 나왔어요. {summary}",),
         "down": ("정리 결과가 나왔어요. {summary}||메모리 정리 결과예요. {summary}",),
+    },
+    "chitchat": {
+        "good": ("(기쁨) 오늘은 기분이 좋아요. 필요한 게 있으면 편하게 불러 주세요.||(기대) 뭔가 재미있는 일이 없을까요? 저는 이런 날이 좋아요.||(기쁨) 조용한 시간도 좋지만, 말을 걸어 주시면 더 좋아요.",),
+        "calm": ("(평온) 조용하네요. 저는 이런 차분한 시간이 꽤 마음에 들어요.||(평온) 필요한 일이 생기면 언제든 불러 주세요. 옆에 있을게요.||(진지) 요즘 하시는 일은 잘 되고 있나요? 조금 궁금해요.",),
+        "down": ("(걱정) 오늘은 조금 기운이 없어요. 그래도 곁에 있을게요.||(걱정) 한동안 조용했네요. 편할 때 불러 주세요.||(슬픔) 너무 조용하니 조금 쓸쓸해요. 시간 나면 말을 걸어 주세요.",),
     },
 }
 
@@ -154,6 +161,7 @@ class EventSpeechScheduler:
         self._last_reaction: dict[str, Any] | None = None
         self._suggestions_cache: list[dict[str, Any]] = []
         self._next_suggestion_at: datetime | None = None
+        self._last_user_input_at: datetime | None = None
 
         if not self._state_path:
             try:
@@ -175,6 +183,10 @@ class EventSpeechScheduler:
         from core.mood_state import get_mood_state
 
         return get_mood_state()
+
+    def note_user_activity(self) -> None:
+        """사용자가 말을 걸었음을 기록한다. 대화 기록은 응답 뒤에 갱신되므로 그 사이 혼잣말을 막는다."""
+        self._last_user_input_at = self._clock()
 
     def request(self, event: str, **values: Any) -> bool:
         """사건을 큐에 넣고 가드가 풀릴 때까지 보류한다."""
@@ -259,6 +271,30 @@ class EventSpeechScheduler:
             self.request("late_night")
         if praise_count >= 3:
             self.request("praise_streak")
+        self._check_chitchat(metrics, now)
+
+    def _check_chitchat(self, metrics: dict, now: datetime) -> None:
+        try:
+            idle_seconds = float(metrics.get("seconds_since_last_interaction"))
+        except (TypeError, ValueError):
+            idle_seconds = 0.0
+        last_input = self._last_user_input_at
+        if last_input is not None:
+            idle_seconds = min(idle_seconds, max(0.0, (now - last_input).total_seconds()))
+        enabled = idle_seconds >= _CHITCHAT_IDLE_SECONDS
+        if enabled:
+            from core.config_manager import ConfigManager
+
+            try:
+                enabled = bool(ConfigManager.get("spontaneous_talk_enabled", False))
+            except (OSError, RuntimeError, TypeError, ValueError):
+                enabled = False
+        if enabled:
+            self.request("chitchat")
+            return
+        # 사용자가 다시 말했거나 설정을 껐으면 대기 중인 혼잣말을 버린다.
+        with self._lock:
+            self._pending = [item for item in self._pending if item[0] != "chitchat"]
 
     def _update_ignored_streak(self, now: datetime) -> None:
         with self._lock:
@@ -353,7 +389,10 @@ class EventSpeechScheduler:
                 return False
 
             selected = None
-            for index, item in enumerate(self._pending):
+            # 혼잣말은 다른 사건보다 뒤에 둔다.
+            for index, item in sorted(
+                enumerate(self._pending), key=lambda entry: entry[1][0] == "chitchat"
+            ):
                 event, _payload = item
                 if event == "agent_done" and not guards.get("other_window", False):
                     continue
@@ -502,3 +541,10 @@ def set_speech_scheduler(scheduler: EventSpeechScheduler | None) -> None:
 def get_speech_scheduler() -> EventSpeechScheduler | None:
     """초기화된 발화 스케줄러를 반환한다."""
     return _speech_scheduler
+
+
+def note_user_activity() -> None:
+    """공유 발화 스케줄러가 있으면 사용자 입력을 알린다."""
+    scheduler = get_speech_scheduler()
+    if scheduler is not None:
+        scheduler.note_user_activity()

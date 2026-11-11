@@ -56,6 +56,29 @@ class MoodStateTests(unittest.TestCase):
         self.assertGreater(positive.values()[0], 0.0)
         self.assertLess(negative.values()[0], 0.0)
 
+    def test_response_emotion_nudges_mood_less_than_praise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            moods = {
+                name: MoodState(
+                    path=os.path.join(tmp, f"{name}.json"),
+                    clock=lambda: 1_000.0,
+                )
+                for name in ("happy", "worried", "calm", "praise")
+            }
+            moods["happy"].record_response_emotion("기쁨")
+            moods["worried"].record_response_emotion("걱정")
+            moods["calm"].record_response_emotion("평온")
+            moods["praise"].record_interaction(praised=True)
+
+        self.assertGreater(moods["happy"].values()[0], 0.0)
+        self.assertGreater(moods["happy"].values()[1], 0.0)
+        self.assertLess(moods["worried"].values()[0], 0.0)
+        self.assertEqual(moods["calm"].values(), (0.0, 0.0))
+        self.assertLess(
+            moods["happy"].values()[0],
+            moods["praise"].values()[0] / 2,
+        )
+
     def test_corrupt_state_is_backed_up_and_defaults_to_neutral(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "mood_state.json")

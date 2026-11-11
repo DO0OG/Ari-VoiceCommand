@@ -202,6 +202,35 @@ class LLMProviderTests(unittest.TestCase):
         self.assertIn("기분 좋음", situation)
         self.assertLessEqual(len(situation), 120)
 
+    def test_situation_prompt_includes_mood_energy(self):
+        provider = LLMProvider()
+        metrics = {
+            "last_interaction_elapsed_minutes": 4,
+            "today_interaction_count": 2,
+            "continuous_use_minutes": 9,
+            "local_time": "14:25",
+            "recent_praise_count": 1,
+        }
+        context = SimpleNamespace(get_situation_metrics=lambda: metrics)
+        translate = lambda message, **values: message.format(**values) if values else message
+        situations = {}
+        for name, values in (("lively", (0.6, 0.5)), ("quiet", (0.0, 0.0))):
+            with (
+                patch("agent.llm_provider._", side_effect=translate),
+                patch("memory.user_context.get_context_manager", return_value=context),
+                patch("core.window_inspector.get_foreground_fullscreen", return_value=None),
+                patch(
+                    "agent.llm_provider.get_mood_state",
+                    return_value=SimpleNamespace(values=lambda values=values: values),
+                ),
+            ):
+                situations[name] = provider._build_situation_prompt()
+
+        self.assertIn("들뜸", situations["lively"])
+        self.assertIn("차분함", situations["quiet"])
+        self.assertNotIn("들뜸", situations["quiet"])
+        self.assertLessEqual(len(situations["lively"]), 120)
+
     def test_static_answer_cache_key_changes_with_situation_metadata(self):
         provider = LLMProvider(provider="openai", model="test")
         provider.client = Mock()

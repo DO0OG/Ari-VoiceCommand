@@ -1206,7 +1206,23 @@ class AICommand(FastPathMixin, BaseCommand):
     def _emit_user_message(self, message: Optional[str]) -> None:
         cleaned = self._sanitize_user_facing_text(message)
         if cleaned:
+            self._record_response_emotion(cleaned)
             self.tts_wrapper(cleaned)
+
+    @staticmethod
+    def _record_response_emotion(text: str) -> None:
+        # 자발 발화·예약 알림은 이 경로를 거치지 않으므로 기분이 스스로 오르지 않는다.
+        from core.emotions import DEFAULT_EMOTION, parse_emotion_text
+        from core.mood_state import get_mood_state
+
+        emotion, _pure_text = parse_emotion_text(text)
+        mood_state = get_mood_state()
+        if emotion == DEFAULT_EMOTION or mood_state is None:
+            return
+        try:
+            mood_state.record_response_emotion(emotion)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            logging.debug("응답 감정의 기분 반영을 건너뜁니다: %s", exc)
 
     def _user_requests_interpretation(self, text: str) -> bool:
         # ponytail: 표현 키워드 판별, 누락 시 요청 분류기로 보강
@@ -1738,6 +1754,9 @@ class AICommand(FastPathMixin, BaseCommand):
             Callable[[str, Optional[str]], None]
         ] = None,
     ) -> Optional[str]:
+        from agent.speech_scheduler import note_user_activity
+
+        note_user_activity()
         if self._is_interrupt_command(text):
             self.orchestrator.interrupt()
             output_callback(_("진행 중인 작업을 중단할게요."))

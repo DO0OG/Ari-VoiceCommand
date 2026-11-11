@@ -82,6 +82,13 @@ class VoiceCommandBubbleTests(unittest.TestCase):
             ("말씀해주세요", 0),
         )
 
+    def test_listening_indicator_marks_user_activity_for_speech_scheduler(self):
+        with patch("agent.speech_scheduler.note_user_activity") as note:
+            voicecommand.set_listening_indicator(True)
+            voicecommand.set_listening_indicator(False)
+
+        note.assert_called_once_with()
+
     def test_show_tts_bubble_accepts_a_transient_duration_without_emotion_emoji(self):
         with patch.object(voicecommand._state, "last_bubble_signature", ("", 0.0)):
             voicecommand._show_tts_bubble("[happy] repeat notice", duration=2000)

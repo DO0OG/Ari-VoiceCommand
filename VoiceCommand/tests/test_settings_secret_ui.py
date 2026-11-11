@@ -118,7 +118,7 @@ class SettingsSecretUITests(unittest.TestCase):
             "activity_idle_checkbox", "activity_lock_checkbox", "activity_quiet_checkbox",
             "activity_away_threshold_spin", "activity_app_checkbox",
             "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
-            "activity_ide_long_use_checkbox",
+            "activity_ide_long_use_checkbox", "spontaneous_talk_checkbox",
             "examples_en_input", "examples_ja_input",
         )
         dialog = SimpleNamespace(**dict.fromkeys(names, field))
@@ -159,7 +159,7 @@ class SettingsSecretUITests(unittest.TestCase):
             "update_check_enabled", "activity_idle_checkbox", "activity_lock_checkbox",
             "activity_quiet_checkbox", "activity_away_threshold_spin", "activity_app_checkbox",
             "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
-            "activity_ide_long_use_checkbox",
+            "activity_ide_long_use_checkbox", "spontaneous_talk_checkbox",
         ), field))
         dialog.original_settings = {"llm_router_enabled": False, "llm_provider": "groq"}
         dialog.update_checker = None

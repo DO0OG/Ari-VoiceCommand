@@ -503,6 +503,33 @@ class AICommandTests(unittest.TestCase):
             "local question", "local answer", data_source="local", lang=ANY
         )
 
+    def test_emit_user_message_feeds_response_emotion_to_mood(self):
+        spoken = []
+        command = AICommand(_FakeAssistant(), spoken.append, {"enabled": False})
+        mood_state = Mock()
+
+        with patch("core.mood_state.get_mood_state", return_value=mood_state):
+            command._emit_user_message("(기쁨) 좋은 소식이에요.")
+            command._emit_user_message("태그 없는 답변")
+
+        mood_state.record_response_emotion.assert_called_once_with("기쁨")
+        self.assertEqual(len(spoken), 2)
+
+    def test_run_interaction_marks_user_activity_for_speech_scheduler(self):
+        class _Assistant:
+            def add_to_history(self, role, content):
+                pass
+
+        command = AICommand(_Assistant(), lambda message: None, {"enabled": False})
+        command.try_fast_path = lambda text: object()
+
+        with patch.object(command, "_execute_fast_path_result", return_value=True), \
+             patch("memory.memory_manager.get_memory_manager"), \
+             patch("agent.speech_scheduler.note_user_activity") as note:
+            command.run_interaction("local question")
+
+        note.assert_called_once_with()
+
     def test_plain_response_records_metadata_with_assistant_without_record_option(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
         skill_ctx = {

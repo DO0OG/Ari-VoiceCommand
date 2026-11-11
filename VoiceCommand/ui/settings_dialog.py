@@ -234,6 +234,14 @@ class SettingsDialog(QDialog):
         gvbox = QVBoxLayout(group)
         gvbox.setSpacing(8)
 
+        self.spontaneous_talk_checkbox = QCheckBox(
+            _("한동안 대화가 없으면 먼저 말 걸기 (기본 꺼짐)")
+        )
+        self.spontaneous_talk_checkbox.setChecked(
+            bool(self.settings.get("spontaneous_talk_enabled", False))
+        )
+        gvbox.addWidget(self.spontaneous_talk_checkbox)
+
         rp_fields = [
             ("personality_input",  _("성격:"),           "personality",         _("예) 상냥하고 귀여운 AI 비서")),
             ("examples_en_input",  _("영어 예시 대사:"), "personality_examples_en", ""),
@@ -829,6 +837,7 @@ class SettingsDialog(QDialog):
             "activity_quiet_bubble_only_enabled": self.activity_quiet_bubble_checkbox.isChecked(),
             "activity_auto_game_mode_enabled": self.activity_auto_game_mode_checkbox.isChecked(),
             "activity_ide_long_use_reaction_enabled": self.activity_ide_long_use_checkbox.isChecked(),
+            "spontaneous_talk_enabled": self.spontaneous_talk_checkbox.isChecked(),
         }
 
         # LLM / TTS 값을 각 페이지에서 수집
