@@ -228,10 +228,28 @@ class SchedulerPanel(FloatingPanel):
             return
         for task in sorted(tasks, key=lambda t: t.next_run):
             row = TaskRow(task)
-            row.toggle_requested.connect(lambda tid: self._scheduler and self._scheduler.toggle_task(tid))
-            row.delete_requested.connect(lambda tid: self._scheduler and self._scheduler.remove_task(tid))
+            row.toggle_requested.connect(self._on_toggle)
+            row.delete_requested.connect(self._on_delete)
             row.run_now_requested.connect(self._on_run_now)
             self._list_layout.addWidget(row)
+
+    def _on_toggle(self, task_id: str) -> None:
+        if not self._scheduler:
+            return
+        try:
+            self._scheduler.toggle_task(task_id)
+        except OSError as exc:
+            show_temp_status(self._status_lbl, _("⚠️ 저장 실패: {error}").format(error=exc))
+        self._refresh_list()
+
+    def _on_delete(self, task_id: str) -> None:
+        if not self._scheduler:
+            return
+        try:
+            self._scheduler.remove_task(task_id)
+        except OSError as exc:
+            show_temp_status(self._status_lbl, _("⚠️ 저장 실패: {error}").format(error=exc))
+        self._refresh_list()
 
     def _on_run_now(self, task_id: str) -> None:
         if self._scheduler and self._scheduler.run_task_now(task_id):

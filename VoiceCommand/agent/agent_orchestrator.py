@@ -45,6 +45,7 @@ class AgentRunResult:
     # 단계는 모두 성공했지만 상태를 확인할 수단이 없었다. 다시 실행하면 동작이 중복된다.
     verification_unavailable: bool = False
     learning_component_trials: Dict[str, Dict[str, bool]] = field(default_factory=dict)
+    busy: bool = False
 
     def all_exec_results(self) -> List[ExecutionResult]:
         return [sr.exec_result for sr in self.step_results]
@@ -236,8 +237,7 @@ class AgentOrchestrator:
         """복잡한 목표를 다층 루프로 자율 달성."""
         self._learn.wait_for_background_thread()
         if not self._run_lock.acquire(blocking=False):
-            logger.warning("[Orchestrator] 이미 에이전트가 실행 중입니다.")
-            return AgentRunResult(goal=goal, summary=_("다른 작업이 진행 중입니다."))
+            return AgentRunResult(goal=goal, summary=_("다른 작업이 진행 중입니다."), busy=True)
 
         start_time = time.time()
         if self._owns_cancel_event:

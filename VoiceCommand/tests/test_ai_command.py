@@ -1045,6 +1045,28 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(command._extract_saved_path_from_agent_run(run_result), "")
 
+    def test_schedule_tools_report_storage_failure_instead_of_success(self):
+        from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask
+
+        for action in ("schedule", "cancel"):
+            with self.subTest(action=action):
+                scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+                scheduler._lock = threading.Lock()
+                scheduler._schedule_file = "scheduled_tasks.json"
+                scheduler._tasks = {"existing": ScheduledTask(
+                    task_id="existing", goal="보고서", schedule_expr="9시",
+                    next_run="2026-03-25T09:00:00",
+                )}
+                command = AICommand.__new__(AICommand)
+                command.scheduler = scheduler
+                with patch("agent.proactive_scheduler.write_json_atomic", side_effect=OSError("disk full")):
+                    if action == "schedule":
+                        result = command._handle_schedule_task({"goal": "보고서", "when": "5분 뒤"})
+                    else:
+                        result = command._handle_cancel_scheduled_task({"task_id": "existing"})
+                self.assertIn(_("예약 작업을 저장하지 못했습니다. 다시 시도해주세요."), result)
+                self.assertEqual(list(scheduler._tasks), ["existing"])
+
     def test_delayed_shutdown_is_scheduled_not_executed_immediately(self):
         # P2-5 이후: 지연 종료는 SystemCommand 경로(execute_command)로 라우팅됨
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

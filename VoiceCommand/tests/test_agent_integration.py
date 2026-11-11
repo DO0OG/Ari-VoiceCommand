@@ -51,6 +51,19 @@ class AgentIntegrationTests(unittest.TestCase):
             results.append(result)
         return steps, results, context
 
+    def test_run_reports_busy_separately_from_execution_failure(self):
+        orchestrator = AgentOrchestrator(AutonomousExecutor(), AgentPlanner(DummyLLMProvider()))
+        orchestrator._run_lock.acquire()
+        try:
+            result = orchestrator.run("예약 보고서")
+        finally:
+            orchestrator._run_lock.release()
+
+        self.assertTrue(getattr(result, "busy", False))
+        self.assertFalse(result.achieved)
+        self.assertEqual(result.step_results, [])
+        self.assertFalse(getattr(AgentRunResult(goal="실행 실패"), "busy", False))
+
     def test_create_folder_template_executes_end_to_end(self):
         with tempfile.TemporaryDirectory() as tmp:
             goal = "바탕화면에 samplefolder 폴더 만들어줘"

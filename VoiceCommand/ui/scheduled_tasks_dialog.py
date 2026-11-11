@@ -86,7 +86,10 @@ class ScheduledTasksDialog(QDialog):
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes and self._scheduler:
-            self._scheduler.cancel_task(task_id)
+            try:
+                self._scheduler.cancel_task(task_id)
+            except OSError as exc:
+                QMessageBox.warning(self, _("작업 취소"), str(exc))
             self._refresh()
 
     def closeEvent(self, event):
