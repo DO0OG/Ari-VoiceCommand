@@ -474,6 +474,55 @@ class AICommandTests(unittest.TestCase):
 
         self.assertEqual(response, "The time is 23:09.")
 
+    def test_empty_response_notice_is_suppressed_after_cancel_tool_or_stream(self):
+        class _Assistant:
+            def __init__(self, *, cancel=False, stream_text="", tool_calls=None):
+                self.cancel = cancel
+                self.stream_text = stream_text
+                self.tool_calls = tool_calls or []
+
+            def chat_with_tools(
+                self, text, include_context=True, stream_callback=None, cancel_event=None
+            ):
+                del text, include_context
+                if self.stream_text and stream_callback:
+                    stream_callback(self.stream_text)
+                if self.cancel:
+                    cancel_event.set()
+                return "", self.tool_calls
+
+        def run_case(assistant):
+            command = AICommand(assistant, lambda _message: None, {"enabled": False})
+            spoken = []
+            streamed = []
+            with (
+                patch.object(command, "try_fast_path", return_value=None),
+                patch.object(command, "_get_skill_context", return_value={}),
+                patch.object(command, "_start_instant_ack", return_value=None),
+                patch.object(command, "_execute_tool_calls", return_value=[None]),
+                patch.object(command, "_should_skip_tool_followup", return_value=False),
+            ):
+                command._run_interaction(
+                    "빈 응답 테스트", spoken.append, stream_callback=streamed.append
+                )
+            return spoken, streamed
+
+        notice = _("(걱정) 응답이 비어 있었어요. 다시 말씀해 주시거나 다른 모델로 바꿔 보세요.")
+        self.assertEqual(run_case(_Assistant()), ([notice], []))
+        self.assertEqual(run_case(_Assistant(cancel=True)), ([], []))
+        self.assertEqual(
+            run_case(_Assistant(stream_text="이미 표시한 문장")),
+            ([], ["이미 표시한 문장"]),
+        )
+        self.assertEqual(
+            run_case(_Assistant(tool_calls=[{
+                "id": "tool-1",
+                "name": "unknown_tool",
+                "arguments": {},
+            }])),
+            ([], []),
+        )
+
     def test_fast_path_records_conversation_through_memory_manager(self):
         class _Assistant:
             def __init__(self):
