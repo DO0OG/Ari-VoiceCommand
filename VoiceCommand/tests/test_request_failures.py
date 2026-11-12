@@ -62,6 +62,72 @@ class RequestFailureMessageTests(unittest.TestCase):
                 self.assertIs(caught.exception, error)
                 secondary.chat.completions.create.assert_not_called()
 
+    def test_ollama_requests_disable_reasoning(self):
+        provider = LLMProvider(provider="ollama", model="gemma4:12b")
+        client = Mock()
+        response = object()
+        client.chat.completions.create.return_value = response
+
+        result = provider._create_completion_with_fallback(
+            client, "ollama", "gemma4:12b", messages=[]
+        )
+
+        self.assertIs(result, response)
+        self.assertEqual(
+            client.chat.completions.create.call_args.kwargs["extra_body"],
+            {"reasoning_effort": "none"},
+        )
+
+    def test_ollama_retries_without_reasoning_after_bad_request(self):
+        provider = LLMProvider(provider="ollama", model="gemma4:12b")
+        client = Mock()
+        error = RuntimeError("invalid reasoning value")
+        error.status_code = 400
+        response = object()
+        client.chat.completions.create.side_effect = [error, response]
+
+        result = provider._create_completion_with_fallback(
+            client, "ollama", "gemma4:12b", messages=[]
+        )
+
+        self.assertIs(result, response)
+        calls = client.chat.completions.create.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(
+            [request.kwargs["extra_body"] for request in calls],
+            [{"reasoning_effort": "none"}, {}],
+        )
+        self.assertEqual(provider._reasoning_extra_body("ollama"), {})
+
+    def test_create_chat_completion_retries_only_ollama_reasoning_rejection(self):
+        provider = LLMProvider(provider="ollama", model="gemma4:12b")
+        client = Mock()
+        error = RuntimeError("invalid reasoning value")
+        error.status_code = 400
+        response = object()
+        client.chat.completions.create.side_effect = [error, response]
+
+        result = provider._create_chat_completion(client, "ollama", model="gemma4:12b", messages=[])
+
+        self.assertIs(result, response)
+        self.assertEqual(
+            [request.kwargs["extra_body"] for request in client.chat.completions.create.call_args_list],
+            [{"reasoning_effort": "none"}, {}],
+        )
+        for provider_name, message in (
+            ("ollama", "bad request"),
+            ("nvidia_nim", "invalid reasoning value"),
+        ):
+            with self.subTest(provider=provider_name, message=message):
+                provider = LLMProvider(provider=provider_name, model="m")
+                other_error = RuntimeError(message)
+                other_error.status_code = 400
+                client = Mock()
+                client.chat.completions.create.side_effect = other_error
+                with self.assertRaises(RuntimeError):
+                    provider._create_chat_completion(client, provider_name, model="m", messages=[])
+                self.assertEqual(client.chat.completions.create.call_count, 1)
+
     def test_server_error_switches_connection_without_duplicate_history(self):
         for with_tools in (False, True):
             with self.subTest(with_tools=with_tools):

@@ -95,6 +95,7 @@ class LLMProvider:
         self.max_history = 10
         self.max_context_tokens = self._load_int_setting("max_context_tokens", 8000)
         self._tool_streaming_support: dict[str, bool] = {}
+        self._ollama_reasoning_effort_supported = True
         self.client = None
         self.planner_client = None   # None = 기본 client 사용
         self.execution_client = None  # None = 기본 client 사용
@@ -598,6 +599,28 @@ class LLMProvider:
             return _("(걱정) 서버에 연결할 수 없어요. 네트워크 상태를 확인해주세요.")
         return _("(걱정) 요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요.")
 
+    def _create_chat_completion(self, client, provider, **kwargs):
+        """제공자별 추론 옵션을 붙여 요청한다. 옛 Ollama가 추론 끄기 값을 거절하면 값을 빼고 한 번 다시 보낸다."""
+        try:
+            return client.chat.completions.create(
+                **kwargs, extra_body=self._reasoning_extra_body(provider),
+            )
+        except Exception as exc:
+            if not (
+                provider == "ollama"
+                and self._ollama_reasoning_effort_supported
+                and getattr(exc, "status_code", None) == 400
+                and "reasoning" in str(exc).lower()
+            ):
+                raise
+            self._ollama_reasoning_effort_supported = False
+            logging.warning(
+                "[LLMProvider] Ollama가 reasoning_effort=none을 거부해 이번 실행에서는 값을 생략합니다."
+            )
+            return client.chat.completions.create(
+                **kwargs, extra_body=self._reasoning_extra_body(provider),
+            )
+
     def _create_completion_with_fallback(
         self,
         client,
@@ -624,9 +647,7 @@ class LLMProvider:
                 continue
             attempted.add(backend)
             try:
-                response = candidate.chat.completions.create(
-                    model=selected, **kwargs, extra_body=self._reasoning_extra_body(backend),
-                )
+                response = self._create_chat_completion(candidate, backend, model=selected, **kwargs)
                 if kwargs.get("stream") and self._is_custom_provider(backend):
                     response = self._sanitize_custom_stream(response, backend)
                 if _return_target:
@@ -918,7 +939,9 @@ class LLMProvider:
                 if self._response_field(block, "text", "")
             )
 
-        response = client.chat.completions.create(
+        response = self._create_chat_completion(
+            client,
+            provider,
             model=model,
             messages=[
                 {"role": "system", "content": instructions},
@@ -926,7 +949,6 @@ class LLMProvider:
             ],
             temperature=0,
             max_tokens=700,
-            extra_body=self._reasoning_extra_body(provider),
         )
         choices = self._response_field(response, "choices", []) or []
         if not choices:
@@ -956,6 +978,9 @@ class LLMProvider:
         """Groq의 reasoning 계열 모델(gpt-oss, qwen3 등)이 사고 과정(체인 오브
         소트)을 그대로 최종 응답 content에 섞어 보내는 것을 막는다.
         reasoning_format=hidden 이면 최종 답변만 content에 담겨 온다."""
+        if provider == "ollama" and self._ollama_reasoning_effort_supported:
+            # 추론 토큰이 응답 한도를 모두 써 빈 본문을 보내는 Ollama 모델을 위한 설정이다.
+            return {"reasoning_effort": "none"}
         if provider == "groq":
             return {"reasoning_format": "hidden"}
         if provider == "nvidia_nim":
@@ -1322,13 +1347,14 @@ class LLMProvider:
                     finally:
                         self._clear_active_stream(stream)
             else:
-                stream = client.chat.completions.create(
+                stream = self._create_chat_completion(
+                    client,
+                    provider,
                     model=model,
                     messages=messages,
                     temperature=float(kwargs.get("temperature", 0.7)),
                     max_tokens=int(kwargs.get("max_tokens", 1000)),
                     stream=True,
-                    extra_body=self._reasoning_extra_body(provider),
                 )
                 self._set_active_stream(stream, cancel_event)
                 try:
@@ -1406,7 +1432,9 @@ class LLMProvider:
                 return self._clean_response(" ".join([b.text for b in resp.content if getattr(b, "type", "") == "text"]))
             if provider in {"openai", "groq", "mistral", "gemini", "openrouter", "nvidia_nim", "ollama"}:
                 image_url = f"data:{media_type};base64,{data}"
-                resp = client.chat.completions.create(
+                resp = self._create_chat_completion(
+                    client,
+                    provider,
                     model=model,
                     messages=[{
                         "role": "user",
@@ -1416,7 +1444,6 @@ class LLMProvider:
                         ],
                     }],
                     max_tokens=800,
-                    extra_body=self._reasoning_extra_body(provider),
                 )
                 return self._clean_response(resp.choices[0].message.content or "")
         except Exception as exc:
@@ -1527,10 +1554,10 @@ class LLMProvider:
             messages.append({"role": "assistant", "content": None, "tool_calls": assistant_tool_calls})
             messages.extend(tool_result_messages)
 
-            response = client.chat.completions.create(
+            response = self._create_chat_completion(
+                client, provider,
                 model=model, messages=messages, temperature=0.7,
                 max_tokens=self._estimate_max_tokens(original_msg),
-                extra_body=self._reasoning_extra_body(provider),
             )
             if cancel_event is not None and cancel_event.is_set():
                 return ""

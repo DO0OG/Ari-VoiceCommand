@@ -3404,6 +3404,9 @@ msgstr "No microphone was found, so voice recognition is unavailable. Please sel
 msgid "아직 이전 요청을 처리하고 있어요."
 msgstr "I'm still processing the previous request."
 
+msgid "(걱정) 응답이 비어 있었어요. 다시 말씀해 주시거나 다른 모델로 바꿔 보세요."
+msgstr "(Worried) The response was empty. Please try saying that again or switch to another model."
+
 msgid "Version: {version} · Commit: {commit}"
 msgstr "Version: {version} · Commit: {commit}"
 

@@ -2060,6 +2060,16 @@ class AICommand(FastPathMixin, BaseCommand):
                     return interrupted_response
                 return ""
 
+            if (
+                not str(response or "").strip()
+                and not tool_calls
+                and not streamed_parts
+            ):
+                logging.warning("[AICommand] 최종 응답 본문이 비어 있습니다.")
+                self._emit_user_message(
+                    _("(걱정) 응답이 비어 있었어요. 다시 말씀해 주시거나 다른 모델로 바꿔 보세요.")
+                )
+
             if response:
                 if direct_skill_escalation:
                     history_recorder = getattr(self.ai_assistant, "add_to_history", None)
