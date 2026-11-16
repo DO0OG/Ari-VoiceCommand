@@ -24,7 +24,7 @@ Ari에 Jev 자체를 사용하는 것은 기술적으로 적합하지만, Jev는
 - 확신이 높은 단순 명령만 직접 실행하고, 애매하거나 복잡한 요청은 기존 Ari LLM/Agent로 넘긴다.
 - 위험하거나 되돌리기 어려운 작업은 Decision Engine의 확률과 관계없이 **기존 SafetyChecker/확인 절차를 절대 우회하지 않는다.**
 
-본 문서에서는 이 구성요소를 임시로 **Ari Local Decision Engine**, 내부 모델을 **Ari MicroJev / AriS1**이라고 부른다. 실제 제품명은 구현 단계에서 변경 가능하다.
+본 문서에서는 이 구성요소를 임시로 **Ari Local Decision Engine**, 내부 모델을 **로컬 결정 모델**이라고 부른다. 실제 제품명은 구현 단계에서 변경 가능하다.
 
 ---
 
@@ -339,7 +339,7 @@ jevbetter  top-1 0.916 / ECE 0.0182 /   40 menus/sec
 
 ### Ari에서의 의미
 
-**Ari MicroJev의 연구 기반으로 가장 유용한 프로젝트.**
+**Ari 로컬 결정 모델의 연구 기반으로 가장 유용한 프로젝트.**
 
 단, 코드를 그대로 복사하기보다 아이디어를 참고하여 Ari 요구사항에 맞춘 더 작은 구성을 따로 벤치하는 것이 바람직하다.
 
@@ -417,7 +417,7 @@ System One replica로서는 흥미롭지만 Ari의 "거의 리소스를 쓰지 �
 
 GLiNER 계열은 상대적으로 성숙한 classification/extraction 기반이다. 다국어 모델도 존재해 Ari 언어 범위에 유리하다.
 
-하지만 수백 M parameter 모델을 상시 올려둘 필요가 생기므로 MicroJev 목표에는 크다.
+하지만 수백 M parameter 모델을 상시 올려둘 필요가 생기므로 로컬 결정 모델 목표에는 크다.
 
 **결론: 정확도 비교용 upper baseline으로는 가치가 있으나 기본 채택은 보류.**
 
@@ -522,7 +522,7 @@ Ari Decision Engine의 임무는:
 
 기존 `CommandRegistry`의 command `matches()` 구조를 유지한다.
 
-## Stage 2 — Ari MicroJev
+## Stage 2 — 로컬 결정 모델
 
 Stage 1에서 놓친 자연스러운 표현을 처리한다.
 
@@ -553,7 +553,7 @@ Stage 1에서 놓친 자연스러운 표현을 처리한다.
 
 ## Stage 3 — Existing LLM / Agent
 
-다음 요청은 MicroJev에서 직접 처리하지 않는다.
+다음 요청은 로컬 결정 모델에서 직접 처리하지 않는다.
 
 ```text
 "크롬 열어서 어제 보던 자료 찾고 세 줄로 정리해줘"
@@ -562,11 +562,11 @@ Stage 1에서 놓친 자연스러운 표현을 처리한다.
 "최근 뉴스 찾아서 내 프로젝트에 영향 있는지 분석해줘"
 ```
 
-MicroJev는 이를 `run_agent_task`, `web_search + complex`, `conversation/unknown` 등으로 라우팅하고 기존 Ari의 지능을 그대로 사용한다.
+로컬 결정 모델은 이를 `run_agent_task`, `web_search + complex`, `conversation/unknown` 등으로 라우팅하고 기존 Ari의 지능을 그대로 사용한다.
 
 ---
 
-# 8. Ari MicroJev 모델 설계
+# 8. 로컬 결정 모델 설계
 
 ## 8.1 MVP: 가장 작은 baseline부터 시작
 
@@ -598,7 +598,7 @@ character 2~5 gram
 - 완전히 새로운 표현의 의미 일반화에는 한계
 - dynamic plugin tool description에는 약함
 
-### Baseline B — AriS1 One-pass Option Scorer
+### Baseline B — One-pass Option Scorer
 
 `jevbetter`의 연구 방향을 참고한다.
 
@@ -749,7 +749,7 @@ DecisionResult(
     probabilities={...},
     confidence=0.96,
     margin=0.92,
-    source="ari_s1",
+    source="local_scorer",
     latency_ms=3.1,
 )
 ```
@@ -847,7 +847,7 @@ ConfirmationManager
 
 # 13. Unknown / Abstain 반드시 지원
 
-AriS1에는 실제 action 외에 항상 다음 후보가 있어야 한다.
+로컬 결정 모델에는 실제 action 외에 항상 다음 후보가 있어야 한다.
 
 ```text
 unknown_or_complex
@@ -1076,7 +1076,7 @@ plugin 설치
  ↓
 plugin tool description 추가
  ↓
-AriS1 choice candidate 자동 추가
+option scorer choice candidate 자동 추가
 ```
 
 하지만 MVP에서는 안전하게 진행한다.
@@ -1089,7 +1089,7 @@ plugin tool은 기존 LLM routing 유지.
 
 ### Phase 2
 
-AriS1이 candidate description을 읽고 unseen option도 평가할 수 있는지 별도 benchmark.
+option scorer가 candidate description을 읽고 unseen option도 평가할 수 있는지 별도 benchmark.
 
 성능이 검증되면 plugin tool까지 확대.
 
@@ -1112,9 +1112,9 @@ VoiceCommand/
 
   resources/
     decision/
-      ari_s1.onnx            # 최종 선택 시
-      ari_s1_config.json
-      ari_s1.sha256
+      decision_model.onnx            # 최종 선택 시
+      decision_model_config.json
+      decision_model.sha256
 
   scripts/
     decision_data/
@@ -1347,7 +1347,7 @@ Character n-gram + linear model을 구현한다.
 
 ---
 
-## Phase 2 — AriS1 Tiny Option Scorer
+## Phase 2 — Tiny Option Scorer
 
 Linear baseline이 부족한 문장들을 대상으로 Jev-like dynamic scorer를 구현한다.
 
@@ -1390,7 +1390,7 @@ Linear과 동일 test set으로 비교한다.
 바로 실행하지 않고 기존 LLM 결과와 비교한다.
 
 ```text
-MicroJev prediction
+로컬 결정 모델 예측
 vs
 실제로 실행된 command
 ```
@@ -1469,7 +1469,7 @@ fallback:
             ↓
 4. 충분하면 그대로 채택
             ↓ 부족하면
-5. jevbetter-inspired AriS1 one-pass scorer 제작
+5. jevbetter-inspired one-pass scorer 제작
             ↓
 6. Calibration + Confidence Gate
             ↓

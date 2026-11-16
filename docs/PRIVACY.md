@@ -46,7 +46,7 @@ Features marked "on by default" are active in a new installation. Features that 
 
 - Default: `tts_mode` is Fish Audio, which needs an API key. Without a key, Ari uses Edge TTS instead. Edge TTS sends the text to be spoken to Microsoft's online speech service through the edge-tts library. Fixed short messages are also synthesized in advance in the background and cached on your PC.
 - With a key: Fish Audio (`api.fish.audio`), OpenAI, ElevenLabs, or an OpenAI-compatible server you configure receive the text to be spoken. Voice cloning features upload the reference audio file you choose to ElevenLabs or to the server you configure.
-- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face. Clearing "Use online speech services" on the installer's privacy options page stops Edge TTS, including the background pre-synthesis; Ari then shows replies as text bubbles without sound until you choose another engine. Selecting it again in the installer and reinstalling turns it back on.
+- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. If local TTS fails to start, the default setting falls back to Edge TTS, which sends the text to Microsoft; set `tts_fallback_provider` to `none` to prevent this. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face. Clearing "Use online speech services" on the installer's privacy options page stops Edge TTS, including the background pre-synthesis; Ari then shows replies as text bubbles without sound until you choose another engine. Selecting it again in the installer and reinstalling turns it back on.
 
 ### Text embeddings (memory and skill search)
 
@@ -60,7 +60,7 @@ Features marked "on by default" are active in a new installation. Features that 
 - Remote approval: off by default (`telegram_remote_approval_enabled`). When enabled, risky actions from Telegram requests can be approved in the same chat; no response within 60 seconds or a communication error means denial. A compromised chat account could approve risky actions.
 - Voice notes and photos: off by default (`telegram_voice_enabled`, `telegram_photo_enabled`). When enabled, Ari downloads the voice note or photo you send from Telegram's servers (up to 10 MB, voice up to 120 seconds). Voice is converted to text only on this PC with local Whisper, but the recognized text and the photo can be sent to the LLM provider you configured. Temporary files are deleted after processing.
 - Default: off (`telegram_enabled`). It also needs a bot token and an allow-list of chat IDs; without both, nothing runs.
-- Turn off: set `telegram_enabled` to `false` in `ari_settings.json`. The bot token is entered in the settings window or through an environment variable.
+- Turn off: set `telegram_enabled` to `false` in `ari_settings.json`. The bot token is set through the `ARI_TELEGRAM_BOT_TOKEN` environment variable or the `.env` file next to `ari_settings.json`.
 
 ### Tools Ari can run on request
 
@@ -68,7 +68,7 @@ These run only when you ask for something that needs them.
 
 - Weather: when no city is named, your approximate location is looked up from your IP address with `ipapi.co`. City names that Ari does not know are looked up with Open-Meteo's geocoding API. The forecast is requested from `api.open-meteo.com` with coordinates.
 - Web search: the search text is sent through the `ddgs` web-search library. This document does not list which search engine receives a given query.
-- Web pages: Ari can fetch public web pages you or the model choose, and can drive a browser to visit sites. Requests to local or private addresses are refused.
+- Web pages: Ari can fetch public web pages you or the model choose, and can drive a browser to visit sites. Fetching web pages accepts only public addresses, but browser automation can open localhost and private addresses.
 - Image generation: off by default (`image_generation_enabled`). When on, the prompt is sent to OpenAI with your API key.
 - Google Calendar and Gmail: off by default (`google_calendar_enabled`). When you connect a Google account, Ari signs in with OAuth in your browser and calls Google's Calendar and Gmail APIs when you ask for them. Use the disconnect action in the agent settings to sign out.
 
@@ -137,7 +137,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 
 - 기본값: `tts_mode`는 Fish Audio이며 API 키가 필요합니다. 키가 없으면 Ari는 Edge TTS를 씁니다. Edge TTS는 edge-tts 라이브러리를 통해 읽을 텍스트를 Microsoft 온라인 음성 서비스로 보냅니다. 고정된 짧은 메시지는 백그라운드에서 미리 합성해 PC에 캐시합니다.
 - 키가 있을 때: Fish Audio(`api.fish.audio`), OpenAI, ElevenLabs, 직접 설정한 OpenAI 호환 서버가 읽을 텍스트를 받습니다. 음성 복제 기능은 선택한 참조 오디오 파일을 ElevenLabs나 설정한 서버로 올립니다.
-- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제하면 Edge TTS(백그라운드 사전 합성 포함)를 쓰지 않으며, 다른 엔진을 고르기 전까지 응답은 소리 없이 말풍선 글자로만 나옵니다. 설치 프로그램에서 다시 선택하고 설치하면 다시 켜집니다.
+- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 다만 로컬 음성 엔진 초기화가 실패하면 기본 설정에서는 Edge TTS로 바뀌어 텍스트가 Microsoft 온라인 음성 서비스로 전송됩니다. 막으려면 `tts_fallback_provider`를 `none`으로 두세요. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제하면 Edge TTS(백그라운드 사전 합성 포함)를 쓰지 않으며, 다른 엔진을 고르기 전까지 응답은 소리 없이 말풍선 글자로만 나옵니다. 설치 프로그램에서 다시 선택하고 설치하면 다시 켜집니다.
 
 ### 텍스트 임베딩(기억·스킬 검색)
 
@@ -151,7 +151,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 - 원격 승인: 기본 꺼짐(`telegram_remote_approval_enabled`). 켜면 Telegram 요청의 위험 작업을 같은 대화방에서 승인하며, 60초 동안 응답이 없거나 통신 오류가 나면 거부합니다. 대화방 계정이 탈취되면 위험 작업까지 승인될 수 있습니다.
 - 음성 메모·사진: 기본 꺼짐(`telegram_voice_enabled`, `telegram_photo_enabled`). 켜면 보낸 음성 메모나 사진을 Telegram 서버에서 내려받습니다(파일 10MB, 음성 120초까지). 음성은 이 PC의 로컬 Whisper로만 글로 바꾸지만, 인식된 글과 사진은 설정한 LLM 제공자로 전송될 수 있습니다. 임시 파일은 처리 뒤 지웁니다.
 - 기본값: 꺼짐(`telegram_enabled`). 봇 토큰과 허용 채팅 ID 목록이 모두 있어야 하며, 없으면 동작하지 않습니다.
-- 끄는 방법: `ari_settings.json`에서 `telegram_enabled`를 `false`로 두세요. 봇 토큰은 설정 창이나 환경변수로 입력합니다.
+- 끄는 방법: `ari_settings.json`에서 `telegram_enabled`를 `false`로 두세요. 봇 토큰은 `ARI_TELEGRAM_BOT_TOKEN` 환경변수 또는 `ari_settings.json`과 같은 폴더의 `.env`에 설정합니다.
 
 ### 요청하면 실행하는 도구
 
@@ -159,7 +159,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 
 - 날씨: 도시를 말하지 않으면 `ipapi.co`로 IP 주소에서 대략적인 위치를 조회합니다. Ari가 모르는 도시 이름은 Open-Meteo 지오코딩 API로 조회하고, 예보는 좌표로 `api.open-meteo.com`에 요청합니다.
 - 웹 검색: 검색어를 `ddgs` 웹 검색 라이브러리를 통해 보냅니다. 어떤 검색 엔진이 질의를 받는지는 이 문서에 적지 않았습니다.
-- 웹 페이지: 사용자나 모델이 고른 공개 웹 페이지를 가져오고, 브라우저를 조작해 사이트를 방문할 수 있습니다. 로컬·사설 주소 요청은 거부합니다.
+- 웹 페이지: 사용자나 모델이 고른 공개 웹 페이지를 가져오고, 브라우저를 조작해 사이트를 방문할 수 있습니다. 웹 페이지 가져오기는 공개 주소만 허용하지만, 브라우저 자동화는 로컬·사설 주소도 열 수 있습니다.
 - 이미지 생성: 기본 꺼짐(`image_generation_enabled`). 켜면 프롬프트를 사용자의 API 키로 OpenAI에 보냅니다.
 - Google 캘린더와 Gmail: 기본 꺼짐(`google_calendar_enabled`). Google 계정을 연결하면 브라우저에서 OAuth로 로그인하고, 요청할 때 Google 캘린더·Gmail API를 호출합니다. 에이전트 설정에서 연결 해제로 로그아웃할 수 있습니다.
 
@@ -230,7 +230,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 
 - 初期設定: `tts_mode` は Fish Audio で、API キーが必要です。キーがない場合、Ari は Edge TTS を使います。Edge TTS は edge-tts ライブラリを通じて、読み上げるテキストを Microsoft のオンライン音声サービスに送ります。定型の短いメッセージは、バックグラウンドで事前に合成して PC にキャッシュします。
 - キーがある場合: Fish Audio(`api.fish.audio`)、OpenAI、ElevenLabs、自分で設定した OpenAI 互換サーバーが読み上げるテキストを受け取ります。音声クローン機能は、選択した参照音声ファイルを ElevenLabs または設定したサーバーにアップロードします。
-- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにすると、Edge TTS(バックグラウンドの事前合成を含む)を使わず、別のエンジンを選ぶまで応答は音声なしで吹き出しの文字だけになります。インストーラーで再び選択してインストールすると、再びオンになります。
+- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。ただし、ローカル音声エンジンの初期化に失敗すると、既定の設定では Edge TTS に切り替わり、テキストが Microsoft のオンライン音声サービスに送信されます。防ぐには `tts_fallback_provider` を `none` にしてください。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにすると、Edge TTS(バックグラウンドの事前合成を含む)を使わず、別のエンジンを選ぶまで応答は音声なしで吹き出しの文字だけになります。インストーラーで再び選択してインストールすると、再びオンになります。
 
 ### テキスト埋め込み(記憶とスキルの検索)
 
@@ -244,7 +244,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 - リモート承認: 初期設定はオフ(`telegram_remote_approval_enabled`)。有効にすると Telegram リクエストの危険な操作を同じチャットで承認できます。60秒以内に応答がない場合や通信エラー時は拒否します。チャットのアカウントが乗っ取られると危険な操作も承認されるおそれがあります。
 - 音声メモ・写真: 初期設定はオフ(`telegram_voice_enabled`, `telegram_photo_enabled`)。有効にすると、送信した音声メモや写真を Telegram のサーバーからダウンロードします(ファイルは 10MB、音声は 120 秒まで)。音声はこの PC 上のローカル Whisper でのみ文字に変換しますが、認識したテキストと写真は設定した LLM プロバイダーに送信されることがあります。一時ファイルは処理後に削除します。
 - 初期設定: オフ(`telegram_enabled`)。ボットトークンと許可するチャット ID のリストの両方が必要で、どちらかがなければ動作しません。
-- オフにする方法: `ari_settings.json` で `telegram_enabled` を `false` にしてください。ボットトークンは設定ウィンドウまたは環境変数で入力します。
+- オフにする方法: `ari_settings.json` で `telegram_enabled` を `false` にしてください。ボットトークンは `ARI_TELEGRAM_BOT_TOKEN` 環境変数、または `ari_settings.json` と同じフォルダーの `.env` に設定します。
 
 ### 依頼に応じて実行するツール
 
@@ -252,7 +252,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 
 - 天気: 都市名を指定しない場合、`ipapi.co` で IP アドレスからおおよその位置を調べます。Ari が知らない都市名は Open-Meteo のジオコーディング API で調べ、予報は座標を使って `api.open-meteo.com` に要求します。
 - ウェブ検索: 検索語を `ddgs` ウェブ検索ライブラリを通じて送ります。どの検索エンジンがクエリを受け取るかは、この文書には記載していません。
-- ウェブページ: ユーザーやモデルが選んだ公開ウェブページを取得し、ブラウザーを操作してサイトを訪問することがあります。ローカルアドレスやプライベートアドレスへのリクエストは拒否します。
+- ウェブページ: ユーザーやモデルが選んだ公開ウェブページを取得し、ブラウザーを操作してサイトを訪問することがあります。ウェブページの取得は公開アドレスのみ許可しますが、ブラウザー自動化ではローカルアドレスやプライベートアドレスも開けます。
 - 画像生成: 初期状態でオフ(`image_generation_enabled`)。オンにすると、プロンプトをユーザーの API キーで OpenAI に送ります。
 - Google カレンダーと Gmail: 初期状態でオフ(`google_calendar_enabled`)。Google アカウントを接続すると、ブラウザーで OAuth によりサインインし、依頼に応じて Google のカレンダーと Gmail の API を呼び出します。エージェント設定の接続解除でサインアウトできます。
 

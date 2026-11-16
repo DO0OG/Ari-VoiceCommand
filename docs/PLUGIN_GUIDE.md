@@ -190,7 +190,7 @@ def register(context):
 ```
 
 - 핸들러 시그니처: `(args: dict) -> Optional[str]`
-- `str`을 반환하면 TTS로 읽어 주고, `None`을 반환하면 아무 일도 하지 않습니다.
+- `str`을 반환하면 그 문자열은 도구 결과로 전달되며, 보통 LLM이 이어서 답변을 만듭니다. 후속 답변이 없으면 결과 문자열을 출력합니다. `None`을 반환하면 아무 일도 하지 않습니다.
 - `intents`는 `conversation`, `memory`, `web`, `file`, `vision`, `automation`, `schedule` 중
   도구를 사용할 intent 목록입니다. 생략한 도구는 `conversation`에서 제외되고 다른 intent에서는
   기존처럼 포함됩니다.
