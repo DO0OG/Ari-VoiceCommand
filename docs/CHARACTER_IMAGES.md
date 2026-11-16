@@ -6,7 +6,7 @@
 ## 1. 이미지 파일 규칙
 - **형식**: 투명 배경을 가진 `.png` 파일
 - **파일명**: `{동작이름}{프레임번호}.png` (예: `idle1.png`, `idle2.png` ...)
-- **위치**: `VoiceCommand/images/` 폴더
+- **위치**: 설치본은 `%AppData%\Ari\images` 폴더가 있으면 그곳을, 없으면 설치 폴더의 `images` 폴더를 씁니다. 소스 실행은 `VoiceCommand\.ari_runtime\images` 폴더가 있으면 그곳을, 없으면 `VoiceCommand/images/` 폴더를 씁니다.
 
 ---
 
