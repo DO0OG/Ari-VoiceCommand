@@ -4,12 +4,14 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent.speech_scheduler import (
     EventSpeechScheduler,
     choose_phrase,
     note_user_activity,
+    read_pc_status,
 )
 from core.mood_state import MoodState
 from core.settings_schema import DEFAULT_SETTINGS
@@ -25,6 +27,8 @@ class SpeechSchedulerTests(unittest.TestCase):
         self.scheduler_index = 0
 
     def create_scheduler(self, **kwargs):
+        # 실제 PC 센서 값이 다른 시험의 발화 건수에 끼어들지 않게 한다.
+        kwargs.setdefault("pc_status_provider", dict)
         self.scheduler_index += 1
         return EventSpeechScheduler(
             self.messages.append,
@@ -344,6 +348,136 @@ class SpeechSchedulerTests(unittest.TestCase):
             DEFAULT_SETTINGS["weekly_report_enabled"],
         )
         self.assertEqual(template["fixed_responses"], {})
+
+    def pc_alert_scheduler(self):
+        self.guards.clear()
+        self.guards["other_window"] = True
+        return self.create_scheduler(
+            context_provider=lambda: {}, pc_status_provider=read_pc_status
+        )
+
+    def pc_alert_step(self, scheduler, battery, free_gib=50.0, minutes=10, settings=None):
+        """가짜 센서 값으로 센서 함수를 바꾸고 시계를 옮겨 tick 을 한 번 돌린다."""
+        self.now += timedelta(minutes=minutes)
+        settings = {} if settings is None else settings
+        sensor = None
+        if battery is not None:
+            sensor = SimpleNamespace(percent=battery[0], power_plugged=battery[1])
+        with (
+            patch("psutil.sensors_battery", return_value=sensor),
+            patch(
+                "psutil.disk_usage",
+                return_value=SimpleNamespace(free=int(free_gib * 1024**3)),
+            ),
+            patch.dict(os.environ, {"SystemDrive": "C:"}),
+            patch(
+                "core.config_manager.ConfigManager.get",
+                side_effect=lambda key, default=None: settings.get(key, default),
+            ),
+        ):
+            return scheduler.tick()
+
+    def test_pc_alert_fires_once_and_rearms_after_recovery(self):
+        scheduler = self.pc_alert_scheduler()
+        readings = [
+            ((30, False), 0),   # 여유 있음
+            ((19, False), 1),   # 기준 아래로 내려가 한 번 알림
+            ((18, False), 1),   # 같은 상태에서는 반복하지 않음
+            ((22, False), 1),   # 기준 위지만 충분히 회복하지 않음
+            ((12, False), 1),   # 다시 내려가도 아직 알릴 수 있는 상태가 아님
+            ((26, False), 1),   # 충분히 회복
+            ((15, False), 2),   # 다시 내려가면 한 번 더 알림
+            ((14, True), 2),    # 충전기를 연결하면 알리지 않음
+        ]
+        for battery, expected_count in readings:
+            with self.subTest(battery=battery):
+                self.pc_alert_step(scheduler, battery)
+                self.assertEqual(len(self.messages), expected_count)
+        self.assertIn("19%", self.messages[0])
+        self.assertIn("15%", self.messages[1])
+
+    def test_pc_alert_drops_stale_warning_and_handles_no_battery(self):
+        scheduler = self.pc_alert_scheduler()
+        self.guards["locked"] = True
+        self.pc_alert_step(scheduler, (15, False))
+        self.assertEqual(self.messages, [])
+        self.assertEqual([item[0] for item in scheduler._pending], ["battery_low"])
+
+        # 잠긴 사이 충전기를 연결하면 미뤄진 알림은 버려진다.
+        self.pc_alert_step(scheduler, (15, True))
+        self.guards["locked"] = False
+        self.pc_alert_step(scheduler, (15, True))
+        self.assertEqual(self.messages, [])
+        self.assertEqual(scheduler._pending, [])
+
+        # 배터리가 없는 PC는 배터리 검사만 건너뛰고 디스크 검사는 한다.
+        self.pc_alert_step(scheduler, None, free_gib=5)
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn("C 드라이브", self.messages[0])
+        self.assertIn("5.0 GB", self.messages[0])
+        self.pc_alert_step(scheduler, None, free_gib=4)
+        self.assertEqual(len(self.messages), 1)
+
+        # 회복한 뒤 다시 부족해지면, 대기 시간(6시간)이 지난 다음 한 번 더 알린다.
+        self.pc_alert_step(scheduler, None, free_gib=20)
+        self.pc_alert_step(scheduler, None, free_gib=3, minutes=7 * 60)
+        self.assertEqual(len(self.messages), 2)
+
+    def test_pc_alert_discarded_before_speaking_can_alert_again(self):
+        scheduler = self.pc_alert_scheduler()
+        self.guards["locked"] = True
+        self.pc_alert_step(scheduler, (15, False))
+        self.assertEqual(len(scheduler._pending), 1)
+
+        # 보류 중 값이 기준과 회복 기준 사이로 올라 대기분이 버려진다.
+        self.pc_alert_step(scheduler, (22, False))
+        self.assertEqual(scheduler._pending, [])
+
+        # 다시 기준 아래로 내려가면 보류가 풀린 뒤 한 번 알린다.
+        self.pc_alert_step(scheduler, (15, False))
+        self.guards["locked"] = False
+        self.pc_alert_step(scheduler, (15, False))
+        self.assertEqual(len(self.messages), 1)
+        self.pc_alert_step(scheduler, (15, False))
+        self.assertEqual(len(self.messages), 1)
+
+    def test_pc_alert_skips_battery_when_power_state_unknown(self):
+        scheduler = self.pc_alert_scheduler()
+        self.pc_alert_step(scheduler, (10, None))
+        self.assertEqual(self.messages, [])
+        self.assertEqual(scheduler._pending, [])
+
+        # 전원 상태를 알게 되면 배터리 알림을 낸다.
+        self.pc_alert_step(scheduler, (10, False))
+        self.assertEqual(len(self.messages), 1)
+
+    def test_pc_alert_follows_setting_and_defaults_to_on(self):
+        scheduler = self.pc_alert_scheduler()
+        self.pc_alert_step(scheduler, (10, False), settings={"pc_resource_alerts_enabled": False})
+        self.assertEqual(self.messages, [])
+
+        # 설정 파일에 키가 없으면 기본값(켜짐)으로 동작한다.
+        self.pc_alert_step(scheduler, (10, False))
+        self.assertEqual(len(self.messages), 1)
+
+    def test_pc_alert_check_runs_at_most_every_five_minutes(self):
+        scheduler = self.pc_alert_scheduler()
+        calls = []
+        scheduler._pc_status_provider = lambda: calls.append(1) or {}
+        for minutes in (0, 1, 2, 3, 4):
+            self.pc_alert_step(scheduler, None, minutes=minutes)
+        self.assertEqual(len(calls), 2)
+
+    def test_pc_alert_default_matches_settings_template(self):
+        template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
+        with template_path.open("r", encoding="utf-8") as stream:
+            template = json.load(stream)
+
+        self.assertTrue(DEFAULT_SETTINGS["pc_resource_alerts_enabled"])
+        self.assertEqual(
+            template["pc_resource_alerts_enabled"],
+            DEFAULT_SETTINGS["pc_resource_alerts_enabled"],
+        )
 
 
 if __name__ == "__main__":

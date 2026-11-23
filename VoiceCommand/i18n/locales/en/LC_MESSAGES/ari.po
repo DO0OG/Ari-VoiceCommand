@@ -4254,3 +4254,12 @@ msgstr "Sending an email to {to}"
 
 msgid "사용자가 승인하지 않아 메일을 보내지 않았습니다."
 msgstr "The email was not sent because you did not approve it."
+
+msgid "배터리가 {percent}% 남았어요. 충전기를 연결해 주세요."
+msgstr "The battery is at {percent}%. Please plug in the charger."
+
+msgid "{drive} 드라이브 여유 공간이 {free} 남았어요."
+msgstr "Only {free} of free space is left on drive {drive}."
+
+msgid "배터리·디스크 공간이 부족하면 먼저 알리기"
+msgstr "Warn me first when the battery or disk space runs low"
