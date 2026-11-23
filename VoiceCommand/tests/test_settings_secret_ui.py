@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea
 
 from ui.settings_dialog import SettingsDialog
 from ui.stt_settings_dialog import STTSettingsDialog
@@ -89,6 +89,20 @@ class SettingsSecretUITests(unittest.TestCase):
         self.assertIsNotNone(dialog.audio_diagnostic_panel)
         dialog.reject()
 
+    def test_rp_tab_shows_address_and_tone_with_privacy_notice(self):
+        self._app = QApplication.instance() or QApplication([])
+        saved = {"user_address_name": "주인님", "user_reply_tone": "공손한 존댓말"}
+        with patch("ui.settings_dialog.ConfigManager.load_settings", return_value=saved):
+            dialog = SettingsDialog()
+        self.addCleanup(dialog.deleteLater)
+
+        self.assertEqual(dialog.user_address_input.text(), "주인님")
+        self.assertEqual(dialog.user_reply_tone_input.text(), "공손한 존댓말")
+        self.assertEqual(dialog.user_address_input.maxLength(), 30)
+        self.assertEqual(dialog.user_reply_tone_input.maxLength(), 60)
+        self.assertIn("외부 언어 모델", dialog.findChild(QLabel, "user_address_notice").text())
+        dialog.reject()
+
     def test_stt_energy_slider_preserves_low_and_large_saved_thresholds(self):
         self._app = QApplication.instance() or QApplication([])
         for threshold in (7, 5000):
@@ -120,6 +134,7 @@ class SettingsSecretUITests(unittest.TestCase):
             "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
             "activity_ide_long_use_checkbox", "spontaneous_talk_checkbox",
             "examples_en_input", "examples_ja_input",
+            "user_address_input", "user_reply_tone_input",
         )
         dialog = SimpleNamespace(**dict.fromkeys(names, field))
         dialog.update_checker = None
@@ -161,7 +176,13 @@ class SettingsSecretUITests(unittest.TestCase):
             "activity_quiet_bubble_checkbox", "activity_auto_game_mode_checkbox",
             "activity_ide_long_use_checkbox", "spontaneous_talk_checkbox",
         ), field))
-        dialog.original_settings = {"llm_router_enabled": False, "llm_provider": "groq"}
+        blank_line = Mock()
+        blank_line.text.return_value = ""
+        dialog.user_address_input = dialog.user_reply_tone_input = blank_line
+        dialog.original_settings = {
+            "llm_router_enabled": False, "llm_provider": "groq",
+            "user_address_name": "", "user_reply_tone": "",
+        }
         dialog.update_checker = None
         dialog._float = lambda value, default: float(value)
         dialog._llm_page = Mock()

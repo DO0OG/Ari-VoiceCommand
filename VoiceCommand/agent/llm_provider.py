@@ -53,7 +53,8 @@ class LLMProvider:
                  memory_extractor_api_key="",
                  system_prompt="", personality="", scenario="", history_instruction="",
                  response_verbosity="concise", router_enabled=DEFAULT_SETTINGS["llm_router_enabled"],
-                 provider_configs=None, personality_examples_en="", personality_examples_ja=""):
+                 provider_configs=None, personality_examples_en="", personality_examples_ja="",
+                 user_address_name="", user_reply_tone=""):
         self.provider = provider
         self.api_key = api_key
         self.provider_configs = {
@@ -113,6 +114,8 @@ class LLMProvider:
             personality_examples_en=personality_examples_en,
             personality_examples_ja=personality_examples_ja,
             response_verbosity=response_verbosity,
+            user_address_name=user_address_name,
+            user_reply_tone=user_reply_tone,
         )
 
         if api_key or provider == "ollama" or not self.provider_configs.get(provider, {}).get("requires_api_key", True):
@@ -856,6 +859,7 @@ class LLMProvider:
             scenario=self.scenario,
             history_instruction=self.rp_generator.history_instruction,
             include_context=include_context,
+            reply_preference=self.rp_generator.reply_preference_signature(),
         )
 
     def _has_any_client(self) -> bool:
@@ -2142,6 +2146,8 @@ class LLMProvider:
                 time_prompt = memory_manager.get_current_time_prompt()
             except Exception as e:
                 logging.debug("[LLM] 메모리 컨텍스트 주입 실패: %s", e)
+        # 추정한 스타일·기억 뒤에 두어 사용자가 직접 정한 값이 우선하게 한다.
+        parts.append(self.rp_generator.build_reply_preference_prompt())
         skill_ctx = self._get_skill_context(user_message)
         if skill_ctx.get("prompt"):
             parts.append(skill_ctx["prompt"])
@@ -2259,6 +2265,8 @@ def _build_llm_provider() -> LLMProvider:
         personality_examples_en=s.get("personality_examples_en", ""),
         personality_examples_ja=s.get("personality_examples_ja", ""),
         response_verbosity=s.get("response_verbosity", "concise"),
+        user_address_name=s.get("user_address_name", ""),
+        user_reply_tone=s.get("user_reply_tone", ""),
         router_enabled=s.get("llm_router_enabled", DEFAULT_SETTINGS["llm_router_enabled"]),
         provider_configs=provider_configs,
     )

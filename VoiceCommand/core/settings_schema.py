@@ -95,6 +95,8 @@ DEFAULT_SETTINGS = {
     "system_prompt": "",
     "history_instruction": "",
     "response_verbosity": "concise",  # concise | normal | chatty — 응답 말수 조절
+    "user_address_name": "",  # 사용자가 정한 호칭 — 비면 프롬프트에 아무것도 더하지 않음
+    "user_reply_tone": "",  # 사용자가 정한 답변 말투 — 비면 프롬프트에 아무것도 더하지 않음
     # ── 기타 ────────────────────────────────────────────────────────────
     "microphone": "",
     "audio_output_device": "",

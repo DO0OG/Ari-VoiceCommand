@@ -20,6 +20,9 @@ from core.activity_monitor import refresh_activity_monitor
 from core.config_manager import ConfigManager
 from core.update_checker import get_update_status
 from core.custom_llm_providers import is_custom_secret_key
+from core.rp_generator import (
+    USER_ADDRESS_NAME_MAX_LENGTH, USER_REPLY_TONE_MAX_LENGTH, normalize_one_line,
+)
 from i18n.translator import _, set_language, get_language
 from ui.theme import (
     FONT_KO, FONT_SIZE_NORMAL, COLOR_SUCCESS,
@@ -89,6 +92,7 @@ class SettingsDialog(QDialog):
         "gemini_api_key", "openrouter_api_key", "nvidia_nim_api_key", "system_prompt", "personality",
         "scenario", "history_instruction", "response_verbosity",
         "personality_examples_en", "personality_examples_ja",
+        "user_address_name", "user_reply_tone",
     }
     THEME_KEYS = {"ui_theme_preset", "ui_theme_scale", "ui_font_family"}
     CHARACTER_KEYS = {"character_scale", "character_ground_offset"}
@@ -270,6 +274,25 @@ class SettingsDialog(QDialog):
         self.verbosity_combo.addItem(_("수다스럽게"), "chatty")
         self._set_combo(self.verbosity_combo, self.settings.get("response_verbosity", "concise"))
         gvbox.addWidget(self.verbosity_combo)
+
+        gvbox.addWidget(QLabel(_("불러 줄 호칭:")))
+        self.user_address_input = QLineEdit(str(self.settings.get("user_address_name") or ""))
+        self.user_address_input.setMaxLength(USER_ADDRESS_NAME_MAX_LENGTH)
+        self.user_address_input.setPlaceholderText(_("예) 주인님 (비우면 지정하지 않음)"))
+        gvbox.addWidget(self.user_address_input)
+
+        gvbox.addWidget(QLabel(_("답변 말투:")))
+        self.user_reply_tone_input = QLineEdit(str(self.settings.get("user_reply_tone") or ""))
+        self.user_reply_tone_input.setMaxLength(USER_REPLY_TONE_MAX_LENGTH)
+        self.user_reply_tone_input.setPlaceholderText(_("예) 공손한 존댓말 (비우면 지정하지 않음)"))
+        gvbox.addWidget(self.user_reply_tone_input)
+
+        address_notice = QLabel(
+            _("호칭과 말투는 외부 언어 모델 제공자로 전송될 수 있습니다. 개인 정보는 넣지 마세요.")
+        )
+        address_notice.setObjectName("user_address_notice")
+        address_notice.setWordWrap(True)
+        gvbox.addWidget(address_notice)
 
         vbox.addWidget(group, 1)
         return self._create_scroll_area(widget)
@@ -815,6 +838,12 @@ class SettingsDialog(QDialog):
             "system_prompt": self.system_input.toPlainText().strip(),
             "history_instruction": self.history_input.toPlainText().strip(),
             "response_verbosity": self.verbosity_combo.currentData(),
+            "user_address_name": normalize_one_line(
+                self.user_address_input.text(), USER_ADDRESS_NAME_MAX_LENGTH
+            ),
+            "user_reply_tone": normalize_one_line(
+                self.user_reply_tone_input.text(), USER_REPLY_TONE_MAX_LENGTH
+            ),
 
             # Device / Theme / Language
             "microphone": self.mic_combo.currentData(),
