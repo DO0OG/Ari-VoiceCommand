@@ -19,6 +19,8 @@ class GlobalAudio:
     """전역 PyAudio 인스턴스 관리 (싱글톤 패턴)"""
     _instance = None
     _pa_api_lock = threading.RLock()
+    # 출력 스트림을 연 횟수. TTS가 소리를 내기 전에 실패했는지 가릴 때 쓴다.
+    output_open_count = 0
 
     @classmethod
     def get_instance(cls):
@@ -40,7 +42,10 @@ class GlobalAudio:
     def open_stream(cls, **kwargs):
         """PortAudio 잠금 안에서 스트림을 연다."""
         with cls._pa_api_lock:
-            return cls.get_instance().open(**kwargs)
+            stream = cls.get_instance().open(**kwargs)
+            if kwargs.get("output"):
+                cls.output_open_count += 1
+            return stream
 
     @classmethod
     def close_stream(cls, stream):

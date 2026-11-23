@@ -1,3 +1,4 @@
+import threading
 import unittest
 from unittest.mock import Mock, call, patch
 
@@ -539,6 +540,189 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             self.assertIs(VoiceCommand._state.character_widget, character)
         finally:
             VoiceCommand._state.character_widget = previous_character
+
+
+class _PrimaryEngine:
+    """기본 엔진 가짜. 호출 기록을 남기고 설정한 방식대로 실패한다."""
+
+    def __init__(self, result=False, error="synthesis failed", opens_output=False):
+        self.result = result
+        self.error = error
+        self.opens_output = opens_output
+        self.calls = []
+        self._last_error = None
+
+    def speak(self, text, emotion=None, stop_event=None):
+        self.calls.append((text, emotion))
+        self._last_error = self.error if not self.result else None
+        if self.opens_output:
+            VoiceCommand.GlobalAudio.output_open_count += 1
+        return self.result
+
+
+class _FallbackEngine:
+    def __init__(self, result=True):
+        self.result = result
+        self.calls = []
+        self.cleanup_calls = 0
+
+    def speak(self, text, emotion=None, stop_event=None):
+        self.calls.append((text, emotion))
+        return self.result
+
+    def cleanup(self):
+        self.cleanup_calls += 1
+
+
+class SpeechFailureFallbackTests(unittest.TestCase):
+    SETTINGS = {"tts_mode": "fish", "tts_fallback_provider": "edge"}
+
+    def setUp(self):
+        state = VoiceCommand._state
+        saved = (
+            state.fish_tts, state.tts_fallback, state.tts_signature,
+            state.game_mode, state.rp_gen, state.character_widget,
+            VoiceCommand.GlobalAudio.output_open_count,
+        )
+        self.addCleanup(self._restore, saved)
+        state.tts_fallback = None
+        state.game_mode = False
+        state.rp_gen = None
+        state.character_widget = None
+        self.fallback = _FallbackEngine()
+
+    @staticmethod
+    def _restore(saved):
+        state = VoiceCommand._state
+        (
+            state.fish_tts, state.tts_fallback, state.tts_signature,
+            state.game_mode, state.rp_gen, state.character_widget,
+            VoiceCommand.GlobalAudio.output_open_count,
+        ) = saved
+
+    def _speak(self, primary, text="안녕하세요", settings=None, stop_event=None):
+        VoiceCommand._state.fish_tts = primary
+        with (
+            patch(
+                "core.config_manager.ConfigManager.load_settings",
+                return_value=settings or self.SETTINGS,
+            ),
+            patch(
+                "tts.tts_factory.create_tts_provider",
+                return_value=(self.fallback, "edge"),
+            ) as create_provider,
+            patch.object(VoiceCommand, "emit_plugin_event"),
+        ):
+            result = VoiceCommand.text_to_speech(text, show_bubble=False, stop_event=stop_event)
+        return result, create_provider
+
+    def test_speech_failure_retries_once_with_fallback_provider(self):
+        primary = _PrimaryEngine()
+
+        result, create_provider = self._speak(primary)
+
+        self.assertTrue(result)
+        self.assertEqual(len(primary.calls), 1)
+        self.assertEqual(len(self.fallback.calls), 1)
+        self.assertEqual(self.fallback.calls[0][0], "안녕하세요")
+        self.assertIs(VoiceCommand._state.fish_tts, primary)
+
+        # 다음 문장도 기본 엔진부터 시도하고, 대체 엔진 인스턴스는 다시 만들지 않는다.
+        result, create_provider = self._speak(primary, text="다음 문장")
+        self.assertTrue(result)
+        self.assertEqual(len(primary.calls), 2)
+        self.assertEqual(len(self.fallback.calls), 2)
+        create_provider.assert_not_called()
+
+    def test_partial_playback_or_none_fallback_skips_retry(self):
+        cases = {
+            "일부 재생 뒤 실패": (_PrimaryEngine(opens_output=True), self.SETTINGS),
+            "실패 사유 신호 없음": (_PrimaryEngine(error=None), self.SETTINGS),
+            "대체 엔진 none": (
+                _PrimaryEngine(),
+                {"tts_mode": "fish", "tts_fallback_provider": "none"},
+            ),
+        }
+        for name, (primary, settings) in cases.items():
+            with self.subTest(name):
+                VoiceCommand._state.tts_fallback = None
+                result, create_provider = self._speak(primary, settings=settings)
+                self.assertFalse(result)
+                self.assertEqual(len(primary.calls), 1)
+                create_provider.assert_not_called()
+        self.assertEqual(self.fallback.calls, [])
+
+    def test_cancel_game_mode_same_engine_and_local_fallback_skip_retry(self):
+        stop_event = threading.Event()
+
+        class _CancelledEngine(_PrimaryEngine):
+            def speak(self, text, emotion=None, stop_event=None):
+                stop_event.set()
+                return super().speak(text, emotion)
+
+        VoiceCommand._state.game_mode = False
+        result, create_provider = self._speak(_CancelledEngine(), stop_event=stop_event)
+        self.assertFalse(result)
+        create_provider.assert_not_called()
+
+        VoiceCommand._state.game_mode = True
+        result, create_provider = self._speak(_PrimaryEngine())
+        self.assertFalse(result)
+        create_provider.assert_not_called()
+        VoiceCommand._state.game_mode = False
+
+        for settings in (
+            {"tts_mode": "edge", "tts_fallback_provider": "edge"},
+            {"tts_mode": "fish", "tts_fallback_provider": "local"},
+        ):
+            result, create_provider = self._speak(_PrimaryEngine(), settings=settings)
+            self.assertFalse(result)
+            create_provider.assert_not_called()
+        self.assertEqual(self.fallback.calls, [])
+
+    def test_fallback_failure_is_not_retried_again(self):
+        self.fallback.result = False
+        primary = _PrimaryEngine()
+
+        result, _create_provider = self._speak(primary)
+
+        self.assertFalse(result)
+        self.assertEqual(len(primary.calls), 1)
+        self.assertEqual(len(self.fallback.calls), 1)
+
+    def test_fallback_of_same_engine_type_is_discarded(self):
+        primary = _FallbackEngine(result=False)
+        primary._last_error = "synthesis failed"
+        self.fallback = _FallbackEngine()
+
+        result, _create_provider = self._speak(primary)
+
+        self.assertFalse(result)
+        self.assertEqual(self.fallback.calls, [])
+        self.assertEqual(self.fallback.cleanup_calls, 1)
+
+    def test_fallback_instance_is_cleaned_when_engine_is_reinitialized(self):
+        from types import SimpleNamespace
+
+        self._speak(_PrimaryEngine())
+        self.assertIsNotNone(VoiceCommand._state.tts_fallback)
+        VoiceCommand._state.tts_signature = ("old",)
+
+        def run_cleanup_thread(*, target, args=(), **_kwargs):
+            target(*args)
+            return Mock()
+
+        with (
+            patch("core.config_manager.ConfigManager.load_settings", return_value=self.SETTINGS),
+            patch("tts.tts_factory.build_tts_signature", return_value=("new",)),
+            patch("tts.tts_factory.create_tts_provider", return_value=(_PrimaryEngine(), "fish")),
+            patch.object(VoiceCommand, "RPGenerator", return_value=SimpleNamespace(set_config=Mock())),
+            patch("core.VoiceCommand.threading.Thread", side_effect=run_cleanup_thread),
+        ):
+            VoiceCommand.initialize_tts()
+
+        self.assertEqual(self.fallback.cleanup_calls, 1)
+        self.assertIsNone(VoiceCommand._state.tts_fallback)
 
 
 if __name__ == "__main__":

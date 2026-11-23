@@ -67,6 +67,21 @@ class GlobalAudioStreamTests(unittest.TestCase):
 
         self.assertFalse(api_lock.held)
 
+    def test_open_stream_counts_only_output_streams(self):
+        audio = Mock()
+        audio.open.return_value = Mock()
+
+        with (
+            patch.object(GlobalAudio, "_instance", audio),
+            patch.object(GlobalAudio, "output_open_count", 0),
+        ):
+            GlobalAudio.open_stream(rate=16000, input=True)
+            GlobalAudio.open_stream(rate=16000)
+            self.assertEqual(GlobalAudio.output_open_count, 0)
+
+            GlobalAudio.open_stream(rate=16000, output=True)
+            self.assertEqual(GlobalAudio.output_open_count, 1)
+
     def test_close_stream_stops_active_stream_and_closes_under_api_lock(self):
         api_lock = _ObservedRLock()
         stream = Mock()
