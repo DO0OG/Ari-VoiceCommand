@@ -2,6 +2,7 @@ from commands.base_command import BaseCommand
 from commands.ai_fast_path import FastPathMixin
 from commands.memory_command import MemoryCommand, _parse_explicit_command
 from memory.sensitive_patterns import is_sensitive_memory_text
+import html
 import inspect
 import json
 import logging
@@ -319,9 +320,9 @@ class AICommand(FastPathMixin, BaseCommand):
         return _("현재 시간은 {time}입니다.").format(time=self._format_time_of_day(now))
 
     def _handle_shutdown_computer(self, args: dict) -> Optional[str]:
-        scheduled = self._maybe_schedule_shutdown_from_goal(self._current_goal)
-        if scheduled:
-            return scheduled
+        # 예약 종료는 SystemCommand 가 처리하며 반환값이 None 이므로, 예약이면 즉시 종료를 이어서 부르지 않는다.
+        if self._extract_schedule_phrase(self._current_goal) and self._is_shutdown_request(self._current_goal):
+            return self._maybe_schedule_shutdown_from_goal(self._current_goal)
         from core.VoiceCommand import execute_command
         execute_command("컴퓨터 종료")
         return None
@@ -758,13 +759,34 @@ class AICommand(FastPathMixin, BaseCommand):
     def _handle_send_email(self, args: dict) -> Optional[str]:
         if not self._google_tools_enabled():
             return "설정에서 Google 도구 사용을 켜야 합니다."
+        to = str(args.get("to", "") or "")
+        subject = str(args.get("subject", "") or "")
+        body = str(args.get("body", "") or "")
         try:
+            from agent.confirmation_manager import get_confirmation_manager
+            from agent.safety_checker import DangerLevel, SafetyReport
             from services.gmail_service import get_gmail_service
-            result = get_gmail_service().send_email(
-                to=str(args.get("to", "") or ""),
-                subject=str(args.get("subject", "") or ""),
-                body=str(args.get("body", "") or ""),
+
+            # 대화상자가 HTML 로 그리므로 모델이 만든 값은 이스케이프하고, 본문은 앞부분만 보인다.
+            preview = " ".join(body.split())
+            if len(preview) > 100:
+                preview = preview[:100] + "…"
+            desc = _("메일 발송 - 받는 사람: {to} / 제목: {subject} / 본문: {body}").format(
+                to=html.escape(to), subject=html.escape(subject), body=html.escape(preview))
+            report = SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                matched_patterns=[_("메일 발송")],
+                summary=_("{to}에게 메일을 보냅니다").format(to=to),
+                category="email",
             )
+            try:
+                confirmed = get_confirmation_manager().request_confirmation(desc, report, self.tts_wrapper) is True
+            except Exception as exc:
+                logging.error("메일 발송 확인 실패: %s", exc)
+                confirmed = False
+            if not confirmed:
+                return _("사용자가 승인하지 않아 메일을 보내지 않았습니다.")
+            result = get_gmail_service().send_email(to=to, subject=subject, body=body)
             return self._format_tool_payload(result)
         except Exception as exc:
             logging.error("이메일 발송 실패: %s", exc, exc_info=True)

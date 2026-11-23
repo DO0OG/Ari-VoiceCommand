@@ -504,6 +504,9 @@ def main():
 
         mood_state = _setup_application()
         app = QApplication(sys.argv)
+        # 확인 대화상자 요청을 UI 스레드에서 처리하도록 확인 관리자를 메인 스레드에서 먼저 만든다.
+        from agent.confirmation_manager import get_confirmation_manager
+        get_confirmation_manager()
         auto_game_mode_applied = False
 
         def _sync_activity_game_mode():

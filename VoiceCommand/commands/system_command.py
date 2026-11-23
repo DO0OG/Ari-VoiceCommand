@@ -137,7 +137,33 @@ class SystemCommand(BaseCommand):
         else:
             self._shutdown_immediate()
 
+    def _confirm_power(self, action: str, when: str) -> bool:
+        """종료·재시작 직전에 사용자 확인을 받는다. 거절·시간 초과·확인 수단 오류는 모두 실행하지 않는다."""
+        try:
+            from agent.confirmation_manager import get_confirmation_manager
+            from agent.safety_checker import DangerLevel, SafetyReport
+
+            desc_fmt = _("컴퓨터 종료: {when}") if action == "shutdown" else _("컴퓨터 재시작: {when}")
+            desc = desc_fmt.format(when=when)
+            report = SafetyReport(
+                level=DangerLevel.DANGEROUS,
+                matched_patterns=[desc],
+                summary=desc,
+                category="power",
+            )
+            confirmed = get_confirmation_manager().request_confirmation(desc, report, self.tts_wrapper) is True
+        except Exception as e:
+            logging.error("전원 명령 확인 실패: %s", e)
+            confirmed = False
+        if not confirmed:
+            logging.info("전원 명령 취소: %s (%s)", action, when)
+            self.tts_wrapper(_("컴퓨터 종료 요청을 취소했어요.") if action == "shutdown"
+                             else _("컴퓨터 재시작 요청을 취소했어요."))
+        return confirmed
+
     def _schedule_shutdown(self, delay_seconds: int, time_str: str) -> None:
+        if not self._confirm_power("shutdown", time_str):
+            return
         logging.info("시스템 종료 예약: %s초 후 (%s)", delay_seconds, time_str)
         self.tts_wrapper(_("{time}에 컴퓨터를 종료할게요.").format(time=time_str))
         try:
@@ -152,6 +178,8 @@ class SystemCommand(BaseCommand):
             self.tts_wrapper(_("시스템 종료 예약에 실패했습니다."))
 
     def _shutdown_immediate(self) -> None:
+        if not self._confirm_power("shutdown", _("지금 바로")):
+            return
         self.tts_wrapper(_("컴퓨터를 종료합니다. 잠시만 기다려 주세요."))
         logging.info("시스템 종료 명령 실행")
         try:
@@ -183,6 +211,8 @@ class SystemCommand(BaseCommand):
         self.tts_wrapper(_("종료 예약을 취소했습니다."))
 
     def _restart_immediate(self) -> None:
+        if not self._confirm_power("restart", _("지금 바로")):
+            return
         self.tts_wrapper(_("컴퓨터를 재시작합니다. 잠시만 기다려 주세요."))
         logging.info("시스템 재시작 명령 실행")
         try:
@@ -195,6 +225,8 @@ class SystemCommand(BaseCommand):
             self.tts_wrapper(_("시스템 재시작 명령 실행에 실패했습니다."))
 
     def _schedule_restart(self, delay_seconds: int, time_str: str) -> None:
+        if not self._confirm_power("restart", time_str):
+            return
         logging.info("시스템 재시작 예약: %s초 후 (%s)", delay_seconds, time_str)
         self.tts_wrapper(_("{time}에 컴퓨터를 재시작할게요.").format(time=time_str))
         try:
