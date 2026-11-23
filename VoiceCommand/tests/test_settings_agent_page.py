@@ -101,6 +101,29 @@ class LocalDecisionSettingsSaveTests(unittest.TestCase):
         self.assertEqual(page.missed_grace_spin.value(), 90)
         self.assertEqual(page.get_values()["scheduler_missed_grace_minutes"], 90)
 
+    def test_morning_briefing_defaults_to_off_and_round_trips(self):
+        values = _AgentSettingsPage({}).get_values()
+        self.assertIs(values["morning_briefing_enabled"], False)
+        self.assertEqual(values["morning_briefing_time"], "08:00")
+        self.assertIs(values["morning_briefing_include_calendar"], False)
+        self.assertIs(values["morning_briefing_include_weather"], False)
+
+        page = _AgentSettingsPage({
+            "morning_briefing_enabled": True,
+            "morning_briefing_time": "06:45",
+            "morning_briefing_include_calendar": True,
+            "morning_briefing_include_weather": True,
+        })
+        values = page.get_values()
+        self.assertIs(values["morning_briefing_enabled"], True)
+        self.assertEqual(values["morning_briefing_time"], "06:45")
+        self.assertIs(values["morning_briefing_include_calendar"], True)
+        self.assertIs(values["morning_briefing_include_weather"], True)
+        # 시각 형식이 틀리면 기본 시각으로 보여 준다.
+        self.assertEqual(
+            _AgentSettingsPage({"morning_briefing_time": "abc"}).get_values()["morning_briefing_time"], "08:00"
+        )
+
     def test_google_connect_requires_credentials_without_starting_thread(self):
         page = _AgentSettingsPage({})
         with patch("ui.settings_agent_page._", side_effect=lambda value: value), patch(

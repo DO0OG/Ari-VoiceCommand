@@ -30,7 +30,11 @@ _EVENT_COOLDOWNS = {
     "chitchat": timedelta(hours=3),
     "battery_low": timedelta(minutes=30),
     "disk_low": timedelta(hours=6),
+    "morning_briefing": timedelta(hours=1),
 }
+# 정한 시각부터 이 시간이 지나면(자정을 넘지 않는 범위) 그날 아침 요약은 건너뛴다.
+_MORNING_BRIEFING_WINDOW = timedelta(hours=4)
+_MORNING_BRIEFING_DEFAULT_TIME = "08:00"
 _CHITCHAT_IDLE_SECONDS = 20 * 60
 _PC_CHECK_INTERVAL = timedelta(minutes=5)
 _PC_ALERT_EVENTS = ("battery_low", "disk_low")
@@ -39,7 +43,7 @@ _BATTERY_LOW_PERCENT = 20
 _BATTERY_REARM_PERCENT = 25
 _DISK_LOW_FREE_BYTES = 10 * 1024**3
 _DISK_REARM_FREE_BYTES = 15 * 1024**3
-_ONCE_DAILY = {"long_use", "late_night", "praise_streak"}
+_ONCE_DAILY = {"long_use", "late_night", "praise_streak", "morning_briefing"}
 _MOOD_BUCKETS = ("good", "calm", "down")
 
 EVENT_PHRASES = {
@@ -91,7 +95,23 @@ EVENT_PHRASES = {
         bucket: ("{drive} 드라이브 여유 공간이 {free} 남았어요.",)
         for bucket in _MOOD_BUCKETS
     },
+    "morning_briefing": {
+        bucket: ("좋은 아침이에요. 오늘 할 일을 알려 드릴게요.",)
+        for bucket in _MOOD_BUCKETS
+    },
 }
+
+
+def morning_briefing_window(now: datetime, time_text: Any) -> tuple[datetime, datetime]:
+    """now 가 속한 날의 아침 요약 가능 구간(시작, 끝)을 돌려준다. 시각 형식이 틀리면 기본 시각을 쓴다."""
+    try:
+        hour, minute = (int(part) for part in str(time_text).strip().split(":"))
+        start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    except ValueError:
+        hour, minute = (int(part) for part in _MORNING_BRIEFING_DEFAULT_TIME.split(":"))
+        start = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return start, min(start + _MORNING_BRIEFING_WINDOW, midnight)
 
 
 def read_pc_status() -> dict[str, Any]:
@@ -241,6 +261,16 @@ class EventSpeechScheduler:
                     return True
             self._pending.append((event, dict(values)))
         return True
+
+    def needs_event_today(self, event: str, now: datetime) -> bool:
+        """오늘 아직 전달하지 않았고 대기 중이지도 않은 하루 한 번 사건인지 알려 준다."""
+        with self._lock:
+            if any(pending_event == event for pending_event, _payload in self._pending):
+                return False
+            try:
+                return datetime.fromisoformat(self._last_delivered.get(event, "")).date() != now.date()
+            except ValueError:
+                return True
 
     def tick(self) -> bool:
         """상황 사건을 확인하고 발화 하나를 전달한다."""
@@ -481,6 +511,12 @@ class EventSpeechScheduler:
 
     def _flush_one(self, now: datetime) -> bool:
         with self._lock:
+            # 정해 둔 시간대를 넘긴 아침 요약은 말하지 않고 버린다.
+            self._pending = [
+                item
+                for item in self._pending
+                if not (item[0] == "morning_briefing" and item[1].get("expires_at", now + timedelta(1)) <= now)
+            ]
             if self._dispatching or not self._pending:
                 return False
             try:
@@ -575,6 +611,10 @@ class EventSpeechScheduler:
             phrase = choose_phrase(EVENT_PHRASES[event], mood_state)
             summary = " ".join(str(values.get("summary", "")).split())[:120]
             return f"{phrase} {summary}".strip() if summary else phrase
+        if event == "morning_briefing":
+            phrase = choose_phrase(EVENT_PHRASES[event], mood_state)
+            summary = " ".join(str(values.get("summary", "")).split())[:600]
+            return f"{phrase} {summary}".strip()
         if event == "maintenance_result":
             values["summary"] = " ".join(str(values.get("summary", "")).split())[:100]
         return choose_phrase(EVENT_PHRASES[event], mood_state, values=values)

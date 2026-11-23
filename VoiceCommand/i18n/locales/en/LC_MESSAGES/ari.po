@@ -4266,3 +4266,30 @@ msgstr "Warn me first when the battery or disk space runs low"
 
 msgid "파일 덮어쓰기 - 경로: {path} / 새 내용: {content}"
 msgstr "Overwrite file - Path: {path} / New content: {content}"
+
+msgid "오늘 남은 예약 작업은 {count}건이에요: {items}."
+msgstr "You have {count} scheduled task(s) left today: {items}."
+
+msgid "오늘 남은 예약 작업은 없어요."
+msgstr "There are no scheduled tasks left today."
+
+msgid "오늘 일정은 {count}건이에요: {items}."
+msgstr "You have {count} event(s) today: {items}."
+
+msgid "오늘 일정은 없어요."
+msgstr "You have no events today."
+
+msgid "정한 아침 시각에 오늘 할 일을 먼저 알리기"
+msgstr "Announce today's tasks at a set morning time"
+
+msgid "아침 요약 시각 (이 시각부터 4시간 안에 처음 말할 수 있을 때)"
+msgstr "Morning briefing time (spoken the first time Ari can speak within 4 hours from this time)"
+
+msgid "아침 요약에 Google Calendar 오늘 일정 포함 (Google 도구 사용 필요)"
+msgstr "Include today's Google Calendar events in the morning briefing (requires Google tools)"
+
+msgid "아침 요약에 오늘 날씨 포함"
+msgstr "Include today's weather in the morning briefing"
+
+msgid "좋은 아침이에요. 오늘 할 일을 알려 드릴게요."
+msgstr "Good morning. Here is what is on for today."

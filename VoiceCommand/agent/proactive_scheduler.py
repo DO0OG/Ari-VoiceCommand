@@ -54,6 +54,35 @@ def _parse_task_run_line(text: str) -> Dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
 
+def _fetch_calendar_events(day_start: datetime, day_end: datetime) -> List[Dict[str, Any]]:
+    from services.google_calendar import get_calendar_service
+
+    return get_calendar_service().get_events_between(day_start, day_end)
+
+
+def _fetch_weather_text() -> str:
+    """기본 위치의 오늘 날씨 문장. 날씨 서비스가 실패 안내 문구를 돌려주면 빈 문자열로 바꾼다."""
+    from services.weather_service import WeatherService
+
+    text = WeatherService().get_weather()
+    failures = (
+        _("날씨 정보를 가져오는 데 실패했습니다."),
+        _("날씨 정보를 가져오는 중 오류가 발생했습니다."),
+    )
+    return "" if text in failures else text
+
+
+def _calendar_event_label(event: Dict[str, Any]) -> str:
+    title = " ".join(str(event.get("summary") or _("제목 없음")).split())[:40]
+    start_text = (event.get("start") or {}).get("dateTime")
+    if start_text:
+        try:
+            return f"{datetime.fromisoformat(start_text).astimezone():%H:%M} {title}"
+        except ValueError:
+            pass
+    return title
+
+
 @dataclass
 class ScheduledTask:
     task_id: str
@@ -495,6 +524,97 @@ class ProactiveScheduler:
             due = self._claim_due_tasks(datetime.now())
         for task, run_meta in due:
             threading.Thread(target=self._execute_task, args=(task, run_meta), daemon=True).start()
+        try:
+            self._check_morning_briefing(datetime.now())
+        except Exception as exc:  # 아침 요약 오류가 예약 작업 반복 확인을 멈추면 안 된다.
+            logging.warning("[Scheduler] 아침 요약 확인 실패: %s", exc)
+
+    def _check_morning_briefing(self, now: datetime) -> None:
+        """정한 아침 시각 뒤 처음 확인될 때 오늘 요약을 만들어 발화 스케줄러에 요청한다.
+
+        하루 한 번 전달은 발화 스케줄러가 전달 날짜를 저장해 보장한다.
+        """
+        from core.config_manager import ConfigManager
+
+        try:
+            if not ConfigManager.get("morning_briefing_enabled", False):
+                return
+            time_text = ConfigManager.get("morning_briefing_time", "08:00")
+            include_calendar = bool(
+                ConfigManager.get("morning_briefing_include_calendar", False)
+                and ConfigManager.get("google_calendar_enabled", False)
+            )
+            include_weather = bool(ConfigManager.get("morning_briefing_include_weather", False))
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return
+        from agent.speech_scheduler import get_speech_scheduler, morning_briefing_window
+
+        start, end = morning_briefing_window(now, time_text)
+        speech_scheduler = get_speech_scheduler()
+        if (
+            speech_scheduler is None
+            or not start <= now < end
+            or not speech_scheduler.needs_event_today("morning_briefing", now)
+        ):
+            return
+        summary = self._build_morning_briefing(now, include_calendar, include_weather)
+        speech_scheduler.request("morning_briefing", summary=summary, expires_at=end)
+
+    def _todays_remaining_tasks(self, now: datetime) -> List[tuple[datetime, ScheduledTask]]:
+        with self._lock:
+            tasks = list(self._tasks.values())
+        remaining = []
+        for task in tasks:
+            if not task.enabled or not task.next_run or task.task_type in _INTERNAL_TASK_TYPES:
+                continue
+            try:
+                due_at = datetime.fromisoformat(task.next_run)
+            except ValueError:
+                continue
+            if due_at.tzinfo is not None:
+                due_at = due_at.astimezone().replace(tzinfo=None)
+            if (
+                due_at >= now
+                and due_at.date() == now.date()
+                and not self._is_except_date(task, due_at.date().isoformat())
+            ):
+                remaining.append((due_at, task))
+        return sorted(remaining, key=lambda item: item[0])
+
+    def _build_morning_briefing(self, now: datetime, include_calendar: bool, include_weather: bool) -> str:
+        """오늘(현지 날짜)의 남은 예약 작업과 허용된 일정·날씨를 한 문단으로 만든다. 조회에 실패한 부분은 뺀다."""
+        parts = []
+        tasks = self._todays_remaining_tasks(now)
+        if tasks:
+            items = ", ".join(f"{due_at:%H:%M} {(task.name or task.goal)[:30]}" for due_at, task in tasks[:3])
+            parts.append(
+                _("오늘 남은 예약 작업은 {count}건이에요: {items}.", count=len(tasks), items=items + (" …" if len(tasks) > 3 else ""))
+            )
+        else:
+            parts.append(_("오늘 남은 예약 작업은 없어요."))
+        if include_calendar:
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            try:
+                events = _fetch_calendar_events(day_start, day_start + timedelta(days=1))
+            except Exception as exc:
+                logging.debug("[Scheduler] 아침 요약의 일정 조회 실패: %s", exc)
+            else:
+                if events:
+                    items = ", ".join(_calendar_event_label(event) for event in events[:3])
+                    parts.append(
+                        _("오늘 일정은 {count}건이에요: {items}.", count=len(events), items=items + (" …" if len(events) > 3 else ""))
+                    )
+                else:
+                    parts.append(_("오늘 일정은 없어요."))
+        if include_weather:
+            try:
+                weather = _fetch_weather_text()
+            except Exception as exc:
+                logging.debug("[Scheduler] 아침 요약의 날씨 조회 실패: %s", exc)
+                weather = ""
+            if weather:
+                parts.append(weather)
+        return " ".join(parts)
 
     def _announce_scheduled_event(self, event: str, **values) -> None:
         try:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import threading
 
-from PySide6.QtCore import Qt, QTimer, QThread, Signal
+from PySide6.QtCore import Qt, QTime, QTimer, QThread, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -105,6 +106,22 @@ class _AgentSettingsPage(QWidget):
         self.pc_alert_checkbox = QCheckBox(_("배터리·디스크 공간이 부족하면 먼저 알리기"))
         self.pc_alert_checkbox.setChecked(settings.get("pc_resource_alerts_enabled", True) is not False)
         box.addWidget(self.pc_alert_checkbox)
+
+        self.morning_briefing_checkbox = QCheckBox(_("정한 아침 시각에 오늘 할 일을 먼저 알리기"))
+        self.morning_briefing_checkbox.setChecked(bool(settings.get("morning_briefing_enabled", False)))
+        box.addWidget(self.morning_briefing_checkbox)
+        self.morning_briefing_time = QTimeEdit()
+        self.morning_briefing_time.setDisplayFormat("HH:mm")
+        briefing_time = QTime.fromString(str(settings.get("morning_briefing_time", "08:00")), "HH:mm")
+        self.morning_briefing_time.setTime(briefing_time if briefing_time.isValid() else QTime(8, 0))
+        box.addWidget(QLabel(_("아침 요약 시각 (이 시각부터 4시간 안에 처음 말할 수 있을 때)")))
+        box.addWidget(self.morning_briefing_time)
+        self.morning_briefing_calendar_checkbox = QCheckBox(_("아침 요약에 Google Calendar 오늘 일정 포함 (Google 도구 사용 필요)"))
+        self.morning_briefing_calendar_checkbox.setChecked(bool(settings.get("morning_briefing_include_calendar", False)))
+        box.addWidget(self.morning_briefing_calendar_checkbox)
+        self.morning_briefing_weather_checkbox = QCheckBox(_("아침 요약에 오늘 날씨 포함"))
+        self.morning_briefing_weather_checkbox.setChecked(bool(settings.get("morning_briefing_include_weather", False)))
+        box.addWidget(self.morning_briefing_weather_checkbox)
 
         self.subagent_spin = QSpinBox()
         self.subagent_spin.setRange(1, 8)
@@ -376,6 +393,10 @@ class _AgentSettingsPage(QWidget):
             "audit_log_enabled": self.audit_checkbox.isChecked(),
             "mcp_server_enabled": self.mcp_checkbox.isChecked(),
             "pc_resource_alerts_enabled": self.pc_alert_checkbox.isChecked(),
+            "morning_briefing_enabled": self.morning_briefing_checkbox.isChecked(),
+            "morning_briefing_time": self.morning_briefing_time.time().toString("HH:mm"),
+            "morning_briefing_include_calendar": self.morning_briefing_calendar_checkbox.isChecked(),
+            "morning_briefing_include_weather": self.morning_briefing_weather_checkbox.isChecked(),
             "max_subagents": int(self.subagent_spin.value()),
             "scheduler_missed_grace_minutes": int(self.missed_grace_spin.value()),
             "google_calendar_enabled": self.google_checkbox.isChecked(),
