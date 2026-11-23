@@ -124,6 +124,26 @@ class DiagnosticHelperTests(unittest.TestCase):
             + "\nSynthesis unavailable",
         )
 
+    def test_tts_diagnostic_includes_reference_read_guidance_and_original_error(self):
+        failing = _Provider(result=False)
+        guidance = _(
+            "참조 WAV 파일을 읽을 수 없습니다. 설정의 음성 복제에서 정상 WAV 파일을 다시 지정해 주세요."
+        )
+        original_error = "Error opening reference.wav: System error"
+        failing._last_error = f"{guidance}\n{original_error}"
+        diagnostic_provider = _DiagnosticProvider(failing)
+
+        ok, message = run_tts_diagnostic(
+            {}, "edge", "", "hello", provider_factory=lambda _s: (diagnostic_provider, "edge")
+        )
+
+        self.assertFalse(ok)
+        self.assertEqual(
+            message,
+            _("TTS 시험 재생에 실패했습니다. 설정과 출력 장치를 확인해 주세요.")
+            + f"\n{guidance}\n{original_error}",
+        )
+
     def test_transcribe_diagnostic_sample_reports_text_or_empty_result(self):
         class _STT:
             def __init__(self, text):

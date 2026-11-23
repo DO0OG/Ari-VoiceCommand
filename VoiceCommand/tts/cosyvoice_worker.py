@@ -23,6 +23,11 @@ sys.stdout = sys.stderr  # 텍스트 출력 → stderr
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
+
+class _ReferenceWavReadError(Exception):
+    pass
+
+
 # SDPA 사용 (eager 대신) — sliding window 경고가 뜨지만 속도는 더 빠름
 # eager 강제 설정을 하지 않음 (기본 SDPA 유지)
 
@@ -53,8 +58,13 @@ def _patch_torchaudio_load():
     def _load(filepath, frame_offset=0, num_frames=-1, normalize=True,
               channels_first=True, **_kwargs):
         frames = num_frames if num_frames and num_frames > 0 else -1
-        data, sample_rate = sf.read(str(filepath), dtype="float32", always_2d=True,
-                                    start=frame_offset, frames=frames)
+        try:
+            data, sample_rate = sf.read(
+                str(filepath), dtype="float32", always_2d=True,
+                start=frame_offset, frames=frames,
+            )
+        except (RuntimeError, OSError) as exc:
+            raise _ReferenceWavReadError(str(exc)) from exc
         wav = torch.from_numpy(data)  # (프레임, 채널)
         return (wav.T.contiguous() if channels_first else wav), sample_rate
 
@@ -264,6 +274,9 @@ def main():
             write_end()
             ctrl(f"DONE:{n}")
 
+        except _ReferenceWavReadError as e:
+            write_end()
+            ctrl(f"ERROR:REFERENCE_WAV:{e}")
         except Exception as e:
             write_end()
             ctrl(f"ERROR:{e}")

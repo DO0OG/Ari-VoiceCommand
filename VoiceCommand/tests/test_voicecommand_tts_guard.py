@@ -243,6 +243,25 @@ class VoiceCommandWakeGuardTests(unittest.TestCase):
             VoiceCommand._state.rp_gen = previous_generator
             VoiceCommand._state.character_widget = previous_widget
 
+    def test_missing_reference_wav_initialization_uses_default_edge_fallback(self):
+        from tts.tts_factory import _MissingReferenceWavError
+
+        fallback_provider = object()
+        settings = {"tts_mode": "local"}
+        create_provider = self._run_initialize_tts(
+            settings,
+            [
+                _MissingReferenceWavError("reference WAV file was not found"),
+                (fallback_provider, "edge"),
+            ],
+        )
+
+        self.assertIs(VoiceCommand._state.fish_tts, fallback_provider)
+        self.assertEqual(
+            create_provider.call_args_list,
+            [call(settings, wait_ready=False), call({**settings, "tts_mode": "edge"})],
+        )
+
     def _run_initialize_tts(self, settings, providers):
         from types import SimpleNamespace
 

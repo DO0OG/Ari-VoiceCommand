@@ -173,11 +173,20 @@ class _TTSSettingsPage(QWidget):
         self.tts_reference_wav_input = QLineEdit(
             self._settings.get("tts_reference_wav", "")
         )
+        self.tts_reference_wav_input.textChanged.connect(
+            self._update_reference_wav_warning
+        )
         reference_row.addWidget(self.tts_reference_wav_input)
         reference_button = QPushButton(_("찾아보기"))
         reference_button.clicked.connect(self._browse_reference_wav)
         reference_row.addWidget(reference_button)
         cloning_layout.addLayout(reference_row)
+        self._reference_wav_warning = QLabel(
+            _("참조 WAV 파일을 찾을 수 없습니다. 설정의 음성 복제에서 참조 WAV를 지정해 주세요.")
+        )
+        self._reference_wav_warning.setWordWrap(True)
+        self._reference_wav_warning.setVisible(False)
+        cloning_layout.addWidget(self._reference_wav_warning)
         cloning_layout.addWidget(QLabel(_("참조 WAV 대본:")))
         self.cosyvoice_ref_text = QTextEdit()
         self.cosyvoice_ref_text.setPlainText(
@@ -269,6 +278,9 @@ class _TTSSettingsPage(QWidget):
         self._set_combo(
             self.openai_compat_clone_combo,
             self._settings.get("openai_compat_tts_clone_mode", "none"),
+        )
+        self.openai_compat_clone_combo.currentIndexChanged.connect(
+            self._update_reference_wav_warning
         )
         compat_options.addWidget(QLabel(_("클로닝:")))
         compat_options.addWidget(self.openai_compat_clone_combo)
@@ -504,6 +516,20 @@ class _TTSSettingsPage(QWidget):
         self._voice_cloning_group.setVisible(
             selected in {"local", "openai_compat_tts", "elevenlabs"}
         )
+        self._update_reference_wav_warning()
+
+    def _update_reference_wav_warning(self, _text=None):
+        from tts.voice_reference import get_reference_wav
+
+        settings = dict(self._settings)
+        settings["tts_reference_wav"] = self.tts_reference_wav_input.text()
+        selected = self.tts_mode_combo.currentData()
+        uses_reference_wav = selected == "local" or (
+            selected == "openai_compat_tts"
+            and self.openai_compat_clone_combo.currentData() == "ref_audio"
+        )
+        missing = uses_reference_wav and not os.path.isfile(get_reference_wav(settings))
+        self._reference_wav_warning.setVisible(missing)
 
     def _tts_diagnostic_values(self):
         selected_mode = self.tts_mode_combo.currentData()
