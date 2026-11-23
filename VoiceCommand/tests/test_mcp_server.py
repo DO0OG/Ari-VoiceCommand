@@ -65,6 +65,18 @@ class MCPServerTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 AriMCPServer(allowed_paths=[])._resolve_allowed_path(str(root / "file"))
 
+    def test_write_file_overwrites_existing_file_without_local_dialog(self):
+        # 외부 클라이언트가 부르는 경로라 PC 확인 대화상자를 띄우지 않는 것이 의도된 동작이다.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "file.txt"
+            target.write_text("기존", encoding="utf-8")
+            server = AriMCPServer(allowed_paths=[directory])
+            with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager:
+                result = json.loads(server._write_file(str(target), "새 내용"))
+            get_manager.assert_not_called()
+            self.assertNotIn("error", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), "새 내용")
+
     def test_resolved_link_outside_allowlist_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -213,6 +213,42 @@ class FileToolsTests(unittest.TestCase):
             self.assertEqual(appended["mode"], "append")
             self.assertEqual(path.read_text(encoding="utf-8"), "첫째\n둘째\n셋째\n")
 
+    def test_write_file_asks_only_before_overwriting_an_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sample.txt"
+            asked = []
+
+            def deny(target):
+                asked.append(target)
+                return False
+
+            created = file_tools.write_file(str(path), "처음", confirm_overwrite=deny)
+            self.assertNotIn("error", created)
+            self.assertEqual(asked, [])
+
+            appended = file_tools.write_file(str(path), "+덧붙임", mode="append", confirm_overwrite=deny)
+            self.assertNotIn("error", appended)
+            self.assertEqual(asked, [])
+
+            refused = file_tools.write_file(str(path), "새 내용", confirm_overwrite=deny)
+            self.assertIn("error", refused)
+            self.assertEqual(asked, [str(path)])
+            self.assertEqual(path.read_text(encoding="utf-8"), "처음+덧붙임")
+
+            approved = file_tools.write_file(str(path), "새 내용", confirm_overwrite=lambda target: True)
+            self.assertNotIn("error", approved)
+            self.assertEqual(path.read_text(encoding="utf-8"), "새 내용")
+
+    def test_write_file_treats_anything_but_true_as_refusal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sample.txt"
+            path.write_text("기존", encoding="utf-8")
+            for answer in (None, False, 0, "yes"):
+                with self.subTest(answer=answer):
+                    result = file_tools.write_file(str(path), "새 내용", confirm_overwrite=lambda target, a=answer: a)
+                    self.assertIn("error", result)
+                    self.assertEqual(path.read_text(encoding="utf-8"), "기존")
+
 
 if __name__ == "__main__":
     unittest.main()
