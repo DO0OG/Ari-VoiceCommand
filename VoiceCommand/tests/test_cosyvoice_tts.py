@@ -282,6 +282,82 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
         self.assertEqual(tts._proc.stdin.writes, ["테스트 문장\n".encode("utf-8")])
         self.assertEqual(worker_lock_state, [False])
 
+    def test_worker_reference_read_error_sets_translated_last_error(self):
+        tts = self._make_pipe_tts()
+        original_error = "Error opening reference.wav: System error"
+        proc = tts._proc
+        proc.on_write = lambda: (
+            proc.feed(_pcm(b"")),
+            tts._ctrl_q.append((proc, f"ERROR:REFERENCE_WAV:{original_error}")),
+        )
+        guidance = (
+            "참조 WAV 파일을 읽을 수 없습니다. 설정의 음성 복제에서 정상 WAV 파일을 다시 지정해 주세요."
+        )
+
+        with patch("i18n.translator._", side_effect=lambda message: message) as translate:
+            self.assertFalse(tts.speak("테스트 문장"))
+
+        self.assertEqual(tts._last_error, f"{guidance}\n{original_error}")
+        translate.assert_called_with(guidance)
+
+    def test_stderr_reader_records_warmup_failure_for_fallback(self):
+        warmup_error = "백그라운드 warmup 실패 (Error opening 'reference.wav': System error.)"
+
+        class _FakeStderr:
+            def __init__(self, lines):
+                self._lines = iter(lines)
+
+            def readline(self):
+                return next(self._lines, b"")
+
+        class _FakeWorker:
+            def __init__(self):
+                self.stderr = _FakeStderr(
+                    [
+                        b"READY\n",
+                        f"INFO:{warmup_error}\n".encode("utf-8"),
+                    ]
+                )
+
+            def poll(self):
+                return None
+
+        with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
+            tts = CosyVoiceTTS()
+        worker = _FakeWorker()
+        tts._proc = worker
+        tts._stopping = False
+        tts._ready = threading.Event()
+        tts._warmup_ready = threading.Event()
+        tts._warmup_done = threading.Event()
+        tts._worker_error = None
+        tts._warmup_error = None
+        reader = threading.Thread(
+            target=tts._stderr_reader, args=(worker,), daemon=True
+        )
+        reader.start()
+
+        self.assertFalse(tts.wait_until_warmup_done(timeout=1))
+        reader.join(1)
+
+        self.assertFalse(reader.is_alive())
+        self.assertTrue(tts._ready.is_set())
+        self.assertEqual(tts._warmup_error, warmup_error)
+
+    def test_generic_worker_error_does_not_reuse_previous_reference_error(self):
+        tts = self._make_pipe_tts()
+        proc = tts._proc
+        proc.on_write = lambda: (
+            proc.feed(_pcm(b"")),
+            tts._ctrl_q.append((proc, "ERROR:current synthesis failure")),
+        )
+
+        with patch("i18n.translator._", side_effect=lambda message: message):
+            tts._record_worker_error("previous reference failure", reference_wav=True)
+            self.assertFalse(tts.speak("테스트 문장"))
+
+        self.assertEqual(tts._last_error, "current synthesis failure")
+
     def test_worker_failure_does_not_acquire_global_output_lock(self):
         with patch.object(CosyVoiceTTS, "__init__", lambda self, *args, **kwargs: None):
             tts = CosyVoiceTTS()
@@ -394,6 +470,7 @@ class CosyVoiceTTSSpeakTests(unittest.TestCase):
 
         self.assertFalse(thread.is_alive())
         self.assertEqual(result, [False])
+        self.assertIsNone(tts._last_error)
         self.assertFalse(tts._drain_event.wait(0.2))  # 종료 표시 전에는 배출 중
         proc.feed(_pcm(b"bbbb"), _pcm(b""))
         tts._ctrl_q.append((proc, "DONE:2"))

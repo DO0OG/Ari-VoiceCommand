@@ -150,6 +150,7 @@ class CosyVoiceTTS(QObject):
         self._warmup_done = threading.Event()
         self._worker_error = None
         self._warmup_error = None
+        self._last_error = None
         self._ctrl_q = deque()
         self._ctrl_lock = threading.Lock()
         self._speak_lock = threading.Lock()
@@ -273,6 +274,18 @@ class CosyVoiceTTS(QObject):
                         f"CosyVoice3 worker exited before warmup completed (code={exit_code})"
                     )
                     self._warmup_done.set()
+
+    def _record_worker_error(self, error, reference_wav=False):
+        error = str(error).strip()
+        if reference_wav:
+            from i18n.translator import _
+
+            guidance = _(
+                "참조 WAV 파일을 읽을 수 없습니다. 설정의 음성 복제에서 정상 WAV 파일을 다시 지정해 주세요."
+            )
+            self._last_error = f"{guidance}\n{error}" if error else guidance
+        else:
+            self._last_error = error
 
     def wait_until_ready(self, timeout=300, stop_event=None):
         """워커 READY 대기"""
@@ -553,6 +566,7 @@ class CosyVoiceTTS(QObject):
             return False
 
         with self._speak_lock:
+            self._last_error = None
             if self._stopping or stop_event.is_set():
                 return False
             with self._state_lock:
@@ -574,7 +588,10 @@ class CosyVoiceTTS(QObject):
                 self._clear_pcm_state()
                 if not self._ensure_worker(stop_event):
                     proc = self._proc
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not self._stopping:
+                        self._record_worker_error(
+                            self._worker_error or "READY timeout"
+                        )
                         logging.error(
                             "[TTS] CosyVoice3 워커 준비 실패: %s",
                             self._worker_error or "READY timeout",
@@ -691,11 +708,23 @@ class CosyVoiceTTS(QObject):
                 worker_complete = ctrl != "ERROR:timeout" and ctrl != "ERROR:cancelled"
                 if ctrl.startswith("ERROR:"):
                     logging.error("워커 오류: %s", ctrl[6:])
+                    if (
+                        ctrl != "ERROR:cancelled"
+                        and not stop_event.is_set()
+                        and not self._stopping
+                    ):
+                        if ctrl.startswith("ERROR:REFERENCE_WAV:"):
+                            self._record_worker_error(
+                                ctrl[len("ERROR:REFERENCE_WAV:"):], reference_wav=True
+                            )
+                        else:
+                            self._record_worker_error(ctrl[6:])
                 return not ctrl.startswith("ERROR:") and not stop_event.is_set()
 
             except Exception as e:
                 if not stop_event.is_set() and not self._stopping:
                     logging.error("CosyVoice TTS speak 오류: %s", e)
+                    self._record_worker_error(e)
                 return False
             finally:
                 request_finished.set()

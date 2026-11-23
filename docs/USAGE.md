@@ -372,8 +372,9 @@ CosyVoice3를 쓰면 로컬에서 꽤 안정적인 TTS 파이프라인을 꾸릴
 - 웨이크워드 대기는 TTS가 재생되는 동안은 물론 재생 직후 짧은 보호 구간에도 잠시 멈춥니다. 스피커에서 나온 소리를 호출어로 잘못 듣는 일을 줄이기 위해서입니다.
 - `reference.wav` 경로 우선순위는 다음과 같습니다.
   소스/테스트 실행: `VoiceCommand/.ari_runtime/reference.wav` → `VoiceCommand/reference.wav`
-  빌드된 exe 실행: `%AppData%/Ari/reference.wav` → 번들된 `reference.wav`
+  빌드된 exe 실행: `%AppData%/Ari/reference.wav` → 빌드에 넣은 경우의 `reference.wav`
 - 설정의 **보이스 클로닝 → 참조 WAV 파일**에 경로를 지정하면 위 기본 경로보다 우선합니다. 참조 대본은 CosyVoice와 OpenAI 호환 서버에서 함께 사용합니다.
+- 공식 설치본에는 저작권 문제로 `reference.wav`가 들어 있지 않습니다. CosyVoice3나 OpenAI 호환 TTS의 참조 오디오 복제(`ref_audio`)를 쓰려면 위 기본 경로에 파일을 두거나 설정에서 직접 지정해야 합니다. 실제로 쓰일 경로에 파일이 없으면 설정의 보이스 클로닝 묶음에 경고가 보이고, 파일을 열거나 읽지 못하면 TTS 시험 재생에 그 사실과 원래 오류가 함께 표시됩니다.
 - 지원되는 TTS 엔진은 응답 감정에 맞춰 말투를 조정할 수 있습니다. 설정 → `TTS 설정`에서 **TTS 감정 조절**을 끌 수 있으며, `tts_emotion_enabled`의 기본값은 `true`입니다.
 
 ### 추가 TTS 제공자
