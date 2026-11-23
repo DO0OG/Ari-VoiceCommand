@@ -4,11 +4,19 @@ import unittest
 import tempfile
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-
-from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask, ScheduledTaskRun
+from agent.proactive_scheduler import ProactiveScheduler, ScheduledTask, ScheduledTaskRun, _fetch_weather_text
+from agent.speech_scheduler import (
+    EventSpeechScheduler,
+    get_speech_scheduler,
+    morning_briefing_window,
+    set_speech_scheduler,
+)
+from core.settings_schema import DEFAULT_SETTINGS
+from i18n.translator import _
 
 
 class ProactiveSchedulerTests(unittest.TestCase):
@@ -755,6 +763,198 @@ class ProactiveSchedulerTests(unittest.TestCase):
         episode_goal = episode_memory.return_value.record.call_args.args[0].goal
         self.assertIn("[예약:agent]", strategy_goal)
         self.assertEqual(strategy_goal, episode_goal)
+
+
+class MorningBriefingTests(unittest.TestCase):
+    def setUp(self):
+        self.now = datetime(2026, 11, 24, 7, 30)
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.messages = []
+        self.guards = {"other_window": True}
+        self.settings = {
+            "morning_briefing_enabled": True,
+            "morning_briefing_time": "08:00",
+        }
+        self.calendar_calls = []
+        self.calendar_result = []
+        self.weather_text = "서울 현재 날씨는 맑음입니다."
+        self.speech = self.create_speech_scheduler()
+        previous = get_speech_scheduler()
+        set_speech_scheduler(self.speech)
+        self.addCleanup(set_speech_scheduler, previous)
+
+        self.scheduler = ProactiveScheduler.__new__(ProactiveScheduler)
+        self.scheduler._lock = threading.Lock()
+        self.scheduler._tasks = {}
+
+        def fetch_calendar(day_start, day_end):
+            self.calendar_calls.append((day_start, day_end))
+            if isinstance(self.calendar_result, Exception):
+                raise self.calendar_result
+            return self.calendar_result
+
+        for target, replacement in (
+            ("agent.proactive_scheduler._fetch_calendar_events", fetch_calendar),
+            ("agent.proactive_scheduler._fetch_weather_text", lambda: self.weather_text),
+            (
+                "core.config_manager.ConfigManager.get",
+                lambda key, default=None: self.settings.get(key, default),
+            ),
+        ):
+            patcher = patch(target, side_effect=replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def create_speech_scheduler(self):
+        return EventSpeechScheduler(
+            self.messages.append,
+            guard_state=lambda: self.guards,
+            context_provider=lambda: {},
+            pc_status_provider=dict,
+            state_path=os.path.join(self.directory.name, "speech.json"),
+            clock=lambda: self.now,
+        )
+
+    def step(self, hour, minute, day=24):
+        """시계를 옮겨 주기 처리와 발화 확인을 한 번씩 돌린다."""
+        self.now = datetime(2026, 11, day, hour, minute)
+        self.scheduler._check_morning_briefing(self.now)
+        self.speech.tick()
+
+    def add_task(self, task_id, next_run, name):
+        self.scheduler._tasks[task_id] = ScheduledTask(
+            task_id=task_id, goal=name, schedule_expr="", next_run=next_run.isoformat(), name=name
+        )
+
+    def test_morning_briefing_is_delivered_once_after_unlock(self):
+        self.add_task("a", datetime(2026, 11, 24, 9, 30), "보고서 정리")
+        self.step(7, 30)
+        self.assertEqual(self.messages, [])
+
+        # 시각이 지나도 잠겨 있으면 말하지 않고 미룬다.
+        self.guards["locked"] = True
+        self.step(8, 5)
+        self.assertEqual(self.messages, [])
+        self.guards["locked"] = False
+        self.step(8, 20)
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn("보고서 정리", self.messages[0])
+        self.assertIn("1건", self.messages[0])
+
+        # 같은 날 다시 확인하거나 재시작해도 두 번 말하지 않는다.
+        self.step(8, 40)
+        self.speech = self.create_speech_scheduler()
+        set_speech_scheduler(self.speech)
+        self.step(9, 0)
+        self.assertEqual(len(self.messages), 1)
+
+        # 다음 날은 다시 한 번 말한다.
+        self.step(8, 1, day=25)
+        self.assertEqual(len(self.messages), 2)
+
+    def test_morning_briefing_skipped_after_window_and_when_disabled(self):
+        self.guards["fullscreen"] = True
+        self.step(11, 59)
+        self.assertEqual([item[0] for item in self.speech._pending], ["morning_briefing"])
+
+        # 정한 시간대(4시간)를 넘기면 미뤄 둔 요약은 버려진다.
+        self.guards["fullscreen"] = False
+        self.step(12, 1)
+        self.assertEqual(self.messages, [])
+        self.assertEqual(self.speech._pending, [])
+        self.step(12, 30)
+        self.assertEqual(self.messages, [])
+
+        # 설정이 꺼져 있거나 키가 없으면 아무 요청도 하지 않는다.
+        for settings in ({"morning_briefing_enabled": False}, {}):
+            self.settings = settings
+            self.step(8, 30, day=25)
+            self.assertEqual(self.messages, [])
+            self.assertEqual(self.speech._pending, [])
+
+    def test_morning_briefing_uses_local_date_and_partial_results(self):
+        self.settings.update(
+            morning_briefing_time="23:00",
+            morning_briefing_include_calendar=True,
+            morning_briefing_include_weather=True,
+            google_calendar_enabled=True,
+        )
+        self.add_task("today", datetime(2026, 11, 24, 23, 40), "백업 확인")
+        self.add_task("past", datetime(2026, 11, 24, 6, 0), "지난 작업")
+        self.add_task("tomorrow", datetime(2026, 11, 25, 0, 10), "내일 작업")
+        self.calendar_result = RuntimeError("조회 실패")
+        self.step(23, 10)
+
+        # 일정 조회는 현지 날짜의 0시부터 다음 날 0시까지이고, 실패해도 나머지로 요약한다.
+        self.assertEqual(
+            self.calendar_calls,
+            [(datetime(2026, 11, 24, 0, 0), datetime(2026, 11, 25, 0, 0))],
+        )
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn("백업 확인", self.messages[0])
+        self.assertNotIn("지난 작업", self.messages[0])
+        self.assertNotIn("내일 작업", self.messages[0])
+        self.assertNotIn("오늘 일정", self.messages[0])
+        self.assertIn("맑음", self.messages[0])
+
+        # 날씨 조회가 실패하면(빈 문자열) 날씨만 빠지고 일정은 들어간다.
+        self.messages.clear()
+        self.calendar_result = [
+            {"summary": "팀 회의", "start": {"dateTime": "2026-11-25T09:00:00+09:00"}},
+            {"summary": "생일", "start": {"date": "2026-11-25"}},
+        ]
+        self.weather_text = ""
+        self.step(23, 10, day=25)
+        self.step(23, 11, day=25)
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn("오늘 일정은 2건", self.messages[0])
+        self.assertIn("팀 회의", self.messages[0])
+        self.assertIn("생일", self.messages[0])
+        self.assertNotIn("맑음", self.messages[0])
+
+    def test_morning_briefing_external_sources_need_their_own_settings(self):
+        self.settings.update(
+            morning_briefing_include_calendar=True,
+            morning_briefing_include_weather=False,
+            google_calendar_enabled=False,
+        )
+        self.step(8, 0)
+        self.assertEqual(self.calendar_calls, [])
+        self.assertEqual(len(self.messages), 1)
+        self.assertIn("예약 작업은 없어요", self.messages[0])
+        self.assertNotIn("맑음", self.messages[0])
+
+    def test_morning_briefing_drops_weather_when_service_returns_failure_text(self):
+        self.settings["morning_briefing_include_weather"] = True
+        failure = _("날씨 정보를 가져오는 데 실패했습니다.")
+        with patch("agent.proactive_scheduler._fetch_weather_text", _fetch_weather_text), patch(
+            "services.weather_service.WeatherService.get_weather", return_value=failure
+        ) as get_weather:
+            self.step(8, 0)
+        get_weather.assert_called_once()
+        self.assertEqual(len(self.messages), 1)
+        self.assertNotIn(failure, self.messages[0])
+        self.assertIn("예약 작업은 없어요", self.messages[0])
+
+    def test_morning_briefing_window_falls_back_on_bad_time(self):
+        start, end = morning_briefing_window(datetime(2026, 11, 24, 15, 0), "25:99")
+        self.assertEqual((start, end), (datetime(2026, 11, 24, 8, 0), datetime(2026, 11, 24, 12, 0)))
+        start, end = morning_briefing_window(datetime(2026, 11, 24, 15, 0), "22:30")
+        self.assertEqual(end, datetime(2026, 11, 25, 0, 0))
+
+    def test_morning_briefing_defaults_are_off_in_settings(self):
+        template_path = Path(__file__).resolve().parents[1] / "ari_settings.template.json"
+        with template_path.open("r", encoding="utf-8") as stream:
+            template = json.load(stream)
+        for key, expected in (
+            ("morning_briefing_enabled", False),
+            ("morning_briefing_time", "08:00"),
+            ("morning_briefing_include_calendar", False),
+            ("morning_briefing_include_weather", False),
+        ):
+            self.assertEqual(DEFAULT_SETTINGS[key], expected)
+            self.assertEqual(template[key], expected)
 
 
 if __name__ == "__main__":

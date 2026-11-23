@@ -145,6 +145,10 @@ DEFAULT_SETTINGS = {
     "activity_ide_long_use_reaction_enabled": True,
     "spontaneous_talk_enabled": False,  # 한동안 대화가 없으면 먼저 말 걸기 (기본 꺼짐)
     "pc_resource_alerts_enabled": True,  # 배터리 20% 미만·시스템 드라이브 여유 10GB 미만을 먼저 알림
+    "morning_briefing_enabled": False,  # 정한 아침 시각 뒤 처음 말할 수 있을 때 오늘 예약 작업을 요약 (기본 꺼짐)
+    "morning_briefing_time": "08:00",  # HH:MM, 이 시각부터 4시간(자정 전까지)만 요약
+    "morning_briefing_include_calendar": False,  # Google Calendar 오늘 일정 포함 (Google 도구 사용도 켜져 있어야 함)
+    "morning_briefing_include_weather": False,  # 오늘 날씨 포함
     "user_birthday": "",            # MM-DD
     "special_date_events_enabled": True,
     # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────

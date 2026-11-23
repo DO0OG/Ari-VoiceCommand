@@ -4263,3 +4263,30 @@ msgstr "배터리·디스크 공간이 부족하면 먼저 알리기"
 
 msgid "파일 덮어쓰기 - 경로: {path} / 새 내용: {content}"
 msgstr "파일 덮어쓰기 - 경로: {path} / 새 내용: {content}"
+
+msgid "오늘 남은 예약 작업은 {count}건이에요: {items}."
+msgstr "오늘 남은 예약 작업은 {count}건이에요: {items}."
+
+msgid "오늘 남은 예약 작업은 없어요."
+msgstr "오늘 남은 예약 작업은 없어요."
+
+msgid "오늘 일정은 {count}건이에요: {items}."
+msgstr "오늘 일정은 {count}건이에요: {items}."
+
+msgid "오늘 일정은 없어요."
+msgstr "오늘 일정은 없어요."
+
+msgid "정한 아침 시각에 오늘 할 일을 먼저 알리기"
+msgstr "정한 아침 시각에 오늘 할 일을 먼저 알리기"
+
+msgid "아침 요약 시각 (이 시각부터 4시간 안에 처음 말할 수 있을 때)"
+msgstr "아침 요약 시각 (이 시각부터 4시간 안에 처음 말할 수 있을 때)"
+
+msgid "아침 요약에 Google Calendar 오늘 일정 포함 (Google 도구 사용 필요)"
+msgstr "아침 요약에 Google Calendar 오늘 일정 포함 (Google 도구 사용 필요)"
+
+msgid "아침 요약에 오늘 날씨 포함"
+msgstr "아침 요약에 오늘 날씨 포함"
+
+msgid "좋은 아침이에요. 오늘 할 일을 알려 드릴게요."
+msgstr "좋은 아침이에요. 오늘 할 일을 알려 드릴게요."

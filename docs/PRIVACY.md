@@ -64,13 +64,14 @@ Features marked "on by default" are active in a new installation. Features that 
 
 ### Tools Ari can run on request
 
-These run only when you ask for something that needs them.
+These run only when you ask for something that needs them. The exception is the morning briefing: when you turn it on, it runs at the time you set, without a request.
 
 - Weather: when no city is named, your approximate location is looked up from your IP address with `ipapi.co`. City names that Ari does not know are looked up with Open-Meteo's geocoding API. The forecast is requested from `api.open-meteo.com` with coordinates.
 - Web search: the search text is sent through the `ddgs` web-search library. This document does not list which search engine receives a given query.
 - Web pages: Ari can fetch public web pages you or the model choose, and can drive a browser to visit sites. Fetching web pages accepts only public addresses, but browser automation can open localhost and private addresses.
 - Image generation: off by default (`image_generation_enabled`). When on, the prompt is sent to OpenAI with your API key.
 - Google Calendar and Gmail: off by default (`google_calendar_enabled`). When you connect a Google account, Ari signs in with OAuth in your browser and calls Google's Calendar and Gmail APIs when you ask for them. Use the disconnect action in the agent settings to sign out.
+- Morning briefing: off by default (`morning_briefing_enabled`). Once a day, at the time you set, Ari speaks today's remaining scheduled tasks from your PC. If you also turn on `morning_briefing_include_calendar` (needs `google_calendar_enabled`), today's events are requested from Google Calendar for your local date. If you turn on `morning_briefing_include_weather`, the weather is requested the same way as a weather question without a city (`ipapi.co` and `api.open-meteo.com`). These lookups happen without a request from you at that time, and each is off by default. Only the date of the last briefing is saved; event titles and weather text are not. The summary is spoken aloud, so if you use a cloud TTS provider, the text, including scheduled task names and event titles, is sent to that provider.
 
 ### Downloads you start
 
@@ -155,13 +156,14 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 
 ### 요청하면 실행하는 도구
 
-필요한 일을 요청했을 때만 실행됩니다.
+필요한 일을 요청했을 때만 실행됩니다. 다만 아침 요약은 설정으로 켜면 정한 시각에 요청 없이 실행됩니다.
 
 - 날씨: 도시를 말하지 않으면 `ipapi.co`로 IP 주소에서 대략적인 위치를 조회합니다. Ari가 모르는 도시 이름은 Open-Meteo 지오코딩 API로 조회하고, 예보는 좌표로 `api.open-meteo.com`에 요청합니다.
 - 웹 검색: 검색어를 `ddgs` 웹 검색 라이브러리를 통해 보냅니다. 어떤 검색 엔진이 질의를 받는지는 이 문서에 적지 않았습니다.
 - 웹 페이지: 사용자나 모델이 고른 공개 웹 페이지를 가져오고, 브라우저를 조작해 사이트를 방문할 수 있습니다. 웹 페이지 가져오기는 공개 주소만 허용하지만, 브라우저 자동화는 로컬·사설 주소도 열 수 있습니다.
 - 이미지 생성: 기본 꺼짐(`image_generation_enabled`). 켜면 프롬프트를 사용자의 API 키로 OpenAI에 보냅니다.
 - Google 캘린더와 Gmail: 기본 꺼짐(`google_calendar_enabled`). Google 계정을 연결하면 브라우저에서 OAuth로 로그인하고, 요청할 때 Google 캘린더·Gmail API를 호출합니다. 에이전트 설정에서 연결 해제로 로그아웃할 수 있습니다.
+- 아침 요약: 기본 꺼짐(`morning_briefing_enabled`). 정한 시각에 하루 한 번 PC에 있는 오늘 남은 예약 작업을 말합니다. `morning_briefing_include_calendar`(`google_calendar_enabled`도 필요)를 켜면 현지 날짜의 오늘 일정을 Google 캘린더에 요청하고, `morning_briefing_include_weather`를 켜면 도시를 말하지 않은 날씨 질문과 같은 방식(`ipapi.co`, `api.open-meteo.com`)으로 날씨를 요청합니다. 이 조회는 그 시각에 사용자의 요청 없이 이루어지며 각각 기본 꺼짐입니다. 마지막 요약 날짜만 저장하고 일정 제목과 날씨 문장은 저장하지 않습니다. 요약은 음성으로 읽히므로, 클라우드 TTS를 쓰면 예약 작업 이름과 일정 제목을 포함한 문장이 그 TTS 제공자에게 전송됩니다.
 
 ### 사용자가 시작하는 내려받기
 
@@ -248,13 +250,14 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 
 ### 依頼に応じて実行するツール
 
-必要な依頼をしたときだけ実行されます。
+必要な依頼をしたときだけ実行されます。ただし朝の要約は、設定でオンにすると設定した時刻に依頼なしで実行されます。
 
 - 天気: 都市名を指定しない場合、`ipapi.co` で IP アドレスからおおよその位置を調べます。Ari が知らない都市名は Open-Meteo のジオコーディング API で調べ、予報は座標を使って `api.open-meteo.com` に要求します。
 - ウェブ検索: 検索語を `ddgs` ウェブ検索ライブラリを通じて送ります。どの検索エンジンがクエリを受け取るかは、この文書には記載していません。
 - ウェブページ: ユーザーやモデルが選んだ公開ウェブページを取得し、ブラウザーを操作してサイトを訪問することがあります。ウェブページの取得は公開アドレスのみ許可しますが、ブラウザー自動化ではローカルアドレスやプライベートアドレスも開けます。
 - 画像生成: 初期状態でオフ(`image_generation_enabled`)。オンにすると、プロンプトをユーザーの API キーで OpenAI に送ります。
 - Google カレンダーと Gmail: 初期状態でオフ(`google_calendar_enabled`)。Google アカウントを接続すると、ブラウザーで OAuth によりサインインし、依頼に応じて Google のカレンダーと Gmail の API を呼び出します。エージェント設定の接続解除でサインアウトできます。
+- 朝の要約: 初期状態でオフ(`morning_briefing_enabled`)。設定した時刻に 1 日 1 回、PC にある今日の残りの予約タスクを読み上げます。`morning_briefing_include_calendar`(`google_calendar_enabled` も必要)をオンにすると、現地の日付の今日の予定を Google カレンダーに要求し、`morning_briefing_include_weather` をオンにすると、都市名を指定しない天気の質問と同じ方法(`ipapi.co`、`api.open-meteo.com`)で天気を要求します。これらの取得はその時刻にユーザーの依頼なしで行われ、それぞれ初期状態でオフです。保存するのは最後に要約した日付だけで、予定のタイトルと天気の文章は保存しません。要約は音声で読み上げられるため、クラウド TTS を使うと、予約タスク名と予定のタイトルを含む文章がその TTS プロバイダーに送信されます。
 
 ### ユーザーが開始するダウンロード
 
