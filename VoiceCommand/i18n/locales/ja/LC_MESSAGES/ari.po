@@ -4224,3 +4224,30 @@ msgstr "未使用の API キーを削除"
 
 msgid "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."
 msgstr "未使用の API キーを {count} 個削除しますか？削除したキーは元に戻せません。"
+
+msgid "컴퓨터 종료: {when}"
+msgstr "コンピューターのシャットダウン: {when}"
+
+msgid "컴퓨터 재시작: {when}"
+msgstr "コンピューターの再起動: {when}"
+
+msgid "지금 바로"
+msgstr "今すぐ"
+
+msgid "컴퓨터 종료 요청을 취소했어요."
+msgstr "コンピューターのシャットダウン要求を取り消しました。"
+
+msgid "컴퓨터 재시작 요청을 취소했어요."
+msgstr "コンピューターの再起動要求を取り消しました。"
+
+msgid "메일 발송 - 받는 사람: {to} / 제목: {subject} / 본문: {body}"
+msgstr "メール送信 - 宛先: {to} / 件名: {subject} / 本文: {body}"
+
+msgid "메일 발송"
+msgstr "メール送信"
+
+msgid "{to}에게 메일을 보냅니다"
+msgstr "{to} 宛にメールを送信します"
+
+msgid "사용자가 승인하지 않아 메일을 보내지 않았습니다."
+msgstr "承認されなかったため、メールは送信しませんでした。"

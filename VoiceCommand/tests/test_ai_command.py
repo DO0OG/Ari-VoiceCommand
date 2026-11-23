@@ -150,6 +150,48 @@ class AICommandTests(unittest.TestCase):
         calendar.assert_not_called()
         gmail.assert_not_called()
 
+    def _send_email(self, confirm_result=None, confirm_error=None, args=None):
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        args = args or {"to": "a@example.com", "subject": "회의 일정", "body": "내일 봅시다"}
+        with (
+            patch("core.config_manager.ConfigManager.get", return_value=True),
+            patch("agent.confirmation_manager.get_confirmation_manager") as get_manager,
+            patch("services.gmail_service.get_gmail_service") as gmail,
+        ):
+            confirm = get_manager.return_value.request_confirmation
+            confirm.return_value = confirm_result
+            confirm.side_effect = confirm_error
+            gmail.return_value.send_email.return_value = {"id": "m1"}
+            result = command._handle_send_email(args)
+        return result, confirm, gmail.return_value.send_email
+
+    def test_send_email_is_sent_once_only_after_approval(self):
+        result, confirm, send = self._send_email(confirm_result=True)
+        confirm.assert_called_once()
+        desc = confirm.call_args.args[0]
+        self.assertIn("a@example.com", desc)
+        self.assertIn("회의 일정", desc)
+        send.assert_called_once_with(to="a@example.com", subject="회의 일정", body="내일 봅시다")
+        self.assertIn("m1", result)
+
+    def test_send_email_is_not_sent_when_denied_timed_out_or_confirmation_fails(self):
+        denied = _("사용자가 승인하지 않아 메일을 보내지 않았습니다.")
+        for kwargs in ({"confirm_result": False}, {"confirm_result": None}, {"confirm_error": RuntimeError("no ui")}):
+            with self.subTest(kwargs=kwargs):
+                result, confirm, send = self._send_email(**kwargs)
+                confirm.assert_called_once()
+                send.assert_not_called()
+                self.assertEqual(result, denied)
+
+    def test_send_email_confirmation_shows_only_start_of_body_and_escapes_html(self):
+        body = "가" * 300
+        _result, confirm, _send = self._send_email(
+            confirm_result=True, args={"to": "a@example.com", "subject": "<b>제목</b>", "body": body})
+        desc = confirm.call_args.args[0]
+        self.assertIn("가" * 100, desc)
+        self.assertNotIn("가" * 101, desc)
+        self.assertNotIn("<b>", desc)
+
     def test_first_response_before_700ms_cancels_ack(self):
         shown = []
         ack = InstantAckTimer(lambda: shown.append("ack"), timer_factory=_ManualTimer)
@@ -1159,6 +1201,25 @@ class AICommandTests(unittest.TestCase):
             any("5분" in cmd for cmd in executed_cmds),
             f"5분이 포함된 명령 없음: {executed_cmds}",
         )
+
+    def test_shutdown_tool_asks_for_confirmation_exactly_once(self):
+        from commands.system_command import SystemCommand
+
+        for goal in ("컴퓨터 꺼줘", "5분 뒤에 컴퓨터 꺼줘"):
+            for approved, os_calls in ((True, 1), (False, 0)):
+                with self.subTest(goal=goal, approved=approved):
+                    command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})
+                    command._current_goal = goal
+                    system = SystemCommand(lambda msg: None)
+                    with (
+                        patch("core.VoiceCommand.execute_command", side_effect=system.execute),
+                        patch("agent.confirmation_manager.get_confirmation_manager") as get_manager,
+                        patch("commands.system_command.subprocess.run") as run,
+                    ):
+                        get_manager.return_value.request_confirmation.return_value = approved
+                        command._handle_shutdown_computer({})
+                    get_manager.return_value.request_confirmation.assert_called_once()
+                    self.assertEqual(run.call_count, os_calls)
 
     def test_handle_mcp_call_routes_through_mcp_pool(self):
         command = AICommand(_FakeAssistant(), lambda msg: None, {"enabled": False})

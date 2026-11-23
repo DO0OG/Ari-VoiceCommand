@@ -4227,3 +4227,30 @@ msgstr "Delete unused API keys"
 
 msgid "쓰지 않는 API 키 {count}개를 삭제할까요? 삭제한 키는 되돌릴 수 없습니다."
 msgstr "Delete unused API keys ({count})? This cannot be undone."
+
+msgid "컴퓨터 종료: {when}"
+msgstr "Shut down computer: {when}"
+
+msgid "컴퓨터 재시작: {when}"
+msgstr "Restart computer: {when}"
+
+msgid "지금 바로"
+msgstr "right now"
+
+msgid "컴퓨터 종료 요청을 취소했어요."
+msgstr "I canceled the request to shut down the computer."
+
+msgid "컴퓨터 재시작 요청을 취소했어요."
+msgstr "I canceled the request to restart the computer."
+
+msgid "메일 발송 - 받는 사람: {to} / 제목: {subject} / 본문: {body}"
+msgstr "Send email - To: {to} / Subject: {subject} / Body: {body}"
+
+msgid "메일 발송"
+msgstr "Send email"
+
+msgid "{to}에게 메일을 보냅니다"
+msgstr "Sending an email to {to}"
+
+msgid "사용자가 승인하지 않아 메일을 보내지 않았습니다."
+msgstr "The email was not sent because you did not approve it."

@@ -5,6 +5,7 @@ from commands.calculator_command import CalculatorCommand
 from commands.system_command import SystemCommand
 from commands.time_command import TimeCommand
 from commands.volume_command import VolumeCommand
+from i18n.translator import _
 
 
 class LegacyCommandMatchingTests(unittest.TestCase):
@@ -64,6 +65,70 @@ class LegacyCommandMatchingTests(unittest.TestCase):
         command.execute("3 곱하기 4는?")
 
         self.assertIn("12입니다", spoken[0])
+
+
+class SystemCommandConfirmationTests(unittest.TestCase):
+    """종료·재시작은 OS 호출 전에 확인을 받고, 종료 취소는 확인 없이 처리한다."""
+
+    CASES = (
+        ("컴퓨터 꺼줘", "종료", "지금 바로"),
+        ("컴퓨터 재시작해줘", "재시작", "지금 바로"),
+        ("5분 뒤에 컴퓨터 꺼줘", "종료", None),
+        ("5분 뒤에 컴퓨터 재시작해줘", "재시작", None),
+    )
+
+    def _run(self, text, confirm_result):
+        spoken = []
+        command = SystemCommand(spoken.append)
+        with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager, \
+                patch("commands.system_command.subprocess.run") as run:
+            get_manager.return_value.request_confirmation.return_value = confirm_result
+            command.execute(text)
+        return get_manager.return_value.request_confirmation, run, spoken
+
+    def test_approved_power_command_runs_os_call_exactly_once(self):
+        for text, action, when in self.CASES:
+            with self.subTest(text=text):
+                confirm, run, _spoken = self._run(text, True)
+                confirm.assert_called_once()
+                desc, report = confirm.call_args.args[:2]
+                self.assertIn(_(action), desc)
+                self.assertEqual(report.category, "power")
+                if when:
+                    self.assertIn(_(when), desc)
+                run.assert_called_once()
+                self.assertEqual(run.call_args.args[0][0], "shutdown")
+
+    def test_denied_or_timed_out_power_command_makes_no_os_call(self):
+        for text, action, _when in self.CASES:
+            for answer in (False, None):
+                with self.subTest(text=text, answer=answer):
+                    confirm, run, spoken = self._run(text, answer)
+                    confirm.assert_called_once()
+                    run.assert_not_called()
+                    self.assertEqual(
+                        spoken[-1],
+                        _("컴퓨터 종료 요청을 취소했어요.") if action == "종료" else _("컴퓨터 재시작 요청을 취소했어요."))
+
+    def test_confirmation_failure_is_treated_as_denied(self):
+        spoken = []
+        command = SystemCommand(spoken.append)
+        with patch("agent.confirmation_manager.get_confirmation_manager", side_effect=RuntimeError("no ui")), \
+                patch("commands.system_command.subprocess.run") as run:
+            command.execute("컴퓨터 꺼줘")
+        run.assert_not_called()
+        self.assertEqual(len(spoken), 1)
+
+    def test_cancel_shutdown_needs_no_confirmation(self):
+        spoken = []
+        command = SystemCommand(spoken.append)
+        with patch("agent.confirmation_manager.get_confirmation_manager") as get_manager, \
+                patch("commands.system_command.subprocess.run") as run:
+            run.return_value.returncode = 0
+            command.execute("종료 취소")
+        get_manager.assert_not_called()
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0][0], "shutdown")
 
 
 if __name__ == "__main__":
