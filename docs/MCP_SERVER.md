@@ -57,6 +57,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8765/mcp" `
 
 `ari_take_screenshot`, `ari_get_system_info`, `ari_read_file`는 `readOnlyHint: true`로 표시합니다. 나머지 도구는 `readOnlyHint: false`이며, `ari_write_file`만 `destructiveHint: true`로 표시하고, 나머지 도구는 `destructiveHint: false`로 표시합니다.
 
+`ari_write_file`은 허용 경로 안의 기존 파일도 `overwrite` 모드에서는 PC의 확인 창 없이 덮어씁니다. 외부 클라이언트가 보내는 요청에 PC 앞의 사용자가 답할 수 있다고 가정할 수 없고, 요청마다 확인 창을 기다리면 그동안 다른 요청 처리가 늦어지기 때문입니다. 덮어쓰기 확인이 필요하면 `destructiveHint: true`를 보고 확인을 받는 MCP 클라이언트를 쓰거나 `ARI_MCP_ALLOWED_PATHS`를 덮어써도 되는 폴더로 좁히세요. Ari 대화에서 언어 모델이 쓰는 `write_file` 도구는 이와 달리 덮어쓰기 전에 확인을 받습니다.
+
 ## 접근 제어
 
 서버는 로컬 전용입니다. 다음 조건을 모두 만족해야 요청이 처리됩니다.

@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 import tempfile
@@ -191,6 +192,90 @@ class AICommandTests(unittest.TestCase):
         self.assertIn("가" * 100, desc)
         self.assertNotIn("가" * 101, desc)
         self.assertNotIn("<b>", desc)
+
+    def _run_tool(self, name, args, confirm_result=None, confirm_error=None):
+        """도구 호출 디스패치로 실행하고 확인 요청 mock 을 돌려준다(실제 대화상자 없음)."""
+        command = AICommand(_FakeAssistant(), lambda _message: None, {"enabled": False})
+        with (
+            patch("agent.confirmation_manager.get_confirmation_manager") as get_manager,
+            patch.object(command.executor, "_log_audit"),
+        ):
+            confirm = get_manager.return_value.request_confirmation
+            confirm.return_value = confirm_result
+            confirm.side_effect = confirm_error
+            results = command._execute_tool_calls([{"id": "t1", "name": name, "arguments": args}])
+        return results[0], confirm
+
+    def test_write_file_overwrite_writes_once_only_after_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "report.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("기존 내용")
+            result, confirm = self._run_tool(
+                "write_file", {"file_path": path, "content": "새 내용"}, confirm_result=True)
+            confirm.assert_called_once()
+            self.assertIn(path, confirm.call_args.args[0])
+            self.assertIn("새 내용", confirm.call_args.args[0])
+            self.assertEqual(confirm.call_args.args[1].category, "file_write")
+            self.assertNotIn("error", json.loads(result))
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "새 내용")
+
+    def test_write_file_overwrite_keeps_file_when_denied_timed_out_or_confirmation_fails(self):
+        for kwargs in ({"confirm_result": False}, {"confirm_result": None}, {"confirm_error": RuntimeError("no ui")}):
+            with self.subTest(kwargs=kwargs), tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "report.txt")
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write("기존 내용")
+                result, confirm = self._run_tool("write_file", {"file_path": path, "content": "새 내용"}, **kwargs)
+                confirm.assert_called_once()
+                self.assertEqual(json.loads(result)["error"], _("사용자가 파일 덮어쓰기를 승인하지 않았습니다."))
+                with open(path, encoding="utf-8") as handle:
+                    self.assertEqual(handle.read(), "기존 내용")
+
+    def test_write_file_without_overwrite_does_not_ask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            new_path = os.path.join(tmp, "new.txt")
+            old_path = os.path.join(tmp, "old.txt")
+            with open(old_path, "w", encoding="utf-8") as handle:
+                handle.write("앞")
+            for args in (
+                {"file_path": new_path, "content": "처음 쓰는 파일"},
+                {"file_path": old_path, "content": "뒤", "mode": "append"},
+            ):
+                result, confirm = self._run_tool("write_file", args, confirm_result=False)
+                confirm.assert_not_called()
+                self.assertNotIn("error", json.loads(result))
+            with open(new_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "처음 쓰는 파일")
+            with open(old_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "앞뒤")
+
+    def test_write_file_confirmation_shows_only_start_of_content_and_escapes_html(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "a.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("x")
+            _result, confirm = self._run_tool(
+                "write_file", {"file_path": path, "content": "<b>" + "가" * 300}, confirm_result=False)
+            desc = confirm.call_args.args[0]
+            self.assertIn("가" * 97, desc)
+            self.assertNotIn("가" * 98, desc)
+            self.assertNotIn("<b>", desc)
+
+    def test_move_and_delete_tools_still_ask_exactly_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "src.txt")
+            dst = os.path.join(tmp, "dst.txt")
+            for path in (src, dst):
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(os.path.basename(path))
+            _result, confirm = self._run_tool("move_file", {"src": src, "dst": dst}, confirm_result=False)
+            confirm.assert_called_once()
+            self.assertTrue(os.path.exists(src))
+            _result, confirm = self._run_tool("delete_file", {"path": dst}, confirm_result=False)
+            confirm.assert_called_once()
+            self.assertTrue(os.path.exists(dst))
 
     def test_first_response_before_700ms_cancels_ack(self):
         shown = []

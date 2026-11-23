@@ -597,13 +597,38 @@ class AICommand(FastPathMixin, BaseCommand):
 
     def _handle_write_file(self, args: dict) -> Optional[str]:
         from agent import file_tools
+        content = str(args.get("content", "") or "")
         result = file_tools.write_file(
             str(args.get("file_path", "") or ""),
-            str(args.get("content", "") or ""),
+            content,
             str(args.get("mode", "overwrite") or "overwrite"),
+            confirm_overwrite=lambda path: self._confirm_file_overwrite(path, content),
         )
         self.executor._log_audit("file_write", str(args.get("file_path", "") or ""), "success" if "error" not in result else "error", result, self._current_goal)
         return self._format_tool_payload(result)
+
+    def _confirm_file_overwrite(self, path: str, content: str) -> bool:
+        """기존 파일을 덮어쓰기 전에 확인을 받는다. 확인 수단이 없거나 실패하면 거절로 본다."""
+        try:
+            from agent.confirmation_manager import get_confirmation_manager
+            from agent.safety_checker import DangerLevel, SafetyReport
+
+            # 대화상자가 HTML 로 그리므로 모델이 만든 값은 이스케이프하고, 새 내용은 앞부분만 보인다.
+            preview = " ".join(content.split())
+            if len(preview) > 100:
+                preview = preview[:100] + "…"
+            desc = _("파일 덮어쓰기 - 경로: {path} / 새 내용: {content}").format(
+                path=html.escape(path), content=html.escape(preview))
+            report = SafetyReport(
+                level=DangerLevel.CAUTION,
+                matched_patterns=[_("파일 덮어쓰기: {path}").format(path=html.escape(path))],
+                summary=_("파일 덮어쓰기: {path}").format(path=html.escape(os.path.basename(path))),
+                category="file_write",
+            )
+            return get_confirmation_manager().request_confirmation(desc, report, self.tts_wrapper) is True
+        except Exception as exc:
+            logging.error("파일 덮어쓰기 확인 실패: %s", exc)
+            return False
 
     def _handle_edit_file(self, args: dict) -> Optional[str]:
         from agent import file_tools

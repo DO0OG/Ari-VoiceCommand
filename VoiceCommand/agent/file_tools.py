@@ -10,7 +10,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Callable, List, Dict, Any, Optional
 
 from core import atomic_io
 from i18n.translator import _
@@ -325,11 +325,23 @@ def read_file(file_path: str, start_line: int = 1, end_line: Optional[int] = Non
         return {"error": str(e)}
 
 
-def write_file(file_path: str, content: str, mode: str = "overwrite") -> Dict[str, Any]:
-    """파일에 내용을 쓰거나 추가한다."""
+def write_file(
+    file_path: str,
+    content: str,
+    mode: str = "overwrite",
+    confirm_overwrite: Optional[Callable[[str], bool]] = None,
+) -> Dict[str, Any]:
+    """파일에 내용을 쓰거나 추가한다.
+
+    confirm_overwrite 가 있으면 기존 파일의 내용을 덮어쓰기 직전에 정규화한 경로로 불러
+    True 가 아니면 쓰지 않는다. 없으면(MCP 서버 등) 확인 없이 쓴다.
+    """
     try:
         path = _normalize_path(file_path)
         file_mode = "a" if str(mode or "overwrite").lower() == "append" else "w"
+        if file_mode == "w" and confirm_overwrite is not None and os.path.isfile(path):
+            if confirm_overwrite(path) is not True:
+                return {"error": _("사용자가 파일 덮어쓰기를 승인하지 않았습니다."), "file_path": path}
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         if file_mode == "a":
             with open(path, file_mode, encoding="utf-8") as f:
