@@ -83,7 +83,7 @@ Use `setup.bat --with-tts` to install local CosyVoice3 as well. If Ari does not 
 
 ## Privacy and running locally
 
-With Ollama for the LLM, Whisper for speech recognition, CosyVoice3 for speech synthesis, and local embeddings for memory search, all of that processing stays on your PC. If local speech synthesis fails to start, the default setting falls back to Edge TTS, which sends the text to Microsoft; set `tts_fallback_provider` to `none` to prevent this. What leaves your PC depends on the providers and features you turn on.
+With Ollama for the LLM, Whisper for speech recognition, CosyVoice3 for speech synthesis, and local embeddings for memory search, all of that processing stays on your PC. If local speech synthesis fails to start, or fails on a sentence before any sound is played, the default setting falls back to Edge TTS, which sends the text to Microsoft; set `tts_fallback_provider` to `none` to prevent this. What leaves your PC depends on the providers and features you turn on.
 
 - Remote embeddings and the Telegram integration are off by default.
 - Only plugins you approve are loaded. Approved plugins run with the app's permissions and are not sandboxed, so approve only the ones you trust.

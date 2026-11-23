@@ -55,6 +55,8 @@ class AppState:
         self.command_registry = None
         self.tts_thread = None
         self.tts_signature = None
+        # 사용 중 합성 실패 때 쓰는 대체 엔진 (모드, 인스턴스). 처음 필요할 때 만들어 재사용한다.
+        self.tts_fallback = None
         self.tts_init_event = threading.Event()
         self.tts_playback_finished_event = threading.Event()
         self.tts_init_started = False
@@ -264,13 +266,20 @@ def _effective_tts_settings(settings: dict) -> dict:
     return effective
 
 
-def _create_fallback_tts(settings: dict):
-    from tts.tts_factory import create_tts_provider
+def _fallback_tts_mode(settings: dict) -> str | None:
     fallback = settings.get("tts_fallback_provider", "edge")
     if fallback == "none":
         return None
     if fallback == settings.get("tts_mode"):
         fallback = "edge"
+    return fallback
+
+
+def _create_fallback_tts(settings: dict):
+    from tts.tts_factory import create_tts_provider
+    fallback = _fallback_tts_mode(settings)
+    if fallback is None:
+        return None
     fallback_settings = dict(settings)
     fallback_settings["tts_mode"] = fallback
     logging.warning("[TTS] 폴백으로 전환: %s", fallback)
@@ -292,6 +301,10 @@ def initialize_tts():
         if _state.fish_tts is not None and _state.tts_signature == next_signature:
             logging.info("TTS 설정 변경 없음 - 기존 프로바이더 재사용")
         else:
+            if _state.tts_fallback is not None:
+                # 엔진이 바뀌면 사용 중 실패용 대체 엔진도 새로 만들게 정리한다.
+                _cleanup_tts_provider_async(_state.tts_fallback[1])
+                _state.tts_fallback = None
             current_provider = _state.fish_tts
             old_provider_was_local = bool(
                 _state.tts_signature and _state.tts_signature[0] == "local"
@@ -562,16 +575,17 @@ def stop_speaking() -> bool:
                 except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                     logging.debug("LLM 대화 기록 갱신 생략: %s", exc)
 
-    provider = _state.fish_tts
-    if hasattr(provider, "stop"):
-        try:
-            provider.stop()
-        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
-            logging.debug("TTS 재생 중단 생략: %s", exc)
-    else:
-        stop_event = getattr(provider, "stop_event", None)
-        if callable(getattr(stop_event, "set", None)):
-            stop_event.set()
+    fallback_tts = _state.tts_fallback
+    for provider in (_state.fish_tts, fallback_tts[1] if fallback_tts else None):
+        if hasattr(provider, "stop"):
+            try:
+                provider.stop()
+            except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("TTS 재생 중단 생략: %s", exc)
+        else:
+            stop_event = getattr(provider, "stop_event", None)
+            if callable(getattr(stop_event, "set", None)):
+                stop_event.set()
 
     _state.tts_resume_guard_until = (
         time.monotonic() + TTS_WAKE_GUARD_BUFFER_SECONDS
@@ -602,6 +616,76 @@ def _quiet_bubble_only_enabled() -> bool:
     from core.config_manager import ConfigManager
 
     return bool(ConfigManager.get("activity_quiet_bubble_only_enabled", False))
+
+
+def _speak_with_provider(provider, text, emotion, stop_event) -> bool:
+    speak = provider.speak
+    speak_kwargs = {"emotion": emotion}
+    if stop_event is not None:
+        try:
+            if "stop_event" in inspect.signature(speak).parameters:
+                speak_kwargs["stop_event"] = stop_event
+        except (TypeError, ValueError):
+            pass
+    return speak(text, **speak_kwargs)
+
+
+def _get_fallback_tts(failed_provider, settings: dict):
+    """대체 엔진을 처음 필요할 때 한 번 만들어 재사용한다. 쓸 수 없으면 None."""
+    mode = _fallback_tts_mode(settings)
+    # 로컬(CosyVoice3)은 GPU 워커를 새로 띄워야 하므로 사용 중 재시도에는 쓰지 않는다.
+    if mode is None or mode == "local" or mode == settings.get("tts_mode"):
+        return None
+    with _TTS_INIT_LOCK:
+        if _state.fish_tts is not failed_provider:
+            return None
+        if _state.tts_fallback is None or _state.tts_fallback[0] != mode:
+            if _state.tts_fallback is not None:
+                _cleanup_tts_provider_async(_state.tts_fallback[1])
+            try:
+                provider = _create_fallback_tts(settings)
+            except (ImportError, OSError, RuntimeError, ValueError) as exc:
+                logging.error("[TTS] 대체 엔진 생성 실패: %s", exc)
+                provider = None
+            if provider is not None and type(provider) is type(failed_provider):
+                # 제공자 생성이 기본 엔진과 같은 엔진으로 되돌아온 경우다.
+                _cleanup_tts_provider_async(provider)
+                provider = None
+            if provider is not None and hasattr(provider, "playback_finished"):
+                try:
+                    provider.playback_finished.connect(_handle_tts_playback_finished)
+                except (AttributeError, RuntimeError, TypeError) as exc:
+                    logging.debug("대체 TTS 시그널 연결 실패: %s", exc)
+            _state.tts_fallback = (mode, provider)
+        return _state.tts_fallback[1]
+
+
+def _retry_with_fallback_tts(failed_provider, text, emotion, stop_event, opens_before) -> bool:
+    """소리를 내기 전에 합성이 실패한 문장을 대체 엔진으로 한 번만 다시 말한다.
+
+    기본 엔진이 이번 호출의 실패 사유(_last_error)를 남겼고 그 뒤 출력 스트림이 한 번도 열리지 않았을 때만
+    소리가 나기 전 실패로 본다. 신호가 없는 엔진은 다시 시도하지 않는다.
+    """
+    if _state.game_mode or (stop_event is not None and stop_event.is_set()):
+        return False
+    last_error = getattr(failed_provider, "_last_error", None)
+    if not isinstance(last_error, str) or not last_error:
+        return False
+    if getattr(GlobalAudio, "output_open_count", 0) != opens_before:
+        return False
+    try:
+        from core.config_manager import ConfigManager
+
+        fallback = _get_fallback_tts(
+            failed_provider, _effective_tts_settings(ConfigManager.load_settings())
+        )
+        if fallback is None:
+            return False
+        logging.warning("[TTS] 합성 실패로 대체 엔진으로 한 번 다시 말합니다: %s", last_error)
+        return bool(_speak_with_provider(fallback, text, emotion, stop_event))
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        logging.error("대체 TTS 오류: %s", exc)
+        return False
 
 
 def text_to_speech(
@@ -661,15 +745,13 @@ def text_to_speech(
             {"text": text, "estimated_duration": estimated_duration},
         )
         emit_plugin_event("on_tts_start", {"text": text, "estimated_duration": estimated_duration})
-        speak = _state.fish_tts.speak
-        speak_kwargs = {"emotion": emotion}
-        if stop_event is not None:
-            try:
-                if "stop_event" in inspect.signature(speak).parameters:
-                    speak_kwargs["stop_event"] = stop_event
-            except (TypeError, ValueError):
-                pass
-        ok = speak(text, **speak_kwargs)
+        provider = _state.fish_tts
+        opens_before = getattr(GlobalAudio, "output_open_count", 0)
+        ok = _speak_with_provider(provider, text, emotion, stop_event)
+        if not ok:
+            ok = _retry_with_fallback_tts(
+                provider, text, emotion, stop_event, opens_before
+            )
         if not ok and show_bubble and _state.character_widget:
             _handle_tts_playback_finished()
         return ok

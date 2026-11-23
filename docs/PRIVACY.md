@@ -45,8 +45,8 @@ Features marked "on by default" are active in a new installation. Features that 
 ### Speech synthesis
 
 - Default: `tts_mode` is Fish Audio, which needs an API key. Without a key, Ari uses Edge TTS instead. Edge TTS sends the text to be spoken to Microsoft's online speech service through the edge-tts library. Fixed short messages are also synthesized in advance in the background and cached on your PC.
-- With a key: Fish Audio (`api.fish.audio`), OpenAI, ElevenLabs, or an OpenAI-compatible server you configure receive the text to be spoken. Voice cloning features upload the reference audio file you choose to ElevenLabs or to the server you configure.
-- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. If local TTS fails to start, the default setting falls back to Edge TTS, which sends the text to Microsoft; set `tts_fallback_provider` to `none` to prevent this. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face. Clearing "Use online speech services" on the installer's privacy options page stops Edge TTS, including the background pre-synthesis; Ari then shows replies as text bubbles without sound until you choose another engine. Selecting it again in the installer and reinstalling turns it back on.
+- With a key: Fish Audio (`api.fish.audio`), OpenAI, ElevenLabs, or an OpenAI-compatible server you configure receive the text to be spoken. Voice cloning features upload the reference audio file you choose to ElevenLabs or to the server you configure. If one of these fails to synthesize a sentence before any sound is played, the default setting (`tts_fallback_provider` set to `edge`) sends that sentence to Microsoft's Edge TTS once more.
+- Turn off: choose local CosyVoice3 as the speech engine. It runs on your PC. If local TTS fails to start, or the speech engine fails to synthesize a sentence before any sound is played, the default setting falls back to Edge TTS (the failed sentence is spoken once more), which sends the text to Microsoft; set `tts_fallback_provider` to `none` to prevent this. Installing it downloads the CosyVoice source code from GitHub, Python packages, and a model from Hugging Face. Clearing "Use online speech services" on the installer's privacy options page stops Edge TTS, including the background pre-synthesis; Ari then shows replies as text bubbles without sound until you choose another engine. Selecting it again in the installer and reinstalling turns it back on.
 
 ### Text embeddings (memory and skill search)
 
@@ -136,8 +136,8 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 ### 음성 합성
 
 - 기본값: `tts_mode`는 Fish Audio이며 API 키가 필요합니다. 키가 없으면 Ari는 Edge TTS를 씁니다. Edge TTS는 edge-tts 라이브러리를 통해 읽을 텍스트를 Microsoft 온라인 음성 서비스로 보냅니다. 고정된 짧은 메시지는 백그라운드에서 미리 합성해 PC에 캐시합니다.
-- 키가 있을 때: Fish Audio(`api.fish.audio`), OpenAI, ElevenLabs, 직접 설정한 OpenAI 호환 서버가 읽을 텍스트를 받습니다. 음성 복제 기능은 선택한 참조 오디오 파일을 ElevenLabs나 설정한 서버로 올립니다.
-- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 다만 로컬 음성 엔진 초기화가 실패하면 기본 설정에서는 Edge TTS로 바뀌어 텍스트가 Microsoft 온라인 음성 서비스로 전송됩니다. 막으려면 `tts_fallback_provider`를 `none`으로 두세요. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제하면 Edge TTS(백그라운드 사전 합성 포함)를 쓰지 않으며, 다른 엔진을 고르기 전까지 응답은 소리 없이 말풍선 글자로만 나옵니다. 설치 프로그램에서 다시 선택하고 설치하면 다시 켜집니다.
+- 키가 있을 때: Fish Audio(`api.fish.audio`), OpenAI, ElevenLabs, 직접 설정한 OpenAI 호환 서버가 읽을 텍스트를 받습니다. 음성 복제 기능은 선택한 참조 오디오 파일을 ElevenLabs나 설정한 서버로 올립니다. 이들 중 하나가 소리를 내기 전에 문장 합성에 실패하면 기본 설정에서는 그 문장이 Microsoft Edge TTS로 한 번 더 전송됩니다.
+- 끄는 방법: 음성 엔진으로 로컬 CosyVoice3를 고르세요. 내 PC에서 실행됩니다. 다만 로컬 음성 엔진 초기화가 실패하거나 소리를 내기 전에 문장 합성이 실패하면 기본 설정에서는 Edge TTS로 바뀌어(실패한 문장은 한 번 다시 말합니다) 텍스트가 Microsoft 온라인 음성 서비스로 전송됩니다. 막으려면 `tts_fallback_provider`를 `none`으로 두세요. 설치할 때 GitHub에서 CosyVoice 소스 코드를, Python 패키지를, Hugging Face에서 모델을 내려받습니다. 설치 프로그램의 개인정보 관련 선택에서 "온라인 음성 서비스 사용"을 해제하면 Edge TTS(백그라운드 사전 합성 포함)를 쓰지 않으며, 다른 엔진을 고르기 전까지 응답은 소리 없이 말풍선 글자로만 나옵니다. 설치 프로그램에서 다시 선택하고 설치하면 다시 켜집니다.
 
 ### 텍스트 임베딩(기억·스킬 검색)
 
@@ -229,8 +229,8 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 ### 音声合成
 
 - 初期設定: `tts_mode` は Fish Audio で、API キーが必要です。キーがない場合、Ari は Edge TTS を使います。Edge TTS は edge-tts ライブラリを通じて、読み上げるテキストを Microsoft のオンライン音声サービスに送ります。定型の短いメッセージは、バックグラウンドで事前に合成して PC にキャッシュします。
-- キーがある場合: Fish Audio(`api.fish.audio`)、OpenAI、ElevenLabs、自分で設定した OpenAI 互換サーバーが読み上げるテキストを受け取ります。音声クローン機能は、選択した参照音声ファイルを ElevenLabs または設定したサーバーにアップロードします。
-- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。ただし、ローカル音声エンジンの初期化に失敗すると、既定の設定では Edge TTS に切り替わり、テキストが Microsoft のオンライン音声サービスに送信されます。防ぐには `tts_fallback_provider` を `none` にしてください。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにすると、Edge TTS(バックグラウンドの事前合成を含む)を使わず、別のエンジンを選ぶまで応答は音声なしで吹き出しの文字だけになります。インストーラーで再び選択してインストールすると、再びオンになります。
+- キーがある場合: Fish Audio(`api.fish.audio`)、OpenAI、ElevenLabs、自分で設定した OpenAI 互換サーバーが読み上げるテキストを受け取ります。音声クローン機能は、選択した参照音声ファイルを ElevenLabs または設定したサーバーにアップロードします。これらのいずれかが音が出る前に文の合成に失敗した場合、既定の設定ではその文が一度 Microsoft の Edge TTS に送信されます。
+- オフにする方法: 音声エンジンとしてローカルの CosyVoice3 を選んでください。お使いの PC で動作します。ただし、ローカル音声エンジンの初期化に失敗した場合や、音が出る前に文の合成に失敗した場合は、既定の設定では Edge TTS に切り替わり(失敗した文は一度だけ言い直します)、テキストが Microsoft のオンライン音声サービスに送信されます。防ぐには `tts_fallback_provider` を `none` にしてください。インストール時には、GitHub から CosyVoice のソースコードを、Python パッケージを、Hugging Face からモデルをダウンロードします。インストーラーの「プライバシーに関する選択」で「オンライン音声サービスを使用する」をオフにすると、Edge TTS(バックグラウンドの事前合成を含む)を使わず、別のエンジンを選ぶまで応答は音声なしで吹き出しの文字だけになります。インストーラーで再び選択してインストールすると、再びオンになります。
 
 ### テキスト埋め込み(記憶とスキルの検索)
 

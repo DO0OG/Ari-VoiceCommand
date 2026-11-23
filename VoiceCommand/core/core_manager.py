@@ -238,6 +238,9 @@ class AriCore(QObject):
         from audio.audio_manager import GlobalAudio
         if _state.fish_tts:
             _state.fish_tts.cleanup()
+        fallback_tts = getattr(_state, "tts_fallback", None)
+        if fallback_tts and fallback_tts[1] is not None:
+            fallback_tts[1].cleanup()
         GlobalAudio.terminate()
 
         logging.info("=== AriCore cleanup 완료 ===")
