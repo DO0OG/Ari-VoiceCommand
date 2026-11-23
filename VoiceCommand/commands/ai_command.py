@@ -1176,7 +1176,9 @@ class AICommand(FastPathMixin, BaseCommand):
     def _agent_run_to_korean(self, run: AgentRunResult, report_path: str = "") -> str:
         steps_done = len(run.step_results)
         saved_path = self._extract_saved_path_from_agent_run(run)
-        if run.achieved:
+        if getattr(run, "plan_declined", False):
+            message = run.summary
+        elif run.achieved:
             if saved_path:
                 path = Path(saved_path)
                 message = _("작업 완료. {folder} 폴더에 {file}를 저장했습니다.").format(

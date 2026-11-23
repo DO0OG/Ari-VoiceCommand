@@ -118,6 +118,7 @@
   "weekly_report_enabled": true,
   "scheduler_missed_grace_minutes": 0,
   "agent_timeout_seconds": 120,
+  "agent_plan_preview": false,
   "plugin_hot_reload_enabled": false,
   "audit_log_enabled": true,
   "mcp_server_enabled": false,

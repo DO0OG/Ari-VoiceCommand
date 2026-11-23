@@ -11,6 +11,8 @@ v2.0 — 실행 대시보드(ExecutionDashboardPanel), 선제적 제안 바(Proa
         메모리 패널 버튼(🧠), 스케줄러 패널 버튼(📅) 추가.
 """
 import logging
+import threading
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Optional
 
@@ -55,6 +57,8 @@ from i18n.translator import _
 
 logger = logging.getLogger(__name__)
 _LIVE_PROCESSING_THREADS: set[QThread] = set()
+PLAN_PREVIEW_SETTING = "agent_plan_preview"   # 기본 꺼짐. 켜면 여러 단계 계획을 실행 전에 보여 주고 승인받는다.
+PLAN_APPROVAL_TIMEOUT_SECONDS = 60
 
 from ui.execution_dashboard_panel import ExecutionDashboardPanel, _STEP_ICON
 from ui.proactive_suggestion_bar import ProactiveSuggestionBar
@@ -73,11 +77,16 @@ class TextInterfaceThread(QThread):
         super().__init__()
         self.ai_assistant = ai_assistant
         self.query = query
+        self._plan_decision = threading.Event()
+        self._plan_approved = False
+        # 시간 초과로 돌아온 하위 에이전트가 아직 승인을 기다릴 수 있어 요청을 한 번에 하나씩 처리한다.
+        self._plan_lock = threading.Lock()
 
     def run(self) -> None:
         self._attach_progress_callback()
         try:
-            response = self._execute_query()
+            with self._plan_approval_scope():
+                response = self._execute_query()
             self.response_ready.emit(str(response))
         except Exception as e:
             logger.error("텍스트 처리 오류: %s", e)
@@ -114,6 +123,30 @@ class TextInterfaceThread(QThread):
         if hasattr(self.ai_assistant, "chat"):
             return self._invoke_with_optional_stream(self.ai_assistant.chat, self.query)
         return _("죄송합니다. AI 응답 엔진을 초기화할 수 없습니다.")
+
+    def _plan_approval_scope(self):
+        """옵션이 켜져 있을 때만 이 채팅 요청에서 계획 승인 대기를 연다. 꺼져 있으면 아무것도 바꾸지 않는다."""
+        try:
+            from core.config_manager import ConfigManager
+            if ConfigManager.get(PLAN_PREVIEW_SETTING, False) is True:
+                from agent.agent_orchestrator import plan_approval_scope
+                return plan_approval_scope(self._request_plan_approval)
+        except Exception as exc:
+            logger.debug("계획 확인 옵션을 읽지 못해 끈 상태로 실행합니다: %s", exc)
+        return nullcontext()
+
+    def _request_plan_approval(self, steps: list, iteration: int) -> bool:
+        """작업 스레드에서 호출된다. 패널의 실행·취소 결정을 기다리고, 시간이 지나면 거절한다."""
+        with self._plan_lock:
+            self._plan_decision.clear()
+            self._plan_approved = False
+            self.progress_event.emit("plan_approval_request", {"steps": steps, "iteration": iteration})
+            decided = self._plan_decision.wait(PLAN_APPROVAL_TIMEOUT_SECONDS)
+            return decided and self._plan_approved
+
+    def resolve_plan_approval(self, approved: bool) -> None:
+        self._plan_approved = bool(approved)
+        self._plan_decision.set()
 
     def _attach_progress_callback(self) -> None:
         try:
@@ -159,6 +192,33 @@ class TitleBar(PanelTitleBar):
         # 닫기 버튼과 함께 타이틀 바에 포함될 아이콘 버튼
         self.add_button("📅", _("예약 작업 관리"),    self.scheduler_btn_clicked.emit)
         self.add_button("🧠", _("아리의 기억 보기"),  self.memory_btn_clicked.emit)
+        # 켜면 여러 단계 작업을 실행하기 전에 계획을 보여 주고 승인받는다. 이 채팅 창에만 적용된다.
+        self.plan_preview_btn = self.add_button(
+            "📋", _("여러 단계 작업을 시작하기 전에 계획 확인 (켜면 실행 전에 승인을 받습니다)"), lambda: None
+        )
+        self.plan_preview_btn.setCheckable(True)
+        self.plan_preview_btn.setStyleSheet(
+            self.plan_preview_btn.styleSheet() + "QPushButton:checked { background: rgba(255,255,255,90); }"
+        )
+        self.plan_preview_btn.setChecked(self._plan_preview_enabled())
+        self.plan_preview_btn.toggled.connect(self._save_plan_preview)
+
+    @staticmethod
+    def _plan_preview_enabled() -> bool:
+        try:
+            from core.config_manager import ConfigManager
+            return ConfigManager.get(PLAN_PREVIEW_SETTING, False) is True
+        except Exception as exc:
+            logger.debug("계획 확인 옵션을 읽지 못했습니다: %s", exc)
+            return False
+
+    @staticmethod
+    def _save_plan_preview(checked: bool) -> None:
+        try:
+            from core.config_manager import ConfigManager
+            ConfigManager.set_value(PLAN_PREVIEW_SETTING, bool(checked))
+        except Exception as exc:
+            logger.warning("계획 확인 옵션을 저장하지 못했습니다: %s", exc)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -262,6 +322,7 @@ class TextInterface(QMainWindow):
 
         # 실행 대시보드 (에이전트 실행 시 표시)
         self.dashboard = ExecutionDashboardPanel()
+        self.dashboard.plan_decision.connect(self._on_plan_decision)
         bg_lay.addWidget(self.dashboard)
 
         # 채팅 영역
@@ -445,6 +506,11 @@ class TextInterface(QMainWindow):
         self._stream_tts_deferred = ""
         self._stream_tts_sentence_batch = []
         self._stream_tts_spoken = False
+
+    def _on_plan_decision(self, approved: bool) -> None:
+        thread = self.processing_thread
+        if thread is not None:
+            thread.resolve_plan_approval(approved)
 
     def _on_progress_event(self, event_type: str, kwargs: dict) -> None:
         """워커 스레드 progress 이벤트 → 메인 스레드 대시보드 업데이트."""
@@ -633,6 +699,7 @@ class TextInterface(QMainWindow):
     def cleanup(self) -> None:
         thread = self._detach_processing_thread()
         if thread and thread.isRunning():
+            thread.resolve_plan_approval(False)  # 승인을 기다리는 중이면 거절로 끝낸다
             thread.requestInterruption()
             if not thread.wait(3000):
                 logger.warning("TextInterfaceThread 종료 대기 초과 — 백그라운드 추적 유지")

@@ -4320,3 +4320,24 @@ msgstr "e.g. polite and formal (leave empty to set nothing)"
 
 msgid "호칭과 말투는 외부 언어 모델 제공자로 전송될 수 있습니다. 개인 정보는 넣지 마세요."
 msgstr "The name and tone may be sent to the external language model provider. Do not enter personal information."
+
+msgid "실행"
+msgstr "Run"
+
+msgid "읽기"
+msgstr "Read"
+
+msgid "쓰기"
+msgstr "Write"
+
+msgid "🤖 이 계획을 실행할까요?"
+msgstr "🤖 Run this plan?"
+
+msgid "⛔ 실행 취소"
+msgstr "⛔ Run cancelled"
+
+msgid "계획을 승인받지 못해 아무 단계도 실행하지 않았습니다."
+msgstr "The plan was not approved, so no steps were run."
+
+msgid "여러 단계 작업을 시작하기 전에 계획 확인 (켜면 실행 전에 승인을 받습니다)"
+msgstr "Review the plan before multi-step tasks (when on, asks for approval before running)"

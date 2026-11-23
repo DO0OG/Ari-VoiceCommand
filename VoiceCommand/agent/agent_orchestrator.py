@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from typing import Callable, Dict, List, Optional
 
@@ -29,7 +30,30 @@ MAX_TOTAL_TIMEOUT = 120.0
 
 # StepResult를 execution_engine에서 임포트하여 re-export한다.
 # 기존 코드의 `from agent.agent_orchestrator import StepResult` 는 계속 동작한다.
-__all__ = ["AgentOrchestrator", "AgentRunResult", "StepResult", "get_orchestrator"]
+__all__ = [
+    "AgentOrchestrator", "AgentRunResult", "StepResult", "get_orchestrator", "plan_approval_scope",
+]
+
+_plan_approval = threading.local()
+
+
+@contextmanager
+def plan_approval_scope(approver: Callable):
+    """이 스레드에서 시작한 실행만 계획을 보여 주고 승인받게 한다.
+
+    approver(steps, iteration) 은 승인되면 True 를 돌려주고, 취소·시간 초과·오류는 거절로 본다.
+    텍스트 채팅 스레드만 이 범위를 열므로 음성·Telegram·예약 실행은 승인 대기를 만들지 않는다.
+    """
+    previous = getattr(_plan_approval, "approver", None)
+    _plan_approval.approver = approver
+    try:
+        yield
+    finally:
+        _plan_approval.approver = previous
+
+
+def _plan_approval_active() -> bool:
+    return getattr(_plan_approval, "approver", None) is not None
 
 
 # ── 데이터 클래스 ──────────────────────────────────────────────────────────────
@@ -46,6 +70,10 @@ class AgentRunResult:
     verification_unavailable: bool = False
     learning_component_trials: Dict[str, Dict[str, bool]] = field(default_factory=dict)
     busy: bool = False
+    # 사용자가 계획을 승인하지 않아(취소·시간 초과) 아무 단계도 실행하지 않았다.
+    plan_declined: bool = False
+    # 계획 승인을 기다린 초 합계. run() 이 실행 제한 시각을 이만큼 늘려 반성·재시도 판정에 쓴다.
+    plan_wait_seconds: float = 0.0
 
     def all_exec_results(self) -> List[ExecutionResult]:
         return [sr.exec_result for sr in self.step_results]
@@ -174,6 +202,8 @@ class AgentOrchestrator:
         # 부모의 중단은 interrupt()가 _children을 돌며 전달한다.
         child_event = threading.Event()
         started: list = []
+        # 하위 에이전트는 다른 스레드에서 돌므로 승인 범위를 그대로 넘겨야 승인 없이 실행되지 않는다.
+        approver = getattr(_plan_approval, "approver", None)
 
         def _run() -> AgentRunResult:
             child = AgentOrchestrator(
@@ -188,7 +218,10 @@ class AgentOrchestrator:
             if self._interrupt_requested.is_set():
                 child.interrupt()
             try:
-                return child.run(delegated_goal, timeout=timeout)
+                if approver is None:
+                    return child.run(delegated_goal, timeout=timeout)
+                with plan_approval_scope(approver):
+                    return child.run(delegated_goal, timeout=timeout)
             finally:
                 with self._children_lock:
                     self._children.discard(child)
@@ -261,9 +294,13 @@ class AgentOrchestrator:
                 checkpoint=_checkpoint,
                 component_trials=component_trials,
             )
+            deadline += run_result.plan_wait_seconds
             if self._interrupt_requested.is_set():
                 run_result.achieved = False
                 run_result.summary = _("사용자 요청으로 중단되었습니다.")
+                return run_result
+            if run_result.plan_declined:
+                # 승인하지 않은 계획은 실패가 아니므로 반성·재시도·학습 기록을 하지 않는다.
                 return run_result
             lesson = ""
             reflection = None
@@ -487,13 +524,19 @@ class AgentOrchestrator:
                 and any(result.step == step for step in saved_steps)
             ]
 
+        approved_plans: set = set()  # 이번 실행에서 승인받은 계획. 같은 계획은 다시 묻지 않는다.
         if checkpoint or self._interrupt_requested.is_set() or self._should_prefer_template_over_skill(goal):
             logger.info("[Orchestrator] 안정 템플릿 우선 적용: skill 재사용 생략")
         else:
+            skill_wait = [0.0]
             skill_result = self._run_with_skill_if_available(
-                goal, context, learning_components, component_trials
+                goal, context, learning_components, component_trials, approved_plans, skill_wait
             )
+            run_result.plan_wait_seconds = skill_wait[0]
+            if deadline is not None:
+                deadline += skill_wait[0]
             if skill_result is not None:
+                skill_result.plan_wait_seconds = skill_wait[0]
                 self._merge_learning_components(learning_components, skill_result.learning_components)
                 skill_result.learning_components = learning_components
                 skill_result.learning_component_trials = run_result.learning_component_trials
@@ -573,6 +616,13 @@ class AgentOrchestrator:
                 break
             completed_ids = {result.step.step_id for result in prior_results}
             pending_steps = [step for step in steps if step.step_id not in completed_ids]
+            approved, waited = self._approve_plan(pending_steps, approved_plans, iteration)
+            if not approved:
+                self._mark_plan_declined(run_result, iteration)
+                break
+            run_result.plan_wait_seconds += waited
+            if deadline is not None:
+                deadline += waited  # 승인을 기다린 시간은 실행 제한 시간에서 빼 준다.
             all_success, step_results = self._execute_plan(
                 pending_steps, context, goal
             )
@@ -747,6 +797,39 @@ class AgentOrchestrator:
 
         return min(score, 1.0)
 
+    # ── 계획 승인 ─────────────────────────────────────────────────────────────
+
+    def _approve_plan(
+        self,
+        steps: List[ActionStep],
+        approved_plans: Optional[set],
+        iteration: int,
+    ) -> tuple:
+        """승인 범위가 열려 있으면 실행할 단계를 보여 주고 (승인 여부, 기다린 초)를 돌려준다."""
+        approver = getattr(_plan_approval, "approver", None)
+        if approver is None or not steps:
+            return True, 0.0
+        # 실행 내용이 같은 계획은 이미 승인받은 것으로 보고, 대상이 바뀐 재계획만 다시 묻는다.
+        signature = tuple(
+            (s.step_type, s.content, tuple(s.reads), tuple(s.writes)) for s in steps
+        )
+        if approved_plans is not None and signature in approved_plans:
+            return True, 0.0
+        started = time.time()
+        try:
+            approved = approver([asdict(s) for s in steps], iteration) is True
+        except Exception as exc:
+            logger.warning("[Orchestrator] 계획 승인 확인 실패, 실행하지 않습니다: %s", exc)
+            approved = False
+        if approved and approved_plans is not None:
+            approved_plans.add(signature)
+        return approved, time.time() - started
+
+    def _mark_plan_declined(self, run_result: AgentRunResult, iteration: int) -> None:
+        run_result.plan_declined = True
+        run_result.summary = _("계획을 승인받지 못해 아무 단계도 실행하지 않았습니다.")
+        self._emit_progress("plan_declined", iteration=iteration)
+
     # ── 스킬 실행 ─────────────────────────────────────────────────────────────
 
     def _should_prefer_template_over_skill(self, goal: str) -> bool:
@@ -789,6 +872,8 @@ class AgentOrchestrator:
         context: Dict[str, str],
         learning_components: Dict[str, bool],
         component_trials: Optional[Dict[str, Dict[str, bool]]] = None,
+        approved_plans: Optional[set] = None,
+        plan_wait: Optional[list] = None,
     ) -> Optional[AgentRunResult]:
         if self._interrupt_requested.is_set():
             return None
@@ -803,8 +888,11 @@ class AgentOrchestrator:
                 return None
             learning_components["SkillLibrary"] = True
 
+            # 계획 확인이 켜져 있으면 컴파일 코드는 보여 줄 단계가 없으므로 쓰지 않고,
+            # 스킬의 단계 목록을 보여 주고 승인받은 대로 실행한다.
+            preview = _plan_approval_active()
             # Direction 2: 컴파일된 Python 스킬 우선 실행
-            if skill.compiled:
+            if skill.compiled and not preview:
                 result = self._run_compiled_skill(skill, goal)
                 if self._interrupt_requested.is_set():
                     return result or AgentRunResult(goal=goal, summary=_("사용자 요청으로 중단되었습니다."))
@@ -828,6 +916,13 @@ class AgentOrchestrator:
                 )
                 for idx, item in enumerate(skill.steps)
             ]
+            approved, waited = self._approve_plan(steps, approved_plans, 0)
+            if plan_wait is not None:
+                plan_wait[0] += waited
+            if not approved:
+                declined = AgentRunResult(goal=goal, total_iterations=1)
+                self._mark_plan_declined(declined, 0)
+                return declined
             all_success, step_results = self._execute_plan(
                 steps, context, goal
             )

@@ -164,6 +164,7 @@ DEFAULT_SETTINGS = {
     "weekly_report_enabled": True,       # 주간 자기개선 리포트 (ProactiveScheduler 등록)
     "scheduler_missed_grace_minutes": 0, # 예정 시각을 이 분보다 넘긴 예약은 실행하지 않음 (0 = 제한 없음)
     "agent_timeout_seconds": 120,
+    "agent_plan_preview": False,         # 텍스트 채팅에서 여러 단계 계획을 실행 전에 보여 주고 승인받기 (채팅 창 제목 줄 버튼)
     "plugin_hot_reload_enabled": False,
     "audit_log_enabled": True,
     "mcp_server_enabled": False,
