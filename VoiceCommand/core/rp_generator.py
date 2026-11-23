@@ -6,6 +6,15 @@ import re
 
 from core.emotions import get_emotion_instruction
 
+# 호칭·말투는 프롬프트에 그대로 들어가므로 한 줄의 짧은 값으로만 받는다.
+USER_ADDRESS_NAME_MAX_LENGTH = 30
+USER_REPLY_TONE_MAX_LENGTH = 60
+
+
+def normalize_one_line(value, limit: int) -> str:
+    """줄바꿈과 연속 공백을 한 칸으로 줄이고 길이를 제한한다."""
+    return " ".join(str(value or "").split())[:limit].strip()
+
 
 class RPGenerator:
     def __init__(self):
@@ -16,10 +25,12 @@ class RPGenerator:
         self.system_prompt = ""
         self.history_instruction = ""
         self.response_verbosity = "concise"
+        self.user_address_name = ""
+        self.user_reply_tone = ""
 
     def set_config(self, personality="", scenario="", system_prompt="", history_instruction="",
                    response_verbosity="concise", personality_examples_en="",
-                   personality_examples_ja=""):
+                   personality_examples_ja="", user_address_name="", user_reply_tone=""):
         """RP 설정"""
         self.personality = personality
         self.personality_examples_en = personality_examples_en
@@ -28,7 +39,29 @@ class RPGenerator:
         self.system_prompt = system_prompt
         self.history_instruction = history_instruction
         self.response_verbosity = response_verbosity or "concise"
+        self.user_address_name = normalize_one_line(user_address_name, USER_ADDRESS_NAME_MAX_LENGTH)
+        self.user_reply_tone = normalize_one_line(user_reply_tone, USER_REPLY_TONE_MAX_LENGTH)
         logging.info("RP 설정 업데이트됨")
+
+    def reply_preference_signature(self) -> str:
+        """응답 캐시 키에 넣을 호칭·말투 값. 둘 다 비면 빈 문자열이라 키가 달라지지 않는다."""
+        if not (self.user_address_name or self.user_reply_tone):
+            return ""
+        return f"{self.user_address_name}\0{self.user_reply_tone}"
+
+    def build_reply_preference_prompt(self) -> str:
+        """사용자가 직접 정한 호칭·말투 지시. 둘 다 비면 빈 문자열."""
+        if not (self.user_address_name or self.user_reply_tone):
+            return ""
+        from i18n.translator import _
+
+        lines = [_("[사용자 지정 호칭·말투]")]
+        if self.user_address_name:
+            lines.append(_("사용자를 부르는 호칭: {name}", name=self.user_address_name))
+        if self.user_reply_tone:
+            lines.append(_("답변 말투: {tone}", tone=self.user_reply_tone))
+        lines.append(_("위 지정은 대화에서 추정한 응답 스타일과 기억 속 이름보다 우선합니다."))
+        return "\n".join(lines)
 
     def build_system_prompt(self, base_prompt: str) -> str:
         """캐릭터 설정을 시스템 프롬프트에 녹여서 반환."""

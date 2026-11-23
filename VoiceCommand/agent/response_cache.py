@@ -94,6 +94,7 @@ def build_response_cache_key(
     scenario: str,
     history_instruction: str,
     include_context: bool,
+    reply_preference: str = "",
 ) -> str:
     payload = {
         "message": message,
@@ -105,5 +106,8 @@ def build_response_cache_key(
         "history_instruction": history_instruction,
         "include_context": include_context,
     }
+    if reply_preference:
+        # 비어 있으면 넣지 않아, 호칭·말투를 쓰지 않는 사용자의 기존 캐시 키가 그대로 유지된다.
+        payload["reply_preference"] = reply_preference
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

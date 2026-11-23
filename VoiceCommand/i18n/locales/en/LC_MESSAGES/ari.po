@@ -4293,3 +4293,30 @@ msgstr "Include today's weather in the morning briefing"
 
 msgid "좋은 아침이에요. 오늘 할 일을 알려 드릴게요."
 msgstr "Good morning. Here is what is on for today."
+
+msgid "[사용자 지정 호칭·말투]"
+msgstr "[User-set address and tone]"
+
+msgid "사용자를 부르는 호칭: {name}"
+msgstr "Name to call the user: {name}"
+
+msgid "답변 말투: {tone}"
+msgstr "Reply tone: {tone}"
+
+msgid "위 지정은 대화에서 추정한 응답 스타일과 기억 속 이름보다 우선합니다."
+msgstr "The settings above take priority over the response style inferred from conversation and any name stored in memory."
+
+msgid "불러 줄 호칭:"
+msgstr "Name to call you:"
+
+msgid "답변 말투:"
+msgstr "Reply tone:"
+
+msgid "예) 주인님 (비우면 지정하지 않음)"
+msgstr "e.g. Boss (leave empty to set nothing)"
+
+msgid "예) 공손한 존댓말 (비우면 지정하지 않음)"
+msgstr "e.g. polite and formal (leave empty to set nothing)"
+
+msgid "호칭과 말투는 외부 언어 모델 제공자로 전송될 수 있습니다. 개인 정보는 넣지 마세요."
+msgstr "The name and tone may be sent to the external language model provider. Do not enter personal information."

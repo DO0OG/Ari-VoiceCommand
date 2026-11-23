@@ -31,6 +31,7 @@ Features marked "on by default" are active in a new installation. Features that 
 ### Language model (LLM)
 
 - Sends: to the provider you select, your messages, recent conversation history, the character and system prompt settings, tool definitions, and the results of tools the model called. Images are sent when an image-analysis tool is used (`vision_enabled`, on by default). A separate request that asks the model to suggest memories from your message is also sent (`fact_extraction_suggestions_enabled`, on by default).
+- Address and tone: the name you want Ari to call you and the reply tone you set in Settings → `RP 설정` (`user_address_name`, `user_reply_tone`) are added to the instructions sent to the provider. Both are empty by default, and nothing is added while they are empty. Do not enter personal information.
 - Providers: Groq, OpenAI, Anthropic, Mistral AI, Google Gemini, OpenRouter, NVIDIA NIM, Ollama (a server on your own PC, `http://localhost:11434` by default), and OpenAI-compatible servers you add yourself.
 - Default: the default provider is Groq, which requires an API key. Without a key, no LLM request is made. With a key, a lightweight connection warm-up request (a model list request, no message content) may be sent to the provider when listening starts (`llm_prewarm_enabled`).
 - Turn off: do not enter API keys, or choose Ollama for processing on your own PC.
@@ -123,6 +124,7 @@ Ari는 Windows 데스크톱 프로그램입니다. 이 프로젝트는 사용자
 ### 언어 모델(LLM)
 
 - 보내는 것: 선택한 제공자에게 사용자 메시지, 최근 대화 기록, 캐릭터·시스템 프롬프트 설정, 도구 정의, 모델이 호출한 도구의 결과를 보냅니다. 이미지 분석 도구를 쓰면 이미지도 보냅니다(`vision_enabled`, 기본 켜짐). 메시지에서 기억할 내용을 제안받는 별도 요청도 보냅니다(`fact_extraction_suggestions_enabled`, 기본 켜짐).
+- 호칭·말투: 설정 → `RP 설정`에서 정한 불러 줄 호칭과 답변 말투(`user_address_name`, `user_reply_tone`)가 제공자에게 보내는 지시문에 들어갑니다. 기본값은 모두 빈 값이며, 비어 있으면 아무것도 덧붙이지 않습니다. 개인 정보는 넣지 마세요.
 - 제공자: Groq, OpenAI, Anthropic, Mistral AI, Google Gemini, OpenRouter, NVIDIA NIM, Ollama(내 PC의 서버, 기본 `http://localhost:11434`), 직접 추가한 OpenAI 호환 서버.
 - 기본값: 기본 제공자는 Groq이며 API 키가 필요합니다. 키가 없으면 LLM 요청을 하지 않습니다. 키가 있으면 듣기를 시작할 때 연결 예열 요청(모델 목록 요청, 메시지 내용 없음)을 제공자에게 보낼 수 있습니다(`llm_prewarm_enabled`).
 - 끄는 방법: API 키를 입력하지 않거나, 내 PC에서 처리하는 Ollama를 선택하세요.
@@ -217,6 +219,7 @@ Ari は Windows 用のデスクトッププログラムです。このプロジ�
 ### 言語モデル(LLM)
 
 - 送るもの: 選択したプロバイダーに、ユーザーのメッセージ、最近の会話履歴、キャラクターとシステムプロンプトの設定、ツール定義、モデルが呼び出したツールの結果を送ります。画像解析ツールを使うと画像も送ります(`vision_enabled`、初期状態でオン)。メッセージから記憶する内容の候補を提案させる別のリクエストも送ります(`fact_extraction_suggestions_enabled`、初期状態でオン)。
+- 呼び名と話し方: 設定 → `RP 설정` で決めた呼び名と返答の話し方(`user_address_name`、`user_reply_tone`)は、プロバイダーに送る指示文に含まれます。初期値はどちらも空で、空のあいだは何も追加しません。個人情報は入力しないでください。
 - プロバイダー: Groq、OpenAI、Anthropic、Mistral AI、Google Gemini、OpenRouter、NVIDIA NIM、Ollama(お使いの PC 上のサーバー、初期値は `http://localhost:11434`)、自分で追加した OpenAI 互換サーバー。
 - 初期設定: 既定のプロバイダーは Groq で、API キーが必要です。キーがなければ LLM へのリクエストは行いません。キーがある場合、聞き取りの開始時に接続のウォームアップ用リクエスト(モデル一覧の取得、メッセージ内容なし)をプロバイダーに送ることがあります(`llm_prewarm_enabled`)。
 - オフにする方法: API キーを入力しないか、お使いの PC で処理する Ollama を選んでください。
