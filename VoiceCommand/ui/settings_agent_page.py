@@ -102,6 +102,10 @@ class _AgentSettingsPage(QWidget):
         self.mcp_checkbox.setChecked(bool(settings.get("mcp_server_enabled", False)))
         box.addWidget(self.mcp_checkbox)
 
+        self.pc_alert_checkbox = QCheckBox(_("배터리·디스크 공간이 부족하면 먼저 알리기"))
+        self.pc_alert_checkbox.setChecked(settings.get("pc_resource_alerts_enabled", True) is not False)
+        box.addWidget(self.pc_alert_checkbox)
+
         self.subagent_spin = QSpinBox()
         self.subagent_spin.setRange(1, 8)
         self.subagent_spin.setValue(int(settings.get("max_subagents", 3)))
@@ -371,6 +375,7 @@ class _AgentSettingsPage(QWidget):
             "agent_dashboard_enabled": self.dashboard_checkbox.isChecked(),
             "audit_log_enabled": self.audit_checkbox.isChecked(),
             "mcp_server_enabled": self.mcp_checkbox.isChecked(),
+            "pc_resource_alerts_enabled": self.pc_alert_checkbox.isChecked(),
             "max_subagents": int(self.subagent_spin.value()),
             "scheduler_missed_grace_minutes": int(self.missed_grace_spin.value()),
             "google_calendar_enabled": self.google_checkbox.isChecked(),

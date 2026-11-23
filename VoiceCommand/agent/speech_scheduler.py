@@ -28,8 +28,17 @@ _EVENT_COOLDOWNS = {
     "praise_streak": timedelta(days=1),
     "maintenance_result": timedelta(hours=20),
     "chitchat": timedelta(hours=3),
+    "battery_low": timedelta(minutes=30),
+    "disk_low": timedelta(hours=6),
 }
 _CHITCHAT_IDLE_SECONDS = 20 * 60
+_PC_CHECK_INTERVAL = timedelta(minutes=5)
+_PC_ALERT_EVENTS = ("battery_low", "disk_low")
+# 기준 근처에서 알림이 되풀이되지 않도록 다시 알릴 수 있는 상태가 되는 값을 기준보다 높게 둔다.
+_BATTERY_LOW_PERCENT = 20
+_BATTERY_REARM_PERCENT = 25
+_DISK_LOW_FREE_BYTES = 10 * 1024**3
+_DISK_REARM_FREE_BYTES = 15 * 1024**3
 _ONCE_DAILY = {"long_use", "late_night", "praise_streak"}
 _MOOD_BUCKETS = ("good", "calm", "down")
 
@@ -74,7 +83,36 @@ EVENT_PHRASES = {
         "calm": ("(평온) 조용하네요. 저는 이런 차분한 시간이 꽤 마음에 들어요.||(평온) 필요한 일이 생기면 언제든 불러 주세요. 옆에 있을게요.||(진지) 요즘 하시는 일은 잘 되고 있나요? 조금 궁금해요.",),
         "down": ("(걱정) 오늘은 조금 기운이 없어요. 그래도 곁에 있을게요.||(걱정) 한동안 조용했네요. 편할 때 불러 주세요.||(슬픔) 너무 조용하니 조금 쓸쓸해요. 시간 나면 말을 걸어 주세요.",),
     },
+    "battery_low": {
+        bucket: ("배터리가 {percent}% 남았어요. 충전기를 연결해 주세요.",)
+        for bucket in _MOOD_BUCKETS
+    },
+    "disk_low": {
+        bucket: ("{drive} 드라이브 여유 공간이 {free} 남았어요.",)
+        for bucket in _MOOD_BUCKETS
+    },
 }
+
+
+def read_pc_status() -> dict[str, Any]:
+    """배터리와 시스템 드라이브 상태를 읽는다. 읽지 못한 항목은 결과에서 뺀다."""
+    import psutil
+
+    status: dict[str, Any] = {}
+    try:
+        battery = psutil.sensors_battery()
+    except (AttributeError, OSError, RuntimeError):
+        battery = None
+    if battery is not None:
+        status["battery_percent"] = float(battery.percent)
+        status["power_plugged"] = battery.power_plugged
+    drive = os.environ.get("SystemDrive", "C:")
+    try:
+        status["disk_free_bytes"] = int(psutil.disk_usage(drive + "\\").free)
+        status["disk_drive"] = drive.rstrip(":\\")
+    except OSError as exc:
+        logging.debug("시스템 드라이브 여유 공간을 읽지 못했습니다: %s", exc)
+    return status
 
 
 def mood_bucket(mood_state=None) -> str:
@@ -141,10 +179,14 @@ class EventSpeechScheduler:
         context_provider: Callable[[], dict] | None = None,
         mood_provider: Callable[[], Any] | None = None,
         suggestions_provider: Callable[[], list[dict]] | None = None,
+        pc_status_provider: Callable[[], dict] | None = None,
         state_path: str | None = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self._tts = tts_func
+        self._pc_status_provider = pc_status_provider or read_pc_status
+        self._next_pc_check_at: datetime | None = None
+        self._pc_alert_active: dict[str, bool] = {}
         self._guard_state = guard_state or (lambda: {})
         self._context_provider = context_provider or self._get_context_metrics
         self._mood_provider = mood_provider or self._get_mood_state
@@ -204,6 +246,7 @@ class EventSpeechScheduler:
         """상황 사건을 확인하고 발화 하나를 전달한다."""
         now = self._clock()
         self._check_context_events(now)
+        self._check_pc_resources(now)
         self._update_ignored_streak(now)
         return self._flush_one(now)
 
@@ -272,6 +315,77 @@ class EventSpeechScheduler:
         if praise_count >= 3:
             self.request("praise_streak")
         self._check_chitchat(metrics, now)
+
+    def _check_pc_resources(self, now: datetime) -> None:
+        """배터리와 시스템 드라이브 상태를 낮은 빈도로 읽어 부족하면 한 번 알린다."""
+        if self._next_pc_check_at is not None and now < self._next_pc_check_at:
+            return
+        self._next_pc_check_at = now + _PC_CHECK_INTERVAL
+        from core.config_manager import ConfigManager
+
+        try:
+            enabled = bool(ConfigManager.get("pc_resource_alerts_enabled", True))
+        except (OSError, RuntimeError, TypeError, ValueError):
+            enabled = False
+        status: dict[str, Any] = {}
+        if enabled:
+            try:
+                status = self._pc_status_provider()
+            except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logging.debug("PC 상태를 읽지 못했습니다: %s", exc)
+            if not isinstance(status, dict):
+                status = {}
+        else:
+            # 끈 동안에는 대기 중인 알림을 버리고, 다시 켜면 처음부터 판단한다.
+            self._pc_alert_active.clear()
+            self._drop_pending(_PC_ALERT_EVENTS)
+            return
+
+        percent = status.get("battery_percent")
+        if isinstance(percent, (int, float)) and not isinstance(percent, bool):
+            plugged = status.get("power_plugged") is True
+            self._update_pc_alert(
+                "battery_low",
+                low=status.get("power_plugged") is False and percent < _BATTERY_LOW_PERCENT,
+                recovered=plugged or percent >= _BATTERY_REARM_PERCENT,
+                values={"percent": int(percent)},
+            )
+        free = status.get("disk_free_bytes")
+        if isinstance(free, (int, float)) and not isinstance(free, bool):
+            self._update_pc_alert(
+                "disk_low",
+                low=free < _DISK_LOW_FREE_BYTES,
+                recovered=free >= _DISK_REARM_FREE_BYTES,
+                values={
+                    "drive": str(status.get("disk_drive") or "C"),
+                    "free": f"{free / 1024**3:.1f} GB",
+                },
+            )
+
+    def _update_pc_alert(
+        self, event: str, *, low: bool, recovered: bool, values: dict[str, Any]
+    ) -> None:
+        if low:
+            with self._lock:
+                if not self._pc_alert_active.get(event):
+                    self._pc_alert_active[event] = True
+                    self._pending.append((event, values))
+                else:
+                    # 아직 말하지 못한 알림이면 최신 수치로 바꾼다.
+                    for index, (pending_event, _payload) in enumerate(self._pending):
+                        if pending_event == event:
+                            self._pending[index] = (event, values)
+            return
+        # 기준 위로 올라오면 미뤄 둔 알림은 버리고, 말한 적 없이 버렸거나 충분히 회복했을 때 다시 알릴 수 있게 한다.
+        dropped = self._drop_pending((event,))
+        if recovered or dropped:
+            self._pc_alert_active[event] = False
+
+    def _drop_pending(self, events: tuple[str, ...]) -> bool:
+        with self._lock:
+            before = len(self._pending)
+            self._pending = [item for item in self._pending if item[0] not in events]
+            return len(self._pending) != before
 
     def _check_chitchat(self, metrics: dict, now: datetime) -> None:
         try:

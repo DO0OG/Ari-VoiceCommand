@@ -144,6 +144,7 @@ DEFAULT_SETTINGS = {
     "activity_auto_game_mode_enabled": False,
     "activity_ide_long_use_reaction_enabled": True,
     "spontaneous_talk_enabled": False,  # 한동안 대화가 없으면 먼저 말 걸기 (기본 꺼짐)
+    "pc_resource_alerts_enabled": True,  # 배터리 20% 미만·시스템 드라이브 여유 10GB 미만을 먼저 알림
     "user_birthday": "",            # MM-DD
     "special_date_events_enabled": True,
     # ── AI 고도화 (Phase 1-5) ────────────────────────────────────────────
